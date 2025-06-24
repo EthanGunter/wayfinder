@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { markdownToNode, nodeToMarkdown } from './MarkdownConverters';
-import { type IStorage, type TaskData, type EdgeData } from './types';
+import { type IStorage, type TaskData } from './types';
 import { err, ok, Result } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError } from '$lib/Errors/Errors';
 
@@ -12,10 +12,6 @@ interface MyDB extends DBSchema {
   index: {
     key: string;
     value: TaskData;
-  };
-  edges: {
-    key: string;
-    value: EdgeData;
   };
 }
 
@@ -31,7 +27,6 @@ export class BrowserStorage implements IStorage {
         upgrade(db) {
           db.createObjectStore('files', { keyPath: 'id' });
           db.createObjectStore('index', { keyPath: 'id' });
-          db.createObjectStore('edges', { keyPath: 'task' });
         },
       });
       BrowserStorage.instance = new BrowserStorage();
@@ -115,51 +110,7 @@ export class BrowserStorage implements IStorage {
   }
 
   // #endregion
-
-
-  // #region Edging operations
-
-  /**
-   * @error {@link IOError} if IndexedDB.put() fails
-   */
-  async createEdge(edge: EdgeData): Promise<Result<EdgeData, Err>> {
-    const db = await BrowserStorage.dbPromise;
-    try {
-      await db.put('edges', edge);
-    } catch (e) {
-      return err(new IOError("Write", edge.task, e));
-    }
-
-    return ok(edge);
-  }
-
-  /**
-   * @error {@link NotFoundError} if the edge id doesn't exist in the indexedDB
-   */
-  async readEdge(id: string): Promise<Result<EdgeData, Err>> {
-    const db = await BrowserStorage.dbPromise;
-    const edge = await db.get('edges', id);
-    if (!edge) {
-      return err(new NotFoundError(id, 'Edge'));
-    }
-    return ok(edge);
-  }
-
-  /**
-   * @error {@link IOError} if IndexedDB.delete() fails
-   */
-  async deleteEdge(id: string): Promise<Result<void, Err>> {
-    const db = await BrowserStorage.dbPromise;
-    try {
-      await db.delete('edges', id);
-    } catch (e) {
-      return err(new IOError("Delete", id, e));
-    }
-    return ok();
-  }
-
-  // #endregion
-
+  
 
   /**
    * @error {@link NotFoundError} if the file doesn't exist in the IndexedDB
