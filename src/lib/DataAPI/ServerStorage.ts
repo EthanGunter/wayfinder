@@ -1,0 +1,3 @@
+class ServerStorage implements IStorage {
+
+}
