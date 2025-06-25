@@ -1,7 +1,7 @@
 import yaml from 'js-yaml'
 import { err, ok, type Result } from 'neverthrow';
 import type { TaskData } from './types';
-import { ParseError } from '$lib/Errors/Errors';
+import { ParseError } from '$lib/Errors';
 // Helper: Convert TaskData to markdown string
 export function nodeToMarkdown(node: TaskData): string {
     const { content, ...meta } = node;

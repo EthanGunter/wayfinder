@@ -1,6 +1,6 @@
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
-import type { NotFoundError, ParseError, Err } from "$lib/Errors/Errors";
+import type { NotFoundError, ParseError, Err } from "$lib/Errors";
 import type { Result, ResultAsync } from "neverthrow";
 
 // Todo narrow error types once concrete classes are implemented
@@ -20,6 +20,7 @@ export interface IStorage {
   readNode(id: string): Promise<Result<TaskData, NotFoundError | Err>>;
   updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>>;
   deleteNode(id: string, recursive: boolean): Promise<Result<void, Err>>;
+  close(): Promise<void>;
 }
 
 

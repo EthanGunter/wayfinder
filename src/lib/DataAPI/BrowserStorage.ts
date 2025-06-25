@@ -2,7 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { markdownToNode, nodeToMarkdown } from './MarkdownConverters';
 import { type IStorage, type TaskData } from './types';
 import { err, ok, Result } from 'neverthrow';
-import { NotFoundError, Err, ParseError, IOError } from '$lib/Errors/Errors';
+import { NotFoundError, Err, ParseError, IOError } from '$lib/Errors';
 
 interface MyDB extends DBSchema {
   files: {
@@ -16,24 +16,25 @@ interface MyDB extends DBSchema {
 }
 
 export class BrowserStorage implements IStorage {
-  private static instance: BrowserStorage;
-  private static dbPromise: Promise<IDBPDatabase<MyDB>>;
+  private dbPromise: Promise<IDBPDatabase<MyDB>>;
 
-  public static get() {
-    if (typeof window == 'undefined' && typeof indexedDB == 'undefined') throw new Error("Data APIs can only operate in a browser environment (is this running in server-rendered code?)");
-
-    if (!BrowserStorage.instance) {
-      BrowserStorage.dbPromise = openDB<MyDB>('wayfinder', 1, {
-        upgrade(db) {
-          db.createObjectStore('files', { keyPath: 'id' });
-          db.createObjectStore('index', { keyPath: 'id' });
-        },
-      });
-      BrowserStorage.instance = new BrowserStorage();
-    }
-
-    return BrowserStorage.instance;
+  private constructor() {
+    this.dbPromise = openDB<MyDB>('wayfinder', 1, {
+      upgrade(db) {
+        db.createObjectStore('files', { keyPath: 'id' });
+        db.createObjectStore('index', { keyPath: 'id' });
+      },
+    });
   }
+
+  static get(): BrowserStorage {
+    return new BrowserStorage();
+  }
+
+  async close(): Promise<void> {
+    (await this.dbPromise).close();
+  }
+
   //#region Task Node Operations
 
   // 👍
@@ -42,7 +43,7 @@ export class BrowserStorage implements IStorage {
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   async createNode(node: Omit<TaskData, "created">): Promise<Result<void, IOError | NotFoundError | ParseError>> {
-    const db = await BrowserStorage.dbPromise;
+    const db = await this.dbPromise;
     const datedNode = node as TaskData;
     datedNode.created = new Date().toISOString();
 
@@ -66,7 +67,7 @@ export class BrowserStorage implements IStorage {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   async readNode(id: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
-    const db = await BrowserStorage.dbPromise;
+    const db = await this.dbPromise;
 
     // Get the .md file content
     const file = await db.get('files', id);
@@ -80,10 +81,11 @@ export class BrowserStorage implements IStorage {
 
   // 👍
   /**
+   * @error {@link NotFoundError} if the task id doesn't exist
    * @error {@link IOError} if IndexedDB.put() fails
-   * @error {@link UpdateIndexErr} if syncing the file with the indexed db fails
+   * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>> {
+  async updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
     return (await this.readNode(id)).match(
       async node => {
         const updated: TaskData = { ...node, ...updates, lastEdit: new Date().toISOString() };
@@ -102,7 +104,7 @@ export class BrowserStorage implements IStorage {
    * @error {@link IOError} if IndexedDB.delete() fails
    */
   async deleteNode(id: string, recursive: boolean): Promise<Result<void, Err>> {
-    const db = await BrowserStorage.dbPromise;
+    const db = await this.dbPromise;
     await db.delete('files', id);
     await db.delete('index', id);
 
@@ -110,14 +112,14 @@ export class BrowserStorage implements IStorage {
   }
 
   // #endregion
-  
+
 
   /**
    * @error {@link NotFoundError} if the file doesn't exist in the IndexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   async updateIndexFromFile(fileID: string): Promise<Result<void, NotFoundError | ParseError>> {
-    const db = await BrowserStorage.dbPromise;
+    const db = await this.dbPromise;
     const file = await db.get('files', fileID);
 
     if (!file) {

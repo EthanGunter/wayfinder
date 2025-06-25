@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BrowserStorage } from './BrowserStorage';
-import { type TaskData, type EdgeData } from './types';
-import { NotFoundError, ParseError } from '$lib/Errors/Errors';
+import { type TaskData } from './types';
+import { NotFoundError, ParseError } from '$lib/Errors';
 import 'fake-indexeddb/auto'
 
 function sampleTask(id: string): TaskData {
@@ -15,16 +15,12 @@ function sampleTask(id: string): TaskData {
   };
 }
 
-function sampleEdge(task: string, dependsOn: string): EdgeData {
-  return { task, dependsOn };
-}
-
 describe('BrowserStorage', () => {
   let storage: BrowserStorage;
 
   beforeEach(async () => {
     // Clear all stores before each test
-    storage = BrowserStorage.get();
+    storage = await BrowserStorage.get();
     const db = await (storage as any).constructor.dbPromise;
     await db.clear('files');
     await db.clear('index');
@@ -73,39 +69,6 @@ describe('BrowserStorage', () => {
 
   it('deleteNode should succeed even if node does not exist', async () => {
     const deleteResult = await storage.deleteNode('nonexistent', false);
-    expect(deleteResult.isOk()).toBe(true);
-  });
-
-  it('should create and read an edge', async () => {
-    const edge = sampleEdge('a', 'b');
-    const createResult = await storage.createEdge(edge);
-    expect(createResult.isOk()).toBe(true);
-
-    const readResult = await storage.readEdge('a');
-    expect(readResult.isOk()).toBe(true);
-    expect(readResult._unsafeUnwrap()).toMatchObject(edge);
-  });
-
-  it('should return NotFoundError for missing edge', async () => {
-    const readResult = await storage.readEdge('missing');
-    expect(readResult.isErr()).toBe(true);
-    expect(readResult._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
-  });
-
-  it('should delete an edge', async () => {
-    const edge = sampleEdge('x', 'y');
-    await storage.createEdge(edge);
-
-    const deleteResult = await storage.deleteEdge('x');
-    expect(deleteResult.isOk()).toBe(true);
-
-    const readResult = await storage.readEdge('x');
-    expect(readResult.isErr()).toBe(true);
-    expect(readResult._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
-  });
-
-  it('deleteEdge should succeed even if edge does not exist', async () => {
-    const deleteResult = await storage.deleteEdge('nonexistent');
     expect(deleteResult.isOk()).toBe(true);
   });
 

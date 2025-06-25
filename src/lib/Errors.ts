@@ -30,3 +30,10 @@ export class IOError extends JSError {
         super(`Failed to ${mode} on ${path}: ${internalError?.message}`);
     }
 }
+
+export class NotImplemented extends Err {
+    constructor(methodName: string) {
+        super(methodName);
+        throw new Error(`${methodName} not implemented`);
+    }
+}
