@@ -1,8 +1,8 @@
 import { err } from "neverthrow";
 
 export class Err {
-    constructor(public msg: string) { }
-    log() { console.error(this.msg); }
+    constructor(public msg: string, public context?: any) { }
+    log() { console.error(this.msg, this.context); }
 }
 
 export class NotFoundError extends Err {
@@ -12,7 +12,7 @@ export class NotFoundError extends Err {
 }
 
 export class ParseError extends Err {
-    constructor(public content: string, public targetType: string) {
+    constructor(public content: any, public targetType: string) {
         super(`Failed to parse content to ${targetType}:\n${content}`);
     }
 }

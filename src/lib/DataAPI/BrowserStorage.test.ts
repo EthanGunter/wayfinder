@@ -21,10 +21,9 @@ describe('BrowserStorage', () => {
   beforeEach(async () => {
     // Clear all stores before each test
     storage = await BrowserStorage.get();
-    const db = await (storage as any).constructor.dbPromise;
+    const db = await (storage as any).dbPromise;
     await db.clear('files');
     await db.clear('index');
-    await db.clear('edges');
   });
 
   it('should create and read a node', async () => {
@@ -80,7 +79,7 @@ describe('BrowserStorage', () => {
     expect(result.isOk()).toBe(true);
 
     // Optionally, check that the index store has the node
-    const db = await (storage as any).constructor.dbPromise;
+    const db = await (storage as any).dbPromise;
     const indexed = await db.get('index', 'idx');
     expect(indexed).toMatchObject(node);
   });

@@ -11,7 +11,12 @@ const config: CapacitorConfig = {
   ...(isDev && {server: {
     url: 'http://192.168.1.7:5173', // Replace YOUR_LOCAL_IP with your machine's IP (e.g., 192.168.1.X)
     cleartext: true // Required for HTTP connections
-  }})
+  }}),
+  plugins: {
+    CapacitorSQLite: {
+      
+    }
+  }
 };
 
 export default config;
