@@ -1,18 +1,26 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { markdownToNode, nodeToMarkdown } from './MarkdownConverters';
-import { type IStorage, type TaskData } from './types';
+import { type CreateTaskDTO, type IStorage } from './types';
 import { err, ok, Result } from 'neverthrow';
-import { NotFoundError, Err, ParseError, IOError } from '$lib/Errors';
+import { NotFoundError, Err, ParseError, IOError, ArgumentError } from '$lib/Errors';
+import { v4 } from 'uuid';
+import { Task, type TaskData } from './TaskData';
 
 interface MyDB extends DBSchema {
   files: {
     key: string;
-    value: { id: string; content: string };
+    value: { filepath: string; content: string };
   };
   index: {
     key: string;
     value: TaskData;
   };
+}
+
+function TryGetIDFromFilepath(key: string): string {
+  if (key.endsWith(".md")) {
+    return key.split("/").slice(-1)[0].split(".")[0];
+  }
+  return key;
 }
 
 export class BrowserStorage implements IStorage {
@@ -21,7 +29,7 @@ export class BrowserStorage implements IStorage {
   private constructor() {
     this.dbPromise = openDB<MyDB>('wayfinder', 1, {
       upgrade(db) {
-        db.createObjectStore('files', { keyPath: 'id' });
+        db.createObjectStore('files', { keyPath: 'filepath' });
         db.createObjectStore('index', { keyPath: 'id' });
       },
     });
@@ -42,54 +50,59 @@ export class BrowserStorage implements IStorage {
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
-  async createNode(node: Omit<TaskData, "created">): Promise<Result<void, IOError | NotFoundError | ParseError>> {
-    const db = await this.dbPromise;
-    const datedNode = node as TaskData;
-    datedNode.created = new Date().toISOString();
+  async createNode(task: CreateTaskDTO): Promise<Result<string, IOError | ParseError>> {
+    const preparedNode = task as TaskData;
+    preparedNode.created = new Date().toISOString();
+    preparedNode.id = v4();
 
-    const md = nodeToMarkdown(datedNode);
-    console.log(md);
-
-    try {
-      // Create the .md file
-      await db.put('files', { id: node.id, content: md });
-    } catch (e) {
-      return err(new IOError("Write", node.id, e));
-    }
-
-    // Update the DB with the new file's data
-    return await this.updateIndexFromFile(node.id);
+    return (await this.writeTaskToDB(preparedNode)).match(
+      success => {
+        return ok(preparedNode.id);
+      },
+      error => err(error))
   }
 
   // 👍
   /**
+   * @param key Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
    * @error {@link NotFoundError} if the node id doesn't exist in the indexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async readNode(id: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
+  async readNode(key: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
     const db = await this.dbPromise;
 
-    // Get the .md file content
-    const file = await db.get('files', id);
-    if (!file) {
-      return err(new NotFoundError(id, 'Node'));
-    }
+    if (key.endsWith(".md")) {
+      // Filepath
+      // Get the .md file content
+      const file = await db.get('files', key);
+      if (!file) {
+        return err(new NotFoundError(key, 'Node File').withTrace(1));
+      }
+      // Parse and return
+      return Task.fromMarkdown(file.content, key);
+    } else {
+      // Task ID
 
-    // Parse and return
-    return markdownToNode(file.content);
+      const node = await db.get('index', key);
+      if (!node) {
+        return err(new NotFoundError(key, 'Node').withTrace(1));
+      }
+      return ok(node);
+    }
   }
 
   // 👍
   /**
+   * @param key Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
    * @error {@link NotFoundError} if the task id doesn't exist
    * @error {@link IOError} if IndexedDB.put() fails
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
-    return (await this.readNode(id)).match(
+  async updateNode(key: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
+    return (await this.readNode(key)).match(
       async node => {
         const updated: TaskData = { ...node, ...updates, lastEdit: new Date().toISOString() };
-        return (await this.createNode(updated)).match(
+        return (await this.writeTaskToDB(updated)).match(
           () => ok(updated),
           error =>
             err(error)
@@ -101,12 +114,25 @@ export class BrowserStorage implements IStorage {
 
   // 👍
   /**
+   * @param key Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  async deleteNode(id: string, recursive: boolean): Promise<Result<void, Err>> {
+  async deleteNode(key: string, recursive: boolean): Promise<Result<void, Err>> {
+    key = TryGetIDFromFilepath(key);
+
     const db = await this.dbPromise;
-    await db.delete('files', id);
-    await db.delete('index', id);
+    const node = await db.get('index', key);
+    const all = await db.getAll("index");
+
+    if (node) {
+      try {
+        await db.delete('files', node.filepath);
+        await db.delete('index', key);
+      } catch (e) {// TODO Throw an error during development/testing ONLY
+        throw new IOError("Delete", key, e);
+      }
+
+    }
 
     return ok();
   }
@@ -114,19 +140,39 @@ export class BrowserStorage implements IStorage {
   // #endregion
 
 
+  //#region Utilities
+
+  async writeTaskToDB(task: TaskData): Promise<Result<void, IOError>> {
+    const db = await this.dbPromise;
+    const md = Task.toMarkdown(task);
+
+    try {
+      // Create the .md file
+      await db.put('files', { filepath: task.filepath, content: md });
+    } catch (e) {
+      return err(new IOError("Write", `Task: ${task.title}`, md, e));
+    }
+
+    // Update the DB with the new file's data
+    const updateRes = await this.updateIndexFromFile(task.filepath);
+    if (updateRes.isErr()) {
+      return err(updateRes.error);
+    }
+    return ok();
+  }
   /**
    * @error {@link NotFoundError} if the file doesn't exist in the IndexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async updateIndexFromFile(fileID: string): Promise<Result<void, NotFoundError | ParseError>> {
+  private async updateIndexFromFile(filepath: string): Promise<Result<void, NotFoundError | ParseError>> {
     const db = await this.dbPromise;
-    const file = await db.get('files', fileID);
+    const file = await db.get('files', filepath);
 
     if (!file) {
-      return err(new NotFoundError(fileID, "File"));
+      return err(new NotFoundError(filepath, "File"));
     }
 
-    return markdownToNode(file.content).match(
+    return Task.fromMarkdown(file.content, filepath).match(
       async node => {
         await db.put('index', node);
         return ok();
@@ -135,4 +181,6 @@ export class BrowserStorage implements IStorage {
         return err(error);
       });
   }
+
+  //#endregion
 }

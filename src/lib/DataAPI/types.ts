@@ -2,6 +2,9 @@
 
 import type { NotFoundError, ParseError, Err } from "$lib/Errors";
 import type { Result, ResultAsync } from "neverthrow";
+import type { TaskData } from "./TaskData";
+
+export type CreateTaskDTO = Omit<TaskData, "created" | "id">
 
 // Todo narrow error types once concrete classes are implemented
 /**
@@ -12,33 +15,23 @@ export interface IStorage {
   // Node operations
   /**
    * Creates a new node with the given data
+   * @returns The new node's generated ID
    */
-  createNode(node: Omit<TaskData, "created">): Promise<Result<void, Err>>;
+  createNode(node: CreateTaskDTO): Promise<Result<string, Err>>;
   /**
    * Fetches a node's data by its ID
    */
-  readNode(id: string): Promise<Result<TaskData, NotFoundError | Err>>;
+  readNode(path: string): Promise<Result<TaskData, NotFoundError | Err>>;
   updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>>;
   deleteNode(id: string, recursive: boolean): Promise<Result<void, Err>>;
   close(): Promise<void>;
 }
 
 
-export interface TaskData {
-  id: string,
-  filepath: string
-  title: string,
-  created: string, // ISO Timestamp
-  content?: string,
-  lastEdit?: string, // ISO Timestamp
-  /** This task's prequisite[s] */
-  dependsOn?: string, // Todo this might become an array in the future
-  /** Tasks that can't be completed until this one is */
-  dependants?: string[]
-}
 
 
-interface SyncStatus {
+// TODO Implement for offline sync
+/* interface SyncStatus {
   lastSyncVersion: string; // Last known sync version/timestamp
   pendingOps: Operation[]; // Local ops not yet pushed
 }
@@ -61,4 +54,4 @@ interface Operation {
   payload: Partial<TaskData>; // etc...
 }
 
-interface Query { }
+interface Query { } */

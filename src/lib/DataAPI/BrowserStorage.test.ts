@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BrowserStorage } from './BrowserStorage';
-import { type TaskData } from './types';
-import { NotFoundError, ParseError } from '$lib/Errors';
+import { Err, NotFoundError, ParseError } from '$lib/Errors';
 import 'fake-indexeddb/auto'
+import type { TaskData } from './TaskData';
+import type { Result } from 'neverthrow';
 
 function sampleTask(id: string): TaskData {
   return {
     id,
-    filepath: `/tasks/${id}.md`,
+    filepath: `${id}.md`,
     title: `Task ${id}`,
     content: 'Sample content',
     created: new Date().toISOString(),
@@ -15,7 +16,10 @@ function sampleTask(id: string): TaskData {
   };
 }
 
-describe('BrowserStorage', () => {
+let _id = 0;
+const idnext = () => { _id++; return _id.toString(); }
+
+describe('Unit', () => {
   let storage: BrowserStorage;
 
   beforeEach(async () => {
@@ -27,68 +31,81 @@ describe('BrowserStorage', () => {
   });
 
   it('should create and read a node', async () => {
-    const node = sampleTask('1');
-    const createResult = await storage.createNode(node);
-    expect(createResult.isOk()).toBe(true);
+    const createData = sampleTask(idnext());
+    const createResult = await storage.createNode(createData);
+    expect(createResult).toBeOk();
+    const id = createResult._unsafeUnwrap();
 
-    const readResult = await storage.readNode('1');
-    expect(readResult.isOk()).toBe(true);
-    expect(readResult._unsafeUnwrap()).toMatchObject(node);
+    const readResult = await storage.readNode(id);
+    expect(readResult).toBeOk();
+
+    const node = readResult._unsafeUnwrap();
+    expect(node).toMatchObject(createData);
   });
 
   it('should return NotFoundError for missing node', async () => {
     const readResult = await storage.readNode('missing');
-    expect(readResult.isErr()).toBe(true);
+    expect(readResult).toErr();
     expect(readResult._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
   });
 
   it('should update a node', async () => {
-    const node = sampleTask('2');
-    await storage.createNode(node);
+    const node = sampleTask(idnext());
+    const createRes = await storage.createNode(node);
+    const id = createRes._unsafeUnwrap();
 
-    const updateResult = await storage.updateNode('2', { title: 'Updated Title' });
-    expect(updateResult.isOk()).toBe(true);
+    const updateResult = await storage.updateNode(id, { title: 'Updated Title' });
+    expect(updateResult).toBeOk();
 
-    const readResult = await storage.readNode('2');
-    expect(readResult.isOk()).toBe(true);
+    const readResult = await storage.readNode(id);
+    expect(readResult).toBeOk();
     expect(readResult._unsafeUnwrap().title).toBe('Updated Title');
   });
 
   it('should delete a node', async () => {
-    const node = sampleTask('3');
-    await storage.createNode(node);
+    const node = sampleTask(idnext());
+    const createRes = await storage.createNode(node);
 
-    const deleteResult = await storage.deleteNode('3', false);
-    expect(deleteResult.isOk()).toBe(true);
+    const genId = createRes._unsafeUnwrap();
 
-    const readResult = await storage.readNode('3');
-    expect(readResult.isErr()).toBe(true);
-    expect(readResult._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
+    const deleteResult = await storage.deleteNode(genId, false);
+    expect(deleteResult).toBeOk();
+
+    const readResult = await storage.readNode(genId);
+    expect(readResult).toErr();
+
+    const error = readResult._unsafeUnwrapErr();
+
+    expect(error).toBeInstanceOf(NotFoundError);
   });
 
   it('deleteNode should succeed even if node does not exist', async () => {
     const deleteResult = await storage.deleteNode('nonexistent', false);
-    expect(deleteResult.isOk()).toBe(true);
+    expect(deleteResult).toBeOk();
   });
 
   it('should update index from file', async () => {
-    const node = sampleTask('idx');
-    await storage.createNode(node);
+    const node = sampleTask(idnext());
+    const createRes = await storage.createNode(node);
+    expect(createRes).toBeOk();
+    const id = createRes._unsafeUnwrap();
 
-    const result = await storage.updateIndexFromFile('idx');
-    expect(result.isOk()).toBe(true);
+    const result = await (storage as any).updateIndexFromFile(node.filepath);
+    expect(result).toBeOk();
 
     // Optionally, check that the index store has the node
     const db = await (storage as any).dbPromise;
-    const indexed = await db.get('index', 'idx');
+    const indexed = await db.get('index', id);
     expect(indexed).toMatchObject(node);
   });
 
   it('should return NotFoundError if updateIndexFromFile is called on missing file', async () => {
-    const result = await storage.updateIndexFromFile('missing');
+    const result = await (storage as any).updateIndexFromFile('missing');
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
   });
 
   // You can add more tests for ParseError, SSR, etc. as needed
 });
+
+describe('Integration', () => { });

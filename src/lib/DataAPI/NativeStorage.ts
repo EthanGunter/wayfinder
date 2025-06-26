@@ -1,10 +1,11 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { type IStorage, type TaskData } from './types';
+import { type CreateTaskDTO, type IStorage } from './types';
 import { Result, err, ok } from 'neverthrow';
 import { NotFoundError, IOError, ParseError } from '$lib/Errors';
-import { markdownToNode, nodeToMarkdown } from './MarkdownConverters';
 import * as path from 'path'
+import { v4 } from 'uuid';
+import { type TaskData, Task } from './TaskData';
 
 // TODO Write tests for NativeStorage
 // TODO Document NativeStorage
@@ -48,26 +49,33 @@ export class NativeStorage implements IStorage {
         }
     }
 
-    async createNode(node: Omit<TaskData, "created">): Promise<Result<void, IOError | NotFoundError | ParseError>> {
+    async createNode(node: CreateTaskDTO): Promise<Result<string, IOError | NotFoundError | ParseError>> {
         const created = new Date().toISOString();
-        const fullNode: TaskData = { ...node, created };
+        const id = v4();
+        const fullNode: TaskData = { ...node, created, id };
 
         // Write markdown file
-        const md = nodeToMarkdown(fullNode);
+        const md = Task.toMarkdown(fullNode);
+        const file = {
+            path: fullNode.filepath,
+            data: md,
+            directory: Directory.Documents // or Directory.Data, depending on your needs
+        }
         try {
             // console.log("Fullnode:", fullNode);
             // console.log(md);
-            await Filesystem.writeFile({
-                path: fullNode.filepath,
-                data: md,
-                directory: Directory.Documents // or Directory.Data, depending on your needs
-            });
+            await Filesystem.writeFile(file);
         } catch (e) {
-            return err(new IOError("Write", fullNode.filepath, e));
+            return err(new IOError("Write", fullNode.filepath, e, file));
         }
 
         // Update index from file
-        return await this.updateIndexFromFile(fullNode.filepath);
+        const updateRes = await this.updateIndexFromFile(fullNode.filepath);
+        if (updateRes.isErr()) {
+            return err(updateRes.error);
+        }
+
+        return ok(id);
     }
 
     async readNode(id: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
@@ -103,15 +111,16 @@ export class NativeStorage implements IStorage {
         };
 
         // Write updated markdown file
-        const md = nodeToMarkdown(updated);
+        const md = Task.toMarkdown(updated);
+        const file = {
+            path: updated.filepath,
+            data: md,
+            directory: Directory.Documents
+        };
         try {
-            await Filesystem.writeFile({
-                path: updated.filepath,
-                data: md,
-                directory: Directory.Documents
-            });
+            await Filesystem.writeFile(file);
         } catch (e) {
-            return err(new IOError("Write", updated.filepath, e));
+            return err(new IOError("Write", updated.filepath, e, file));
         }
 
         // Update index from file
@@ -162,7 +171,7 @@ export class NativeStorage implements IStorage {
         }
 
         // Parse markdown
-        const nodeResult = markdownToNode(fileContent, filepath);
+        const nodeResult = Task.fromMarkdown(fileContent, filepath);
         if (nodeResult.isErr()) return err(nodeResult._unsafeUnwrapErr());
         const node = nodeResult._unsafeUnwrap();
 
@@ -183,7 +192,7 @@ export class NativeStorage implements IStorage {
                 ]
             );
         } catch (e) {
-            return err(new IOError("Write", filepath, e));
+            return err(new IOError("Write", filepath, e, node));
         }
 
         return ok();

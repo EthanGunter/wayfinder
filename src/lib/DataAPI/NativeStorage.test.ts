@@ -3,12 +3,27 @@ import { NativeStorage } from './NativeStorage';
 import { NotFoundError, ParseError } from '$lib/Errors';
 import { Filesystem } from '@capacitor/filesystem';
 import { SQLiteConnection } from '@capacitor-community/sqlite';
+import type { TaskData } from './TaskData';
 
 vi.mock("@capacitor/filesystem");
 vi.mock("@capacitor-community/sqlite");
 const fsMock = vi.mocked(Filesystem);
 
-describe('NativeStorage', () => {
+function sampleTask(id: string): TaskData {
+    return {
+        id,
+        filepath: `${id}.md`,
+        title: `Task ${id}`,
+        content: 'Sample content',
+        created: new Date().toISOString(),
+        lastEdit: new Date().toISOString(),
+    };
+}
+
+let _id = 0;
+const idnext = () => { _id++; return _id.toString(); }
+
+describe("Unit", () => {
     let storage: NativeStorage;
 
     beforeEach(async () => {
@@ -23,35 +38,48 @@ describe('NativeStorage', () => {
     });
 
     it('should create a node and update index', async () => {
-        const result = await storage.createNode({ id: '1', filepath: '1.md', title: 'Test' });
-        expect(result.isOk()).toBe(true);
+        const taskData = sampleTask(idnext());
+        const result = await storage.createNode(taskData);
+        expect(result).toBeOk();
         expect(fsMock.writeFile).toHaveBeenCalled();
     });
 
     it('should read a node from the database', async () => {
-        await storage.createNode({ id: '1', filepath: '1.md', title: 'Test' });
-        const result = await storage.readNode('1');
-        expect(result.isOk()).toBe(true);
-        expect(result._unsafeUnwrap().id).toBe('1');
+        const taskData = sampleTask(idnext());
+        const createRes = await storage.createNode(taskData);
+        expect(createRes).toBeOk();
+        const id = createRes._unsafeUnwrap();
+
+        const result = await storage.readNode(id);
+        expect(result).toBeOk();
+        expect(result._unsafeUnwrap().id).toBe(id);
     });
 
     it('should return NotFoundError for missing node', async () => {
         const result = await storage.readNode('missing');
-        expect(result.isErr()).toBe(true);
+        expect(result).toErr();
         expect(result._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
     });
 
     it('should update a node', async () => {
-        await storage.createNode({ id: '1', filepath: '1.md', title: 'Test' });
-        const result = await storage.updateNode('1', { title: 'Updated' });
-        expect(result.isOk()).toBe(true);
+        const taskData = sampleTask(idnext());
+        const createRes = await storage.createNode(taskData);
+        expect(createRes).toBeOk();
+        const id = createRes._unsafeUnwrap();
+
+        const result = await storage.updateNode(id, { title: 'Updated' });
+        expect(result).toBeOk();
         expect(fsMock.writeFile).toHaveBeenCalled();
     });
 
     it('should delete a node', async () => {
-        await storage.createNode({ id: '1', filepath: '1.md', title: 'Test' });
-        const result = await storage.deleteNode('1');
-        expect(result.isOk()).toBe(true);
+        const taskData = sampleTask(idnext());
+        const createRes = await storage.createNode(taskData);
+        expect(createRes).toBeOk();
+        const id = createRes._unsafeUnwrap();
+
+        const result = await storage.deleteNode(id);
+        expect(result).toBeOk();
         expect(fsMock.deleteFile).toHaveBeenCalled();
     });
 
@@ -59,7 +87,7 @@ describe('NativeStorage', () => {
         // Override the mock for this test to simulate a parse error
         fsMock.readFile.mockResolvedValueOnce({ data: 'failparse' });
         const result = await storage.updateIndexFromFile('bad.md');
-        expect(result.isErr()).toBe(true);
+        expect(result).toErr();
         expect(result._unsafeUnwrapErr()).toBeInstanceOf(ParseError);
     });
 
@@ -67,7 +95,9 @@ describe('NativeStorage', () => {
         // Override the mock for this test to simulate a missing file
         fsMock.readFile.mockRejectedValueOnce(new Error('File not found'));
         const result = await storage.updateIndexFromFile('missing.md');
-        expect(result.isErr()).toBe(true);
+        expect(result).toErr();
         expect(result._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
     });
 });
+
+describe("Integration", () => {});
