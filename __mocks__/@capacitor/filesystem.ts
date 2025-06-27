@@ -9,11 +9,11 @@ export const Filesystem = {
     return;
   }),
   readFile: vi.fn().mockImplementation(async ({ path }) => {
-    if (!(path in files)) throw new Error('File not found');
+    if (!(path in files)) throw new Error(`File not found: ${path}`);
     return { data: files[path] };
   }),
   deleteFile: vi.fn().mockImplementation(async ({ path }) => {
-    if (!(path in files)) throw new Error('File not found');
+    if (!(path in files)) throw new Error(`File not found: ${path}`);
     delete files[path];
     return;
   }),

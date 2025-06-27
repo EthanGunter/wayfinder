@@ -1,31 +1,35 @@
-import { Err, IOError, NotFoundError } from "$lib/Errors";
+import { Err, IOError, NotFoundError, NotImplemented } from "$lib/Errors";
 import { SupabaseClient, createClient } from "@supabase/supabase-js";
 import { Result, err, ok } from "neverthrow";
-import type { IStorage, CreateTaskDTO } from "./types";
-import type { TaskData } from "./TaskData";
+import type { ITaskStorage, CreateTaskDTO } from "./types";
+import type { TaskData } from "./Task";
 
-export class SupabaseStorage implements IStorage {
+export class SupabaseTaskStorage implements ITaskStorage {
   private client: SupabaseClient;
 
   private constructor() {
     const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const supabaseKey = import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
 
-    if (!supabaseUrl || !supabaseKey) throw new Error('Supabase env vars missing');
+    if (!supabaseUrl || !supabaseKey) {
+      const missing = [];
+      if (!supabaseUrl) missing.push('SUPABASE_URL');
+      if (!supabaseKey) missing.push('SUPABASE_API_KEY');
+      throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
     this.client = createClient(supabaseUrl, supabaseKey);
   }
 
-  static get(): Promise<SupabaseStorage> {
-    return Promise.resolve(new SupabaseStorage());
+  static get(): Promise<SupabaseTaskStorage> {
+    return Promise.resolve(new SupabaseTaskStorage());
   }
 
-  async createTask(node: CreateTaskDTO): Promise<Result<string, Err>> {
+  async createTask(task: CreateTaskDTO): Promise<Result<string, Err>> {
     // Generate ID if not provided
     const created = new Date().toISOString();
-    const insertObj = { ...node, created };
+    const insertObj = { ...task, created };
 
     const { data, error } = await this.client.from('tasks').insert([insertObj]).select('id').single();
-    console.log("Create:", insertObj, "=>", data,);
 
     if (error) return err(new IOError("Write", "id", error, insertObj));
     // Return the generated ID
@@ -36,7 +40,9 @@ export class SupabaseStorage implements IStorage {
   async readTask(id: string): Promise<Result<TaskData, NotFoundError | Err>> {
     // path is filepath, not id
     const { data, error } = await this.client.from('tasks').select().eq('id', id).single();
-    if (error || !data) return err(new NotFoundError(id, 'Node'));
+    if (!data) return err(new NotFoundError(id, 'Task'));
+    if (error) return err(new IOError("Read", id, error));
+
     return ok(data as TaskData);
   }
 
@@ -51,7 +57,11 @@ export class SupabaseStorage implements IStorage {
     return ok(data as TaskData);
   }
 
+  /**
+   * @param recursive NOT IMPLEMENTED
+   */
   async deleteTask(id: string, recursive: boolean): Promise<Result<void, Err>> {
+    if (recursive) throw new NotImplemented("SupabaseStorage.deleteTask(recursive = true)");
     const { error } = await this.client.from('tasks').delete().eq('id', id);
     if (error) return err(new IOError("Delete", id, error));
     return ok();

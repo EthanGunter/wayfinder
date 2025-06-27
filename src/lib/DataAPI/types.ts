@@ -2,7 +2,7 @@
 
 import type { NotFoundError, ParseError, Err } from "$lib/Errors";
 import type { Result, ResultAsync } from "neverthrow";
-import type { TaskData } from "./TaskData";
+import type { TaskData } from "./Task";
 
 export type CreateTaskDTO = Omit<TaskData, "created" | "id">
 
@@ -11,15 +11,15 @@ export type CreateTaskDTO = Omit<TaskData, "created" | "id">
  * Manages modifications to markdown files that represent tasks,
  * as well as keeping a database index in sync for rapid querying of data
  */
-export interface IStorage {
-  // Node operations
+export interface ITaskStorage {
+  // Task Node operations
   /**
-   * Creates a new node with the given data
-   * @returns The new node's generated ID
+   * Creates a new task with the given data
+   * @returns The new task's generated ID
    */
-  createTask(node: CreateTaskDTO): Promise<Result<string, Err>>;
+  createTask(task: CreateTaskDTO): Promise<Result<string, Err>>;
   /**
-   * Fetches a node's data by its ID
+   * Fetches a task's data by its ID
    */
   readTask(path: string): Promise<Result<TaskData, NotFoundError | Err>>;
   updateTask(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>>;

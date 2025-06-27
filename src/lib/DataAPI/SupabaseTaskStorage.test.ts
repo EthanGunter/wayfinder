@@ -1,20 +1,20 @@
-import { SupabaseStorage } from './SupabaseStorage';
-import type { IStorage } from './types';
+import { SupabaseTaskStorage } from './SupabaseTaskStorage';
+import type { ITaskStorage } from './types';
 import type { TestIStorageImplementation } from './IStorage.test';
 import { afterAll, afterEach, beforeEach, describe } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export const SupabaseIStorageTest: TestIStorageImplementation<SupabaseStorage> = {
+export const SupabaseIStorageTest: TestIStorageImplementation<SupabaseTaskStorage> = {
   name: "Supabase",
   getInstance: async () => {
-    return await SupabaseStorage.get();
+    return await SupabaseTaskStorage.get();
   },
-  beforeeach: async (storage: IStorage) => {
-    // Clear all stores before each test
-    const db = await (storage as any).dbPromise;
-    await db.clear('files');
-    await db.clear('index');
-  },
+  afterall: async (storage) => {
+    // Clean up after tests
+    const { client } = (storage as any as { client: SupabaseClient });
+    await client.from('tasks').delete().not('id', 'is', null);
+    await storage.close();
+  }
 }
 
 // describe('Unit', () => {

@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 
 
 expect.extend({
-    toBeOk(received: Result<any, Err>, expected: Result<any, Err> | undefined) {
+    toBeOk(received: Result<any, Err>) {
         const pass = received.isOk();
         if (pass) {
             return {
@@ -19,7 +19,7 @@ expect.extend({
             };
         }
     },
-    toErr(received: Result<any, Err>, expected: Result<any, Err> | undefined) {
+    toErr(received: Result<any, Err>) {
         const pass = received.isErr();
         if (pass) {
             return {

@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, test } from 'vitest';
 import { NotFoundError } from '$lib/Errors';
-import type { IStorage } from './types';
-import { BrowserIStorageTest } from './BrowserStorage.test';
-import { NativeIStorageTest } from './NativeStorage.test';
-import { SupabaseIStorageTest } from './SupabaseStorage.test';
+import type { ITaskStorage } from './types';
+import { BrowserIStorageTest } from './BrowserTaskStorage.test';
+import { NativeIStorageTest } from './NativeTaskStorage.test';
+import { SupabaseIStorageTest } from './SupabaseTaskStorage.test';
 import { v4 } from 'uuid';
 
-export interface TestIStorageImplementation<T extends IStorage> {
+export interface TestIStorageImplementation<T extends ITaskStorage> {
     name: string,
     getInstance: () => Promise<T>,
     // beforeall?: (implementation: T) => Promise<void>,
@@ -25,7 +25,7 @@ const storageImplementations: TestIStorageImplementation<any>[] = [
 for (const { name, getInstance, ...vitefn } of storageImplementations) {
     describe(`${name} IStorage compliance`, () => {
         //#region Setup
-        let storage: IStorage;
+        let storage: ITaskStorage;
 
         async function createSampleTask(title: string): Promise<string> {
             const createData = {
@@ -42,10 +42,10 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
 
         beforeEach(async () => {
             storage = await getInstance();
-            vitefn.beforeeach?.(storage);
+            await vitefn.beforeeach?.(storage);
         });
 
-        afterEach(async () => { await vitefn.aftereach?.(storage); });
+        afterEach(async () => { await vitefn.aftereach?.(storage); storage.close() });
 
         afterAll(async () => { await vitefn.afterall?.(storage); });
         //#endregion
@@ -53,7 +53,7 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
 
         //#region Tests
         it('should create a task', async () => {
-            createSampleTask("should create a task");
+            await createSampleTask("should create a task");
         });
 
         it('should read a task', async () => {

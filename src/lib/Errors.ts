@@ -15,6 +15,7 @@ export class Err {
      */
     withTrace(depth: number) {
         // TODO Don't execute this logic in prod
+        // https://github.com/LZS911/vite-plugin-conditional-compile
         this.traceDepth = depth;
 
         // Capture stack trace
@@ -74,7 +75,6 @@ export class IOError extends Err {
 
 export class NotImplemented extends Err {
     constructor(methodName: string) {
-        super(1, "Not Implmemented", methodName);
-        throw this;
+        super(1, "Not Implemented", methodName);
     }
 }

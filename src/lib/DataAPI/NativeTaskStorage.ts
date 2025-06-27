@@ -1,15 +1,15 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { type CreateTaskDTO, type IStorage } from './types';
+import { type CreateTaskDTO, type ITaskStorage } from './types';
 import { Result, err, ok } from 'neverthrow';
-import { NotFoundError, IOError, ParseError } from '$lib/Errors';
+import { NotFoundError, IOError, ParseError, NotImplemented } from '$lib/Errors';
 import * as path from 'path'
 import { v4 } from 'uuid';
-import { type TaskData, Task } from './TaskData';
+import { type TaskData, Task } from './Task';
 
 // TODO Write tests for NativeStorage
 // TODO Document NativeStorage
-export class NativeStorage implements IStorage {
+export class NativeTaskStorage implements ITaskStorage {
     private db: SQLiteDBConnection | null = null;
     private vaultPath: string;
 
@@ -17,11 +17,11 @@ export class NativeStorage implements IStorage {
         this.vaultPath = vaultPath;
     }
 
-    static async get(vaultPath: string): Promise<NativeStorage> {
+    static async get(vaultPath: string): Promise<NativeTaskStorage> {
         const sqlite = new SQLiteConnection(CapacitorSQLite);
         const dbName = 'wayfinder.db';
         const res = await sqlite.createConnection(dbName, false, 'no-encryption', 1, false);
-        const storage = new NativeStorage(vaultPath);
+        const storage = new NativeTaskStorage(vaultPath);
         storage.db = res;
         await storage.db.open();
 
@@ -49,28 +49,26 @@ export class NativeStorage implements IStorage {
         }
     }
 
-    async createTask(node: CreateTaskDTO): Promise<Result<string, IOError | NotFoundError | ParseError>> {
+    async createTask(task: CreateTaskDTO): Promise<Result<string, IOError | NotFoundError | ParseError>> {
         const created = new Date().toISOString();
         const id = v4();
-        const fullNode: TaskData = { ...node, created, id };
+        const fullTask: TaskData = { ...task, created, id };
 
         // Write markdown file
-        const md = Task.toMarkdown(fullNode);
+        const md = Task.toMarkdown(fullTask);
         const file = {
-            path: fullNode.filepath,
+            path: fullTask.filepath,
             data: md,
             directory: Directory.Documents // or Directory.Data, depending on your needs
         }
         try {
-            // console.log("Fullnode:", fullNode);
-            // console.log(md);
             await Filesystem.writeFile(file);
         } catch (e) {
-            return err(new IOError("Write", fullNode.filepath, e, file));
+            return err(new IOError("Write", fullTask.filepath, e, file));
         }
 
         // Update index from file
-        const updateRes = await this.updateIndexFromFile(fullNode.filepath);
+        const updateRes = await this.updateIndexFromFile(fullTask.filepath);
         if (updateRes.isErr()) {
             return err(updateRes.error);
         }
@@ -96,11 +94,11 @@ export class NativeStorage implements IStorage {
             }
             return ok(row as TaskData);
         }
-        return err(new NotFoundError(id, 'Node'));
+        return err(new NotFoundError(id, 'Task'));
     }
 
     async updateTask(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
-        // Get current node from DB
+        // Get current task from DB
         const current = await this.readTask(id);
         if (current.isErr()) return err(current._unsafeUnwrapErr());
 
@@ -130,7 +128,12 @@ export class NativeStorage implements IStorage {
         return ok(updated);
     }
 
-    async deleteTask(id: string/* , recursive: boolean */): Promise<Result<void, IOError>> {
+    /**
+     * @param recursive NOT IMPLEMENTED
+     */
+    async deleteTask(id: string, recursive: boolean): Promise<Result<void, IOError>> {
+        if (recursive) throw new NotImplemented("NativeTaskStorage.deleteTask(recursive = true)");
+
         if (!this.db) throw new Error("Database not initialized");
         // Get filepath from DB
         const res = await this.db.query('SELECT filepath FROM tasks WHERE id = ?', [id]);
@@ -171,9 +174,9 @@ export class NativeStorage implements IStorage {
         }
 
         // Parse markdown
-        const nodeResult = Task.fromMarkdown(fileContent, filepath);
-        if (nodeResult.isErr()) return err(nodeResult._unsafeUnwrapErr());
-        const node = nodeResult._unsafeUnwrap();
+        const taskResult = Task.fromMarkdown(fileContent, filepath);
+        if (taskResult.isErr()) return err(taskResult._unsafeUnwrapErr());
+        const task = taskResult._unsafeUnwrap();
 
         // Store in SQLite
         try {
@@ -181,18 +184,18 @@ export class NativeStorage implements IStorage {
                 `INSERT OR REPLACE INTO tasks (id, filepath, title, content, created, lastEdit, dependsOn, dependants)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                    node.id,
-                    node.filepath, ///TODO We'll deal with this later... path.join(this.vaultPath, node.filepath),
-                    node.title,
-                    node.content ?? null,
-                    node.created,
-                    node.lastEdit ?? null,
-                    node.dependsOn ?? null,
-                    node.dependants ? JSON.stringify(node.dependants) : null
+                    task.id,
+                    task.filepath, ///TODO We'll deal with this later... path.join(this.vaultPath, task.filepath),
+                    task.title,
+                    task.content ?? null,
+                    task.created,
+                    task.lastEdit ?? null,
+                    task.dependsOn ?? null,
+                    task.dependants ? JSON.stringify(task.dependants) : null
                 ]
             );
         } catch (e) {
-            return err(new IOError("Write", filepath, e, node));
+            return err(new IOError("Write", filepath, e, task));
         }
 
         return ok();
