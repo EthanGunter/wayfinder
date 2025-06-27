@@ -17,13 +17,13 @@ export interface IStorage {
    * Creates a new node with the given data
    * @returns The new node's generated ID
    */
-  createNode(node: CreateTaskDTO): Promise<Result<string, Err>>;
+  createTask(node: CreateTaskDTO): Promise<Result<string, Err>>;
   /**
    * Fetches a node's data by its ID
    */
-  readNode(path: string): Promise<Result<TaskData, NotFoundError | Err>>;
-  updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>>;
-  deleteNode(id: string, recursive: boolean): Promise<Result<void, Err>>;
+  readTask(path: string): Promise<Result<TaskData, NotFoundError | Err>>;
+  updateTask(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>>;
+  deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
   close(): Promise<void>;
 }
 

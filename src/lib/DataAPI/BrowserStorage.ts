@@ -24,23 +24,23 @@ function TryGetIDFromFilepath(key: string): string {
 }
 
 export class BrowserStorage implements IStorage {
-  private dbPromise: Promise<IDBPDatabase<MyDB>>;
+  private db!: IDBPDatabase<MyDB>;
 
-  private constructor() {
-    this.dbPromise = openDB<MyDB>('wayfinder', 1, {
+  private constructor() { }
+
+  static async get(): Promise<BrowserStorage> {
+    const storage = new BrowserStorage();
+    storage.db = await openDB<MyDB>('wayfinder', 1, {
       upgrade(db) {
         db.createObjectStore('files', { keyPath: 'filepath' });
         db.createObjectStore('index', { keyPath: 'id' });
       },
     });
-  }
-
-  static get(): BrowserStorage {
-    return new BrowserStorage();
+    return storage;
   }
 
   async close(): Promise<void> {
-    (await this.dbPromise).close();
+    this.db.close();
   }
 
   //#region Task Node Operations
@@ -50,7 +50,7 @@ export class BrowserStorage implements IStorage {
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
-  async createNode(task: CreateTaskDTO): Promise<Result<string, IOError | ParseError>> {
+  async createTask(task: CreateTaskDTO): Promise<Result<string, IOError | ParseError>> {
     const preparedNode = task as TaskData;
     preparedNode.created = new Date().toISOString();
     preparedNode.id = v4();
@@ -68,13 +68,11 @@ export class BrowserStorage implements IStorage {
    * @error {@link NotFoundError} if the node id doesn't exist in the indexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async readNode(key: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
-    const db = await this.dbPromise;
-
+  async readTask(key: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
     if (key.endsWith(".md")) {
       // Filepath
       // Get the .md file content
-      const file = await db.get('files', key);
+      const file = await this.db.get('files', key);
       if (!file) {
         return err(new NotFoundError(key, 'Node File').withTrace(1));
       }
@@ -83,7 +81,7 @@ export class BrowserStorage implements IStorage {
     } else {
       // Task ID
 
-      const node = await db.get('index', key);
+      const node = await this.db.get('index', key);
       if (!node) {
         return err(new NotFoundError(key, 'Node').withTrace(1));
       }
@@ -98,8 +96,8 @@ export class BrowserStorage implements IStorage {
    * @error {@link IOError} if IndexedDB.put() fails
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async updateNode(key: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
-    return (await this.readNode(key)).match(
+  async updateTask(key: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
+    return (await this.readTask(key)).match(
       async node => {
         const updated: TaskData = { ...node, ...updates, lastEdit: new Date().toISOString() };
         return (await this.writeTaskToDB(updated)).match(
@@ -117,17 +115,16 @@ export class BrowserStorage implements IStorage {
    * @param key Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  async deleteNode(key: string, recursive: boolean): Promise<Result<void, Err>> {
+  async deleteTask(key: string, recursive: boolean): Promise<Result<void, Err>> {
     key = TryGetIDFromFilepath(key);
 
-    const db = await this.dbPromise;
-    const node = await db.get('index', key);
-    const all = await db.getAll("index");
+    const node = await this.db.get('index', key);
+    const all = await this.db.getAll("index");
 
     if (node) {
       try {
-        await db.delete('files', node.filepath);
-        await db.delete('index', key);
+        await this.db.delete('files', node.filepath);
+        await this.db.delete('index', key);
       } catch (e) {// TODO Throw an error during development/testing ONLY
         throw new IOError("Delete", key, e);
       }
@@ -143,12 +140,12 @@ export class BrowserStorage implements IStorage {
   //#region Utilities
 
   async writeTaskToDB(task: TaskData): Promise<Result<void, IOError>> {
-    const db = await this.dbPromise;
+    
     const md = Task.toMarkdown(task);
 
     try {
       // Create the .md file
-      await db.put('files', { filepath: task.filepath, content: md });
+      await this.db.put('files', { filepath: task.filepath, content: md });
     } catch (e) {
       return err(new IOError("Write", `Task: ${task.title}`, md, e));
     }
@@ -165,8 +162,8 @@ export class BrowserStorage implements IStorage {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   private async updateIndexFromFile(filepath: string): Promise<Result<void, NotFoundError | ParseError>> {
-    const db = await this.dbPromise;
-    const file = await db.get('files', filepath);
+    
+    const file = await this.db.get('files', filepath);
 
     if (!file) {
       return err(new NotFoundError(filepath, "File"));
@@ -174,7 +171,7 @@ export class BrowserStorage implements IStorage {
 
     return Task.fromMarkdown(file.content, filepath).match(
       async node => {
-        await db.put('index', node);
+        await this.db.put('index', node);
         return ok();
       },
       error => {

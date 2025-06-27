@@ -2,26 +2,27 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { NativeStorage } from './NativeStorage';
 import { NotFoundError, ParseError } from '$lib/Errors';
 import { Filesystem } from '@capacitor/filesystem';
-import { SQLiteConnection } from '@capacitor-community/sqlite';
-import type { TaskData } from './TaskData';
+import type { TestIStorageImplementation } from './IStorage.test';
+import type { IStorage } from './types';
 
 vi.mock("@capacitor/filesystem");
 vi.mock("@capacitor-community/sqlite");
 const fsMock = vi.mocked(Filesystem);
 
-function sampleTask(id: string): TaskData {
-    return {
-        id,
-        filepath: `${id}.md`,
-        title: `Task ${id}`,
-        content: 'Sample content',
-        created: new Date().toISOString(),
-        lastEdit: new Date().toISOString(),
-    };
-}
+export const NativeIStorageTest: TestIStorageImplementation<NativeStorage> = {
+    name: "Native",
+    getInstance: async () => {
+        return await NativeStorage.get('');
+    },
+    beforeeach: async (storage: IStorage) => {
+        // @ts-expect-error
+        fsMock.__reset && fsMock.__reset();
 
-let _id = 0;
-const idnext = () => { _id++; return _id.toString(); }
+        fsMock.writeFile.mockClear();
+        fsMock.readFile.mockClear();
+        fsMock.deleteFile.mockClear();
+    },
+}
 
 describe("Unit", () => {
     let storage: NativeStorage;
@@ -35,52 +36,6 @@ describe("Unit", () => {
         fsMock.readFile.mockClear();
         fsMock.deleteFile.mockClear();
         storage = await NativeStorage.get('vault');
-    });
-
-    it('should create a node and update index', async () => {
-        const taskData = sampleTask(idnext());
-        const result = await storage.createNode(taskData);
-        expect(result).toBeOk();
-        expect(fsMock.writeFile).toHaveBeenCalled();
-    });
-
-    it('should read a node from the database', async () => {
-        const taskData = sampleTask(idnext());
-        const createRes = await storage.createNode(taskData);
-        expect(createRes).toBeOk();
-        const id = createRes._unsafeUnwrap();
-
-        const result = await storage.readNode(id);
-        expect(result).toBeOk();
-        expect(result._unsafeUnwrap().id).toBe(id);
-    });
-
-    it('should return NotFoundError for missing node', async () => {
-        const result = await storage.readNode('missing');
-        expect(result).toErr();
-        expect(result._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
-    });
-
-    it('should update a node', async () => {
-        const taskData = sampleTask(idnext());
-        const createRes = await storage.createNode(taskData);
-        expect(createRes).toBeOk();
-        const id = createRes._unsafeUnwrap();
-
-        const result = await storage.updateNode(id, { title: 'Updated' });
-        expect(result).toBeOk();
-        expect(fsMock.writeFile).toHaveBeenCalled();
-    });
-
-    it('should delete a node', async () => {
-        const taskData = sampleTask(idnext());
-        const createRes = await storage.createNode(taskData);
-        expect(createRes).toBeOk();
-        const id = createRes._unsafeUnwrap();
-
-        const result = await storage.deleteNode(id);
-        expect(result).toBeOk();
-        expect(fsMock.deleteFile).toHaveBeenCalled();
     });
 
     it('should handle updateIndexFromFile with parse error', async () => {
@@ -100,4 +55,4 @@ describe("Unit", () => {
     });
 });
 
-describe("Integration", () => {});
+// describe("Integration", () => { });

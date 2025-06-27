@@ -49,7 +49,7 @@ export class NativeStorage implements IStorage {
         }
     }
 
-    async createNode(node: CreateTaskDTO): Promise<Result<string, IOError | NotFoundError | ParseError>> {
+    async createTask(node: CreateTaskDTO): Promise<Result<string, IOError | NotFoundError | ParseError>> {
         const created = new Date().toISOString();
         const id = v4();
         const fullNode: TaskData = { ...node, created, id };
@@ -78,7 +78,7 @@ export class NativeStorage implements IStorage {
         return ok(id);
     }
 
-    async readNode(id: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
+    async readTask(id: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
         if (!this.db) throw new Error("Database not initialized");
         // Read from SQLite only (optimization)
         const res = await this.db.query('SELECT * FROM tasks WHERE id = ?', [id]);
@@ -99,9 +99,9 @@ export class NativeStorage implements IStorage {
         return err(new NotFoundError(id, 'Node'));
     }
 
-    async updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
+    async updateTask(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
         // Get current node from DB
-        const current = await this.readNode(id);
+        const current = await this.readTask(id);
         if (current.isErr()) return err(current._unsafeUnwrapErr());
 
         const updated: TaskData = {
@@ -130,7 +130,7 @@ export class NativeStorage implements IStorage {
         return ok(updated);
     }
 
-    async deleteNode(id: string/* , recursive: boolean */): Promise<Result<void, IOError>> {
+    async deleteTask(id: string/* , recursive: boolean */): Promise<Result<void, IOError>> {
         if (!this.db) throw new Error("Database not initialized");
         // Get filepath from DB
         const res = await this.db.query('SELECT filepath FROM tasks WHERE id = ?', [id]);
@@ -182,7 +182,7 @@ export class NativeStorage implements IStorage {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     node.id,
-                    path.join(this.vaultPath, node.filepath),
+                    node.filepath, ///TODO We'll deal with this later... path.join(this.vaultPath, node.filepath),
                     node.title,
                     node.content ?? null,
                     node.created,

@@ -7,7 +7,7 @@ import type { TaskData } from "./TaskData";
 export class SupabaseStorage implements IStorage {
   private client: SupabaseClient;
 
-  constructor() {
+  private constructor() {
     const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
     const supabaseKey = import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
 
@@ -15,7 +15,11 @@ export class SupabaseStorage implements IStorage {
     this.client = createClient(supabaseUrl, supabaseKey);
   }
 
-  async createNode(node: CreateTaskDTO): Promise<Result<string, Err>> {
+  static get(): Promise<SupabaseStorage> {
+    return Promise.resolve(new SupabaseStorage());
+  }
+
+  async createTask(node: CreateTaskDTO): Promise<Result<string, Err>> {
     // Generate ID if not provided
     const created = new Date().toISOString();
     const insertObj = { ...node, created };
@@ -29,14 +33,14 @@ export class SupabaseStorage implements IStorage {
   }
 
   /** Filepath is basically ignored in the server's database */
-  async readNode(id: string): Promise<Result<TaskData, NotFoundError | Err>> {
+  async readTask(id: string): Promise<Result<TaskData, NotFoundError | Err>> {
     // path is filepath, not id
     const { data, error } = await this.client.from('tasks').select().eq('id', id).single();
     if (error || !data) return err(new NotFoundError(id, 'Node'));
     return ok(data as TaskData);
   }
 
-  async updateNode(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>> {
+  async updateTask(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>> {
     const { data, error } = await this.client
       .from('tasks')
       .update({ ...updates, lastEdit: new Date().toISOString() })
@@ -47,7 +51,7 @@ export class SupabaseStorage implements IStorage {
     return ok(data as TaskData);
   }
 
-  async deleteNode(id: string, recursive: boolean): Promise<Result<void, Err>> {
+  async deleteTask(id: string, recursive: boolean): Promise<Result<void, Err>> {
     const { error } = await this.client.from('tasks').delete().eq('id', id);
     if (error) return err(new IOError("Delete", id, error));
     return ok();
