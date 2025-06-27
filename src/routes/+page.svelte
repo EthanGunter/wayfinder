@@ -1,7 +1,7 @@
-<script>
-	import { m } from "$lib/paraglide/messages";
-
+<script lang="ts">
 </script>
-<h1>Welcome to SvelteKit</h1>
-<p>{m.test()}</p>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+
+<h1>Welcome to Wayfinder!</h1>
+
+<style lang="scss">
+</style>
