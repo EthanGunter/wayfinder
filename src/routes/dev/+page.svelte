@@ -8,42 +8,35 @@
 
 	<section>
 		<h3>1. Basic Tooltip</h3>
-		<Tooltip content="This is a helpful tooltip!" position="top">
-			<button>Hover me</button>
-		</Tooltip>
+		<button id="basic-btn">Hover me</button>
+		<Tooltip forElement="#basic-btn" position="mouse">This is a helpful tooltip!</Tooltip>
 	</section>
 
 	<section>
 		<h3>2. Different Positions</h3>
 		<div class="position-grid">
-			<Tooltip content="Top tooltip" position="top">
-				<button>Top</button>
-			</Tooltip>
-			
-			<Tooltip content="Right tooltip" position="right">
-				<button>Right</button>
-			</Tooltip>
-			
-			<Tooltip content="Bottom tooltip" position="bottom">
-				<button>Bottom</button>
-			</Tooltip>
-			
-			<Tooltip content="Left tooltip" position="left">
-				<button>Left</button>
-			</Tooltip>
+			<button id="top">Top</button>
+			<Tooltip forElement="#top" followMouse position="top">Top tooltip</Tooltip>
+
+			<button id="right">Right</button>
+			<Tooltip forElement="#right" followMouse position="right">Right tooltip</Tooltip>
+
+			<button id="bottom">Bottom</button>
+			<Tooltip forElement="#bottom" followMouse position="bottom">Bottom tooltip</Tooltip>
+
+			<button id="left">Left</button>
+			<Tooltip forElement="#left" followMouse position="left">Left tooltip</Tooltip>
 		</div>
 	</section>
 
 	<section>
 		<h3>3. BubbleText with Error Tooltip</h3>
 		<div class="bubble-examples">
-			<BubbleText id="normal" onDelete={(id) => console.log('Delete:', id)}>
-				Normal Tag
-			</BubbleText>
-			
-			<BubbleText 
-				id="error" 
-				error={{ msg: "This tag has an error that needs attention!" }}
+			<BubbleText id="normal" onDelete={(id) => console.log('Delete:', id)}>Normal Tag</BubbleText>
+
+			<BubbleText
+				id="error"
+				error={{ msg: 'This tag has an error that needs attention!' }}
 				onDelete={(id) => console.log('Delete:', id)}
 			>
 				Error Tag
@@ -53,19 +46,84 @@
 
 	<section>
 		<h3>4. Complex Content</h3>
-		<Tooltip content="This tooltip has a longer message that will wrap to multiple lines when it gets too long" position="bottom">
-			<div class="complex-trigger">
-				<span>📊</span>
-				<span>Complex Element</span>
-			</div>
-		</Tooltip>
+		<div class="complex-trigger">
+			<span>📊</span>
+			<span>Complex Element</span>
+		</div>
+		<Tooltip forElement=".complex-trigger" position="bottom">Not so complex tooltip</Tooltip>
 	</section>
 
 	<section>
 		<h3>5. Delayed Tooltip</h3>
-		<Tooltip content="This tooltip appears after a delay" position="top" delay={500}>
-			<button>Hover and wait</button>
-		</Tooltip>
+		<button id="wait">Hover and wait</button>
+		<Tooltip forElement="#wait" position="top" delay={500}
+			>This tooltip appears after a delay</Tooltip
+		>
+	</section>
+
+	<section>
+		<h3>6. Advanced Tooltip with Named Slots</h3>
+		<div class="advanced-examples">
+			<button class="fancy-button">
+				<span class="icon">✨</span>
+				<span>Fancy Button</span>
+			</button>
+
+			<Tooltip forElement=".fancy-button" position="top">
+				<div class="rich-tooltip">
+					<h4>Rich Content</h4>
+					<p>This tooltip can contain <strong>HTML</strong> content!</p>
+					<ul>
+						<li>✅ Lists</li>
+						<li>🎨 Styling</li>
+						<li>📊 Any content</li>
+					</ul>
+				</div>
+			</Tooltip>
+
+			<div class="card">
+				<div class="card-icon">📈</div>
+				<div class="card-content">
+					<h4>Data Card</h4>
+					<p>Hover for details</p>
+				</div>
+			</div>
+
+			<Tooltip forElement=".card" position="right" delay={300}>
+				<div class="data-tooltip">
+					<div class="metric">
+						<span class="label">Revenue:</span>
+						<span class="value">$12,345</span>
+					</div>
+					<div class="metric">
+						<span class="label">Growth:</span>
+						<span class="value positive">+15.3%</span>
+					</div>
+					<div class="metric">
+						<span class="label">Users:</span>
+						<span class="value">1,234</span>
+					</div>
+				</div>
+			</Tooltip>
+
+			<img
+				id="img"
+				src="https://via.placeholder.com/100x100/4f46e5/ffffff?text=IMG"
+				alt="Sample"
+				class="sample-image"
+			/>
+
+			<Tooltip forElement="#img" position="bottom">
+				<div class="image-tooltip">
+					<h4>Image Details</h4>
+					<div class="details">
+						<div><strong>Size:</strong> 100x100px</div>
+						<div><strong>Format:</strong> PNG</div>
+						<div><strong>Created:</strong> Today</div>
+					</div>
+				</div>
+			</Tooltip>
+		</div>
 	</section>
 </div>
 
@@ -74,10 +132,10 @@
 		max-width: 600px;
 		margin: 2rem auto;
 		padding: 2rem;
-		
+
 		section {
 			margin-bottom: 3rem;
-			
+
 			h3 {
 				margin-bottom: 1rem;
 				color: var(--c-text);
@@ -108,7 +166,7 @@
 		border: 1px solid var(--c-border);
 		border-radius: var(--interactible-border-radius);
 		cursor: pointer;
-		
+
 		&:hover {
 			background: var(--c-bg);
 		}
@@ -121,9 +179,151 @@
 		border: none;
 		border-radius: var(--interactible-border-radius);
 		cursor: pointer;
-		
+
 		&:hover {
 			background: var(--c-primary_-1);
+		}
+	}
+
+	.advanced-examples {
+		display: flex;
+		gap: 2rem;
+		flex-wrap: wrap;
+		align-items: flex-start;
+	}
+
+	.fancy-button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1.5rem;
+		background: linear-gradient(135deg, var(--c-primary), var(--c-primary_-1));
+		color: var(--c-bg_2);
+		border: none;
+		border-radius: var(--interactible-border-radius);
+		cursor: pointer;
+		font-weight: 500;
+		transition: all 0.2s ease;
+
+		.icon {
+			font-size: 1.1em;
+		}
+
+		&:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		}
+	}
+
+	.card {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1rem;
+		background: var(--c-bg_1);
+		border: 1px solid var(--c-border);
+		border-radius: var(--interactible-border-radius);
+		cursor: pointer;
+		transition: all 0.2s ease;
+		min-width: 200px;
+
+		&:hover {
+			background: var(--c-bg);
+			border-color: var(--c-primary);
+		}
+
+		.card-icon {
+			font-size: 2rem;
+		}
+
+		.card-content {
+			h4 {
+				margin: 0 0 0.25rem 0;
+				color: var(--c-text);
+			}
+
+			p {
+				margin: 0;
+				color: var(--c-text_-1);
+				font-size: 0.9rem;
+			}
+		}
+	}
+
+	.sample-image {
+		border-radius: var(--interactible-border-radius);
+		cursor: pointer;
+		transition: transform 0.2s ease;
+
+		&:hover {
+			transform: scale(1.05);
+		}
+	}
+
+	/* Tooltip content styles */
+	:global(.rich-tooltip) {
+		h4 {
+			margin: 0 0 0.5rem 0;
+			color: var(--c-bg_2);
+			font-size: 1rem;
+		}
+
+		p {
+			margin: 0 0 0.5rem 0;
+			line-height: 1.4;
+		}
+
+		ul {
+			margin: 0;
+			padding-left: 1rem;
+
+			li {
+				margin: 0.25rem 0;
+			}
+		}
+	}
+
+	:global(.data-tooltip) {
+		.metric {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin: 0.5rem 0;
+			min-width: 150px;
+
+			&:first-child {
+				margin-top: 0;
+			}
+
+			&:last-child {
+				margin-bottom: 0;
+			}
+
+			.label {
+				font-weight: 500;
+			}
+
+			.value {
+				font-weight: 600;
+
+				&.positive {
+					color: #10b981;
+				}
+			}
+		}
+	}
+
+	:global(.image-tooltip) {
+		h4 {
+			margin: 0 0 0.5rem 0;
+			color: var(--c-bg_2);
+		}
+
+		.details {
+			div {
+				margin: 0.25rem 0;
+				font-size: 0.9rem;
+			}
 		}
 	}
 </style>

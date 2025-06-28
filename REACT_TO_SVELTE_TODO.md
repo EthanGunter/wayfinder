@@ -21,10 +21,6 @@ This document tracks JSX to Svelte file conversions. TODO-tagged functionality i
 - [x] **task-item-context-menu.tsx** → `TaskItemContextMenu.svelte`
 - [x] **bubble-text.tsx** → `BubbleText.svelte`
 
-### Tutorial Components
-- [ ] **welcome-tutorial.tsx** → `WelcomeTutorial.svelte`
-- [ ] **tasks-tutorial.tsx** → `TasksTutorial.svelte`
-
 ### Task Browser Sub-components
 - [ ] Check `/src/old-react-code/pages/task-browser/components/` for additional files
 
@@ -47,12 +43,12 @@ This document tracks JSX to Svelte file conversions. TODO-tagged functionality i
 
 ## 🎯 CONVERSION PRIORITY
 
-### Phase 1: Essential Components
+### Phase 1: Essential Components - complete
 1. `TaskItemContextMenu.svelte` - Core task interaction
 2. `TagListInput.svelte` - Used in task editing
 3. `BubbleText.svelte` - UI component
 
-### Phase 2: Tutorial System
+### Phase 2: Tutorial System - complete
 1. `WelcomeTutorial.svelte` - User onboarding
 2. `TasksTutorial.svelte` - Feature guidance
 

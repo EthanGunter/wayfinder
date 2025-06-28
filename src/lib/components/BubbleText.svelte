@@ -10,28 +10,29 @@
 	}
 
 	const { id, children, image, error, onDelete }: Props = $props();
-
+	let bubble = $state<HTMLDivElement>();
 	function handleDelete() {
 		onDelete?.(id);
 	}
 </script>
 
 {#if error}
-	<Tooltip content={error.msg} position="top">
-		<div class="text-bubble error">
-			{#if image}
-				<img src={image} alt="" />
-			{/if}
-			<span class="text">
-				{@render children?.()}
-			</span>
-			{#if onDelete}
-				<button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
-					<!-- Using × symbol as clear icon -->
-					×
-				</button>
-			{/if}
-		</div>
+	<div bind:this={bubble} class="text-bubble error">
+		{#if image}
+			<img src={image} alt="" />
+		{/if}
+		<span class="text">
+			{@render children?.()}
+		</span>
+		{#if onDelete}
+			<button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
+				<!-- Using × symbol as clear icon -->
+				×
+			</button>
+		{/if}
+	</div>
+	<Tooltip forElement={bubble} position="top">
+		{error.msg}
 	</Tooltip>
 {:else}
 	<div class="text-bubble">
