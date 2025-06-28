@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Tooltip from './Tooltip.svelte';
+
 	interface Props {
 		id: string;
 		children: any;
@@ -9,49 +11,44 @@
 
 	const { id, children, image, error, onDelete }: Props = $props();
 
-	let showTooltip = $state(false);
-
 	function handleDelete() {
 		onDelete?.(id);
 	}
-
-	function showErrorTooltip() {
-		if (error) {
-			showTooltip = true;
-		}
-	}
-
-	function hideErrorTooltip() {
-		showTooltip = false;
-	}
 </script>
 
-<div 
-	class="text-bubble" 
-	class:error={!!error}
-	onmouseenter={showErrorTooltip}
-	onmouseleave={hideErrorTooltip}
-	title={error?.msg}
->
-	{#if image}
-		<img src={image} alt="" />
-	{/if}
-	<span class="text">
-		{@render children?.()}
-	</span>
-	{#if onDelete}
-		<button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
-			<!-- Using × symbol as clear icon -->
-			×
-		</button>
-	{/if}
-	
-	{#if error && showTooltip}
-		<div class="error-tooltip">
-			{error.msg}
+{#if error}
+	<Tooltip content={error.msg} position="top">
+		<div class="text-bubble error">
+			{#if image}
+				<img src={image} alt="" />
+			{/if}
+			<span class="text">
+				{@render children?.()}
+			</span>
+			{#if onDelete}
+				<button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
+					<!-- Using × symbol as clear icon -->
+					×
+				</button>
+			{/if}
 		</div>
-	{/if}
-</div>
+	</Tooltip>
+{:else}
+	<div class="text-bubble">
+		{#if image}
+			<img src={image} alt="" />
+		{/if}
+		<span class="text">
+			{@render children?.()}
+		</span>
+		{#if onDelete}
+			<button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
+				<!-- Using × symbol as clear icon -->
+				×
+			</button>
+		{/if}
+	</div>
+{/if}
 
 <style lang="scss">
 	.text-bubble {
@@ -102,35 +99,5 @@
 		&:hover {
 			background-color: rgb(255, 0, 0, 0.2);
 		}
-	}
-
-	.error-tooltip {
-		position: absolute;
-		top: 100%;
-		left: 50%;
-		transform: translateX(-50%);
-		background: var(--c-neg);
-		color: var(--c-bg_2);
-		padding: 0.5rem;
-		border-radius: 0.25rem;
-		font-size: 0.8rem;
-		white-space: nowrap;
-		z-index: 1000;
-		margin-top: 0.25rem;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-
-		&::before {
-			content: '';
-			position: absolute;
-			bottom: 100%;
-			left: 50%;
-			transform: translateX(-50%);
-			border: 4px solid transparent;
-			border-bottom-color: var(--c-neg);
-		}
-	}
-
-	.text-bubble {
-		position: relative;
 	}
 </style>

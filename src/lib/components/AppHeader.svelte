@@ -4,18 +4,27 @@
 	import BugReportMenu from '$lib/components/BugReportMenu.svelte';
 	import type { Task } from '$lib/DataAPI/Task';
 	import SearchBar from './SearchBar.svelte';
+	import { searchTasks } from '$lib/stores/taskStorage';
 
 	function openPulloutMenu() {
 		// TODO: Implement pullout menu logic - will need to create a pullout menu component
 		console.log('Opening pullout menu...');
 	}
 
+	async function search(query: string): Promise<Task[]> {
+		try {
+			const results = await searchTasks(query);
+			return results;
+		} catch (error) {
+			console.error('Error searching tasks:', error);
+			return [];
+		}
+	}
+
 	function gotoTask(task: Task | string) {
 		if (typeof task === 'string') {
-			// Handle string search results
-			goto(`/tasks/?search=${encodeURIComponent(task)}`);
+			// TODO Open the create-task dialog / page
 		} else {
-			// Handle Task objects
 			goto(`/tasks/?id=${task.id}`);
 		}
 	}
@@ -28,10 +37,24 @@
 		<BugReportMenu />
 	{/if}
 	<SearchBar
-		handleQuery={() => Promise.resolve([{ title: 'Fake', complete: false }, 'query', 'response'])}
+		handleQuery={search}
 		onItemSelected={gotoTask}
-		defaultOptions={['what da frik']}
-	></SearchBar>
+		placeholder="Search tasks..."
+		defaultOptions={[{ title: 'Placeholder', completed: false } as Task]}
+	>
+		{#snippet children(task)}
+			{#if typeof task === 'string'}
+				<div class="task-search-result">
+					<span class="task-title">{task}</span>
+				</div>
+			{:else}
+				<div class="task-search-result">
+					<span class="task-title">{task.title}</span>
+					<span>{task.completed ? '👍' : '👎'}</span>
+				</div>
+			{/if}
+		{/snippet}
+	</SearchBar>
 </div>
 
 <style lang="scss">
@@ -52,5 +75,27 @@
 	:global(#app-header-menu) {
 		height: 100vh;
 		max-height: 100vh;
+	}
+
+	.task-search-result {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+
+		.task-title {
+			flex: 1;
+			text-align: left;
+			font-weight: 500;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			overflow: hidden;
+		}
+
+		// .task-deps {
+		// 	color: var(--c-primary);
+		// 	font-size: 0.8rem;
+		// 	white-space: nowrap;
+		// }
 	}
 </style>

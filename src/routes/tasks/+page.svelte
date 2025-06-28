@@ -3,6 +3,7 @@
 	import type { Task } from '$lib/DataAPI/Task';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import BubbleText from '$lib/components/BubbleText.svelte';
 
 	//TODO: Replace with real task loading logic (from store, API, etc.)
 	let tasks = $state<Task[]>([]);
@@ -33,6 +34,7 @@
 
 <section class="task-browser page">
 	<!-- TODO: <TasksTutorial /> -->
+	<BubbleText id="test" error={{ msg: 'Example Error' }}>Bubble butt</BubbleText>
 	{#if currentTask}
 		<div class="task-browser-header">
 			<button class="task-browser-back-button" onclick={() => history.back()}>

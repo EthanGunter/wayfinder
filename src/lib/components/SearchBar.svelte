@@ -1,12 +1,13 @@
-<!-- SearchBar.svelte -->
-<script lang="ts">
-	interface Props<T = any> {
-		onItemSelected?: (item: T) => void;
+<script lang="ts" generics="T">
+	import type { Snippet } from 'svelte';
+
+	interface Props {
+		onItemSelected?: (item: T | string) => void;
 		handleQuery: (search: string) => Promise<T[]>;
-		defaultOptions?: T[];
+		defaultOptions?: (T | string)[];
 		placeholder?: string;
 		inverted?: boolean;
-		children?: any;
+		children?: Snippet<[T | string]>;
 	}
 
 	const {
@@ -19,7 +20,7 @@
 	}: Props = $props();
 
 	let query = $state('');
-	let searchResults = $state<any[]>([]);
+	let searchResults = $state<T[]>([]);
 	let showResults = $state(false);
 	let isLoading = $state(false);
 
@@ -54,7 +55,7 @@
 		}
 	}
 
-	function selectItem(item: string) {
+	function selectItem(item: T | string) {
 		onItemSelected?.(item);
 		query = '';
 		searchResults = [];
@@ -63,14 +64,12 @@
 
 	function handleFocus() {
 		if (query.length === 0 && defaultOptions.length > 0) {
-			let test = defaultOptions;
-			console.log(test);
-
 			showResults = true;
 		} else if (searchResults.length > 0) {
 			showResults = true;
 		}
 	}
+
 	function handleBlur() {
 		// Delay hiding to allow clicks on results
 		setTimeout(() => {
@@ -78,8 +77,7 @@
 		}, 150);
 	}
 
-	// Determine which results to show
-	let displayResults = $derived(query.length > 0 ? searchResults : defaultOptions);
+	let displayResults = $derived<(T | string)[]>(query.length > 0 ? searchResults : defaultOptions);
 </script>
 
 <div class="search-bar">
@@ -102,11 +100,11 @@
 		<ul class="search-results" class:inverted>
 			{#each displayResults as result}
 				<li class="search-result">
-					<button onclick={() => selectItem(result)}>
+					<button onclick={() => selectItem(result)} tabindex="0">
 						{#if children}
 							{@render children(result)}
 						{:else}
-							{result.toString()}
+							{result?.toString() ?? ''}
 						{/if}
 					</button>
 				</li>
@@ -130,13 +128,12 @@
 
 <style lang="scss">
 	.search-bar {
-		// Layout
 		flex: 1 1 auto;
 		position: relative;
 
 		input {
 			width: 100%;
-			z-index: 101; // .pullout z-index +1
+			z-index: 101;
 		}
 	}
 
@@ -151,6 +148,9 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
+		gap: 0.25rem;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.search-results.inverted {
@@ -159,45 +159,28 @@
 	}
 
 	.search-result {
-		// Layout
-		display: grid;
-		grid-template-columns: 1fr 1rem;
-		grid-template-rows: 1fr;
-		padding: 0.5rem;
-
-		//Style
 		background-color: var(--c-bg_-1);
 		border-radius: 0.5rem;
 		box-shadow: 3px 3px 10px 0 var(--c-shadow);
-		justify-content: center;
-		align-items: center;
-		cursor: pointer;
 
-		span {
-			text-align: center;
-			width: 100%;
-
-			white-space: nowrap;
-			text-overflow: ellipsis;
-			overflow: hidden;
-		}
-		// :nth-child(1) {
-		// 	grid-column: 1/2;
-		// }
-		// :nth-child(2) {
-		// 	grid-column: 2/3;
-		// }
 		button {
-			grid-column: 1/3;
-		}
-	}
+			width: 100%;
+			padding: 0.5rem;
+			border: none;
+			background: none;
+			cursor: pointer;
+			text-align: left;
+			border-radius: 0.5rem;
 
-	.result-text {
-		text-align: center;
-		width: 100%;
-		white-space: nowrap;
-		text-overflow: ellipsis;
-		overflow: hidden;
+			&:hover {
+				background-color: var(--c-bg);
+			}
+
+			&:focus {
+				outline: 2px solid var(--c-primary);
+				outline-offset: 2px;
+			}
+		}
 	}
 
 	.search-loading {
