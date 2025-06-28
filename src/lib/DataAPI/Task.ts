@@ -9,19 +9,37 @@ export interface TaskData {
     created: string, // ISO Timestamp
     content?: string,
     lastEdit?: string, // ISO Timestamp
-    /** This task's prequisite[s] */
-    dependsOn?: string, // Todo this might become an array in the future
-    /** Tasks that can't be completed until this one is */
-    dependants?: string[]
+    /** 
+     * Tasks that can't be completed until this one is.
+     * Effectively the node's parent
+    */
+    dependants?: string //TODO this might become an array in the future
+    /** 
+     * This task's prequisite[s].
+     * Effectively the node's children
+    */
+    dependsOn?: string[]
+}
+
+export enum TaskStatus {
+    incomplete = 0,
+    complete = 1,
 }
 
 export class Task implements TaskData {
     id: string;
+    status: TaskStatus;
     filepath: string;
     title: string;
     created: string;
     content?: string;
     lastEdit?: string;
+    dependants?: string;
+    dependsOn?: string[];
+
+    public get completed(): boolean {
+        return this.status === TaskStatus.complete;
+    }
 
     constructor({
         id,
@@ -37,8 +55,8 @@ export class Task implements TaskData {
         this.content = content;
         this.created = created;
         this.lastEdit = lastEdit;
+        this.status = TaskStatus.incomplete;
     }
-
 
     // Helper: Convert TaskData to markdown string
     static toMarkdown(task: TaskData): string {

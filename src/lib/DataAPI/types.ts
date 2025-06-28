@@ -27,9 +27,6 @@ export interface ITaskStorage {
   close(): Promise<void>;
 }
 
-
-
-
 // TODO Implement for offline sync
 /* interface SyncStatus {
   lastSyncVersion: string; // Last known sync version/timestamp
