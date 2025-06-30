@@ -1,9 +1,10 @@
 <script lang="ts">
-	import TaskList from '$lib/components/TaskList.svelte';
 	import type { Task } from '$lib/DataAPI/Task';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import BubbleText from '$lib/components/BubbleText.svelte';
+	import ItemList from '$lib/components/ItemList.svelte';
+	import TaskListItem from '$lib/components/TaskListItem.svelte';
 
 	//TODO: Replace with real task loading logic (from store, API, etc.)
 	let tasks = $state<Task[]>([]);
@@ -58,11 +59,19 @@
 			{/if}
 		</div>
 		<!-- TODO: <TaskEditor task={currentTask}> -->
-		<TaskList tasks={children} />
+		<ItemList items={children}>
+			{#snippet list(task, index)}
+				<TaskListItem {task} />
+			{/snippet}
+		</ItemList>
 		<button id="add-task-button" onclick={addTask}>Add Task</button>
 		<!-- </TaskEditor> -->
 	{:else}
-		<TaskList tasks={children} />
+		<ItemList items={children}>
+			{#snippet list(task, index)}
+				<TaskListItem {task} />
+			{/snippet}
+		</ItemList>
 		<button id="add-task-button" onclick={addTask}>New Project</button>
 	{/if}
 </section>

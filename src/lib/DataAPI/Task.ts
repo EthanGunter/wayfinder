@@ -7,6 +7,7 @@ export interface TaskData {
     filepath: string
     title: string,
     created: string, // ISO Timestamp
+    status: TaskStatus
     content?: string,
     lastEdit?: string, // ISO Timestamp
     /** 
@@ -28,9 +29,9 @@ export enum TaskStatus {
 
 export class Task implements TaskData {
     id: string;
-    status: TaskStatus;
     filepath: string;
     title: string;
+    status: TaskStatus;
     created: string;
     content?: string;
     lastEdit?: string;
@@ -47,15 +48,16 @@ export class Task implements TaskData {
         title,
         content,
         created,
-        lastEdit
+        lastEdit,
+        status
     }: TaskData) {
         this.id = id;
         this.filepath = filepath;
         this.title = title;
+        this.status = status;
         this.content = content;
         this.created = created;
         this.lastEdit = lastEdit;
-        this.status = TaskStatus.incomplete;
     }
 
     // Helper: Convert TaskData to markdown string

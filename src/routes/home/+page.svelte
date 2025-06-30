@@ -1,8 +1,9 @@
 <script lang="ts">
-	import TaskList from '$lib/components/TaskList.svelte';
-	import { droppable } from '$lib/dnd';
-	import type { Task } from '$lib/DataAPI/Task';
+	import { droppable } from '$lib/actions/dnd';
+	import { Task, TaskStatus, type TaskData } from '$lib/DataAPI/Task';
 	import { goto } from '$app/navigation';
+	import ItemList from '$lib/components/ItemList.svelte';
+	import TaskListItem from '$lib/components/TaskListItem.svelte';
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
@@ -64,20 +65,24 @@
 	let filteredSuggestedTasks = $derived(
 		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
 	);
+
+	const tasks: Task[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(
+		(id) =>
+			new Task({
+				title: id,
+				id: id,
+				filepath: id,
+				created: new Date().toISOString(),
+				status: TaskStatus.incomplete //parseInt(id) % 2 == 0 ? TaskStatus.complete : TaskStatus.incomplete
+			})
+	);
 </script>
 
 <div class="page page-todays-tasks">
 	<!-- TODO: <HomepageTutorial /> -->
 	<!-- TODO: <TasksTutorial /> -->
 
-	<div
-		class="drop-zone"
-		id="todays-tasks-list"
-		use:droppable={{
-			accepts: ['task'],
-			onDrop: handleTodaysTaskDrop
-		}}
-	>
+	<div id="todays-tasks-list">
 		<h1>Today's Tasks</h1>
 		{#if filteredDaysTasks.length === 0}
 			<h4>Empty todolist!</h4>
@@ -92,12 +97,31 @@
 			</div>
 		{/if}
 
-		<TaskList tasks={filteredDaysTasks} />
+		<ItemList items={filteredDaysTasks} accepts={['task']}>
+			{#snippet list(task, index)}
+				<TaskListItem {task} />
+			{/snippet}
+		</ItemList>
+
+		<!-- Pending Tasks -->
+		<h2>TODO</h2>
+		<ItemList items={tasks.filter((t) => !t.completed)} accepts={['task']}>
+			{#snippet list(task, index)}
+				<TaskListItem {task} />
+			{/snippet}
+		</ItemList>
+
+		<!-- Completed Tasks -->
+		<h2>TOO DONE</h2>
+		<ItemList items={tasks.filter((t) => t.completed)} accepts={['task']}>
+			{#snippet list(task, index)}
+				<TaskListItem {task} />
+			{/snippet}
+		</ItemList>
 	</div>
 
 	{#if suggestedTasks.length > 0 && todaysList.length < 999}
 		<div
-			class="drop-zone"
 			id="suggested-tasks-list"
 			use:droppable={{
 				accepts: ['task'],
@@ -105,7 +129,11 @@
 			}}
 		>
 			<h2>Suggested Tasks</h2>
-			<TaskList tasks={filteredSuggestedTasks} />
+			<ItemList items={filteredSuggestedTasks}>
+				{#snippet list(task, index)}
+					<TaskListItem {task} />
+				{/snippet}
+			</ItemList>
 		</div>
 	{/if}
 </div>
@@ -118,15 +146,15 @@
 		margin-bottom: 2em;
 		min-height: 3em;
 		padding: 1em;
-		border: 2px dashed transparent;
-	}
-	.drop-zone.valid-drop {
-		border-color: var(--color-accent, #007acc);
-		background-color: var(--background-modifier-hover, #f5f5f5);
-	}
-	.drop-zone.invalid-drop {
-		border-color: var(--color-accent, #007acc);
-		background-color: var(--background-modifier-hover, #f5f5f5);
+		border: 2px dashed red;
+		&.valid-drop {
+			border-color: var(--color-accent, #007acc);
+			background-color: var(--background-modifier-hover, #f5f5f5);
+		}
+		&.invalid-drop {
+			border-color: var(--color-accent, #007acc);
+			background-color: var(--background-modifier-hover, #f5f5f5);
+		}
 	}
 	#add-task-button {
 		padding: 0.7em 1.5em;

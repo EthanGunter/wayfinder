@@ -1,7 +1,9 @@
 .dnd-draggable {
   cursor: grab;
   user-select: none;
+
 }
+
 .dnd-ghost {
   position: absolute;
   pointer-events: none !important;
