@@ -1,14 +1,31 @@
 <script lang="ts">
 	import Tooltip from '$lib/components/Tooltip.svelte';
 	import BubbleText from '$lib/components/BubbleText.svelte';
+	import Modal from '$lib/components/Modal.svelte';
+	import Pullout from '$lib/components/PulloutBlock.svelte';
+
+	let showModal = $state(false);
+	let openPullout = $state(false);
+	const placementOpts: ['left', 'top', 'right', 'bottom'] = ['left', 'top', 'right', 'bottom'];
+	let placementInd = $state(0);
+	let placement = $state<'left' | 'top' | 'right' | 'bottom'>('left');
+	$effect(() => {
+		placement = placementOpts[placementInd % 4];
+	});
 </script>
 
 <div class="examples">
+	<Modal title="Test Modal" bind:open={showModal}>Yep, this is a modal.</Modal>
+	<button onclick={() => (openPullout = true)}>Open pullout</button>
+	<Pullout bind:open={openPullout} {placement}
+		><button onclick={() => placementInd++}>Switch location</button></Pullout
+	>
+
 	<h2>Tooltip Examples</h2>
 
 	<section>
 		<h3>1. Basic Tooltip</h3>
-		<button id="basic-btn">Hover me</button>
+		<button id="basic-btn" onclick={() => (showModal = true)}>Hover me</button>
 		<Tooltip forElement="#basic-btn" position="mouse">This is a helpful tooltip!</Tooltip>
 	</section>
 

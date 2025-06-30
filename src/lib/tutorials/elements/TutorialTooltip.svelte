@@ -1,82 +1,30 @@
 <script lang="ts">
-	interface Props {
+	import Tooltip from '$lib/components/Tooltip.svelte';
+
+	export interface Props {
+		forElement: string | HTMLElement;
+		position?: 'top' | 'bottom' | 'left' | 'right' | 'mouse';
 		title?: string;
 		content: string;
-		target?: string; // CSS selector for positioning
+		showControls?: boolean;
 		onNext?: () => void;
 		onPrevious?: () => void;
 		onSkip?: () => void;
-		showControls?: boolean;
-		position?: 'top' | 'bottom' | 'left' | 'right' | 'center';
 	}
 
-	const { 
-		title, 
-		content, 
-		target,
-		onNext, 
-		onPrevious, 
-		onSkip, 
+	const {
+		forElement,
+		position = 'top',
+		title,
+		content,
 		showControls = true,
-		position = 'bottom'
+		onNext,
+		onPrevious,
+		onSkip
 	}: Props = $props();
-
-	let tooltipElement: HTMLDivElement;
-
-	$effect(() => {
-		if (tooltipElement && target) {
-			positionTooltip();
-		}
-	});
-
-	function positionTooltip() {
-		const targetEl = document.querySelector(target!);
-		if (!targetEl || !tooltipElement) return;
-
-		const targetRect = targetEl.getBoundingClientRect();
-		const tooltipRect = tooltipElement.getBoundingClientRect();
-
-		let top = 0;
-		let left = 0;
-
-		switch (position) {
-			case 'top':
-				top = targetRect.top - tooltipRect.height - 16;
-				left = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
-				tooltipElement.classList.add('arrow-bottom');
-				break;
-			case 'bottom':
-				top = targetRect.bottom + 16;
-				left = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
-				tooltipElement.classList.add('arrow-top');
-				break;
-			case 'left':
-				top = targetRect.top + (targetRect.height - tooltipRect.height) / 2;
-				left = targetRect.left - tooltipRect.width - 16;
-				tooltipElement.classList.add('arrow-right');
-				break;
-			case 'right':
-				top = targetRect.top + (targetRect.height - tooltipRect.height) / 2;
-				left = targetRect.right + 16;
-				tooltipElement.classList.add('arrow-left');
-				break;
-			case 'center':
-			default:
-				top = window.innerHeight / 2 - tooltipRect.height / 2;
-				left = window.innerWidth / 2 - tooltipRect.width / 2;
-				break;
-		}
-
-		// Keep tooltip within viewport
-		top = Math.max(16, Math.min(top, window.innerHeight - tooltipRect.height - 16));
-		left = Math.max(16, Math.min(left, window.innerWidth - tooltipRect.width - 16));
-
-		tooltipElement.style.top = `${top}px`;
-		tooltipElement.style.left = `${left}px`;
-	}
 </script>
 
-<div bind:this={tooltipElement} class="tutorial-tooltip">
+<Tooltip {forElement} {position} show>
 	{#if title}
 		<h3 class="tutorial-title">{title}</h3>
 	{/if}
@@ -95,10 +43,10 @@
 			{/if}
 		</div>
 	{/if}
-</div>
+</Tooltip>
 
 <style>
-	.tutorial-tooltip {
+	:global(.tooltip) {
 		position: absolute;
 		background: var(--background-primary, white);
 		border: 1px solid var(--border-color, #ccc);
