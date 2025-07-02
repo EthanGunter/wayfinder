@@ -12,25 +12,20 @@
 	}: Props = $props();
 
 	let dialogEl = $state<HTMLDialogElement>();
-	onMount(() => {
-		console.log('dialogEl at mount', dialogEl);
-		dialogEl?.addEventListener('click', (e) => {
-			console.log('Clicked dialog element');
-			const x = e.clientX;
-			const y = e.clientY;
-			const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+	function handleClick(e: MouseEvent) {
+		e.stopPropagation();
 
-			if (x < box.left || x > box.right || y < box.top || y > box.bottom) {
-				console.log('Out of bounds', x, y, box);
-				open = false;
-				dialogEl?.close();
-			}
-		});
-	});
+		const x = e.clientX;
+		const y = e.clientY;
+		const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+
+		if (x < box.left || x > box.right || y < box.top || y > box.bottom) {
+			open = false;
+			dialogEl?.close();
+		}
+	}
 	$effect(() => {
 		if (open) {
-			console.log('Show');
-
 			dialogEl?.showModal();
 		} else {
 			dialogEl?.close();
@@ -38,14 +33,16 @@
 	});
 </script>
 
-<dialog bind:this={dialogEl} class="placement-{placement}">
+<dialog bind:this={dialogEl} onclick={handleClick} class="placement-{placement}">
 	{@render children()}
 </dialog>
 
 <style>
 	dialog {
-		transition: display 0.2s allow-discrete, overlay 0.2s allow-discrete;
-		background: var(--c-bg_2, #fff);
+		transition:
+			display 0.2s allow-discrete,
+			overlay 0.2s allow-discrete;
+		background: var(--c-bg, #fff);
 		border: 1px solid var(--c-border, #ccc);
 		box-shadow: 0 0 2rem 0 var(--c-shadow, #0002);
 		padding: 1rem;
@@ -105,35 +102,83 @@
 	}
 
 	@keyframes open-left {
-		from { transform: translateX(-100%); opacity: 0; }
-		to   { transform: translateX(0); opacity: 1; }
+		from {
+			transform: translateX(-100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
 	}
 	@keyframes close-left {
-		from { transform: translateX(0); opacity: 1; }
-		to   { transform: translateX(-100%); opacity: 0; }
+		from {
+			transform: translateX(0);
+			opacity: 1;
+		}
+		to {
+			transform: translateX(-100%);
+			opacity: 0;
+		}
 	}
 	@keyframes open-right {
-		from { transform: translateX(100%); opacity: 0; }
-		to   { transform: translateX(0); opacity: 1; }
+		from {
+			transform: translateX(100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
 	}
 	@keyframes close-right {
-		from { transform: translateX(0); opacity: 1; }
-		to   { transform: translateX(100%); opacity: 0; }
+		from {
+			transform: translateX(0);
+			opacity: 1;
+		}
+		to {
+			transform: translateX(100%);
+			opacity: 0;
+		}
 	}
 	@keyframes open-top {
-		from { transform: translateY(-100%); opacity: 0; }
-		to   { transform: translateY(0); opacity: 1; }
+		from {
+			transform: translateY(-100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateY(0);
+			opacity: 1;
+		}
 	}
 	@keyframes close-top {
-		from { transform: translateY(0); opacity: 1; }
-		to   { transform: translateY(-100%); opacity: 0; }
+		from {
+			transform: translateY(0);
+			opacity: 1;
+		}
+		to {
+			transform: translateY(-100%);
+			opacity: 0;
+		}
 	}
 	@keyframes open-bottom {
-		from { transform: translateY(100%); opacity: 0; }
-		to   { transform: translateY(0); opacity: 1; }
+		from {
+			transform: translateY(100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateY(0);
+			opacity: 1;
+		}
 	}
 	@keyframes close-bottom {
-		from { transform: translateY(0); opacity: 1; }
-		to   { transform: translateY(100%); opacity: 0; }
+		from {
+			transform: translateY(0);
+			opacity: 1;
+		}
+		to {
+			transform: translateY(100%);
+			opacity: 0;
+		}
 	}
 </style>

@@ -4,43 +4,72 @@
 	import { goto } from '$app/navigation';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
+	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
+	import { onMount } from 'svelte';
+	import type { ITaskStorage } from '$lib/DataAPI/types';
+
+	let API = $state<ITaskStorage>();
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
 	let draggedTask = $state<Task | null>(null);
 
-	//TODO: Replace with real task loading logic
+	onMount(async () => {
+		API = await BrowserTaskStorage.get();
+		refreshTasks();
+	});
+
 	function refreshTasks() {
-		//TODO: getTodaysTasks().then(tasks => todaysList = tasks);
-		//TODO: getPrioritizedTasks(15).then(topTasks => suggestedTasks = topTasks);
+		if (!API) return;
+		API.getTodaysTasks().then((tasks) =>
+			tasks.match(
+				(data) => {
+					todaysList = data;
+				},
+				(err) => {
+					console.error(err);
+				}
+			)
+		);
+		API.getPrioritizedTasks(15).then((result) =>
+			result.match(
+				(tasks) => {
+					suggestedTasks = tasks;
+				},
+				(err) => {
+					console.error(err);
+				}
+			)
+		);
 	}
 
-	//TODO: Call refreshTasks on mount
-	// refreshTasks();
-
 	function handleTodaysTaskDrop(e: CustomEvent) {
+		if (!API) return;
 		const task = e.detail.data;
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			//TODO: setTodaysTask(task.id, todaysList.indexOf(task));
+			API.setTodaysTask(task.id, todaysList.indexOf(task));
 		}
 	}
 
 	function handleSuggestedTaskDrop(e: CustomEvent) {
+		if (!API) return;
 		const task = e.detail.data;
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		//TODO: removeTodaysTask(task);
+		API.removeTodaysTask(task);
 	}
 
 	function todaysTaskChange(task: Task, changes: Partial<Task>) {
+		if (!API) return;
 		//TODO: Implement task change logic
 		if (changes.completed) {
-			//TODO: removeTodaysTask(task);
+			API.removeTodaysTask(task.id);
 			todaysList = todaysList.filter((t) => t.id !== task.id);
 		}
 	}
 
 	function suggestedTaskChange(task: Task, changes: Partial<Task>) {
+		if (!API) return;
 		//TODO: Implement suggested task change logic
 		if (changes.completed) {
 			suggestedTasks = suggestedTasks.filter((t) => t.id !== task.id);
@@ -48,10 +77,22 @@
 	}
 
 	async function startProject() {
+		if (!API) return;
+
 		//TODO: Implement create new project logic
-		// let newTask = await createTask(new Task("New Project"));
-		// goto(`/tasks/?id=${newTask.id}`);
-		alert('Start project (stub)');
+		let newTaskResult = await API.createTask({
+			title: 'New Task',
+			status: TaskStatus.incomplete,
+		});
+		newTaskResult.match(
+			(newTask) => {
+				goto(`/tasks/?id=${newTask}`);
+			},
+			(err) => {
+				console.error(err);
+			}
+		);
+		// alert('Start project (stub)');
 	}
 
 	function navigateToTask(task: Task) {
@@ -66,16 +107,6 @@
 		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
 	);
 
-	const tasks: Task[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(
-		(id) =>
-			new Task({
-				title: id,
-				id: id,
-				filepath: id,
-				created: new Date().toISOString(),
-				status: TaskStatus.incomplete //parseInt(id) % 2 == 0 ? TaskStatus.complete : TaskStatus.incomplete
-			})
-	);
 </script>
 
 <div class="page page-todays-tasks">
@@ -98,22 +129,6 @@
 		{/if}
 
 		<ItemList items={filteredDaysTasks} accepts={['task']}>
-			{#snippet list(task, index)}
-				<TaskListItem {task} />
-			{/snippet}
-		</ItemList>
-
-		<!-- Pending Tasks -->
-		<h2>TODO</h2>
-		<ItemList items={tasks.filter((t) => !t.completed)} accepts={['task']}>
-			{#snippet list(task, index)}
-				<TaskListItem {task} />
-			{/snippet}
-		</ItemList>
-
-		<!-- Completed Tasks -->
-		<h2>TOO DONE</h2>
-		<ItemList items={tasks.filter((t) => t.completed)} accepts={['task']}>
 			{#snippet list(task, index)}
 				<TaskListItem {task} />
 			{/snippet}

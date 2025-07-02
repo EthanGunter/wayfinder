@@ -46,14 +46,20 @@
 		open = false;
 	}
 
-	function handleBackdropClick(event: MouseEvent) {
-		// if (event.target === dialogEl) {
-		// 	handleCancel();
-		// }
+	function handleClick(e: MouseEvent) {
+		e.stopPropagation();
+		const x = e.clientX;
+		const y = e.clientY;
+		const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+
+		if (x < box.left || x > box.right || y < box.top || y > box.bottom) {
+			open = false;
+			dialogEl?.close();
+		}
 	}
 </script>
 
-<dialog bind:this={dialogEl} class="modal-dialog {size}" onclick={handleBackdropClick}>
+<dialog bind:this={dialogEl} class="modal-dialog {size}" onclick={handleClick}>
 	<div class="modal-content">
 		{#if title}
 			<header class="modal-header">
@@ -88,6 +94,7 @@
 			0 10px 10px -5px rgba(0, 0, 0, 0.04);
 		max-height: 90vh;
 		overflow: visible;
+		margin: auto;
 		animation: modal-appear 0.2s ease-out;
 	}
 

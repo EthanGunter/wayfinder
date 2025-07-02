@@ -191,7 +191,7 @@ export class NativeTaskStorage implements ITaskStorage {
                     task.created,
                     task.lastEdit ?? null,
                     task.dependsOn ?? null,
-                    task.dependants ? JSON.stringify(task.dependants) : null
+                    task.dependant ? JSON.stringify(task.dependant) : null
                 ]
             );
         } catch (e) {

@@ -137,7 +137,7 @@
 		const draggedItem = event.detail.data;
 
 		if (originalItems.includes(draggedItem)) {
-			event.detail.node.addEventListener(eventNames.DROP, handleDropElsewhere as EventListener);
+			event.detail.ghost.addEventListener(eventNames.DROP, handleDropElsewhere as EventListener, { once: true });
 			items = items.filter((x) => x !== draggedItem);
 		}
 
@@ -177,9 +177,7 @@
 <style lang="scss">
 	.item-list {
 		// Fill the containing element
-		// width: 100%;
-		// height: 100%;
-		flex-grow: 1;
+		height: min-content;
 
 		display: flex;
 		flex-direction: column;

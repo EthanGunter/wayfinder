@@ -1,8 +1,11 @@
 <script lang="ts">
 	import type { Task } from '$lib/DataAPI/Task';
-	import TasksSearchBar from './TasksSearchBar.svelte';
+	import SearchBar from './SearchBar.svelte';
 	import { goto } from '$app/navigation';
-	import { deleteTask, searchTasks, updateTask } from '$lib/stores/taskStorage';
+	// import { deleteTask, searchTasks, updateTask } from '$lib/stores/taskStorage';
+	import Modal from '$lib/components/overlays/Modal.svelte';
+	import type { ITaskStorage } from '$lib/DataAPI/types';
+	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
 
 	interface Props {
 		task: Task;
@@ -22,6 +25,7 @@
 		onTaskMoved
 	}: Props = $props();
 
+	let API = $state<Promise<ITaskStorage>>(BrowserTaskStorage.get());
 	let showContextMenu = $state(false);
 	let showDeleteDialog = $state(false);
 	let showMoveMenu = $state(false);
@@ -32,6 +36,7 @@
 	let moveResolver: ((value: any) => void) | null = null;
 
 	function openContextMenu(event: MouseEvent) {
+		event.stopPropagation();
 		event.preventDefault();
 		showContextMenu = true;
 	}
@@ -51,6 +56,8 @@
 	}
 
 	async function openDeleteDialogue(event: MouseEvent) {
+		const api = await API;
+
 		event.preventDefault();
 		closeContextMenu();
 
@@ -64,7 +71,7 @@
 				deleteOverride();
 			} else {
 				try {
-					const result = await deleteTask(task.id, true);
+					const result = await api.deleteTask(task.id, true);
 					if (result.isOk()) {
 						console.log('Task deleted successfully:', task.id);
 						onTaskDeleted?.(task.id);
@@ -82,6 +89,8 @@
 	}
 
 	async function openMoveDialogue(event: MouseEvent) {
+		const api = await API;
+
 		event.preventDefault();
 		closeContextMenu();
 
@@ -92,7 +101,7 @@
 
 		if (typeof moveTarget === 'string') {
 			try {
-				const result = await updateTask(task.id, { dependants: undefined });
+				const result = await api.updateTask(task.id, { dependant: undefined });
 				if (result.isOk()) {
 					console.log('Moved to root:', task.id);
 					onTaskMoved?.(task.id);
@@ -105,7 +114,7 @@
 			}
 		} else if (moveTarget) {
 			try {
-				const result = await updateTask(task.id, { dependants: moveTarget.id });
+				const result = await api.updateTask(task.id, { dependant: moveTarget.id });
 				if (result.isOk()) {
 					console.log('Moved to parent:', moveTarget.id);
 					onTaskMoved?.(task.id, moveTarget.id);
@@ -118,7 +127,7 @@
 			}
 		} else if (moveTarget === null) {
 			try {
-				const result = await updateTask(task.id, { dependants: undefined });
+				const result = await api.updateTask(task.id, { dependant: undefined });
 				if (result.isOk()) {
 					console.log('Moved to root (null):', task.id);
 					onTaskMoved?.(task.id);
@@ -143,16 +152,16 @@
 		moveResolver?.(value);
 	}
 
-	async function handleMoveQueryUpdate(query: string) {
-		searchExpanded = query.length > 0;
-		try {
-			const results = await searchTasks(query);
-			return results.map((task) => task.title || task.id);
-		} catch (error) {
-			console.error('Error searching tasks:', error);
-			return ['Search error occurred', 'Please try again...'];
-		}
-	}
+	// async function handleMoveQueryUpdate(query: string) {
+	// 	searchExpanded = query.length > 0;
+	// 	try {
+	// 		const results = await searchTasks(query);
+	// 		return results.map((task) => task.title || task.id);
+	// 	} catch (error) {
+	// 		console.error('Error searching tasks:', error);
+	// 		return ['Search error occurred', 'Please try again...'];
+	// 	}
+	// }
 
 	// Close menus when clicking outside
 	function handleOutsideClick(event: MouseEvent) {
@@ -208,36 +217,32 @@
 {/if}
 
 <!-- Delete Confirmation Dialog -->
-{#if showDeleteDialog}
-	<div class="dialog-overlay">
-		<div class="delete-dialog dialog">
-			<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
-			{#if task.dependsOn && task.dependsOn.length > 0}
-				<p>This will also delete <em>all</em> descendants.</p>
-			{/if}
-			<div class="dialog-buttons">
-				<button class="warning" onclick={() => resolveDelete(true)}> Yes </button>
-				<button onclick={() => resolveDelete(false)}> Cancel </button>
-			</div>
+<Modal bind:open={showDeleteDialog}>
+	<div class="delete-dialog dialog">
+		<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
+		{#if task.dependsOn && task.dependsOn.length > 0}
+			<p>This will also delete <em>all</em> descendants.</p>
+		{/if}
+		<div class="dialog-buttons">
+			<button class="warning" onclick={() => resolveDelete(true)}> Yes </button>
+			<button onclick={() => resolveDelete(false)}> Cancel </button>
 		</div>
 	</div>
-{/if}
+</Modal>
 
 <!-- Move Task Menu -->
-{#if showMoveMenu}
-	<div class="dialog-overlay">
-		<div class="move-menu dialog" class:expanded={searchExpanded}>
-			<h4>Move</h4>
-			<h2>{task.title}</h2>
-			<TasksSearchBar
-				inverted={true}
-				onItemSelected={resolveMove}
-				defaultOptions={["Searching doesn't work yet"]}
-				onQueryUpdate={handleMoveQueryUpdate}
-			/>
-		</div>
+<!-- <Modal bind:open={showMoveMenu}>
+	<div class="move-menu dialog" class:expanded={searchExpanded}>
+		<h4>Move</h4>
+		<h2>{task.title}</h2>
+		<SearchBar
+			inverted={true}
+			onItemSelected={resolveMove}
+			defaultOptions={["Searching doesn't work yet"]}
+			onQueryUpdate={handleMoveQueryUpdate}
+		/>
 	</div>
-{/if}
+</Modal> -->
 
 <style>
 	.list-item-menu {

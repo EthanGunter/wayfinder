@@ -74,12 +74,6 @@ body {
   --interactible-border-radius: 0.2rem;
   --interactible-padding: 0.5rem;
 
-  // Field styles
-  --field-border: 1px solid var(--c-border);
-  --field-border-radius: var(--interactible-border-radius);
-  --field-bg: var(--input-bg);
-  --disabled: var(--c-disabled);
-
   --font-size: 1rem;
   --font-size-h1: 2em;
   --font-size-h2: 1.5em;
@@ -108,23 +102,28 @@ h1 {
   color: var(--c-text);
   font-size: var(--font-size-h1);
 }
+
 h2 {
   color: var(--c-text_1);
   font-size: var(--font-size-h2);
 }
+
 h3 {
   color: var(--c-text_1);
   font-size: var(--font-size-h3);
 }
+
 h4 {
   color: var(--c-text_2);
   font-size: var(--font-size-h4);
 }
+
 h5 {
   color: var(--c-text_2);
   font-size: var(--font-size-h5);
   font-weight: 200;
 }
+
 h6 {
   color: var(--c-text_2);
   font-size: var(--font-size-h6);
@@ -149,17 +148,19 @@ button,
 
   // Style
   padding: var(--interactible-padding);
-  font-size: large;
+  font-size: medium;
   border-radius: var(--interactible-border-radius);
   border: var(--interactible-border);
-  background-color: var(--button-bg);
+  background-color: var(--interactible-bg);
 }
+
 button,
 .button,
 *[role="button"] {
   cursor: pointer;
   background: var(--button-bg);
 }
+
 .input,
 input,
 .textarea,
@@ -174,17 +175,21 @@ textarea {
   background-color: var(--c-warning);
   color: var(--c-bg_2);
 }
+
 // 3rd party overrides
 pwa-toast {
   z-index: 99999;
 }
+
 .MuiButton-root {
   background-color: var(--c-primary);
 }
+
 .MuiCheckbox-root {
-  input[value="checked"] + svg {
+  input[value="checked"]+svg {
     color: var(--c-primary);
   }
+
   svg {
     color: var(--c-text_2);
   }

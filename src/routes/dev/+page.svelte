@@ -1,10 +1,13 @@
 <script lang="ts">
-	import Tooltip from '$lib/components/Tooltip.svelte';
+	import Tooltip from '$lib/components/overlays/TooltipHover.svelte';
 	import BubbleText from '$lib/components/BubbleText.svelte';
-	import Modal from '$lib/components/Modal.svelte';
-	import Pullout from '$lib/components/PulloutBlock.svelte';
+	import Modal from '$lib/components/overlays/Modal.svelte';
+	import Pullout from '$lib/components/overlays/Pullout.svelte';
+	import OverlayElement from '$lib/components/overlays/OverlayElement.svelte';
+	// import HoverTooltip from '$lib/components/overlays/HoverTooltip.svelte';
 
 	let showModal = $state(false);
+	let showOverlay = $state(false);
 	let openPullout = $state(false);
 	const placementOpts: ['left', 'top', 'right', 'bottom'] = ['left', 'top', 'right', 'bottom'];
 	let placementInd = $state(0);
@@ -15,11 +18,21 @@
 </script>
 
 <div class="examples">
+	<button
+		onclick={() => {
+			showOverlay = true;
+		}}
+	>
+		open overlay
+	</button>
+	<OverlayElement dismissable={true} bind:open={showOverlay}>
+		This is the simplest form of overlay!
+	</OverlayElement>
 	<Modal title="Test Modal" bind:open={showModal}>Yep, this is a modal.</Modal>
 	<button onclick={() => (openPullout = true)}>Open pullout</button>
-	<Pullout bind:open={openPullout} {placement}
-		><button onclick={() => placementInd++}>Switch location</button></Pullout
-	>
+	<Pullout bind:open={openPullout} {placement}>
+		<button onclick={() => placementInd++}> Switch location </button>
+	</Pullout>
 
 	<h2>Tooltip Examples</h2>
 
@@ -33,16 +46,16 @@
 		<h3>2. Different Positions</h3>
 		<div class="position-grid">
 			<button id="top">Top</button>
-			<Tooltip forElement="#top" followMouse position="top">Top tooltip</Tooltip>
+			<Tooltip forElement="#top" position="top" followMouse>Top tooltip</Tooltip>
 
 			<button id="right">Right</button>
-			<Tooltip forElement="#right" followMouse position="right">Right tooltip</Tooltip>
+			<Tooltip forElement="#right" position="right" followMouse>Right tooltip</Tooltip>
 
 			<button id="bottom">Bottom</button>
-			<Tooltip forElement="#bottom" followMouse position="bottom">Bottom tooltip</Tooltip>
+			<Tooltip forElement="#bottom" position="bottom" followMouse>Bottom tooltip</Tooltip>
 
 			<button id="left">Left</button>
-			<Tooltip forElement="#left" followMouse position="left">Left tooltip</Tooltip>
+			<Tooltip forElement="#left" position="left" followMouse>Left tooltip</Tooltip>
 		</div>
 	</section>
 

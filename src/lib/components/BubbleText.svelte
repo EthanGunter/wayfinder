@@ -1,6 +1,5 @@
 <script lang="ts">
-	import Tooltip from './Tooltip.svelte';
-
+	import Tooltip from './overlays/TooltipHover.svelte';
 	interface Props {
 		id: string;
 		children: any;

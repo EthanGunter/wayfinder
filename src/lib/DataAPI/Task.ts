@@ -1,6 +1,7 @@
 import { ParseError } from "$lib/Errors";
 import { Result, err, ok } from "neverthrow";
 import yaml from 'js-yaml'
+import type { CreateTaskDTO } from "./types";
 
 export interface TaskData {
     id: string,
@@ -14,7 +15,7 @@ export interface TaskData {
      * Tasks that can't be completed until this one is.
      * Effectively the node's parent
     */
-    dependants?: string //TODO this might become an array in the future
+    dependant?: string //TODO this might become an array in the future
     /** 
      * This task's prequisite[s].
      * Effectively the node's children
@@ -35,7 +36,7 @@ export class Task implements TaskData {
     created: string;
     content?: string;
     lastEdit?: string;
-    dependants?: string;
+    dependant?: string;
     dependsOn?: string[];
 
     public get completed(): boolean {
@@ -50,14 +51,14 @@ export class Task implements TaskData {
         created,
         lastEdit,
         status
-    }: TaskData) {
-        this.id = id;
-        this.filepath = filepath;
+    }: CreateTaskDTO) {
+        this.id = id ?? "NO-ID";
         this.title = title;
-        this.status = status;
         this.content = content;
-        this.created = created;
-        this.lastEdit = lastEdit;
+        this.filepath = filepath ?? `${title}.md`;
+        this.status = status ?? TaskStatus.incomplete;
+        this.created = created ?? new Date().toISOString();
+        this.lastEdit = lastEdit ?? new Date().toISOString();
     }
 
     // Helper: Convert TaskData to markdown string
@@ -70,13 +71,13 @@ export class Task implements TaskData {
     /**
      * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
      */
-    static fromMarkdown(md: string, filepath: string): Result<TaskData, ParseError> {
+    static fromMarkdown(md: string, filepath: string): Result<Task, ParseError> {
         const match = md.match(/^---\n([\s\S]+?)---\n([\s\S]*)$/);
         if (!match) {
             return err(new ParseError(md, "TaskNode"));
         }
 
-        const meta = yaml.load(match[1]) as Omit<TaskData, 'content'>;
+        const meta = yaml.load(match[1]) as Omit<Task, 'content'>;
         return ok({ ...meta, filepath, content: match[2].trim() });
     }
 }

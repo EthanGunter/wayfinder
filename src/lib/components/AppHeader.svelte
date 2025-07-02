@@ -1,20 +1,17 @@
 <script lang="ts">
-	import { dev as DEVELOPMENT } from '$app/environment';
 	import { goto } from '$app/navigation';
-	import BugReportMenu from '$lib/components/BugReportMenu.svelte';
+	import BugReportMenu from '$lib/components/BugReportModal.svelte';
 	import type { Task } from '$lib/DataAPI/Task';
 	import SearchBar from './SearchBar.svelte';
-	import { searchTasks } from '$lib/stores/taskStorage';
+	import AppPulloutMenu from './AppPulloutMenu.svelte';
 
-	function openPulloutMenu() {
-		// TODO: Implement pullout menu logic - will need to create a pullout menu component
-		console.log('Opening pullout menu...');
-	}
+	let pulloutOpen = $state(false);
 
 	async function search(query: string): Promise<Task[]> {
 		try {
-			const results = await searchTasks(query);
-			return results;
+			// TODO: Use ITaskStorage API
+			// const results = await searchTasks(query);
+			return [];
 		} catch (error) {
 			console.error('Error searching tasks:', error);
 			return [];
@@ -31,11 +28,7 @@
 </script>
 
 <div class={'app-header'}>
-	{#if DEVELOPMENT}
-		<button onclick={openPulloutMenu} aria-label="Open menu">☰</button>
-	{:else}
-		<BugReportMenu />
-	{/if}
+	<AppPulloutMenu />
 	<SearchBar
 		handleQuery={search}
 		onItemSelected={gotoTask}

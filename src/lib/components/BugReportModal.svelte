@@ -1,17 +1,15 @@
 <script lang="ts">
-	const { onReport } = $props<{ onReport?: () => void }>();
+	import type { Snippet } from 'svelte';
+	import Modal from '$lib/components/overlays/Modal.svelte';
+	interface Props {
+		onSubmit?: () => void;
+		children: Snippet;
+	}
+	const { children, onSubmit }: Props = $props();
 
 	let showModal = $state(false);
 	let bugDescription = $state('');
 	let userEmail = $state('');
-
-	function handleClick() {
-		if (onReport) {
-			onReport();
-		} else {
-			showModal = true;
-		}
-	}
 
 	function closeBugReport() {
 		showModal = false;
@@ -19,9 +17,7 @@
 		userEmail = '';
 	}
 
-	function submitBugReport(e: SubmitEvent) {
-		e.preventDefault();
-
+	function submitBugReport() {
 		//TODO In a real app, this would send the report to a backend service
 		console.log('Bug report submitted:', {
 			description: bugDescription,
@@ -32,58 +28,43 @@
 		});
 
 		alert('Bug report submitted! Thank you for your feedback.');
+		onSubmit?.();
 		closeBugReport();
-	}
-
-	function handleOutsideClick(event: MouseEvent) {
-		const target = event.target as Element;
-		if (!target.closest('.bug-report-modal')) {
-			closeBugReport();
-		}
 	}
 </script>
 
-<svelte:window onclick={handleOutsideClick} />
+<button class="bug-report-menu" onclick={() => (showModal = true)} aria-label="Report a bug">
+	{@render children()}
+</button>
 
-<button class="bug-report-menu" onclick={handleClick} aria-label="Report a bug"> 🐞 </button>
+<Modal bind:open={showModal} ok="Submit" onOk={submitBugReport} onCancel={closeBugReport}>
+	<h3>Report a Bug</h3>
+	<p>Help us improve by describing the issue you encountered:</p>
 
-{#if showModal}
-	<div class="modal-overlay">
-		<div class="bug-report-modal">
-			<h3>Report a Bug</h3>
-			<p>Help us improve by describing the issue you encountered:</p>
-
-			<form onsubmit={submitBugReport}>
-				<div class="form-group">
-					<label for="bug-description">Description *</label>
-					<textarea
-						id="bug-description"
-						bind:value={bugDescription}
-						placeholder="Please describe what happened, what you expected, and steps to reproduce..."
-						required
-						rows="4"
-					></textarea>
-				</div>
-
-				<div class="form-group">
-					<label for="user-email">Email (optional)</label>
-					<input
-						id="user-email"
-						type="email"
-						bind:value={userEmail}
-						placeholder="your.email@example.com"
-					/>
-					<small>We'll only use this to follow up on your report</small>
-				</div>
-
-				<div class="form-actions">
-					<button type="button" onclick={closeBugReport}>Cancel</button>
-					<button type="submit" disabled={!bugDescription.trim()}>Submit Report</button>
-				</div>
-			</form>
+	<form onsubmit={submitBugReport}>
+		<div class="form-group">
+			<label for="bug-description">Description *</label>
+			<textarea
+				id="bug-description"
+				bind:value={bugDescription}
+				placeholder="Please describe what happened, what you expected, and steps to reproduce..."
+				required
+				rows="4"
+			></textarea>
 		</div>
-	</div>
-{/if}
+
+		<div class="form-group">
+			<label for="user-email">Email (optional)</label>
+			<input
+				id="user-email"
+				type="email"
+				bind:value={userEmail}
+				placeholder="your.email@example.com"
+			/>
+			<small>We'll only use this to follow up on your report</small>
+		</div>
+	</form>
+</Modal>
 
 <style lang="scss">
 	.bug-report-menu {
@@ -99,38 +80,14 @@
 		}
 	}
 
-	.modal-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 2000;
+	h3 {
+		margin: 0 0 1rem 0;
+		color: var(--c-text);
 	}
 
-	.bug-report-modal {
-		background: var(--c-bg_2);
-		border-radius: var(--container-border-radius);
-		padding: 2rem;
-		max-width: 500px;
-		width: 90%;
-		max-height: 80vh;
-		overflow-y: auto;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-
-		h3 {
-			margin: 0 0 1rem 0;
-			color: var(--c-text);
-		}
-
-		p {
-			margin: 0 0 1.5rem 0;
-			color: var(--c-text_1);
-		}
+	p {
+		margin: 0 0 1.5rem 0;
+		color: var(--c-text_1);
 	}
 
 	.form-group {

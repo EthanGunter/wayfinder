@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { draggable } from '$lib/actions/dnd';
 	import type { Task } from '$lib/DataAPI/Task';
+	import TaskItemContextMenu from './TaskItemContextMenu.svelte';
 
 	const { task, onDragStart, onDrop, ghostRenderOverride, children } = $props<{
 		task: Task;
@@ -32,37 +34,40 @@
 	}
 </script>
 
-<li
-	class="list-item"
-	use:draggable={{
-		type: 'task',
-		data: task,
-		onDragStart: handleDragStart,
-		onDrop: handleDrop
-		// ghostRenderOverride: handleGhostRender
-	}}
->
-	{#if editName}
-		<input
-			type="text"
-			bind:value={title}
-			onblur={handleBlur}
-			onkeydown={(e) => e.key === 'Enter' && handleBlur()}
-		/>
-	{:else}
-		<span
-			class="list-item-title"
-			role="button"
-			tabindex="0"
-			ondblclick={handleEdit}
-			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleEdit()}
-			aria-label="Edit task title"
-		>
-			{title}
-		</span>
-	{/if}
-	{@render children?.()}
-</li>
+<!-- ondblclick={() => (editName = true)} -->
+<button onclick={() => goto(`tasks?id=${task.id}`)}>
+	<li
+		class="list-item"
+		use:draggable={{
+			type: 'task',
+			data: task,
+			onDragStart: handleDragStart,
+			onDrop: handleDrop
+		}}
+	>
+		{#if editName}
+			<input
+				type="text"
+				bind:value={title}
+				onblur={handleBlur}
+				onkeydown={(e) => e.key === 'Enter' && handleBlur()}
+			/>
+		{:else}
+			<span
+				class="list-item-title"
+				role="button"
+				tabindex="0"
+				ondblclick={handleEdit}
+				onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleEdit()}
+				aria-label="Edit task title"
+			>
+				{title}
+			</span>
+		{/if}
+		{@render children?.()}
+		<TaskItemContextMenu {task} />
+	</li>
+</button>
 
 <style lang="scss">
 	.list-item {
@@ -71,14 +76,13 @@
 		display: grid;
 		justify-content: space-between;
 		grid-template-areas: 'checkbox header menu' 'checkbox header menu';
-		grid-template-columns: auto 1fr auto auto;
+		grid-template-columns:  1fr auto;
 		grid-template-rows: 1fr auto;
 
 		// Style
 		list-style: none;
 		align-items: center;
 		gap: 0.2rem;
-		font-size: normal;
 		border: 1px solid var(--c-border);
 		border-radius: 1rem;
 		min-height: min-content;
@@ -98,6 +102,8 @@
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		overflow: hidden;
+		background: none;
+		align-content: center;
 
 		> input {
 			width: 100%;

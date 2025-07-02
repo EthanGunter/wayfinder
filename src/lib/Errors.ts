@@ -1,12 +1,13 @@
 
 export class Err {
-    stacks: string[] = ["call .withTraceDepth() for stacktrace"];
+    stack: string[] = ["call .withTraceDepth() for stacktrace"];
     private traceDepth: number | undefined;
     // private inheritanceDepth: number;
     /**
      * @param inheritanceDepth helps keep the stacktrace clean. -1 doesn't generate a stacktrace
      */
     constructor(private inheritanceDepth: number, public msg: string, public context?: any) {
+        this.withTrace(3);
     }
 
     /**
@@ -22,10 +23,10 @@ export class Err {
         const err = new Error();
         if (err.stack) {
             if (depth < 0) {
-                this.stacks = err.stack.split('\n').map(line => line.trim().replace("at ", ""));
+                this.stack = err.stack.split('\n').map(line => line.trim().replace("at ", ""));
             } else {
                 // Skip the error frames and keep only the relevant code frames
-                this.stacks = err.stack.split('\n').slice(this.inheritanceDepth + 1, this.inheritanceDepth + this.traceDepth + 1).map(line => line.trim().replace("at ", ""));
+                this.stack = err.stack.split('\n').slice(this.inheritanceDepth + 2, this.inheritanceDepth + this.traceDepth + 2).map(line => line.trim().replace("at ", ""));
             }
         }
         return this;
@@ -60,16 +61,8 @@ export class ParseError extends Err {
 
 
 export class IOError extends Err {
-    constructor(mode: "Read" | "Delete", path: string, internalError: any);
-    constructor(mode: "Write" | "Update", path: string, internalError: any, dataToWrite: any);
-    constructor(mode: "Read" | "Write" | "Update" | "Delete", path: string, internalError: any, dataToWrite?: any) {
-        let message = "IOError: "
-        if (mode === "Read" || mode === "Delete") {
-            message += `Failed to ${mode} ${path}`;
-        } else {
-            message += `Failed to ${mode} data to "${path}":\n${typeof dataToWrite === 'string' ? dataToWrite : JSON.stringify(dataToWrite, undefined, 2)}`
-        }
-        super(1, message, internalError);
+    constructor(message: string, internalError: any, dataToWrite?: any) {
+        super(1, message, { internalError, dataToWrite });
     }
 }
 

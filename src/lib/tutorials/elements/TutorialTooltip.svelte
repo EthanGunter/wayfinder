@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Tooltip from '$lib/components/Tooltip.svelte';
+	import Tooltip from '$lib/components/TimedTooltip.svelte';
 
 	export interface Props {
 		forElement: string | HTMLElement;
