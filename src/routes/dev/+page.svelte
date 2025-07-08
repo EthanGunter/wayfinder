@@ -4,157 +4,177 @@
 	import Modal from '$lib/components/overlays/Modal.svelte';
 	import Pullout from '$lib/components/overlays/Pullout.svelte';
 	import OverlayElement from '$lib/components/overlays/OverlayElement.svelte';
-	// import HoverTooltip from '$lib/components/overlays/HoverTooltip.svelte';
+	import ItemList from '$lib/components/ItemList.svelte';
+	import {
+		draggable,
+		droppable,
+		dragGroup,
+		type DragStartEvent,
+		type DropEvent
+	} from '$lib/actions/dnd';
+	import DndExamples from './DndExamples.svelte';
+
+	let showOverlays = $state(false);
+	let showDnd = $state(false);
 
 	let showModal = $state(false);
 	let showOverlay = $state(false);
 	let openPullout = $state(false);
-	const placementOpts: ['left', 'top', 'right', 'bottom'] = ['left', 'top', 'right', 'bottom'];
-	let placementInd = $state(0);
-	let placement = $state<'left' | 'top' | 'right' | 'bottom'>('left');
-	$effect(() => {
-		placement = placementOpts[placementInd % 4];
-	});
 </script>
 
 <div class="examples">
-	<button
-		onclick={() => {
-			showOverlay = true;
-		}}
-	>
-		open overlay
-	</button>
-	<OverlayElement dismissable={true} bind:open={showOverlay}>
-		This is the simplest form of overlay!
-	</OverlayElement>
-	<Modal title="Test Modal" bind:open={showModal}>Yep, this is a modal.</Modal>
-	<button onclick={() => (openPullout = true)}>Open pullout</button>
-	<Pullout bind:open={openPullout} {placement}>
-		<button onclick={() => placementInd++}> Switch location </button>
-	</Pullout>
-
-	<h2>Tooltip Examples</h2>
-
-	<section>
-		<h3>1. Basic Tooltip</h3>
-		<button id="basic-btn" onclick={() => (showModal = true)}>Hover me</button>
-		<Tooltip forElement="#basic-btn" position="mouse">This is a helpful tooltip!</Tooltip>
-	</section>
-
-	<section>
-		<h3>2. Different Positions</h3>
-		<div class="position-grid">
-			<button id="top">Top</button>
-			<Tooltip forElement="#top" position="top" followMouse>Top tooltip</Tooltip>
-
-			<button id="right">Right</button>
-			<Tooltip forElement="#right" position="right" followMouse>Right tooltip</Tooltip>
-
-			<button id="bottom">Bottom</button>
-			<Tooltip forElement="#bottom" position="bottom" followMouse>Bottom tooltip</Tooltip>
-
-			<button id="left">Left</button>
-			<Tooltip forElement="#left" position="left" followMouse>Left tooltip</Tooltip>
-		</div>
-	</section>
-
-	<section>
-		<h3>3. BubbleText with Error Tooltip</h3>
-		<div class="bubble-examples">
-			<BubbleText id="normal" onDelete={(id) => console.log('Delete:', id)}>Normal Tag</BubbleText>
-
-			<BubbleText
-				id="error"
-				error={{ msg: 'This tag has an error that needs attention!' }}
-				onDelete={(id) => console.log('Delete:', id)}
-			>
-				Error Tag
-			</BubbleText>
-		</div>
-	</section>
-
-	<section>
-		<h3>4. Complex Content</h3>
-		<div class="complex-trigger">
-			<span>📊</span>
-			<span>Complex Element</span>
-		</div>
-		<Tooltip forElement=".complex-trigger" position="bottom">Not so complex tooltip</Tooltip>
-	</section>
-
-	<section>
-		<h3>5. Delayed Tooltip</h3>
-		<button id="wait">Hover and wait</button>
-		<Tooltip forElement="#wait" position="top" delay={500}
-			>This tooltip appears after a delay</Tooltip
+	<div>
+		<button onclick={() => (showOverlays = !showOverlays)}>
+			{showOverlays ? '✔️' : '❌'}Overlays
+		</button>
+		<button onclick={() => (showDnd = !showDnd)}>
+			{showDnd ? '✔️' : '❌'}Drag and Drop
+		</button>
+	</div>
+	{#if showOverlays}
+		<button
+			onclick={() => {
+				showOverlay = true;
+			}}
 		>
-	</section>
+			open overlay
+		</button>
+		<OverlayElement dismissable={true} bind:open={showOverlay}>
+			This is the simplest form of overlay!
+		</OverlayElement>
+		<Modal title="Test Modal" bind:open={showModal}>Yep, this is a modal.</Modal>
+		<button onclick={() => (openPullout = true)}>Open pullout</button>
+		<Pullout bind:open={openPullout} placement="left">
+			<h1>Hello! I'm a pullout</h1>
+		</Pullout>
 
-	<section>
-		<h3>6. Advanced Tooltip with Named Slots</h3>
-		<div class="advanced-examples">
-			<button class="fancy-button">
-				<span class="icon">✨</span>
-				<span>Fancy Button</span>
-			</button>
+		<h2>Tooltip Examples</h2>
 
-			<Tooltip forElement=".fancy-button" position="top">
-				<div class="rich-tooltip">
-					<h4>Rich Content</h4>
-					<p>This tooltip can contain <strong>HTML</strong> content!</p>
-					<ul>
-						<li>✅ Lists</li>
-						<li>🎨 Styling</li>
-						<li>📊 Any content</li>
-					</ul>
-				</div>
-			</Tooltip>
+		<section>
+			<h3>1. Basic Tooltip</h3>
+			<button id="basic-btn" onclick={() => (showModal = true)}>Hover me</button>
+			<Tooltip forElement="#basic-btn" position="mouse">This is a helpful tooltip!</Tooltip>
+		</section>
 
-			<div class="card">
-				<div class="card-icon">📈</div>
-				<div class="card-content">
-					<h4>Data Card</h4>
-					<p>Hover for details</p>
-				</div>
+		<section>
+			<h3>2. Different Positions</h3>
+			<div class="position-grid">
+				<button id="top">Top</button>
+				<Tooltip forElement="#top" position="top" followMouse>Top tooltip</Tooltip>
+
+				<button id="right">Right</button>
+				<Tooltip forElement="#right" position="right" followMouse>Right tooltip</Tooltip>
+
+				<button id="bottom">Bottom</button>
+				<Tooltip forElement="#bottom" position="bottom" followMouse>Bottom tooltip</Tooltip>
+
+				<button id="left">Left</button>
+				<Tooltip forElement="#left" position="left" followMouse>Left tooltip</Tooltip>
 			</div>
+		</section>
 
-			<Tooltip forElement=".card" position="right" delay={300}>
-				<div class="data-tooltip">
-					<div class="metric">
-						<span class="label">Revenue:</span>
-						<span class="value">$12,345</span>
+		<section>
+			<h3>3. BubbleText with Error Tooltip</h3>
+			<div class="bubble-examples">
+				<BubbleText id="normal" onDelete={(id) => console.log('Delete:', id)}>Normal Tag</BubbleText
+				>
+
+				<BubbleText
+					id="error"
+					error={{ msg: 'This tag has an error that needs attention!' }}
+					onDelete={(id) => console.log('Delete:', id)}
+				>
+					Error Tag
+				</BubbleText>
+			</div>
+		</section>
+
+		<section>
+			<h3>4. Complex Content</h3>
+			<div class="complex-trigger">
+				<span>📊</span>
+				<span>Complex Element</span>
+			</div>
+			<Tooltip forElement=".complex-trigger" position="bottom">Not so complex tooltip</Tooltip>
+		</section>
+
+		<section>
+			<h3>5. Delayed Tooltip</h3>
+			<button id="wait">Hover and wait</button>
+			<Tooltip forElement="#wait" position="top" delay={500}
+				>This tooltip appears after a delay</Tooltip
+			>
+		</section>
+
+		<section>
+			<h3>6. Advanced Tooltip with Named Slots</h3>
+			<div class="advanced-examples">
+				<button class="fancy-button">
+					<span class="icon">✨</span>
+					<span>Fancy Button</span>
+				</button>
+
+				<Tooltip forElement=".fancy-button" position="top">
+					<div class="rich-tooltip">
+						<h4>Rich Content</h4>
+						<p>This tooltip can contain <strong>HTML</strong> content!</p>
+						<ul>
+							<li>✅ Lists</li>
+							<li>🎨 Styling</li>
+							<li>📊 Any content</li>
+						</ul>
 					</div>
-					<div class="metric">
-						<span class="label">Growth:</span>
-						<span class="value positive">+15.3%</span>
-					</div>
-					<div class="metric">
-						<span class="label">Users:</span>
-						<span class="value">1,234</span>
+				</Tooltip>
+
+				<div class="card">
+					<div class="card-icon">📈</div>
+					<div class="card-content">
+						<h4>Data Card</h4>
+						<p>Hover for details</p>
 					</div>
 				</div>
-			</Tooltip>
 
-			<img
-				id="img"
-				src="https://via.placeholder.com/100x100/4f46e5/ffffff?text=IMG"
-				alt="Sample"
-				class="sample-image"
-			/>
-
-			<Tooltip forElement="#img" position="bottom">
-				<div class="image-tooltip">
-					<h4>Image Details</h4>
-					<div class="details">
-						<div><strong>Size:</strong> 100x100px</div>
-						<div><strong>Format:</strong> PNG</div>
-						<div><strong>Created:</strong> Today</div>
+				<Tooltip forElement=".card" position="right" delay={300}>
+					<div class="data-tooltip">
+						<div class="metric">
+							<span class="label">Revenue:</span>
+							<span class="value">$12,345</span>
+						</div>
+						<div class="metric">
+							<span class="label">Growth:</span>
+							<span class="value positive">+15.3%</span>
+						</div>
+						<div class="metric">
+							<span class="label">Users:</span>
+							<span class="value">1,234</span>
+						</div>
 					</div>
-				</div>
-			</Tooltip>
-		</div>
-	</section>
+				</Tooltip>
+
+				<img
+					id="img"
+					src="https://via.placeholder.com/100x100/4f46e5/ffffff?text=IMG"
+					alt="Sample"
+					class="sample-image"
+				/>
+
+				<Tooltip forElement="#img" position="bottom">
+					<div class="image-tooltip">
+						<h4>Image Details</h4>
+						<div class="details">
+							<div><strong>Size:</strong> 100x100px</div>
+							<div><strong>Format:</strong> PNG</div>
+							<div><strong>Created:</strong> Today</div>
+						</div>
+					</div>
+				</Tooltip>
+			</div>
+		</section>
+	{/if}
+
+	{#if showDnd}
+		<DndExamples />
+	{/if}
 </div>
 
 <style lang="scss">

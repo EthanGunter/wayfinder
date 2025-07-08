@@ -1,6 +1,6 @@
 <!-- 
  @component
- @snippet list(item, index)
+ #snippet listItem(item, index)
  -->
 <script lang="ts" generics="T">
 	import type { Snippet } from 'svelte';
@@ -13,23 +13,25 @@
 		eventNames
 	} from '$lib/actions/dnd';
 
+	interface Props {
+		id?: string;
+		scrollable?: boolean;
+		accepts?: string[];
+		items: T[];
+		listItem: Snippet<[T, number]>;
+		onListOrderChanged?: (items: T[]) => void;
+		// onItemAdded?: (item: T) => void;
+		// onItemRemoved?: (item: T) => void;
+	}
+
 	const {
 		id = '',
 		scrollable = false,
 		accepts = ['*'],
 		items: initialItems = [],
-		list,
+		listItem,
 		onListOrderChanged = undefined
-	} = $props<{
-		id?: string;
-		scrollable?: boolean;
-		accepts?: string[];
-		items: T[];
-		list: Snippet<[T, number]>;
-		onListOrderChanged?: (items: T[]) => void;
-		// onItemAdded?: (item: T) => void;
-		// onItemRemoved?: (item: T) => void;
-	}>();
+	}: Props = $props();
 
 	let items = $state([...initialItems]);
 	let originalItems: T[] = [];
@@ -137,8 +139,10 @@
 		const draggedItem = event.detail.data;
 
 		if (originalItems.includes(draggedItem)) {
-			event.detail.ghost.addEventListener(eventNames.DROP, handleDropElsewhere as EventListener, { once: true });
-			items = items.filter((x) => x !== draggedItem);
+			event.detail.ghost.addEventListener(eventNames.DROP, handleDropElsewhere as EventListener, {
+				once: true
+			});
+			// items = items.filter((x) => x !== draggedItem);
 		}
 
 		// If we temporarily added an item from another list, remove it
@@ -163,13 +167,13 @@
 		}}
 	>
 		{#each items as item, index (item)}
-			{@render list(item, index)}
+			{@render listItem(item, index)}
 		{/each}
 	</ol>
 {:else}
 	<ol class="item-list" {id} data-scrollable={scrollable}>
 		{#each items as item, index (item)}
-			{@render list(item, index)}
+			{@render listItem(item, index)}
 		{/each}
 	</ol>
 {/if}

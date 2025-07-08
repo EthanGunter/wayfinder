@@ -5,10 +5,10 @@
 	interface Props extends HTMLAttributes<HTMLDivElement> {
 		open: boolean;
 		dismissable?: boolean;
+		popoverEl?: HTMLDivElement;
 		onopen?: () => void;
 		onclose?: () => void;
 		children?: Snippet;
-		popoverEl?: HTMLDivElement;
 	}
 	let {
 		popoverEl = $bindable(),
@@ -20,8 +20,13 @@
 		...rest
 	}: Props = $props();
 
+	let backdropEl = $state<HTMLDivElement>();
+
 	function show() {
 		open = true;
+		if (dismissable) {
+			backdropEl?.showPopover?.();
+		}
 		popoverEl?.showPopover?.();
 		document.addEventListener('keydown', handleKey);
 		onopen?.();
@@ -29,6 +34,9 @@
 	function hide() {
 		open = false;
 		popoverEl?.hidePopover?.();
+		if (dismissable) {
+			backdropEl?.hidePopover?.();
+		}
 		document.removeEventListener('keydown', handleKey);
 		onclose?.();
 	}
@@ -38,6 +46,9 @@
 			open = false;
 			popoverEl?.classList.remove('out');
 			popoverEl?.hidePopover?.();
+			if (dismissable) {
+				backdropEl?.hidePopover?.();
+			}
 		}
 	}
 	function handleClick(event: MouseEvent) {
@@ -66,12 +77,10 @@
 	});
 </script>
 
-{#if open && dismissable}
-	<div class="backdrop" onclick={handleClick}></div>
-{/if}
+<div bind:this={backdropEl} popover="manual" class="overlay-backdrop" onclick={handleClick}></div>
 <div
 	bind:this={popoverEl}
-	class="popover"
+	class="overlay"
 	popover="manual"
 	tabindex="-1"
 	onanimationend={handleAnimationEnd}
@@ -82,9 +91,11 @@
 </div>
 
 <style lang="scss">
-	.popover {
+	.overlay {
 		margin: auto;
+		border: none;
 		background-color: var(--c-bg);
+		overflow: visible;
 		transition:
 			display 0.2s allow-discrete,
 			overlay 0.2s allow-discrete;
@@ -92,12 +103,18 @@
 		&:popover-open {
 			animation: in 0.2s forwards;
 		}
+		// &::backdrop {
+		// 	background-color: var(--c-shadow);
+		// 	pointer-events: inherit !important;
+		// }
 	}
 
-	.backdrop {
+	.overlay-backdrop {
 		position: absolute;
-		inset: 0;
-		z-index: 9999;
+		// inset: 0;
+		z-index: -1;
+		width: 100vw;
+		height: 100vh;
 		background-color: var(--c-shadow);
 	}
 

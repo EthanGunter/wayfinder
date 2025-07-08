@@ -3,6 +3,7 @@
  -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import OverlayElement from './OverlayElement.svelte';
 
 	interface Props {
 		open: boolean;
@@ -10,39 +11,14 @@
 		cancel?: string;
 		title?: string;
 		size?: 'small' | 'medium' | 'large';
-		onOk?: () => void | Promise<void>;
-		onCancel?: () => void;
+		buttons?: { label: string; action: () => void; class: 'primary' | 'secondary' }[];
 		children: Snippet;
 	}
 
-	let {
-		open = $bindable(false),
-		ok = 'OK',
-		cancel = 'Cancel',
-		title,
-		size = 'medium',
-		onOk,
-		onCancel,
-		children
-	}: Props = $props();
+	let { open = $bindable(false), title, size = 'medium', buttons = [], children }: Props = $props();
 
-	let dialogEl = $state<HTMLDialogElement>();
-
-	$effect(() => {
-		if (open && dialogEl) {
-			dialogEl.showModal();
-		} else if (!open && dialogEl) {
-			dialogEl.close();
-		}
-	});
 
 	function handleCancel() {
-		onCancel?.();
-		open = false;
-	}
-
-	function handleOk() {
-		onOk?.();
 		open = false;
 	}
 
@@ -54,13 +30,12 @@
 
 		if (x < box.left || x > box.right || y < box.top || y > box.bottom) {
 			open = false;
-			dialogEl?.close();
 		}
 	}
 </script>
 
-<dialog bind:this={dialogEl} class="modal-dialog {size}" onclick={handleClick}>
-	<div class="modal-content">
+<OverlayElement bind:open={open} class="modal-dialog {size}" onclick={handleClick}>
+	<!-- <div class="modal-content"> -->
 		{#if title}
 			<header class="modal-header">
 				<h2 class="modal-title">{title}</h2>
@@ -72,16 +47,17 @@
 			{@render children()}
 		</main>
 
-		<footer class="modal-footer">
-			<button class="btn btn-secondary" onclick={handleCancel}>
-				{cancel}
-			</button>
-			<button class="btn btn-primary" onclick={handleOk}>
-				{ok}
-			</button>
-		</footer>
-	</div>
-</dialog>
+		{#if buttons.length > 0}
+			<footer class="modal-footer">
+				{#each buttons as button}
+					<button class={`btn btn-${button.class}`} onclick={button.action}>
+						{button.label}
+					</button>
+				{/each}
+			</footer>
+		{/if}
+	<!-- </div> -->
+</OverlayElement>
 
 <style>
 	.modal-dialog {

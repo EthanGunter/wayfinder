@@ -144,6 +144,7 @@ type DraggableParams<T> = {
   onDragOver?: (event: DragOverEvent) => void;
   axis?: DragAxis;
   devDelay?: number; // Debugging delay for ghost removal
+  delay?: number; // Delay in ms before drag starts (default: 200ms)
 };
 
 // Parameters for the droppable action
@@ -342,6 +343,7 @@ export function draggable<T>(
     onDragOver, // Consolidated callback for ghost appearance AND position
     axis = "both",
     devDelay,
+    delay = 200, // Default 200ms delay
   }: DraggableParams<T>
 ) {
   node.setAttribute("draggable", "true"); // Necessary for HTML drag API, though we override behavior
@@ -350,6 +352,8 @@ export function draggable<T>(
   let isDragging = false;
   let startX: number, startY: number, offsetX: number, offsetY: number;
   let ghost: HTMLElement;
+  let delayTimeout: ReturnType<typeof setTimeout> | null = null;
+  let initialMouseDownEvent: MouseEvent | TouchEvent | null = null;
 
   // Event listeners for syntactic sugar
   const eventListeners: Array<{ event: string; handler: EventListener }> = [];
@@ -384,19 +388,58 @@ export function draggable<T>(
 
   // Handle both mouse and touch start events
   function handleStart(event: MouseEvent | TouchEvent) {
-    const isTouch = event.type === "touchstart";
-    const clientX = isTouch
-      ? (event as TouchEvent).touches[0].clientX
-      : (event as MouseEvent).clientX;
-    const clientY = isTouch
-      ? (event as TouchEvent).touches[0].clientY
-      : (event as MouseEvent).clientY;
-
-    // Prevent default actions like text selection or native drag
+    // Prevent default to avoid text selection during delay
     event.preventDefault();
-    event.stopPropagation();
+    
+    // Store the initial event for later use
+    initialMouseDownEvent = event;
+    
+    // Clear any existing timeout
+    if (delayTimeout) {
+      clearTimeout(delayTimeout);
+      delayTimeout = null;
+    }
 
-    isDragging = true;
+    // Set up the delay timeout
+    delayTimeout = setTimeout(() => {
+      if (!initialMouseDownEvent) return;
+      
+      const isTouch = initialMouseDownEvent.type === "touchstart";
+      const clientX = isTouch
+        ? (initialMouseDownEvent as TouchEvent).touches[0].clientX
+        : (initialMouseDownEvent as MouseEvent).clientX;
+      const clientY = isTouch
+        ? (initialMouseDownEvent as TouchEvent).touches[0].clientY
+        : (initialMouseDownEvent as MouseEvent).clientY;
+
+      isDragging = true;
+      startDrag(clientX, clientY);
+    }, delay);
+
+    // Add listeners for mouse/touch up to cancel the delay
+    document.addEventListener("mouseup", cancelDelayedStart);
+    document.addEventListener("touchend", cancelDelayedStart);
+    document.addEventListener("mousemove", cancelDelayedStart);
+    document.addEventListener("touchmove", cancelDelayedStart);
+  }
+
+  // Cancel the delayed start if mouse is released or moved before delay
+  function cancelDelayedStart() {
+    if (delayTimeout) {
+      clearTimeout(delayTimeout);
+      delayTimeout = null;
+    }
+    initialMouseDownEvent = null;
+    
+    // Remove the cancel listeners
+    document.removeEventListener("mouseup", cancelDelayedStart);
+    document.removeEventListener("touchend", cancelDelayedStart);
+    document.removeEventListener("mousemove", cancelDelayedStart);
+    document.removeEventListener("touchmove", cancelDelayedStart);
+  }
+
+  // Start the actual drag operation
+  function startDrag(clientX: number, clientY: number) {
 
     // --- Group Logic: Just-in-Time Detection ---
     const groupElement = node.closest<HTMLElement>(`[${DRAG_GROUP_ID_ATTR}]`);
@@ -538,11 +581,11 @@ export function draggable<T>(
       // Execute the default positioning logic if not prevented
       if (!dragOverEvent.defaultPrevented) {
         let x, y;
-        if (axis !== "y") x = clientX + offsetX;
-        else x = startX; // Lock x
+        if (axis !== "y") x = clientX + offsetX + window.scrollX;
+        else x = startX + window.scrollX; // Lock x
 
-        if (axis !== "x") y = clientY + offsetY;
-        else y = startY; // Lock y
+        if (axis !== "x") y = clientY + offsetY + window.scrollY;
+        else y = startY + window.scrollY; // Lock y
         setPosition({ x, y });
       }
 
@@ -557,7 +600,10 @@ export function draggable<T>(
       // --- End Event Dispatching and Ghost Rendering ---
     }
 
-    moveGhost(event); // Initial positioning and rendering
+    // Initial positioning and rendering with the stored initial event
+    if (initialMouseDownEvent) {
+      moveGhost(initialMouseDownEvent);
+    }
 
     // Add move listeners
     document.addEventListener("mousemove", moveGhost);
@@ -640,7 +686,7 @@ export function draggable<T>(
     // Add end listeners to the document
     document.addEventListener("mouseup", handleEnd);
     document.addEventListener("touchend", handleEnd);
-  } // End handleStart
+  } // End startDrag
 
   // Attach start listeners to the node
   node.addEventListener("mousedown", handleStart);
@@ -653,12 +699,22 @@ export function draggable<T>(
       data = newProps.data ?? data;
       draggableType = newProps.type;
       devDelay = newProps.devDelay;
+      delay = newProps.delay ?? delay;
 
       // Re-setup event listeners with new callbacks
       setupEventListeners(newProps);
       // Note: Group association is determined at drag start, cannot be updated dynamically this way.
     },
     destroy() {
+      // Clear any pending delay timeout
+      if (delayTimeout) {
+        clearTimeout(delayTimeout);
+        delayTimeout = null;
+      }
+      
+      // Cancel any delayed start
+      cancelDelayedStart();
+      
       // Remove all managed event listeners
       removeAllManagedListeners();
 
@@ -841,8 +897,9 @@ function copyComputedSizeAndPosition(source: HTMLElement, target: HTMLElement) {
   target.style.zIndex = "9999"; // Ensure ghost is on top
 
   const sourceRect = source.getBoundingClientRect();
-  target.style.top = sourceRect.top + "px";
-  target.style.left = sourceRect.left + "px";
+  // Account for page scroll when positioning the ghost
+  target.style.top = (sourceRect.top + window.scrollY) + "px";
+  target.style.left = (sourceRect.left + window.scrollX) + "px";
 }
 
 function getValidDroppableUnderMouse(

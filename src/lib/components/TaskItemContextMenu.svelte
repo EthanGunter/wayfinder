@@ -2,10 +2,11 @@
 	import type { Task } from '$lib/DataAPI/Task';
 	import SearchBar from './SearchBar.svelte';
 	import { goto } from '$app/navigation';
-	// import { deleteTask, searchTasks, updateTask } from '$lib/stores/taskStorage';
 	import Modal from '$lib/components/overlays/Modal.svelte';
 	import type { ITaskStorage } from '$lib/DataAPI/types';
 	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
+	import TooltipStatic from './overlays/TooltipStatic.svelte';
+	import OverlayElement from './overlays/OverlayElement.svelte';
 
 	interface Props {
 		task: Task;
@@ -182,39 +183,22 @@
 	}
 </script>
 
-<svelte:window onclick={handleOutsideClick} />
-
 <!-- Context Menu Trigger -->
-<button class="list-item-menu" onclick={openContextMenu} aria-label="Open task menu">
-	<!-- Using vertical ellipsis for menu -->
-	⋮
-</button>
+<button class="list-item-menu" onclick={openContextMenu} aria-label="Open task menu"> ⋮ </button>
 
 <!-- Context Menu -->
-{#if showContextMenu}
+<Modal bind:open={showContextMenu} >
 	<div class="context-menu">
 		{#if onRename}
-			<button onclick={rename}>
-				<!-- Using pencil icon for edit -->
-				✏️ Rename
-			</button>
+			<button onclick={rename}> ✏️ Rename </button>
 		{/if}
-		<button onclick={openMoveDialogue}>
-			<!-- Using up arrow for move -->
-			↗️ Move
-		</button>
+		<!-- <button onclick={openMoveDialogue}> ↗️ Move </button> -->
 		{#if displayGotoOption}
-			<button onclick={gotoTask}>
-				<!-- Using northeast arrow for open -->
-				🔗 Open
-			</button>
+			<button onclick={gotoTask}> 🔗 Open </button>
 		{/if}
-		<button class="warning" onclick={openDeleteDialogue}>
-			<!-- Using wastebasket for delete -->
-			🗑️ Delete
-		</button>
+		<button class="warning" onclick={openDeleteDialogue}> 🗑️ Delete </button>
 	</div>
-{/if}
+</Modal>
 
 <!-- Delete Confirmation Dialog -->
 <Modal bind:open={showDeleteDialog}>
@@ -261,16 +245,16 @@
 	}
 
 	.context-menu {
-		position: absolute;
-		top: 100%;
-		right: 0;
+		/* min-width: 120px;
+		min-height: 150px; */
+
+		z-index: 1000;
+		padding: 0.5rem 0;
+
 		background: var(--background-primary, white);
-		border: 1px solid var(--border-color, #ddd);
+		/* border: 1px solid var(--border-color, #ddd); */
 		border-radius: 8px;
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 1000;
-		min-width: 120px;
-		padding: 0.5rem 0;
 	}
 
 	.context-menu button {
@@ -335,7 +319,7 @@
 
 	.dialog-buttons button {
 		padding: 0.5rem 1rem;
-		border: 1px solid var(--border-color, #ddd);
+		/* border: 1px solid var(--border-color, #ddd); */
 		border-radius: 4px;
 		cursor: pointer;
 		font-size: 0.9rem;
@@ -369,7 +353,7 @@
 		max-width: none;
 	}
 
-	:global(#move-task-menu.expanded) {
+	#move-task-menu.expanded {
 		height: 100vh;
 	}
 
@@ -390,7 +374,7 @@
 		font-weight: 600;
 	}
 
-	:global(.move-task-search-results) {
+	.move-task-search-results {
 		max-height: 300px;
 		overflow-y: auto;
 	}

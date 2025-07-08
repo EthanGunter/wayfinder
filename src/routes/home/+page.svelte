@@ -129,7 +129,7 @@
 		{/if}
 
 		<ItemList items={filteredDaysTasks} accepts={['task']}>
-			{#snippet list(task, index)}
+			{#snippet listItem(task, index)}
 				<TaskListItem {task} />
 			{/snippet}
 		</ItemList>
@@ -145,7 +145,7 @@
 		>
 			<h2>Suggested Tasks</h2>
 			<ItemList items={filteredSuggestedTasks}>
-				{#snippet list(task, index)}
+				{#snippet listItem(task, index)}
 					<TaskListItem {task} />
 				{/snippet}
 			</ItemList>

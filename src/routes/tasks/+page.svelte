@@ -129,7 +129,7 @@
 		</div>
 		<TaskEditor bind:task={currentTask} {onTaskChange}>
 			<ItemList items={dependencies}>
-				{#snippet list(task, index)}
+				{#snippet listItem(task, index)}
 					<TaskListItem {task} />
 				{/snippet}
 			</ItemList>
@@ -137,7 +137,7 @@
 		<button id="add-task-button" onclick={addTask}>Add Task</button>
 	{:else}
 		<ItemList items={dependencies}>
-			{#snippet list(task, index)}
+			{#snippet listItem(task, index)}
 				<TaskListItem {task} />
 			{/snippet}
 		</ItemList>
