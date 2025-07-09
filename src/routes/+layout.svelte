@@ -61,6 +61,6 @@
 		max-width: 100vw;
 
 		// Style
-		background-color: var(--c-bg);
+		background-color: var(--c-bg_-2);
 	}
 </style>

@@ -6,7 +6,7 @@
 	let showPullout = $state(false);
 </script>
 
-<button onclick={() => (showPullout = true)} aria-label="Open menu">☰</button>
+<button onclick={() => (showPullout = true)} aria-label="Open menu">☰ menu</button>
 
 <PulloutBlock bind:open={showPullout} placement="left">
 	<h1>Settings</h1>

@@ -37,7 +37,13 @@
 	{@render children()}
 </button>
 
-<Modal bind:open={showModal} ok="Submit" onOk={submitBugReport} onCancel={closeBugReport}>
+<Modal
+	bind:open={showModal}
+	buttons={[
+		{ label: 'Submit', action: submitBugReport, class: 'primary' },
+		{ label: 'Cancel', action: closeBugReport, class: 'secondary' }
+	]}
+>
 	<h3>Report a Bug</h3>
 	<p>Help us improve by describing the issue you encountered:</p>
 
@@ -154,7 +160,7 @@
 
 			&[type='submit'] {
 				background: var(--c-primary);
-				color: var(--c-bg_2);
+				color: var(--c-bg);
 				border-color: var(--c-primary);
 
 				&:hover:not(:disabled) {

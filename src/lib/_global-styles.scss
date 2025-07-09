@@ -2,10 +2,10 @@ body {
   // @media (prefers-color-scheme: light) {
   color-scheme: light;
   --c-bg_2: #ffffff;
-  --c-bg_1: #f8f8f8;
-  --c-bg: #eeeeee;
-  --c-bg_-1: #dfdfdf;
-  --c-bg_-2: #cccccc;
+  --c-bg_1: #fff;
+  --c-bg: #fff;
+  --c-bg_-1: #eee;
+  --c-bg_-2: #ddd;
 
   --c-border: #a7a7a7;
   --c-shadow: #19181851;
@@ -140,8 +140,8 @@ input,
 .textarea,
 textarea,
 button,
-.button,
-*[role="button"] {
+.button/* ,
+*[role="button"] */ {
   // Layout / Accessibility
   min-height: var(--min-size);
   min-width: var(--min-size);
@@ -155,8 +155,8 @@ button,
 }
 
 button,
-.button,
-*[role="button"] {
+.button/* ,
+*[role="button"] */ {
   cursor: pointer;
   background: var(--button-bg);
 }
@@ -173,7 +173,7 @@ textarea {
 
 .warning {
   background-color: var(--c-warning);
-  color: var(--c-bg_2);
+  color: var(--c-bg);
 }
 
 // 3rd party overrides

@@ -504,7 +504,7 @@
 		}
 
 		.event-log {
-			background: var(--c-bg_2);
+			background: var(--c-bg);
 			padding: 1rem;
 			border-radius: var(--interactible-border-radius);
 			max-height: 150px;

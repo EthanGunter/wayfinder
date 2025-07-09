@@ -7,8 +7,6 @@
 
 	interface Props {
 		open: boolean;
-		ok?: string;
-		cancel?: string;
 		title?: string;
 		size?: 'small' | 'medium' | 'large';
 		buttons?: { label: string; action: () => void; class: 'primary' | 'secondary' }[];

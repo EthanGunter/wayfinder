@@ -225,7 +225,7 @@
 	button {
 		padding: 0.5rem 1rem;
 		background: var(--c-primary);
-		color: var(--c-bg_2);
+		color: var(--c-bg);
 		border: none;
 		border-radius: var(--interactible-border-radius);
 		cursor: pointer;
@@ -248,7 +248,7 @@
 		gap: 0.5rem;
 		padding: 0.75rem 1.5rem;
 		background: linear-gradient(135deg, var(--c-primary), var(--c-primary_-1));
-		color: var(--c-bg_2);
+		color: var(--c-bg);
 		border: none;
 		border-radius: var(--interactible-border-radius);
 		cursor: pointer;
@@ -314,7 +314,7 @@
 	:global(.rich-tooltip) {
 		h4 {
 			margin: 0 0 0.5rem 0;
-			color: var(--c-bg_2);
+			color: var(--c-bg);
 			font-size: 1rem;
 		}
 
@@ -366,7 +366,7 @@
 	:global(.image-tooltip) {
 		h4 {
 			margin: 0 0 0.5rem 0;
-			color: var(--c-bg_2);
+			color: var(--c-bg);
 		}
 
 		.details {
