@@ -1,0 +1,185 @@
+<script lang="ts">
+	import { droppable } from '$lib/actions/dnd';
+	import { Task, TaskStatus, type TaskData } from '$lib/DataAPI/Task';
+	import { goto } from '$app/navigation';
+	import ItemList from '$lib/components/ItemList.svelte';
+	import TaskListItem from '$lib/components/TaskListItem.svelte';
+	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
+	import { onMount } from 'svelte';
+	import type { ITaskStorage } from '$lib/DataAPI/types';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppFooter from '$lib/components/AppFooter.svelte';
+
+	let API = $state<ITaskStorage>();
+
+	let todaysList = $state<Task[]>([]);
+	let suggestedTasks = $state<Task[]>([]);
+	let draggedTask = $state<Task | null>(null);
+
+	onMount(async () => {
+		API = await BrowserTaskStorage.get();
+		refreshTasks();
+	});
+
+	function refreshTasks() {
+		if (!API) return;
+		API.getTodaysTasks().then((tasks) =>
+			tasks.match(
+				(data) => {
+					todaysList = data;
+				},
+				(err) => {
+					console.error(err);
+				}
+			)
+		);
+		API.getPrioritizedTasks(15).then((result) =>
+			result.match(
+				(tasks) => {
+					suggestedTasks = tasks;
+				},
+				(err) => {
+					console.error(err);
+				}
+			)
+		);
+	}
+
+	function handleTodaysTaskDrop(e: CustomEvent) {
+		if (!API) return;
+		const task = e.detail.data;
+		if (!todaysList.includes(task)) {
+			todaysList = [...todaysList, task];
+			API.setTodaysTask(task.id, todaysList.indexOf(task));
+		}
+	}
+
+	function handleSuggestedTaskDrop(e: CustomEvent) {
+		if (!API) return;
+		const task = e.detail.data;
+		todaysList = todaysList.filter((t) => t.id !== task.id);
+		API.removeTodaysTask(task);
+	}
+
+	function todaysTaskChange(task: Task, changes: Partial<Task>) {
+		if (!API) return;
+		//TODO: Implement task change logic
+		if (changes.completed) {
+			API.removeTodaysTask(task.id);
+			todaysList = todaysList.filter((t) => t.id !== task.id);
+		}
+	}
+
+	function suggestedTaskChange(task: Task, changes: Partial<Task>) {
+		if (!API) return;
+		//TODO: Implement suggested task change logic
+		if (changes.completed) {
+			suggestedTasks = suggestedTasks.filter((t) => t.id !== task.id);
+		}
+	}
+
+	async function startProject() {
+		if (!API) return;
+
+		//TODO: Implement create new project logic
+		let newTaskResult = await API.createTask({
+			title: 'New Task',
+			status: TaskStatus.incomplete
+		});
+		newTaskResult.match(
+			(newTask) => {
+				goto(`/tasks/?id=${newTask}`);
+			},
+			(err) => {
+				console.error(err);
+			}
+		);
+		// alert('Start project (stub)');
+	}
+
+	function navigateToTask(task: Task) {
+		goto(`/tasks/?id=${task.id}`);
+	}
+
+	// Filter completed tasks and duplicates
+	let filteredDaysTasks = $derived(
+		todaysList.filter((t) => !t.completed).sort((a, b) => (a.title < b.title ? -1 : 1))
+	);
+	let filteredSuggestedTasks = $derived(
+		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
+	);
+</script>
+
+<AppHeader />
+<div class="page page-todays-tasks">
+	<!-- TODO: <HomepageTutorial /> -->
+	<!-- TODO: <TasksTutorial /> -->
+
+	<div id="todays-tasks-list">
+		<h1>Today's Tasks</h1>
+		{#if filteredDaysTasks.length === 0}
+			<h4>Empty todolist!</h4>
+		{/if}
+		{#if filteredSuggestedTasks.length > 0}
+			<h4>Drag some suggestions in!</h4>
+		{/if}
+		{#if suggestedTasks.length === 0 && todaysList.length === 0}
+			<div>
+				<br />
+				<button id="add-task-button" onclick={startProject}>Start a Project</button>
+			</div>
+		{/if}
+
+		<ItemList items={filteredDaysTasks} accepts={['task']}>
+			{#snippet listItem(task, index)}
+				<TaskListItem {task} />
+			{/snippet}
+		</ItemList>
+	</div>
+
+	{#if suggestedTasks.length > 0 && todaysList.length < 999}
+		<div
+			id="suggested-tasks-list"
+			use:droppable={{
+				accepts: ['task'],
+				onDrop: handleSuggestedTaskDrop
+			}}
+		>
+			<h2>Suggested Tasks</h2>
+			<ItemList items={filteredSuggestedTasks}>
+				{#snippet listItem(task, index)}
+					<TaskListItem {task} />
+				{/snippet}
+			</ItemList>
+		</div>
+	{/if}
+</div>
+<AppFooter />
+
+<style>
+	.page-todays-tasks {
+		padding: 1.5em 1em;
+	}
+	.drop-zone {
+		margin-bottom: 2em;
+		min-height: 3em;
+		padding: 1em;
+		border: 2px dashed red;
+		&.valid-drop {
+			border-color: var(--color-accent, #007acc);
+			background-color: var(--background-modifier-hover, #f5f5f5);
+		}
+		&.invalid-drop {
+			border-color: var(--color-accent, #007acc);
+			background-color: var(--background-modifier-hover, #f5f5f5);
+		}
+	}
+	#add-task-button {
+		padding: 0.7em 1.5em;
+		background: var(--color-accent, #007acc);
+		color: white;
+		border: none;
+		border-radius: 4px;
+		cursor: pointer;
+	}
+</style>

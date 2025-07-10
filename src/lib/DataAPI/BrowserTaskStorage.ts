@@ -3,7 +3,7 @@ import { type CreateTaskDTO, type ITaskStorage } from './types';
 import { err, ok, Result } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, ArgumentError, NotImplemented } from '$lib/Errors';
 import { v4 } from 'uuid';
-import { Task, type TaskData } from './Task';
+import { Task } from './Task';
 
 interface MyDB extends DBSchema {
   files: {
@@ -12,7 +12,7 @@ interface MyDB extends DBSchema {
   };
   index: {
     key: string;
-    value: TaskData;
+    value: Task;
   };
 }
 
@@ -24,19 +24,23 @@ function TryGetIDFromFilepath(key: string): string {
 }
 
 export class BrowserTaskStorage implements ITaskStorage {
+  private static instance: BrowserTaskStorage | undefined;
   private db!: IDBPDatabase<MyDB>;
 
   private constructor() { }
 
   static async get(): Promise<BrowserTaskStorage> {
-    const storage = new BrowserTaskStorage();
-    storage.db = await openDB<MyDB>('wayfinder', 1, {
-      upgrade(db) {
-        db.createObjectStore('files', { keyPath: 'filepath' });
-        db.createObjectStore('index', { keyPath: 'id' });
-      },
-    });
-    return storage;
+    if (!this.instance) {
+      const storage = new BrowserTaskStorage();
+      storage.db = await openDB<MyDB>('wayfinder', 1, {
+        upgrade(db) {
+          db.createObjectStore('files', { keyPath: 'filepath' });
+          db.createObjectStore('index', { keyPath: 'id' });
+        },
+      });
+      this.instance = storage
+    }
+    return this.instance;
   }
 
   async close(): Promise<void> {
@@ -51,9 +55,11 @@ export class BrowserTaskStorage implements ITaskStorage {
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   async createTask(task: CreateTaskDTO): Promise<Result<string, IOError | ParseError>> {
-    const preparedTask = task as TaskData;
+    const preparedTask = task as Task;
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
+
+    this.updateRelationships(null, preparedTask);
 
     return (await this.writeTaskToDB(preparedTask)).match(
       success => {
@@ -68,7 +74,7 @@ export class BrowserTaskStorage implements ITaskStorage {
    * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async readTask(key: string): Promise<Result<TaskData, NotFoundError | ParseError>> {
+  async readTask(key: string): Promise<Result<Task, NotFoundError | ParseError>> {
     if (key.endsWith(".md")) {
       // Filepath
       // Get the .md file content
@@ -95,10 +101,13 @@ export class BrowserTaskStorage implements ITaskStorage {
    * @error {@link IOError} if IndexedDB.put() fails
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  async updateTask(key: string, updates: Partial<TaskData>): Promise<Result<TaskData, NotFoundError | IOError | ParseError>> {
+  async updateTask(key: string, updates: Partial<Task>): Promise<Result<Task, NotFoundError | IOError | ParseError>> {
     return (await this.readTask(key)).match(
       async task => {
-        const updated: TaskData = { ...task, ...updates, lastEdit: new Date().toISOString() };
+        const updated: Task = new Task({ ...task, ...updates, lastEdit: new Date().toISOString() });
+
+        this.updateRelationships(task, updated);
+
         return (await this.writeTaskToDB(updated)).match(
           () => ok(updated),
           error =>
@@ -141,15 +150,85 @@ export class BrowserTaskStorage implements ITaskStorage {
 
   //#region Utilities
 
-  async writeTaskToDB(task: TaskData): Promise<Result<void, IOError>> {
+  private async updateRelationships(oldTask: Task | null, newTask: Task | null) {
+    if (!oldTask && newTask) {
+      // Add new task to all relationships
+      if (newTask.children) {
+        this.addAsParent(newTask.id, newTask.children);
+      }
+      if (newTask.parent) {
+        this.addAsChild(newTask.id, [newTask.parent]);
+      }
+    }
+    else if (oldTask && !newTask) {
+      // Remove oldTask from all relationships
+      if (oldTask.children) {
+        this.removeAsParent(oldTask.id, oldTask.children);
+      }
+      if (oldTask.parent) {
+        this.removeAsChild(oldTask.id, [oldTask.parent]);
+      }
+    }
+    else if (oldTask && newTask) {
+      if (oldTask.parent !== newTask.parent) {
+        if (oldTask.parent) {
+          // Remove old parent
+          this.removeAsChild(oldTask.id, [oldTask.parent]);
+        }
 
+        if (newTask.parent) {
+          // Add new parent
+          this.addAsChild(oldTask.id, [newTask.parent]);
+        }
+      }
+
+      const addedChildren = newTask.children?.filter(x => oldTask.children?.includes(x));
+      const removedChildren = oldTask.children?.filter(x => newTask.children?.includes(x));
+      if (addedChildren) {
+        this.addAsParent(newTask.id, addedChildren);
+      }
+      if (removedChildren) {
+        this.removeAsParent(newTask.id, removedChildren);
+      }
+    }
+  }
+
+
+  private async addAsParent(add: string, to: string[]) {
+    console.log(`Adding ${add} as parent to`, to);
+  }
+  private async addAsChild(add: string, to: string[]) {
+    console.log(`Adding ${add} as child of`, to);
+  }
+  private async removeAsParent(remove: string, to: string[]) {
+    console.log(`Removing ${remove} as parent to`, to);
+  }
+  private async removeAsChild(remove: string, to: string[]) {
+    console.log(`Removing ${remove} as child of`, to);
+  }
+
+  private async _updateInternal(key: string, updated?: Task, relationshipChanges?: { addParents?: string[], removeParents?: string[], addChildren?: string[], removeChildren?: string[], })/* : Promise<Result<Task, NotFoundError | IOError | ParseError>> */ {
+    // return (await this.readTask(key)).match(
+    //   async task => {
+
+    //     return (await this.writeTaskToDB(updated)).match(
+    //       () => ok(updated),
+    //       error =>
+    //         err(error)
+    //     );
+    //   },
+    //   error => err(error)
+    // )
+  }
+  private async writeTaskToDB(task: Task): Promise<Result<void, IOError>> {
+    if (!task.filepath) task.filepath = task.id + ".md";
     const md = Task.toMarkdown(task);
 
     try {
       // Create the .md file
       await this.db.put('files', { filepath: task.filepath, content: md });
     } catch (e) {
-      return err(new IOError("Write", `Task: ${task.title}`, md, e));
+      return err(new IOError(`Failed to write ${task.filepath}`, e, md));
     }
 
     // Update the DB with the new file's data
@@ -179,6 +258,74 @@ export class BrowserTaskStorage implements ITaskStorage {
       error => {
         return err(error);
       });
+  }
+
+  async getChildren(id: string): Promise<Result<Task[], Err>> {
+    const allTasks = await this.db.getAll('index');
+    const children = allTasks.filter(task => task.parent === id);
+    return ok(children);
+  }
+
+  async getparents(id: string): Promise<Result<Task[], Err>> {
+    const parents: Task[] = [];
+    let currentId = id;
+
+    while (currentId) {
+      const taskResult = await this.readTask(currentId);
+      if (taskResult.isOk()) {
+        const task = taskResult.value;
+        if (task.parent) {
+          const parentResult = await this.readTask(task.parent);
+          if (parentResult.isOk()) {
+            parents.unshift(parentResult.value);
+            currentId = parentResult.value.id;
+          } else {
+            currentId = '';
+          }
+        } else {
+          currentId = '';
+        }
+      } else {
+        currentId = '';
+      }
+    }
+
+    return ok(parents);
+  }
+
+  async getRootTasks(): Promise<Result<Task[], Err>> {
+    const allTasks = await this.db.getAll('index');
+    const rootTasks = allTasks.filter(task => !task.parent);
+    return ok(rootTasks);
+  }
+  async getTodaysTasks(): Promise<Result<Task[], Err>> {
+    const todaysTaskIds = JSON.parse(localStorage.getItem('todaysTasks') || '[]') as string[];
+    const tasks = await Promise.all(todaysTaskIds.map(id => this.readTask(id)));
+    const successfulTasks = tasks.filter(r => r.isOk()).map(r => r.value as Task);
+    return ok(successfulTasks);
+  }
+
+  async setTodaysTask(id: string, position: number): Promise<Result<void, Err>> {
+    const todaysTaskIds = JSON.parse(localStorage.getItem('todaysTasks') || '[]') as string[];
+    const index = todaysTaskIds.indexOf(id);
+    if (index > -1) {
+      todaysTaskIds.splice(index, 1);
+    }
+    todaysTaskIds.splice(position, 0, id);
+    localStorage.setItem('todaysTasks', JSON.stringify(todaysTaskIds));
+    return ok(undefined);
+  }
+
+  async removeTodaysTask(id: string): Promise<Result<void, Err>> {
+    let todaysTaskIds = JSON.parse(localStorage.getItem('todaysTasks') || '[]') as string[];
+    todaysTaskIds = todaysTaskIds.filter(taskId => taskId !== id);
+    localStorage.setItem('todaysTasks', JSON.stringify(todaysTaskIds));
+    return ok(undefined);
+  }
+  async getPrioritizedTasks(limit: number): Promise<Result<Task[], Err>> {
+    const allTasks = await this.db.getAll('index');
+    const sortedTasks = allTasks.sort((a, b) => 0/* (b.priority || 0) - (a.priority || 0) */);
+    return ok(sortedTasks.slice(0, limit));
   }
 
   //#endregion

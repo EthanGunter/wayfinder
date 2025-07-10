@@ -1,7 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { redirect } from '@sveltejs/kit';
+	goto('/home');
 </script>
-
-<h1>Welcome to Wayfinder!</h1>
-
-<style lang="scss">
-</style>

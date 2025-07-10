@@ -2,9 +2,9 @@
 
 import type { NotFoundError, ParseError, Err } from "$lib/Errors";
 import type { Result, ResultAsync } from "neverthrow";
-import type { TaskData } from "./Task";
+import type { Task } from "./Task";
 
-export type CreateTaskDTO = Omit<TaskData, "created" | "id">
+export type CreateTaskDTO = Partial<Task> & Omit<Task, "created" | "id" | "completed" | "filepath" | "status">
 
 // Todo narrow error types once concrete classes are implemented
 /**
@@ -12,23 +12,57 @@ export type CreateTaskDTO = Omit<TaskData, "created" | "id">
  * as well as keeping a database index in sync for rapid querying of data
  */
 export interface ITaskStorage {
-  // Task Node operations
+  close(): Promise<void>;
+
+  /* #region Basic CRUD Operations */
   /**
    * Creates a new task with the given data
    * @returns The new task's generated ID
    */
+  // TODO-test: sets up relationships if parent(s) or children are populated
   createTask(task: CreateTaskDTO): Promise<Result<string, Err>>;
   /**
    * Fetches a task's data by its ID
    */
-  readTask(path: string): Promise<Result<TaskData, NotFoundError | Err>>;
-  updateTask(id: string, updates: Partial<TaskData>): Promise<Result<TaskData, Err>>;
+  readTask(path: string): Promise<Result<Task, NotFoundError | Err>>;
+  updateTask(id: string, updates: Partial<Task>): Promise<Result<Task, Err>>;
   deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
-  close(): Promise<void>;
+  /* #endregion */
+
+  /* #region Node Relationships */
+  /**
+   * Finds all tasks that must be completed before `id`
+   */
+  getChildren(id: string): Promise<Result<Task[], Err>>;
+  /**
+   * Gets all tasks that are waiting for `id`
+   */
+  getparents(id: string): Promise<Result<Task[], Err>>;
+  /**
+   * Gets all tasks that nothing depends on
+   */
+  getRootTasks(): Promise<Result<Task[], Err>>;
+  /* #endregion */
+
+  /* #region Prioritization Logic */
+  /**
+   * Gets all tasks that are on the "Today's List"
+   */
+  getTodaysTasks(): Promise<Result<Task[], Err>>;
+  /**
+   * Adds a task to the "Today's List" at the given position
+   */
+  setTodaysTask(id: string, position: number): Promise<Result<void, Err>>;
+  /**
+   * Removes a task from the "Today's List"
+   */
+  removeTodaysTask(id: string): Promise<Result<void, Err>>;
+  /**
+   * Gets the top N tasks based on priority
+   */
+  getPrioritizedTasks(limit: number): Promise<Result<Task[], Err>>;
+  /* #endregion */
 }
-
-
-
 
 // TODO Implement for offline sync
 /* interface SyncStatus {
@@ -51,7 +85,7 @@ interface Operation {
   id: string; // unique op ID
   timestamp: string; // ISO or logical clock
   type: 'add' | 'update' | 'delete';
-  payload: Partial<TaskData>; // etc...
+  payload: Partial<Task>; // etc...
 }
 
 interface Query { } */

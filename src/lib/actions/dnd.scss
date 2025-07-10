@@ -1,0 +1,30 @@
+.dnd-draggable {
+  cursor: grab;
+  user-select: none;
+}
+
+.dnd-ghost {
+  position: absolute;
+  pointer-events: none !important;
+  // opacity: 0.7;
+  z-index: 2147483647;
+}
+
+/* DEBUGGING STYLES */
+// .dnd-ghost.valid-drop {
+//   background-color: #00ff0055;
+// }
+// .dnd-ghost.invalid-drop {
+//   background-color: #ff000055;
+// }
+// .dnd-droppable.valid-drop {
+//   outline: 1px solid #00ff0055;
+// }
+// .dnd-droppable.invalid-drop {
+//   outline: 1px solid #ff000055;
+// }
+// [style*="pointer-events: none"] {
+//   /* Your highlighting styles here */
+//   background-color: yellow; /* Example: highlight with yellow background */
+//   border: 1px solid red; /* Example: add a red border */
+// }

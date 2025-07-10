@@ -15,6 +15,21 @@
             ],
             "console": "integratedTerminal",
             "autoAttachChildProcesses": true
+        },
+        {
+            "name": "Attach to Brave",
+            "port": 5173,
+            "request": "attach",
+            "type": "chrome",
+            "webRoot": "${workspaceFolder}"
+        },
+        {
+            "name": "Launch Brave",
+            "request": "launch",
+            "runtimeExecutable": "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            "type": "chrome",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}"
         }
     ]
 }
