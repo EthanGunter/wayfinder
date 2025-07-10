@@ -336,12 +336,12 @@ export class BrowserTaskStorage implements ITaskStorage {
         }
       }
 
-      const addedChildren = newTask.children?.filter(x => oldTask.children?.includes(x));
-      const removedChildren = oldTask.children?.filter(x => newTask.children?.includes(x));
-      if (addedChildren.length > 0) {
+      const addedChildren = newTask.children?.filter(x => !oldTask.children?.includes(x));
+      const removedChildren = oldTask.children?.filter(x => !newTask.children?.includes(x));
+      if (addedChildren && addedChildren.length > 0) {
         this.addAsParent(newTask.id, addedChildren);
       }
-      if (removedChildren.length > 0) {
+      if (removedChildren && removedChildren.length > 0) {
         this.removeAsParent(newTask.id, removedChildren);
       }
     }

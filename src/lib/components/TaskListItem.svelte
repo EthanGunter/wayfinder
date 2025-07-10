@@ -162,6 +162,7 @@
 		width: 100%;
 		height: 100%;
 		cursor: text;
+		padding: 0.2rem;
 	}
 	.drag-handle {
 		padding: 0 1rem;
