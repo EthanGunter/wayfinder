@@ -89,7 +89,7 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
             expect(children).toHaveLength(1);
             expect(children[0].id).toBe(task1Id);
 
-            const parentsResult = await storage.getparents(task3Id);
+            const parentsResult = await storage.getParents(task3Id);
             expect(parentsResult).toBeOk();
             const parents = parentsResult._unsafeUnwrap();
             expect(parents).toHaveLength(1);

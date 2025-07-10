@@ -59,14 +59,14 @@
 <style>
 	:global(.modal-dialog) {
 		border: none;
-		border-radius: 12px;
+		border-radius: var(--container-border-radius, 0.5rem);
 		padding: 0;
-		background: transparent;
+		background: var(--c-bg, #f9fafb);
 		box-shadow:
 			0 20px 25px -5px rgba(0, 0, 0, 0.1),
 			0 10px 10px -5px rgba(0, 0, 0, 0.04);
 		max-height: 90vh;
-		overflow: visible;
+		overflow: hidden;
 		margin: auto;
 		animation: modal-appear 0.2s ease-out;
 	}
@@ -84,7 +84,7 @@
 	}
 
 	.modal-content {
-		background: var(--background-primary, #ffffff);
+		background: var(--c-bg, #ffffff);
 		border-radius: 12px;
 		overflow: hidden;
 		display: flex;
@@ -97,8 +97,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 1.5rem 2rem 1rem;
-		border-bottom: 1px solid var(--border-color, #e5e7eb);
-		background: var(--background-secondary, #f9fafb);
+		border-bottom: 1px solid var(--c-border, #e5e7eb);
+		background: var(--c-bg_-2, #f9fafb);
 	}
 
 	.modal-title {
@@ -142,7 +142,7 @@
 		justify-content: flex-end;
 		padding: 1rem 2rem 2rem;
 		border-top: 1px solid var(--border-color, #e5e7eb);
-		background: var(--background-secondary, #f9fafb);
+		background: var(--c-bg_-1, #f9fafb);
 	}
 
 	.btn {
@@ -160,7 +160,7 @@
 	}
 
 	.btn-secondary {
-		background: var(--background-primary, #ffffff);
+		background: var(--c-bg, #ffffff);
 		color: var(--text-secondary, #6b7280);
 		border-color: var(--border-color, #d1d5db);
 	}
@@ -171,9 +171,9 @@
 	}
 
 	.btn-primary {
-		background: var(--primary-color, #3b82f6);
+		background: var(--c-primary, #3b82f6);
 		color: white;
-		border-color: var(--primary-color, #3b82f6);
+		border-color: var(--c-primary, #3b82f6);
 	}
 
 	.btn-primary:hover {

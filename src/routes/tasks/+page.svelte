@@ -37,7 +37,7 @@
 				console.error(err);
 			}
 		);
-		(await api.getparents(id)).match(
+		(await api.getParents(id)).match(
 			(deps) => {
 				parents = deps;
 			},
@@ -94,8 +94,17 @@
 		// TODO: Do some debouncing to save on server calls
 		API.then((api) => {
 			if (currentTask) {
-				console.log(update);
 				api.updateTask(currentTask.id, update);
+			}
+		});
+	}
+
+	function onListOrderChanged(items: Task[]) {
+		API.then((api) => {
+			for (let index = 0; index < items.length; index++) {
+				const item = items[index];
+
+				api.updateTask(item.id, { priority: items.length - index });
 			}
 		});
 	}
@@ -121,7 +130,7 @@
 			{/if}
 		</div>
 		<TaskEditor bind:task={currentTask} {onTaskChange}>
-			<ItemList items={children}>
+			<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 				{#snippet listItem(task, index)}
 					<TaskListItem {task} />
 				{/snippet}
@@ -129,7 +138,7 @@
 		</TaskEditor>
 		<button id="add-task-button" onclick={addTask}>Add Task</button>
 	{:else}
-		<ItemList items={children}>
+		<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 			{#snippet listItem(task, index)}
 				<TaskListItem {task} />
 			{/snippet}

@@ -27,7 +27,7 @@
 	const {
 		id = '',
 		scrollable = false,
-		accepts = ['*'],
+		accepts,
 		items: initialItems = [],
 		listItem,
 		onListOrderChanged = undefined

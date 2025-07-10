@@ -9,6 +9,7 @@ export interface TaskData {
     title: string,
     created: string, // ISO Timestamp
     status: TaskStatus
+    priority?: number,
     content?: string,
     lastEdit?: string, // ISO Timestamp
     /** 
@@ -34,10 +35,11 @@ export class Task implements TaskData {
     title: string;
     status: TaskStatus;
     created: string;
+    priority?: number;
     content?: string;
     lastEdit?: string;
     parent?: string;
-    children?: string[];
+    children: string[];
 
     public get completed(): boolean {
         return this.status === TaskStatus.complete;
@@ -46,6 +48,7 @@ export class Task implements TaskData {
     constructor({
         id,
         filepath,
+        priority,
         title,
         content,
         created,
@@ -55,6 +58,7 @@ export class Task implements TaskData {
         children
     }: CreateTaskDTO) {
         this.id = id ?? "NO-ID";
+        this.priority = priority ?? 0;
         this.title = title;
         this.content = content;
         this.filepath = filepath ?? `${title}.md`;
@@ -62,7 +66,7 @@ export class Task implements TaskData {
         this.created = created ?? new Date().toISOString();
         this.lastEdit = lastEdit ?? new Date().toISOString();
         this.parent = parent;
-        this.children = children;
+        this.children = children ?? [];
     }
 
     // Helper: Convert TaskData to markdown string
