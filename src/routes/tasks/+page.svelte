@@ -37,7 +37,7 @@
 				console.error(err);
 			}
 		);
-		(await api.getparents(id)).match(
+		(await api.getParents(id)).match(
 			(deps) => {
 				parents = deps;
 			},
@@ -94,7 +94,6 @@
 		// TODO: Do some debouncing to save on server calls
 		API.then((api) => {
 			if (currentTask) {
-				console.log(update);
 				api.updateTask(currentTask.id, update);
 			}
 		});
@@ -121,7 +120,7 @@
 			{/if}
 		</div>
 		<TaskEditor bind:task={currentTask} {onTaskChange}>
-			<ItemList items={children}>
+			<ItemList items={children} accepts={['task']}>
 				{#snippet listItem(task, index)}
 					<TaskListItem {task} />
 				{/snippet}
@@ -129,7 +128,7 @@
 		</TaskEditor>
 		<button id="add-task-button" onclick={addTask}>Add Task</button>
 	{:else}
-		<ItemList items={children}>
+		<ItemList items={children} accepts={['task']}>
 			{#snippet listItem(task, index)}
 				<TaskListItem {task} />
 			{/snippet}

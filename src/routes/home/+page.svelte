@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { droppable } from '$lib/actions/dnd';
+	import { DropEvent, droppable } from '$lib/actions/dnd';
 	import { Task, TaskStatus, type TaskData } from '$lib/DataAPI/Task';
 	import { goto } from '$app/navigation';
 	import ItemList from '$lib/components/ItemList.svelte';
@@ -45,20 +45,24 @@
 		);
 	}
 
-	function handleTodaysTaskDrop(e: CustomEvent) {
+	function handleTodaysTaskDrop(e: DropEvent<Task>) {
 		if (!API) return;
 		const task = e.detail.data;
+		if (!task) return;
+
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
 			API.setTodaysTask(task.id, todaysList.indexOf(task));
 		}
 	}
 
-	function handleSuggestedTaskDrop(e: CustomEvent) {
+	function handleSuggestedTaskDrop(e: DropEvent<Task>) {
 		if (!API) return;
 		const task = e.detail.data;
+		if (!task) return;
+
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		API.removeTodaysTask(task);
+		API.removeTodaysTask(task.id);
 	}
 
 	function todaysTaskChange(task: Task, changes: Partial<Task>) {
@@ -84,7 +88,8 @@
 		//TODO: Implement create new project logic
 		let newTaskResult = await API.createTask({
 			title: 'New Task',
-			status: TaskStatus.incomplete
+			status: TaskStatus.incomplete,
+			priority: 0
 		});
 		newTaskResult.match(
 			(newTask) => {
@@ -115,7 +120,13 @@
 	<!-- TODO: <HomepageTutorial /> -->
 	<!-- TODO: <TasksTutorial /> -->
 
-	<div id="todays-tasks-list">
+	<div
+		id="todays-tasks-list"
+		use:droppable={{
+			accepts: ['task'],
+			onDrop: handleTodaysTaskDrop
+		}}
+	>
 		<h1>Today's Tasks</h1>
 		{#if filteredDaysTasks.length === 0}
 			<h4>Empty todolist!</h4>
@@ -130,14 +141,14 @@
 			</div>
 		{/if}
 
-		<ItemList items={filteredDaysTasks} accepts={['task']}>
+		<ItemList items={filteredDaysTasks}>
 			{#snippet listItem(task, index)}
 				<TaskListItem {task} />
 			{/snippet}
 		</ItemList>
 	</div>
 
-	{#if suggestedTasks.length > 0 && todaysList.length < 999}
+	{#if todaysList.length < 999}
 		<div
 			id="suggested-tasks-list"
 			use:droppable={{

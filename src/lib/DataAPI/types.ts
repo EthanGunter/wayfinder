@@ -4,7 +4,7 @@ import type { NotFoundError, ParseError, Err } from "$lib/Errors";
 import type { Result, ResultAsync } from "neverthrow";
 import type { Task } from "./Task";
 
-export type CreateTaskDTO = Partial<Task> & Omit<Task, "created" | "id" | "completed" | "filepath" | "status">
+export type CreateTaskDTO = Partial<Task> & Omit<Task, "created" | "id" | "completed" | "filepath" | "status" | "children">
 
 // Todo narrow error types once concrete classes are implemented
 /**
@@ -20,13 +20,13 @@ export interface ITaskStorage {
    * @returns The new task's generated ID
    */
   // TODO-test: sets up relationships if parent(s) or children are populated
-  createTask(task: CreateTaskDTO): Promise<Result<string, Err>>;
+  createTask(task: CreateTaskDTO): Promise<Result<string, Err>>; // TODO Implement plural operation
   /**
    * Fetches a task's data by its ID
    */
-  readTask(path: string): Promise<Result<Task, NotFoundError | Err>>;
-  updateTask(id: string, updates: Partial<Task>): Promise<Result<Task, Err>>;
-  deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
+  readTask(path: string): Promise<Result<Task, NotFoundError | Err>>; // TODO Implement plural operation
+  updateTask(id: string, updates: Partial<Task>): Promise<Result<Task, Err>>; // TODO Implement plural operation
+  deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>; // TODO Implement plural operation
   /* #endregion */
 
   /* #region Node Relationships */
@@ -37,7 +37,7 @@ export interface ITaskStorage {
   /**
    * Gets all tasks that are waiting for `id`
    */
-  getparents(id: string): Promise<Result<Task[], Err>>;
+  getParents(id: string): Promise<Result<Task[], Err>>;
   /**
    * Gets all tasks that nothing depends on
    */
@@ -60,7 +60,14 @@ export interface ITaskStorage {
   /**
    * Gets the top N tasks based on priority
    */
-  getPrioritizedTasks(limit: number): Promise<Result<Task[], Err>>;
+  getPrioritizedTasks(limit: number /* , weights: WeightParams = {
+    deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
+} */): Promise<Result<Task[], Err>>;
+
+  searchTasks(searchTerm: string): Promise<Task[]>;
+
+  exportData(simplify?: boolean): Promise<string>;
+  importData(data: string): Promise<number>;
   /* #endregion */
 }
 
