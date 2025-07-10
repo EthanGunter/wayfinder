@@ -7,6 +7,8 @@
 	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
 	import { onMount } from 'svelte';
 	import type { ITaskStorage } from '$lib/DataAPI/types';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppFooter from '$lib/components/AppFooter.svelte';
 
 	let API = $state<ITaskStorage>();
 
@@ -82,7 +84,7 @@
 		//TODO: Implement create new project logic
 		let newTaskResult = await API.createTask({
 			title: 'New Task',
-			status: TaskStatus.incomplete,
+			status: TaskStatus.incomplete
 		});
 		newTaskResult.match(
 			(newTask) => {
@@ -106,9 +108,9 @@
 	let filteredSuggestedTasks = $derived(
 		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
 	);
-
 </script>
 
+<AppHeader />
 <div class="page page-todays-tasks">
 	<!-- TODO: <HomepageTutorial /> -->
 	<!-- TODO: <TasksTutorial /> -->
@@ -152,6 +154,7 @@
 		</div>
 	{/if}
 </div>
+<AppFooter />
 
 <style>
 	.page-todays-tasks {

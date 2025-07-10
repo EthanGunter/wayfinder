@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import BugReportMenu from '$lib/components/BugReportModal.svelte';
 	import type { Task } from '$lib/DataAPI/Task';
 	import SearchBar from './SearchBar.svelte';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
 
+	let { children = undefined } = $props();
 	let pulloutOpen = $state(false);
 
 	async function search(query: string): Promise<Task[]> {
@@ -48,6 +48,7 @@
 			{/if}
 		{/snippet}
 	</SearchBar>
+	{@render children?.()}
 </div>
 
 <style lang="scss">

@@ -166,7 +166,7 @@
 
 		input {
 			flex-grow: 1;
-			min-height: var(--min-size);
+			min-height: var(--size-min);
 			border: none;
 			outline: none;
 			background: transparent;

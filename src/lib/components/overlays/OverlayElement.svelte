@@ -94,6 +94,8 @@
 	.overlay {
 		margin: auto;
 		border: none;
+		border-radius: var(--container-border-radius_1);
+		overflow: hidden;
 		background-color: var(--c-bg);
 		overflow: visible;
 		transition:

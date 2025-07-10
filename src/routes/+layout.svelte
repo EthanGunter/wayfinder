@@ -14,9 +14,7 @@
 </script>
 
 <div class="app-layout">
-	<AppHeader />
 	{@render children?.()}
-	<AppFooter />
 </div>
 
 <style lang="scss">
@@ -32,7 +30,7 @@
 		// Internal layout
 		display: grid;
 		grid-template-rows: auto 1fr auto;
-		grid-template-areas: "header" "content" "footer";
+		grid-template-areas: 'header' 'content' 'footer';
 
 		> :global(.app-header) {
 			// Layout

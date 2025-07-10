@@ -10,6 +10,9 @@
 
 	function handleInput(event: Event) {
 		const target = event.target as HTMLInputElement;
+		if (target.name === 'description') {
+			task.content = target.value;
+		}
 		onTaskChange?.({ [target.name]: target.value });
 	}
 
@@ -20,7 +23,13 @@
 </script>
 
 <div class="task-editor">
-	<div class="header">
+	<div class="title">
+		<input
+			type="checkbox"
+			name="completed"
+			bind:checked={task.completed}
+			onchange={handleCheckbox}
+		/>
 		<input
 			name="title"
 			class="task-title"
@@ -29,29 +38,17 @@
 			oninput={handleInput}
 		/>
 	</div>
-	<div class="content">
-		{@render children()}
+	<div class="editor-controls">
+		<textarea
+			name="description"
+			id="task-editor-notes"
+			placeholder="Notes"
+			value={task.content ?? null}
+			oninput={handleInput}
+		></textarea>
 	</div>
-	<div class="footer">
-		<span>
-			<input
-				type="checkbox"
-				name="completed"
-				bind:checked={task.completed}
-				onchange={handleCheckbox}
-			/>
-			<label for="task-editor-completion">Completed</label>
-		</span>
-		<span>
-			<label for="task-editor-notes">Notes</label>
-			<textarea
-				name="description"
-				id="task-editor-notes"
-				placeholder="Notes"
-				bind:value={task.content}
-				oninput={handleInput}
-			></textarea>
-		</span>
+	<div class="subtasks">
+		{@render children()}
 	</div>
 </div>
 
@@ -59,31 +56,74 @@
 	.task-editor {
 		display: flex;
 		flex-direction: column;
-		background-color: var(--c-bg);
+		/* background-color: var(--c-bg); */
 		height: 100%;
-	}
 
-	.task-editor > .header {
+		.title {
+			display: flex;
+			align-items: center;
+
+			border-top: 1px solid var(--c-border);
+			border-bottom: 1px solid var(--c-border);
+			/* background-color: var(--c-bg); */
+
+			input[type='checkbox'] {
+				margin-left: 1rem;
+			}
+
+			.task-title {
+				flex-grow: 1;
+				font-size: var(--font-size-h3);
+				border-bottom: 1px solid var(--c-border);
+				margin: 1rem;
+			}
+		}
+
+		.editor-controls {
+			display: flex;
+			padding: 0.5rem;
+			gap: 0.5rem;
+
+			> * {
+				width: 100%;
+			}
+
+			span {
+				display: flex;
+				align-items: center;
+				justify-items: center;
+				gap: 0.5rem;
+				padding: 0.5rem;
+				/* border-bottom: 1px solid var(--c-border); */
+			}
+		}
+	}
+	.task-editor > .editor-controls > span > :nth-child(1) {
 		display: flex;
-		border-top: 1px solid var(--c-border);
+		justify-content: center;
 		align-items: center;
+		width: 2rem;
+		margin: 0 1rem;
+		color: var(--c-text_2);
 	}
 
-	.task-title {
+	.task-editor > .editor-controls > span > :nth-child(2) {
 		flex-grow: 1;
-		font-size: var(--font-size-h3);
-		border-bottom: 1px solid var(--c-border);
-		margin: 1rem;
 	}
 
-	.task-editor > .content {
+	#task-editor-notes {
+		min-height: 3rem;
+	}
+
+	.task-editor > .subtasks {
 		position: relative;
 		display: flex;
 		flex-direction: column;
-		padding-bottom: var(--gap-small);
+		margin-bottom: var(--gap-small);
+		flex-grow: 1;
 	}
 
-	.task-editor > .content:before {
+	.task-editor > .subtasks:before {
 		content: '';
 		pointer-events: none;
 		display: block;
@@ -97,31 +137,5 @@
 			inset 0 10px 0.6rem -10px var(--c-shadow),
 			inset 0 -10px 0.6rem -10px var(--c-shadow);
 		border-bottom: 1px solid var(--c-border);
-	}
-
-	.task-editor > .footer > span {
-		display: flex;
-		align-items: center;
-		justify-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem;
-		border-bottom: 1px solid var(--c-border);
-	}
-
-	.task-editor > .footer > span > :nth-child(1) {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		width: 2rem;
-		margin: 0 1rem;
-		color: var(--c-text_2);
-	}
-
-	.task-editor > .footer > span > :nth-child(2) {
-		flex-grow: 1;
-	}
-
-	#task-editor-notes {
-		min-height: 3rem;
 	}
 </style>

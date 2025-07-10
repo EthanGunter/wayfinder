@@ -87,7 +87,7 @@ body {
   --gap-small: 1rem;
   --gap-med: 1.5rem;
   --gap-large: 2rem;
-  --min-size: 48px;
+  --size-min: 24px;
 
   font-size: var(--font-size);
   font-family: "Fira Mono", monospace;
@@ -143,8 +143,8 @@ button,
 .button/* ,
 *[role="button"] */ {
   // Layout / Accessibility
-  min-height: var(--min-size);
-  min-width: var(--min-size);
+  min-height: var(--size-min);
+  min-width: var(--size-min);
 
   // Style
   padding: var(--interactible-padding);
@@ -152,6 +152,11 @@ button,
   border-radius: var(--interactible-border-radius);
   border: var(--interactible-border);
   background-color: var(--interactible-bg);
+}
+input[type="checkbox"]{
+  min-height: var(--size-min);
+  min-width: var(--size-min);
+
 }
 
 button,

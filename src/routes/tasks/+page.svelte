@@ -7,8 +7,9 @@
 	import { type ITaskStorage } from '$lib/DataAPI/types';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
 	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppFooter from '$lib/components/AppFooter.svelte';
 
-	//TODO: Replace with real task loading logic (from store, API, etc.)
 	let API = $state<Promise<ITaskStorage>>(BrowserTaskStorage.get());
 	let currentTask = $state<Task | null>(null);
 	let dependencies = $state<Task[]>([]);
@@ -103,11 +104,12 @@
 	}
 </script>
 
+<AppHeader />
 <section class="task-browser page">
 	<!-- TODO: <TasksTutorial /> -->
 	{#if currentTask}
-		<div class="task-browser-header">
-			<button class="task-browser-back-button" onclick={() => history.back()}>
+		<div class="navigation">
+			<button class="back-button" onclick={() => history.back()}>
 				<!-- TODO: Replace with real icon -->
 				<span>⬅️</span>
 			</button>
@@ -144,13 +146,14 @@
 		<button id="add-task-button" onclick={addTask}>New Project</button>
 	{/if}
 </section>
+<AppFooter />
 
 <style>
 	.task-browser.page {
 		display: flex;
 		padding: 1.5em 1em;
 	}
-	.task-browser-header {
+	.navigation {
 		display: flex;
 		gap: 0.5em;
 		align-items: center;

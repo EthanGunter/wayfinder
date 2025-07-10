@@ -64,7 +64,7 @@ export class Task implements TaskData {
     // Helper: Convert TaskData to markdown string
     static toMarkdown(task: TaskData): string {
         const { content, filepath, ...meta } = task;
-        return `---\n${yaml.dump(meta)}---\n${content}`;
+        return `---\n${yaml.dump(meta)}---\n${content ?? ''}`;
     }
 
     // Helper: Parse markdown string to TaskData

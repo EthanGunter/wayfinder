@@ -1,18 +1,37 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
 	import type { Task } from '$lib/DataAPI/Task';
 	import ContextMenu from './ContextMenu.svelte';
 	import Modal from './overlays/Modal.svelte';
-	import TaskItemContextMenu from './TaskItemContextMenu.svelte';
 
-	const { task, onDragStart, onDrop, ghostRenderOverride, children } = $props<{
+	const { task, onDragStart, onDrop, ghostRenderOverride /* children */ } = $props<{
 		task: Task;
 		onDragStart?: (e: CustomEvent) => void;
 		onDrop?: (e: CustomEvent) => void;
 	}>();
 
+	let listItemEl = $state<HTMLLIElement>();
+	let inputEl = $state<HTMLInputElement>();
+
 	let editName = $state(false);
 	let title = $state(task.title);
+
+	// Context menu state
+	let showContextMenu = $state(false);
+	let showDeleteDialog = $state(false);
+	function rename() {
+		editName = true;
+		showContextMenu = false;
+		setTimeout(() => inputEl?.focus(), 0);
+	}
+	function gotoTask() {
+		goto(`/tasks/?id=${task.id}`);
+	}
+	function openDeleteDialogue() {}
+	function resolveDelete(confirm: boolean) {
+		if (!confirm) return;
+	}
 
 	function handleDragStart(e: CustomEvent) {
 		onDragStart?.(e);
@@ -23,18 +42,12 @@
 	function handleDragOver(args: any) {
 		ghostRenderOverride?.(args);
 	}
-	function handleEdit() {
-		editName = true;
-	}
 	function handleBlur() {
-		console.log('Blur');
-
 		editName = false;
-		// Save logic here if needed
 	}
 </script>
 
-<li class="list-item" use:dragGroup>
+<li bind:this={listItemEl} class="list-item" use:dragGroup>
 	<span
 		class="drag-handle"
 		use:draggable={{
@@ -46,11 +59,11 @@
 			delay: 0
 		}}
 	>
-		<!-- ∷ ⧚ -->
 		⧚
 	</span>
 	{#if editName}
 		<input
+			bind:this={inputEl}
 			class="title"
 			type="text"
 			bind:value={title}
@@ -62,28 +75,21 @@
 			class="title"
 			role="button"
 			tabindex="0"
-			ondblclick={handleEdit}
-			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleEdit()}
+			onclick={gotoTask}
+			ondblclick={rename}
+			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && rename()}
 			aria-label="Edit task title"
 		>
 			{title}
 		</span>
 	{/if}
-	{@render children?.()}
-	<ContextMenu>
-		<!-- Context Menu -->
-		<Modal bind:open={showContextMenu}>
-			<div class="context-menu">
-				{#if onRename}
-					<button onclick={rename}> ✏️ Rename </button>
-				{/if}
-				<!-- <button onclick={openMoveDialogue}> ↗️ Move </button> -->
-				{#if displayGotoOption}
-					<button onclick={gotoTask}> 🔗 Open </button>
-				{/if}
-				<button class="warning" onclick={openDeleteDialogue}> 🗑️ Delete </button>
-			</div>
-		</Modal>
+	<button onclick={() => (showContextMenu = true)}> ⫶ </button>
+
+	<ContextMenu target={listItemEl} bind:open={showContextMenu}>
+		<button onclick={rename}> ✏️ Rename </button>
+		<!-- <button onclick={openMoveDialogue}> ↗️ Move </button> -->
+		<button onclick={gotoTask}> 🔗 Open </button>
+		<button class="warning" onclick={openDeleteDialogue}> 🗑️ Delete </button>
 
 		<!-- Delete Confirmation Dialog -->
 		<Modal bind:open={showDeleteDialog}>
@@ -135,6 +141,9 @@
 		font-size: x-large;
 		font-weight: 100;
 		opacity: 50%;
+	}
+	:global(.context-menu button:not(:hover)) {
+		border: 1px solid var(--c-bg_-2);
 	}
 	// // Completion % gradient bar
 	// .list-item::before,
