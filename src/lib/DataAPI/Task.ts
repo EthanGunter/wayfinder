@@ -15,12 +15,12 @@ export interface TaskData {
      * Tasks that can't be completed until this one is.
      * Effectively the node's parent
     */
-    dependant?: string //TODO this might become an array in the future
+    parent?: string //TODO this might become an array in the future
     /** 
      * This task's prequisite[s].
      * Effectively the node's children
     */
-    dependsOn?: string[]
+    children?: string[]
 }
 
 export enum TaskStatus {
@@ -36,8 +36,8 @@ export class Task implements TaskData {
     created: string;
     content?: string;
     lastEdit?: string;
-    dependant?: string;
-    dependsOn?: string[];
+    parent?: string;
+    children?: string[];
 
     public get completed(): boolean {
         return this.status === TaskStatus.complete;
@@ -50,7 +50,9 @@ export class Task implements TaskData {
         content,
         created,
         lastEdit,
-        status
+        status,
+        parent,
+        children
     }: CreateTaskDTO) {
         this.id = id ?? "NO-ID";
         this.title = title;
@@ -59,6 +61,8 @@ export class Task implements TaskData {
         this.status = status ?? TaskStatus.incomplete;
         this.created = created ?? new Date().toISOString();
         this.lastEdit = lastEdit ?? new Date().toISOString();
+        this.parent = parent;
+        this.children = children;
     }
 
     // Helper: Convert TaskData to markdown string

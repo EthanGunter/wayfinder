@@ -12,8 +12,8 @@
 
 	let API = $state<Promise<ITaskStorage>>(BrowserTaskStorage.get());
 	let currentTask = $state<Task | null>(null);
-	let dependencies = $state<Task[]>([]);
-	let dependants = $state<Task[]>([]);
+	let children = $state<Task[]>([]);
+	let parents = $state<Task[]>([]);
 
 	//TODO: Implement real query param reading and task fetching
 	$effect(() => {
@@ -37,17 +37,17 @@
 				console.error(err);
 			}
 		);
-		(await api.getDependants(id)).match(
+		(await api.getparents(id)).match(
 			(deps) => {
-				dependants = deps;
+				parents = deps;
 			},
 			(err) => {
 				console.error(err);
 			}
 		);
-		(await api.getDependencies(id)).match(
+		(await api.getChildren(id)).match(
 			(deps) => {
-				dependencies = deps;
+				children = deps;
 			},
 			(err) => {
 				console.error(err);
@@ -59,7 +59,7 @@
 
 		(await api.getRootTasks()).match(
 			(roots) => {
-				dependencies = roots;
+				children = roots;
 			},
 			(err) => {
 				console.error(err);
@@ -67,14 +67,10 @@
 		);
 	}
 
-	function gotoTask(id: string) {
-		goto(`tasks?id=${id}`);
-	}
-
 	async function addTask() {
 		const api = await API;
 		if (currentTask) {
-			(await api.createTask({ title: 'New Subtask', dependant: currentTask.id })).match(
+			(await api.createTask({ title: 'New Subtask', parent: currentTask.id })).match(
 				(newID) => {
 					fetchCurrentTask(newID);
 				},
@@ -94,11 +90,12 @@
 		}
 	}
 
-	async function onTaskChange() {
+	async function onTaskChange(update: Partial<Task>) {
 		// TODO: Do some debouncing to save on server calls
 		API.then((api) => {
 			if (currentTask) {
-				api.updateTask(currentTask.id, currentTask);
+				console.log(update);
+				api.updateTask(currentTask.id, update);
 			}
 		});
 	}
@@ -109,28 +106,22 @@
 	<!-- TODO: <TasksTutorial /> -->
 	{#if currentTask}
 		<div class="navigation">
-			<button class="back-button" onclick={() => history.back()}>
-				<!-- TODO: Replace with real icon -->
-				<span>⬅️</span>
-			</button>
-			{#if dependants.length > 0}
-				{#each dependants as parent}
-					<button class="task-browser-parent-button" onclick={() => gotoTask(parent.id)}>
+			<a class="breadcrumb-link" href="/tasks">
+				<!-- Go to root -->
+				Projects
+			</a>
+			{#if parents.length > 0}
+				{#each parents as parent, index}
+					>
+					<a class="breadcrumb-link" href={`/tasks?id=${parent.id}`}>
 						<!-- TODO: Replace with real icon -->
-						<span>⬆️</span>
-						{parent.title}
-					</button>
+						{parent.title ?? 'Projects'}
+					</a>
 				{/each}
-			{:else}
-				<button onclick={() => goto('/tasks')}>
-					<!-- Go to root -->
-					<span>⬆️</span>
-					Projects
-				</button>
 			{/if}
 		</div>
 		<TaskEditor bind:task={currentTask} {onTaskChange}>
-			<ItemList items={dependencies}>
+			<ItemList items={children}>
 				{#snippet listItem(task, index)}
 					<TaskListItem {task} />
 				{/snippet}
@@ -138,7 +129,7 @@
 		</TaskEditor>
 		<button id="add-task-button" onclick={addTask}>Add Task</button>
 	{:else}
-		<ItemList items={dependencies}>
+		<ItemList items={children}>
 			{#snippet listItem(task, index)}
 				<TaskListItem {task} />
 			{/snippet}
@@ -158,6 +149,20 @@
 		gap: 0.5em;
 		align-items: center;
 		margin-bottom: 1em;
+
+		color: #0005;
+		font-size: small;
+
+		a {
+			text-decoration: none;
+			color: var(--c-text_2);
+			border: 1px solid #0003;
+			border-radius: 0.25rem;
+			padding: 0.2rem 0.5rem;
+			&:hover {
+				background-color: #0001;
+			}
+		}
 	}
 	#add-task-button {
 		margin-top: auto;

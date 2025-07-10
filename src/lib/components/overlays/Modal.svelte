@@ -15,7 +15,6 @@
 
 	let { open = $bindable(false), title, size = 'medium', buttons = [], children }: Props = $props();
 
-
 	function handleCancel() {
 		open = false;
 	}
@@ -32,33 +31,33 @@
 	}
 </script>
 
-<OverlayElement bind:open={open} class="modal-dialog {size}" onclick={handleClick}>
+<OverlayElement bind:open class="modal-dialog {size}" onclick={handleClick}>
 	<!-- <div class="modal-content"> -->
-		{#if title}
-			<header class="modal-header">
-				<h2 class="modal-title">{title}</h2>
-				<button class="modal-close" onclick={handleCancel} aria-label="Close modal"> × </button>
-			</header>
-		{/if}
+	{#if title}
+		<header class="modal-header">
+			<h2 class="modal-title">{title}</h2>
+			<button class="modal-close" onclick={handleCancel} aria-label="Close modal"> × </button>
+		</header>
+	{/if}
 
-		<main class="modal-body">
-			{@render children()}
-		</main>
+	<main class="modal-body">
+		{@render children()}
+	</main>
 
-		{#if buttons.length > 0}
-			<footer class="modal-footer">
-				{#each buttons as button}
-					<button class={`btn btn-${button.class}`} onclick={button.action}>
-						{button.label}
-					</button>
-				{/each}
-			</footer>
-		{/if}
+	{#if buttons.length > 0}
+		<footer class="modal-footer">
+			{#each buttons as button}
+				<button class={`btn btn-${button.class}`} onclick={button.action}>
+					{button.label}
+				</button>
+			{/each}
+		</footer>
+	{/if}
 	<!-- </div> -->
 </OverlayElement>
 
 <style>
-	.modal-dialog {
+	:global(.modal-dialog) {
 		border: none;
 		border-radius: 12px;
 		padding: 0;

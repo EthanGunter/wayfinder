@@ -7,6 +7,7 @@
 		children: Snippet;
 	}
 	let { task = $bindable(), onTaskChange, children }: Props = $props();
+	let checked = $derived(task.status === TaskStatus.complete);
 
 	function handleInput(event: Event) {
 		const target = event.target as HTMLInputElement;
@@ -24,12 +25,7 @@
 
 <div class="task-editor">
 	<div class="title">
-		<input
-			type="checkbox"
-			name="completed"
-			bind:checked={task.completed}
-			onchange={handleCheckbox}
-		/>
+		<input type="checkbox" name="completed" bind:checked onchange={handleCheckbox} />
 		<input
 			name="title"
 			class="task-title"

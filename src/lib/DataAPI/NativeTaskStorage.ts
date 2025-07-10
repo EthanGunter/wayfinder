@@ -35,7 +35,7 @@ export class NativeTaskStorage implements ITaskStorage {
         created TEXT NOT NULL,
         lastEdit TEXT,
         dependsOn TEXT,
-        dependants TEXT
+        parents TEXT
       );
     `);
 
@@ -81,15 +81,15 @@ export class NativeTaskStorage implements ITaskStorage {
         // Read from SQLite only (optimization)
         const res = await this.db.query('SELECT * FROM tasks WHERE id = ?', [id]);
         if (res.values && res.values.length > 0) {
-            // Convert dependants from JSON string if present
+            // Convert parents from JSON string if present
             const row = res.values[0];
-            if (row.dependants && typeof row.dependants === 'string') {
+            if (row.parents && typeof row.parents === 'string') {
                 try {
-                    row.dependants = JSON.parse(row.dependants);
+                    row.parents = JSON.parse(row.parents);
                 } catch {
-                    console.log("row.dependants is not what we thought it was:", row.dependants);
+                    console.log("row.parents is not what we thought it was:", row.parents);
 
-                    row.dependants = [];
+                    row.parents = [];
                 }
             }
             return ok(row as TaskData);
@@ -181,7 +181,7 @@ export class NativeTaskStorage implements ITaskStorage {
         // Store in SQLite
         try {
             await this.db.run(
-                `INSERT OR REPLACE INTO tasks (id, filepath, title, content, created, lastEdit, dependsOn, dependants)
+                `INSERT OR REPLACE INTO tasks (id, filepath, title, content, created, lastEdit, dependsOn, parents)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     task.id,
@@ -190,8 +190,8 @@ export class NativeTaskStorage implements ITaskStorage {
                     task.content ?? null,
                     task.created,
                     task.lastEdit ?? null,
-                    task.dependsOn ?? null,
-                    task.dependant ? JSON.stringify(task.dependant) : null
+                    task.children ?? null,
+                    task.parent ? JSON.stringify(task.parent) : null
                 ]
             );
         } catch (e) {

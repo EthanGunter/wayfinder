@@ -24,19 +24,23 @@ function TryGetIDFromFilepath(key: string): string {
 }
 
 export class BrowserTaskStorage implements ITaskStorage {
+  private static instance: BrowserTaskStorage | undefined;
   private db!: IDBPDatabase<MyDB>;
 
   private constructor() { }
 
   static async get(): Promise<BrowserTaskStorage> {
-    const storage = new BrowserTaskStorage();
-    storage.db = await openDB<MyDB>('wayfinder', 1, {
-      upgrade(db) {
-        db.createObjectStore('files', { keyPath: 'filepath' });
-        db.createObjectStore('index', { keyPath: 'id' });
-      },
-    });
-    return storage;
+    if (!this.instance) {
+      const storage = new BrowserTaskStorage();
+      storage.db = await openDB<MyDB>('wayfinder', 1, {
+        upgrade(db) {
+          db.createObjectStore('files', { keyPath: 'filepath' });
+          db.createObjectStore('index', { keyPath: 'id' });
+        },
+      });
+      this.instance = storage
+    }
+    return this.instance;
   }
 
   async close(): Promise<void> {
@@ -54,6 +58,8 @@ export class BrowserTaskStorage implements ITaskStorage {
     const preparedTask = task as Task;
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
+
+    this.updateRelationships(null, preparedTask);
 
     return (await this.writeTaskToDB(preparedTask)).match(
       success => {
@@ -99,6 +105,9 @@ export class BrowserTaskStorage implements ITaskStorage {
     return (await this.readTask(key)).match(
       async task => {
         const updated: Task = new Task({ ...task, ...updates, lastEdit: new Date().toISOString() });
+
+        this.updateRelationships(task, updated);
+
         return (await this.writeTaskToDB(updated)).match(
           () => ok(updated),
           error =>
@@ -141,7 +150,77 @@ export class BrowserTaskStorage implements ITaskStorage {
 
   //#region Utilities
 
-  async writeTaskToDB(task: Task): Promise<Result<void, IOError>> {
+  private async updateRelationships(oldTask: Task | null, newTask: Task | null) {
+    if (!oldTask && newTask) {
+      // Add new task to all relationships
+      if (newTask.children) {
+        this.addAsParent(newTask.id, newTask.children);
+      }
+      if (newTask.parent) {
+        this.addAsChild(newTask.id, [newTask.parent]);
+      }
+    }
+    else if (oldTask && !newTask) {
+      // Remove oldTask from all relationships
+      if (oldTask.children) {
+        this.removeAsParent(oldTask.id, oldTask.children);
+      }
+      if (oldTask.parent) {
+        this.removeAsChild(oldTask.id, [oldTask.parent]);
+      }
+    }
+    else if (oldTask && newTask) {
+      if (oldTask.parent !== newTask.parent) {
+        if (oldTask.parent) {
+          // Remove old parent
+          this.removeAsChild(oldTask.id, [oldTask.parent]);
+        }
+
+        if (newTask.parent) {
+          // Add new parent
+          this.addAsChild(oldTask.id, [newTask.parent]);
+        }
+      }
+
+      const addedChildren = newTask.children?.filter(x => oldTask.children?.includes(x));
+      const removedChildren = oldTask.children?.filter(x => newTask.children?.includes(x));
+      if (addedChildren) {
+        this.addAsParent(newTask.id, addedChildren);
+      }
+      if (removedChildren) {
+        this.removeAsParent(newTask.id, removedChildren);
+      }
+    }
+  }
+
+
+  private async addAsParent(add: string, to: string[]) {
+    console.log(`Adding ${add} as parent to`, to);
+  }
+  private async addAsChild(add: string, to: string[]) {
+    console.log(`Adding ${add} as child of`, to);
+  }
+  private async removeAsParent(remove: string, to: string[]) {
+    console.log(`Removing ${remove} as parent to`, to);
+  }
+  private async removeAsChild(remove: string, to: string[]) {
+    console.log(`Removing ${remove} as child of`, to);
+  }
+
+  private async _updateInternal(key: string, updated?: Task, relationshipChanges?: { addParents?: string[], removeParents?: string[], addChildren?: string[], removeChildren?: string[], })/* : Promise<Result<Task, NotFoundError | IOError | ParseError>> */ {
+    // return (await this.readTask(key)).match(
+    //   async task => {
+
+    //     return (await this.writeTaskToDB(updated)).match(
+    //       () => ok(updated),
+    //       error =>
+    //         err(error)
+    //     );
+    //   },
+    //   error => err(error)
+    // )
+  }
+  private async writeTaskToDB(task: Task): Promise<Result<void, IOError>> {
     if (!task.filepath) task.filepath = task.id + ".md";
     const md = Task.toMarkdown(task);
 
@@ -181,13 +260,13 @@ export class BrowserTaskStorage implements ITaskStorage {
       });
   }
 
-  async getDependencies(id: string): Promise<Result<Task[], Err>> {
+  async getChildren(id: string): Promise<Result<Task[], Err>> {
     const allTasks = await this.db.getAll('index');
-    const children = allTasks.filter(task => task.dependant === id);
+    const children = allTasks.filter(task => task.parent === id);
     return ok(children);
   }
 
-  async getDependants(id: string): Promise<Result<Task[], Err>> {
+  async getparents(id: string): Promise<Result<Task[], Err>> {
     const parents: Task[] = [];
     let currentId = id;
 
@@ -195,8 +274,8 @@ export class BrowserTaskStorage implements ITaskStorage {
       const taskResult = await this.readTask(currentId);
       if (taskResult.isOk()) {
         const task = taskResult.value;
-        if (task.dependant) {
-          const parentResult = await this.readTask(task.dependant);
+        if (task.parent) {
+          const parentResult = await this.readTask(task.parent);
           if (parentResult.isOk()) {
             parents.unshift(parentResult.value);
             currentId = parentResult.value.id;
@@ -216,7 +295,7 @@ export class BrowserTaskStorage implements ITaskStorage {
 
   async getRootTasks(): Promise<Result<Task[], Err>> {
     const allTasks = await this.db.getAll('index');
-    const rootTasks = allTasks.filter(task => !task.dependant);
+    const rootTasks = allTasks.filter(task => !task.parent);
     return ok(rootTasks);
   }
   async getTodaysTasks(): Promise<Result<Task[], Err>> {

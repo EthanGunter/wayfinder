@@ -19,7 +19,7 @@ export interface ITaskStorage {
    * Creates a new task with the given data
    * @returns The new task's generated ID
    */
-  // TODO-test: sets up relationships if dependant(s) or dependencies are populated
+  // TODO-test: sets up relationships if parent(s) or children are populated
   createTask(task: CreateTaskDTO): Promise<Result<string, Err>>;
   /**
    * Fetches a task's data by its ID
@@ -33,11 +33,11 @@ export interface ITaskStorage {
   /**
    * Finds all tasks that must be completed before `id`
    */
-  getDependencies(id: string): Promise<Result<Task[], Err>>;
+  getChildren(id: string): Promise<Result<Task[], Err>>;
   /**
    * Gets all tasks that are waiting for `id`
    */
-  getDependants(id: string): Promise<Result<Task[], Err>>;
+  getparents(id: string): Promise<Result<Task[], Err>>;
   /**
    * Gets all tasks that nothing depends on
    */

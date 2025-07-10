@@ -1,21 +1,28 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
+	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
 	import type { Task } from '$lib/DataAPI/Task';
+	import type { ITaskStorage } from '$lib/DataAPI/types';
 	import ContextMenu from './ContextMenu.svelte';
 	import Modal from './overlays/Modal.svelte';
 
-	const { task, onDragStart, onDrop, ghostRenderOverride /* children */ } = $props<{
+	const { task, onDragStart, onDrop /* children */ } = $props<{
 		task: Task;
 		onDragStart?: (e: CustomEvent) => void;
 		onDrop?: (e: CustomEvent) => void;
 	}>();
+
+	let API = $state<Promise<ITaskStorage>>(BrowserTaskStorage.get());
 
 	let listItemEl = $state<HTMLLIElement>();
 	let inputEl = $state<HTMLInputElement>();
 
 	let editName = $state(false);
 	let title = $state(task.title);
+
+	const DBL_CLICK_MS = 200;
+	let dblClickTimeout: NodeJS.Timeout | null;
 
 	// Context menu state
 	let showContextMenu = $state(false);
@@ -25,12 +32,36 @@
 		showContextMenu = false;
 		setTimeout(() => inputEl?.focus(), 0);
 	}
-	function gotoTask() {
-		goto(`/tasks/?id=${task.id}`);
+	function handleTitleClick() {
+		if (!dblClickTimeout) {
+			// Single click
+			dblClickTimeout = setTimeout(() => {
+				goto(`/tasks/?id=${task.id}`);
+			}, DBL_CLICK_MS);
+		} else {
+			// Double click
+			clearTimeout(dblClickTimeout);
+			dblClickTimeout = null;
+			rename();
+		}
 	}
-	function openDeleteDialogue() {}
-	function resolveDelete(confirm: boolean) {
-		if (!confirm) return;
+	function openDeleteDialogue() {
+		showDeleteDialog = true;
+		showContextMenu = false;
+	}
+	async function resolveDelete(confirm: boolean) {
+		if (confirm) {
+			const api = await API;
+			(await api.deleteTask(task.id)).match(
+				(ok) => {
+					// redraw the list
+				},
+				(err) => {
+					throw err;
+				}
+			);
+		}
+		showDeleteDialog = false;
 	}
 
 	function handleDragStart(e: CustomEvent) {
@@ -38,9 +69,6 @@
 	}
 	function handleDrop(e: CustomEvent) {
 		onDrop?.(e);
-	}
-	function handleDragOver(args: any) {
-		ghostRenderOverride?.(args);
 	}
 	function handleBlur() {
 		editName = false;
@@ -55,7 +83,6 @@
 			data: task,
 			onDragStart: handleDragStart,
 			onDrop: handleDrop,
-			onDragOver: handleDragOver,
 			delay: 0
 		}}
 	>
@@ -75,9 +102,8 @@
 			class="title"
 			role="button"
 			tabindex="0"
-			onclick={gotoTask}
-			ondblclick={rename}
-			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && rename()}
+			onclick={handleTitleClick}
+			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleTitleClick()}
 			aria-label="Edit task title"
 		>
 			{title}
@@ -88,23 +114,23 @@
 	<ContextMenu target={listItemEl} bind:open={showContextMenu}>
 		<button onclick={rename}> ✏️ Rename </button>
 		<!-- <button onclick={openMoveDialogue}> ↗️ Move </button> -->
-		<button onclick={gotoTask}> 🔗 Open </button>
+		<button onclick={handleTitleClick}> 🔗 Open </button>
 		<button class="warning" onclick={openDeleteDialogue}> 🗑️ Delete </button>
 
 		<!-- Delete Confirmation Dialog -->
-		<Modal bind:open={showDeleteDialog}>
-			<div class="delete-dialog dialog">
-				<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
-				{#if task.dependsOn && task.dependsOn.length > 0}
-					<p>This will also delete <em>all</em> descendants.</p>
-				{/if}
-				<div class="dialog-buttons">
-					<button class="warning" onclick={() => resolveDelete(true)}> Yes </button>
-					<button onclick={() => resolveDelete(false)}> Cancel </button>
-				</div>
-			</div>
-		</Modal>
 	</ContextMenu>
+	<Modal bind:open={showDeleteDialog}>
+		<div class="delete-dialog dialog">
+			<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
+			{#if task.dependsOn && task.dependsOn.length > 0}
+				<p>This will also delete <em>all</em> descendants.</p>
+			{/if}
+			<div class="dialog-buttons">
+				<button class="warning" onclick={() => resolveDelete(true)}> Yes </button>
+				<button onclick={() => resolveDelete(false)}> Cancel </button>
+			</div>
+		</div>
+	</Modal>
 	<!-- <TaskItemContextMenu {task} /> -->
 </li>
 
@@ -134,6 +160,7 @@
 		align-content: center;
 		text-align: start;
 		width: 100%;
+		height: 100%;
 		cursor: text;
 	}
 	.drag-handle {

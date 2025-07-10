@@ -102,7 +102,7 @@
 
 		if (typeof moveTarget === 'string') {
 			try {
-				const result = await api.updateTask(task.id, { dependant: undefined });
+				const result = await api.updateTask(task.id, { parent: undefined });
 				if (result.isOk()) {
 					console.log('Moved to root:', task.id);
 					onTaskMoved?.(task.id);
@@ -115,7 +115,7 @@
 			}
 		} else if (moveTarget) {
 			try {
-				const result = await api.updateTask(task.id, { dependant: moveTarget.id });
+				const result = await api.updateTask(task.id, { parent: moveTarget.id });
 				if (result.isOk()) {
 					console.log('Moved to parent:', moveTarget.id);
 					onTaskMoved?.(task.id, moveTarget.id);
@@ -128,7 +128,7 @@
 			}
 		} else if (moveTarget === null) {
 			try {
-				const result = await api.updateTask(task.id, { dependant: undefined });
+				const result = await api.updateTask(task.id, { parent: undefined });
 				if (result.isOk()) {
 					console.log('Moved to root (null):', task.id);
 					onTaskMoved?.(task.id);
@@ -204,7 +204,7 @@
 <Modal bind:open={showDeleteDialog}>
 	<div class="delete-dialog dialog">
 		<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
-		{#if task.dependsOn && task.dependsOn.length > 0}
+		{#if task.children && task.children.length > 0}
 			<p>This will also delete <em>all</em> descendants.</p>
 		{/if}
 		<div class="dialog-buttons">
