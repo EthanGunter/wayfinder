@@ -216,8 +216,6 @@ export class BrowserTaskStorage implements ITaskStorage {
   }
 
   async setTodaysTask(id: string, position: number): Promise<Result<void, Err>> {
-    console.log(`Set todays task: ${id} @${position}`);
-
     const todaysTaskIds = JSON.parse(localStorage.getItem('todaysTasks') || '[]') as string[];
     const index = todaysTaskIds.indexOf(id);
     if (index > -1) {
@@ -229,8 +227,6 @@ export class BrowserTaskStorage implements ITaskStorage {
   }
 
   async removeTodaysTask(id: string): Promise<Result<void, Err>> {
-    console.log(`Remove today's task: ${id}`);
-
     let todaysTaskIds = JSON.parse(localStorage.getItem('todaysTasks') || '[]') as string[];
     todaysTaskIds = todaysTaskIds.filter(taskId => taskId !== id);
     localStorage.setItem('todaysTasks', JSON.stringify(todaysTaskIds));

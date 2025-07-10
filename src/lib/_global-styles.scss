@@ -1,5 +1,4 @@
 body {
-  box-sizing: border-box;
   // @media (prefers-color-scheme: light) {
   color-scheme: light;
   --c-bg_2: #ffffff;
@@ -66,8 +65,7 @@ body {
   //   --c-success: #25bc32;
   // }
 
-  --container-border-radius_1: 1rem;
-  --container-border-radius: 0.4rem;
+  --container-border-radius: 1rem;
 
   --button-bg: var(--c-bg_1);
   --input-bg: var(--c-bg_-1);
