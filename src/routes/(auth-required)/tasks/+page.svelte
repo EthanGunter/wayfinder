@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { type Task } from '$lib/API/Tasks/Task';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
-	import { type ITaskStorage } from '$lib/API/Tasks/types';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
-	import { BrowserTaskStorage } from '$lib/API/Tasks/BrowserTaskStorage';
+	import API from '$lib/API/Tasks';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
+	import { redirect } from '@sveltejs/kit';
+	import { goto } from '$app/navigation';
 
-	let API = $state<Promise<ITaskStorage>>(BrowserTaskStorage.get());
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
 	let parents = $state<Task[]>([]);
@@ -25,32 +24,35 @@
 		}
 	});
 
-	async function fetchCurrentTask(id: string) {
+	async function fetchCurrentTask(task: string | Task) {
 		const api = await API;
 
-		//TODO: Fetch currentTask, children, and parents based on id
-		(await api.readTask(id)).match(
-			(task) => {
-				currentTask = task;
-			},
-			(err) => {
-				console.error(err);
-			}
-		);
-		(await api.getParents(id)).match(
+		if (typeof task === 'string') {
+			//TODO: Fetch currentTask, children, and parents based on id
+			(await api.readTask(task)).match(
+				(task) => {
+					currentTask = task;
+				},
+				(err) => {
+					err.logError();
+					goto('/tasks');
+				}
+			);
+		}
+		(await api.getParentsOf(task)).match(
 			(deps) => {
 				parents = deps;
 			},
 			(err) => {
-				console.error(err);
+				err.logError();
 			}
 		);
-		(await api.getChildren(id)).match(
+		(await api.getChildrenOf(task)).match(
 			(deps) => {
 				children = deps;
 			},
 			(err) => {
-				console.error(err);
+				err.logError();
 			}
 		);
 	}
@@ -62,7 +64,7 @@
 				children = roots;
 			},
 			(err) => {
-				console.error(err);
+				err.logError();
 			}
 		);
 	}
@@ -70,12 +72,12 @@
 	async function addTask() {
 		const api = await API;
 		if (currentTask) {
-			(await api.createTask({ title: 'New Subtask', parent: currentTask.id })).match(
-				(newID) => {
-					fetchCurrentTask(newID);
+			(await api.createTask({ title: 'New Subtask', parents: [currentTask.id] })).match(
+				(newTask) => {
+					fetchCurrentTask(newTask);
 				},
 				(err) => {
-					console.error(err);
+					err.logError();
 				}
 			);
 		} else {
@@ -84,7 +86,7 @@
 					fetchCurrentTask(newID);
 				},
 				(err) => {
-					console.error(err);
+					err.logError();
 				}
 			);
 		}
@@ -107,6 +109,15 @@
 				api.updateTask(item.id, { priority: items.length - index });
 			}
 		});
+	}
+
+	async function handleTaskDelete(task: Task) {
+		// Remove the task from the visual list
+		children = children.filter((x) => x.id !== task.id);
+		const api = await API;
+		if ((await api.deleteTask(task.id)).isErr()) {
+			// Something went wrong, add the item back to the list
+		}
 	}
 </script>
 
@@ -132,7 +143,7 @@
 		<TaskEditor bind:task={currentTask} {onTaskChange}>
 			<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 				{#snippet listItem(task, index)}
-					<TaskListItem {task} />
+					<TaskListItem {task} onDelete={handleTaskDelete} />
 				{/snippet}
 			</ItemList>
 		</TaskEditor>
@@ -140,7 +151,7 @@
 	{:else}
 		<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 			{#snippet listItem(task, index)}
-				<TaskListItem {task} />
+				<TaskListItem {task} onDelete={handleTaskDelete} />
 			{/snippet}
 		</ItemList>
 		<button id="add-task-button" onclick={addTask}>New Project</button>

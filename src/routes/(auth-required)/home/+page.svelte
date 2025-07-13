@@ -4,78 +4,77 @@
 	import { goto } from '$app/navigation';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
-	import { BrowserTaskStorage } from '$lib/API/Tasks/BrowserTaskStorage';
+	import API from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
-	import type { ITaskStorage } from '$lib/API/Tasks/';
+	import type { ITaskProvider } from '$lib/API/Tasks/';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
-
-	let API = $state<ITaskStorage>();
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
 	let draggedTask = $state<Task | null>(null);
+	let api = $state<ITaskProvider>();
 
 	onMount(async () => {
-		API = await BrowserTaskStorage.get();
+		api = await API;
 		refreshTasks();
 	});
 
 	function refreshTasks() {
-		if (!API) return;
-		API.getTodaysTasks().then((tasks) =>
+		if (!api) return;
+		api.getTodaysTasks().then((tasks) =>
 			tasks.match(
 				(data) => {
 					todaysList = data;
 				},
 				(err) => {
-					console.error(err);
+					err.logError();
 				}
 			)
 		);
-		API.getPrioritizedTasks(15).then((result) =>
+		api.getPrioritizedTasks(15).then((result) =>
 			result.match(
 				(tasks) => {
 					suggestedTasks = tasks;
 				},
 				(err) => {
-					console.error(err);
+					err.logError();
 				}
 			)
 		);
 	}
 
 	function handleTodaysTaskDrop(e: DropEvent<Task>) {
-		if (!API) return;
+		if (!api) return;
 		const task = e.detail.data;
 		if (!task) return;
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			API.setTodaysTask(task.id, todaysList.indexOf(task));
+			api.updateTask(task.id, { todays_task: true });
 		}
 	}
 
 	function handleSuggestedTaskDrop(e: DropEvent<Task>) {
-		if (!API) return;
+		if (!api) return;
 		const task = e.detail.data;
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		API.removeTodaysTask(task.id);
+		api.updateTask(task.id, { todays_task: false });
 	}
 
 	function todaysTaskChange(task: Task, changes: Partial<Task>) {
-		if (!API) return;
+		if (!api) return;
 		//TODO: Implement task change logic
 		if (changes.completed) {
-			API.removeTodaysTask(task.id);
+			api.updateTask(task.id, { todays_task: false });
 			todaysList = todaysList.filter((t) => t.id !== task.id);
 		}
 	}
 
 	function suggestedTaskChange(task: Task, changes: Partial<Task>) {
-		if (!API) return;
+		if (!api) return;
 		//TODO: Implement suggested task change logic
 		if (changes.completed) {
 			suggestedTasks = suggestedTasks.filter((t) => t.id !== task.id);
@@ -83,10 +82,10 @@
 	}
 
 	async function startProject() {
-		if (!API) return;
+		if (!api) return;
 
 		//TODO: Implement create new project logic
-		let newTaskResult = await API.createTask({
+		let newTaskResult = await api.createTask({
 			title: 'New Task',
 			status: TaskStatus.incomplete,
 			priority: 0
@@ -96,7 +95,7 @@
 				goto(`/tasks/?id=${newTask}`);
 			},
 			(err) => {
-				console.error(err);
+				err.logError();
 			}
 		);
 		// alert('Start project (stub)');

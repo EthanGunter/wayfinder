@@ -1,27 +1,26 @@
 import { ParseError } from "$lib/Errors";
 import { Result, err, ok } from "neverthrow";
 import yaml from 'js-yaml'
-import type { CreateTaskDTO } from "./types";
+import type { CreateTaskDTO, PopulatedTaskDTO } from "./types";
 
 export interface TaskData {
     id: string,
-    filepath: string
+    filepath?: string // TODO I'd eventually like to make Wayfinder local-plain-text-first, but that's a future feature
     title: string,
-    created: string, // ISO Timestamp
-    status: TaskStatus
-    priority?: number,
     content?: string,
-    lastEdit?: string, // ISO Timestamp
+    status: TaskStatus,
+    todays_task: boolean,
+    priority?: number,
     /** 
-     * Tasks that can't be completed until this one is.
-     * Effectively the node's parent
+     * Tasks that depend on this one's completion.
     */
-    parent?: string //TODO this might become an array in the future
+    parents: string[]
     /** 
      * This task's prequisite[s].
-     * Effectively the node's children
     */
-    children?: string[]
+    children: string[]
+    created: string, // ISO Timestamp
+    last_edit: string, // ISO Timestamp
 }
 
 export enum TaskStatus {
@@ -29,17 +28,31 @@ export enum TaskStatus {
     complete = 1,
 }
 
+export function isTask(value: any): value is Task {
+    return typeof value === 'object'
+        && typeof value.id === 'string'
+        && typeof value.filepath === 'string'
+        && typeof value.title === 'string'
+        && typeof value.created === 'string'
+        && typeof value.last_edit === 'string'
+        && typeof value.todays_task === 'boolean'
+        && typeof value.parents === 'object'
+        && typeof value.children === 'object'
+        ;
+}
+
 export class Task implements TaskData {
     id: string;
-    filepath: string;
+    filepath?: string;
     title: string;
-    status: TaskStatus;
-    created: string;
-    priority?: number;
     content?: string;
-    lastEdit?: string;
-    parent?: string;
+    status: TaskStatus;
+    todays_task: boolean;
+    priority?: number;
+    parents: string[];
     children: string[];
+    created: string;
+    last_edit: string;
 
     public get completed(): boolean {
         return this.status === TaskStatus.complete;
@@ -48,25 +61,42 @@ export class Task implements TaskData {
     constructor({
         id,
         filepath,
-        priority,
         title,
         content,
-        created,
-        lastEdit,
-        status,
-        parent,
-        children
+        status = TaskStatus.incomplete,
+        todays_task: todaysTask = false,
+        priority = 0,
+        created = new Date().toISOString(),
+        last_edit: last_edit = new Date().toISOString(),
+        parents = [],
+        children = []
     }: CreateTaskDTO) {
         this.id = id ?? "NO-ID";
-        this.priority = priority ?? 0;
         this.title = title;
         this.content = content;
         this.filepath = filepath ?? `${title}.md`;
-        this.status = status ?? TaskStatus.incomplete;
-        this.created = created ?? new Date().toISOString();
-        this.lastEdit = lastEdit ?? new Date().toISOString();
-        this.parent = parent;
-        this.children = children ?? [];
+        this.status = status;
+        this.todays_task = todaysTask;
+        this.priority = priority;
+        this.created = created;
+        this.last_edit = last_edit;
+        this.parents = parents;
+        this.children = children;
+    }
+
+    static populateDTO(dto: CreateTaskDTO): PopulatedTaskDTO {
+        return {
+            priority: dto.priority ?? 0,
+            title: dto.title,
+            content: dto.content,
+            filepath: dto.filepath ?? `${dto.title}.md`,
+            status: dto.status ?? TaskStatus.incomplete,
+            todays_task: dto.todays_task ?? false,
+            created: dto.created ?? new Date().toISOString(),
+            last_edit: dto.last_edit ?? new Date().toISOString(),
+            parents: dto.parents ?? [],
+            children: dto.children ?? [],
+        }
     }
 
     // Helper: Convert TaskData to markdown string

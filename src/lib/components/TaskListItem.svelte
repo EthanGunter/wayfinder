@@ -1,20 +1,21 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
-	import { BrowserTaskStorage } from '$lib/API/Tasks/BrowserTaskStorage';
 	import type { Task } from '$lib/API/Tasks/Task';
-	import type { ITaskStorage } from '$lib/API/Tasks/types';
 	import ContextMenu from './ContextMenu.svelte';
 	import Modal from './overlays/Modal.svelte';
 
-	const { task, onDragStart, onDrop /* children */ } = $props<{
+	const {
+		task,
+		onDragStart,
+		onDrop,
+		onDelete /* children */
+	}: {
 		task: Task;
 		onDragStart?: (e: CustomEvent) => void;
 		onDrop?: (e: CustomEvent) => void;
-	}>();
-
-	let API = $state<Promise<ITaskStorage>>(BrowserTaskStorage.get());
-
+		onDelete?: (task: Task) => void;
+	} = $props();
 	let listItemEl = $state<HTMLLIElement>();
 	let inputEl = $state<HTMLInputElement>();
 
@@ -51,15 +52,7 @@
 	}
 	async function resolveDelete(confirm: boolean) {
 		if (confirm) {
-			const api = await API;
-			(await api.deleteTask(task.id)).match(
-				(ok) => {
-					// redraw the list
-				},
-				(err) => {
-					throw err;
-				}
-			);
+			onDelete?.(task);
 		}
 		showDeleteDialog = false;
 	}
@@ -122,9 +115,10 @@
 	<Modal bind:open={showDeleteDialog}>
 		<div class="delete-dialog dialog">
 			<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
-			{#if task.dependsOn && task.dependsOn.length > 0}
+			<!-- {#if task.children && task.children.length > 0}
+			 // TODO This is currently not true
 				<p>This will also delete <em>all</em> descendants.</p>
-			{/if}
+			{/if} -->
 			<div class="dialog-buttons">
 				<button class="warning" onclick={() => resolveDelete(true)}> Yes </button>
 				<button onclick={() => resolveDelete(false)}> Cancel </button>

@@ -48,7 +48,7 @@ export class ArgumentError extends Err {
 }
 
 export class NotFoundError extends Err {
-    constructor(item: string, type: string = "Item") {
+    constructor(item: any, type: string = "Item") {
         super(1, `NotFoundError: ${type} NotFound`, item);
     }
 }
@@ -61,8 +61,8 @@ export class ParseError extends Err {
 
 
 export class IOError extends Err {
-    constructor(message: string, internalError: any, dataToWrite?: any) {
-        super(1, message, { internalError, dataToWrite });
+    constructor(message: string, internalError: any, context?: any) {
+        super(1, message, { internalError, dataToWrite: context });
     }
 }
 

@@ -1,20 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { NativeTaskStorage } from './NativeTaskStorage';
+import { NativeTaskStorage as NativeTaskProvider } from './NativeTaskProvider';
 import { NotFoundError, ParseError } from '$lib/Errors';
 import { Filesystem } from '@capacitor/filesystem';
-import type { TestIStorageImplementation } from './IStorage.test';
-import type { ITaskStorage } from './types';
+import type { TestIStorageImplementation as TestITaskProviderImplementation } from './ITaskProvider.test';
+import type { ITaskProvider } from './types';
 
 vi.mock("@capacitor/filesystem");
 vi.mock("@capacitor-community/sqlite");
 const fsMock = vi.mocked(Filesystem);
 
-export const NativeIStorageTest: TestIStorageImplementation<NativeTaskStorage> = {
+export const NativeITaskProviderTest: TestITaskProviderImplementation = {
     name: "Native",
     getInstance: async () => {
-        return await NativeTaskStorage.get('');
+        return await NativeTaskProvider.get('');
     },
-    beforeeach: async (storage: ITaskStorage) => {
+    beforeeach: async (storage: ITaskProvider) => {
         if ('__reset' in fsMock && typeof fsMock.__reset === 'function') {
             fsMock.__reset();
         }
@@ -26,7 +26,7 @@ export const NativeIStorageTest: TestIStorageImplementation<NativeTaskStorage> =
 }
 
 describe("Unit", () => {
-    let storage: NativeTaskStorage;
+    let storage: NativeTaskProvider;
 
     beforeEach(async () => {
         // Reset all mock calls before each test
@@ -36,7 +36,7 @@ describe("Unit", () => {
         fsMock.writeFile.mockClear();
         fsMock.readFile.mockClear();
         fsMock.deleteFile.mockClear();
-        storage = await NativeTaskStorage.get('vault');
+        storage = await NativeTaskProvider.get('vault');
     });
 
     it('should handle updateIndexFromFile with parse error', async () => {

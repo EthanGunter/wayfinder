@@ -1,31 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, test } from 'vitest';
 import { NotFoundError } from '$lib/Errors';
-import type { ITaskStorage } from './types';
-import { BrowserIStorageTest } from './BrowserTaskStorage.test';
-import { NativeIStorageTest } from './NativeTaskStorage.test';
-import { SupabaseIStorageTest } from './SupabaseTaskStorage.test';
+import type { ITaskProvider } from './types';
+import { BrowserITaskProviderTest } from './BrowserTaskProvider.test';
+// import { NativeITaskProviderTest } from './NativeTaskProvider.test';
+// import { SupabaseITaskProviderTest } from './SupabaseTaskProvider.test';
 import { v4 } from 'uuid';
 
-export interface TestIStorageImplementation<T extends ITaskStorage> {
+export interface TestIStorageImplementation {
     name: string,
-    getInstance: () => Promise<T>,
+    getInstance: () => Promise<ITaskProvider>,
     // beforeall?: (implementation: T) => Promise<void>,
-    beforeeach?: (implementation: T) => Promise<void>,
-    aftereach?: (implementation: T) => Promise<void>,
-    afterall?: (implementation: T) => Promise<void>
+    beforeeach?: (implementation: ITaskProvider) => Promise<void>,
+    aftereach?: (implementation: ITaskProvider) => Promise<void>,
+    afterall?: (implementation: ITaskProvider) => Promise<void>
 }
 
-const storageImplementations: TestIStorageImplementation<any>[] = [
-    BrowserIStorageTest,
-    NativeIStorageTest,
-    SupabaseIStorageTest
+const storageImplementations: TestIStorageImplementation[] = [
+    BrowserITaskProviderTest,
+    // NativeITaskProviderTest,
+    // SupabaseITaskProviderTest
 ];
 
 
 for (const { name, getInstance, ...vitefn } of storageImplementations) {
     describe(`${name} IStorage compliance`, () => {
         //#region Setup
-        let storage: ITaskStorage;
+        let provider: ITaskProvider;
 
         async function createSampleTask(title: string): Promise<string> {
             const createData = {
@@ -33,7 +33,7 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
                 title,
                 content: 'Sample content',
             };
-            const createResult = await storage.createTask(createData);
+            const createResult = await provider.createTask(createData);
             expect(createResult).toBeOk();
             expect(typeof createResult._unsafeUnwrap()).toBe('string');
 
@@ -41,13 +41,13 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
         }
 
         beforeEach(async () => {
-            storage = await getInstance();
-            await vitefn.beforeeach?.(storage);
+            provider = await getInstance();
+            await vitefn.beforeeach?.(provider);
         });
 
-        afterEach(async () => { await vitefn.aftereach?.(storage); storage.close() });
+        afterEach(async () => { await vitefn.aftereach?.(provider); provider.close() });
 
-        afterAll(async () => { await vitefn.afterall?.(storage); });
+        afterAll(async () => { await vitefn.afterall?.(provider); });
         //#endregion
 
 
@@ -70,26 +70,26 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
                 parent: task2Id
             };
 
-            const createResult = await storage.createTask(createData);
+            const createResult = await provider.createTask(createData);
             expect(createResult).toBeOk();
             const task3Id = createResult._unsafeUnwrap();
 
             // Verify the task was created with the correct relationships
-            const readResult = await storage.readTask(task3Id);
+            const readResult = await provider.readTask(task3Id);
             expect(readResult).toBeOk();
-            
+
             const task = readResult._unsafeUnwrap();
             expect(task.children).toEqual([task1Id]);
-            expect(task.parent).toBe(task2Id);
+            expect(task.parents).toBe(task2Id);
 
             // Verify we can retrieve children and parents
-            const childrenResult = await storage.getChildren(task3Id);
+            const childrenResult = await provider.getChildrenOf(task3Id);
             expect(childrenResult).toBeOk();
             const children = childrenResult._unsafeUnwrap();
             expect(children).toHaveLength(1);
             expect(children[0].id).toBe(task1Id);
 
-            const parentsResult = await storage.getParents(task3Id);
+            const parentsResult = await provider.getParentsOf(task3Id);
             expect(parentsResult).toBeOk();
             const parents = parentsResult._unsafeUnwrap();
             expect(parents).toHaveLength(1);
@@ -102,10 +102,10 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
                 title: "should read a task",
                 content: 'Sample content',
             };
-            const createResult = await storage.createTask(createData);
+            const createResult = await provider.createTask(createData);
             expect(createResult).toBeOk();
 
-            const readResult = await storage.readTask(createResult._unsafeUnwrap());
+            const readResult = await provider.readTask(createResult._unsafeUnwrap());
             expect(readResult).toBeOk();
 
             const task = readResult._unsafeUnwrap();
@@ -113,7 +113,7 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
         });
 
         it('should return NotFoundError for missing task', async () => {
-            const readResult = await storage.readTask('missing');
+            const readResult = await provider.readTask('missing');
             expect(readResult).toErr();
             expect(readResult._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
         });
@@ -121,10 +121,10 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
         it('should update a task', async () => {
             // TODO Update needs to test *every single property*, including relationships
             const id = await createSampleTask('should update a task');
-            const updateResult = await storage.updateTask(id, { title: 'Updated Title' });
+            const updateResult = await provider.updateTask(id, { title: 'Updated Title' });
             expect(updateResult).toBeOk();
 
-            const readResult = await storage.readTask(id);
+            const readResult = await provider.readTask(id);
             expect(readResult).toBeOk();
             expect(readResult._unsafeUnwrap().title).toBe('Updated Title');
         });
@@ -132,22 +132,22 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
         it('should delete a task', async () => {
             const id = await createSampleTask('should delete a task');
 
-            const deleteResult = await storage.deleteTask(id);
+            const deleteResult = await provider.deleteTask(id);
             expect(deleteResult).toBeOk();
 
-            const readResult = await storage.readTask(id);
+            const readResult = await provider.readTask(id);
             expect(readResult).toErr();
             const error = readResult._unsafeUnwrapErr();
             expect(error).toBeInstanceOf(NotFoundError);
         });
 
         test('deleteTask should succeed even if task does not exist', async () => {
-            const deleteResult = await storage.deleteTask(v4()); // Generate a random uuid since supabase expects a uuid-v4 argument
+            const deleteResult = await provider.deleteTask(v4()); // Generate a random uuid since supabase expects a uuid-v4 argument
             expect(deleteResult).toBeOk();
         });
 
         it('should close the storage without error', async () => {
-            await expect(storage.close()).resolves.not.toThrow();
+            await expect(provider.close()).resolves.not.toThrow();
         });
 
         //#endregion

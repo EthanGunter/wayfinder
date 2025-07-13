@@ -1,0 +1,1 @@
+- Handle all Result<T,Err> appropriately. We're haphazardly using .consoleError/Warn(); in development for speed and ease

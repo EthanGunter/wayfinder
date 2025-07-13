@@ -1,15 +1,15 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { type CreateTaskDTO, type ITaskStorage } from './types';
+import { type CreateTaskDTO, type ITaskProvider } from './types';
 import { Result, err, ok } from 'neverthrow';
-import { NotFoundError, IOError, ParseError, NotImplemented } from '$lib/Errors';
+import { NotFoundError, IOError, ParseError, NotImplementedError } from '$lib/Errors';
 import * as path from 'path'
 import { v4 } from 'uuid';
 import { type TaskData, Task } from './Task';
 
 // TODO Write tests for NativeStorage
 // TODO Document NativeStorage
-export class NativeTaskStorage implements ITaskStorage {
+export class NativeTaskStorage implements ITaskProvider {
     private db: SQLiteDBConnection | null = null;
     private vaultPath: string;
 
@@ -105,7 +105,7 @@ export class NativeTaskStorage implements ITaskStorage {
         const updated: TaskData = {
             ...current._unsafeUnwrap(),
             ...updates,
-            lastEdit: new Date().toISOString()
+            last_edit: new Date().toISOString()
         };
 
         // Write updated markdown file
@@ -132,7 +132,7 @@ export class NativeTaskStorage implements ITaskStorage {
      * @param recursive NOT IMPLEMENTED
      */
     async deleteTask(id: string, recursive: boolean): Promise<Result<void, IOError>> {
-        if (recursive) throw new NotImplemented("NativeTaskStorage.deleteTask(recursive = true)");
+        if (recursive) throw new NotImplementedError("NativeTaskStorage.deleteTask(recursive = true)");
 
         if (!this.db) throw new Error("Database not initialized");
         // Get filepath from DB
@@ -189,9 +189,9 @@ export class NativeTaskStorage implements ITaskStorage {
                     task.title,
                     task.content ?? null,
                     task.created,
-                    task.lastEdit ?? null,
+                    task.last_edit ?? null,
                     task.children ?? null,
-                    task.parent ? JSON.stringify(task.parent) : null
+                    task.parents ? JSON.stringify(task.parents) : null
                 ]
             );
         } catch (e) {

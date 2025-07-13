@@ -1,4 +1,4 @@
-import type { ITaskStorage as ITaskProvider } from "../Tasks";
+import type { ITaskProvider as ITaskProvider } from "../Tasks";
 
 export interface User {
     id: string;
@@ -30,9 +30,9 @@ export type SignOutOptions = {
 // TODO Convert return types to Result
 export interface IAuthProvider {
     getCurrentUser(): Promise<User | null>;
-    signIn(credentials: SignInCredentials): Promise<void>;
-    signUp(details: SignUpDetails): Promise<void>;
-    signOut(opt: SignOutOptions): Promise<void>;
+    signIn(credentials: SignInCredentials): Promise<any>;
+    signUp(details: SignUpDetails): Promise<any>;
+    signOut(opt: SignOutOptions): Promise<any>;
     onAuthStateChanged(callback: any): UnsubscribeFn; // TODO Finalize callback type
 }
 

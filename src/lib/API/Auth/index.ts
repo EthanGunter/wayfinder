@@ -1,16 +1,13 @@
+import LocalAuth from "./LocalAuth";
 import SupabaseAuth from "./SupabaseAuth";
 import type { IAuthProvider, LocalUserProxy } from "./types"
 
-let _provider: IAuthProvider | null = null;
-let remote = () => {
-    if (!_provider) {
-        _provider = new SupabaseAuth();
-    }
-    return _provider;
-}
+let authProvider: IAuthProvider;
+authProvider = new SupabaseAuth();
+export default authProvider;
 
-export async function getUser(): Promise<LocalUserProxy|null> {
-    let fetched = await remote().getCurrentUser();
+export async function getUser(): Promise<LocalUserProxy | null> {
+    let fetched = await authProvider.getCurrentUser();
     let user: LocalUserProxy;
     if (fetched) {
         // TODO Create anon local user
@@ -18,7 +15,6 @@ export async function getUser(): Promise<LocalUserProxy|null> {
         user.isSynced = true;
     } else {
         user = { id: "local-anon", displayName: "", isSynced: false }
-        return null;
     }
     return user;
 }
