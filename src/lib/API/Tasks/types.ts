@@ -6,7 +6,8 @@ import type { Task } from "./Task";
 
 export type CreateTaskDTO = Partial<Task> & Omit<Task, "created" | "id" | "completed" | "filepath" | "status" | "children">
 
-// Todo narrow error types once concrete classes are implemented
+// TODO narrow error types once concrete classes are implemented
+// TODO break into more specific interfaces
 /**
  * Manages modifications to markdown files that represent tasks,
  * as well as keeping a database index in sync for rapid querying of data

@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { Task } from '$lib/DataAPI/Task';
+	import type { Task } from '$lib/API/Tasks/';
 	import SearchBar from './SearchBar.svelte';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
-
-	let { children = undefined } = $props();
-	let pulloutOpen = $state(false);
+	import UserAccountMenu from './UserAccountMenu.svelte';
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -48,7 +46,7 @@
 			{/if}
 		{/snippet}
 	</SearchBar>
-	{@render children?.()}
+	<UserAccountMenu />
 </div>
 
 <style lang="scss">

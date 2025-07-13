@@ -1,10 +1,10 @@
 <script lang="ts">
-	import type { Task } from '$lib/DataAPI/Task';
+	import type { Task } from '$lib/API/Tasks/Task';
 	import SearchBar from './SearchBar.svelte';
 	import { goto } from '$app/navigation';
 	import Modal from '$lib/components/overlays/Modal.svelte';
-	import type { ITaskStorage } from '$lib/DataAPI/types';
-	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
+	import type { ITaskStorage } from '$lib/API/Tasks/types';
+	import { BrowserTaskStorage } from '$lib/API/Tasks/BrowserTaskStorage';
 	import TooltipStatic from './overlays/TooltipStatic.svelte';
 	import OverlayElement from './overlays/OverlayElement.svelte';
 

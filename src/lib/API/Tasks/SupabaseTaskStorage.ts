@@ -1,23 +1,15 @@
 import { Err, IOError, NotFoundError, NotImplemented } from "$lib/Errors";
-import { SupabaseClient, createClient } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { Result, err, ok } from "neverthrow";
 import type { ITaskStorage, CreateTaskDTO } from "./types";
 import type { TaskData } from "./Task";
+import supabase from "../SupabaseClient";
 
 export class SupabaseTaskStorage implements ITaskStorage {
   private client: SupabaseClient;
 
   private constructor() {
-    const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      const missing = [];
-      if (!supabaseUrl) missing.push('SUPABASE_URL');
-      if (!supabaseKey) missing.push('SUPABASE_API_KEY');
-      throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
-    }
-    this.client = createClient(supabaseUrl, supabaseKey);
+    this.client = supabase;
   }
 
   static get(): Promise<SupabaseTaskStorage> {

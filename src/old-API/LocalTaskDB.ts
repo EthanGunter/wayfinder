@@ -1,4 +1,4 @@
-import {Task} from '$lib/DataAPI/Task';
+import {Task} from '$lib/API/Tasks/Task';
 import { Storage } from '@ionic/storage';
 import type { GetTasksResponse } from './TaskDBResponses';
 import FuzzySet from 'fuzzyset'

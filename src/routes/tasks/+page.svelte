@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { type Task } from '$lib/DataAPI/Task';
+	import { type Task } from '$lib/API/Tasks/Task';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
-	import { type ITaskStorage } from '$lib/DataAPI/types';
+	import { type ITaskStorage } from '$lib/API/Tasks/types';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
-	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
+	import { BrowserTaskStorage } from '$lib/API/Tasks/BrowserTaskStorage';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 

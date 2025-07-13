@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TaskStatus, type Task } from '$lib/DataAPI/Task';
+	import { TaskStatus, type Task } from '$lib/API/Tasks/Task';
 	import { type Snippet } from 'svelte';
 	interface Props {
 		task: Task;

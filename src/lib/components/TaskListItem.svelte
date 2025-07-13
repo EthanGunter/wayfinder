@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
-	import { BrowserTaskStorage } from '$lib/DataAPI/BrowserTaskStorage';
-	import type { Task } from '$lib/DataAPI/Task';
-	import type { ITaskStorage } from '$lib/DataAPI/types';
+	import { BrowserTaskStorage } from '$lib/API/Tasks/BrowserTaskStorage';
+	import type { Task } from '$lib/API/Tasks/Task';
+	import type { ITaskStorage } from '$lib/API/Tasks/types';
 	import ContextMenu from './ContextMenu.svelte';
 	import Modal from './overlays/Modal.svelte';
 
