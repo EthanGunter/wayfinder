@@ -14,115 +14,261 @@ const APIPromise: Promise<ITaskProvider> = SupabaseTaskProvider.get();
 export default APIPromise;
 
 
-export async function updateRelationships(provider: ITaskProvider, oldTask: Task | null, newTask: Task | null) {
-    if (!oldTask && newTask) {
-        // Add new task to all relationships
-        if (newTask.children.length > 0) {
-            addAsParent(provider, newTask.id, newTask.children);
-        }
-        if (newTask.parents.length > 0) {
-            addAsChild(provider, newTask.id, newTask.parents);
-        }
-    }
-    else if (oldTask && !newTask) {
-        // Remove oldTask from all relationships
-        if (oldTask.children.length > 0) {
-            removeAsParent(provider, oldTask.id, oldTask.children);
-        }
-        if (oldTask.parents.length > 0) {
-            removeAsChild(provider, oldTask.id, oldTask.parents);
-        }
-    }
-    else if (oldTask && newTask) {
-
-        const addedParents = newTask.parents?.filter(x => !oldTask.parents?.includes(x));
-        const removedParents = oldTask.parents?.filter(x => !newTask.parents?.includes(x));
-        if (addedParents && addedParents.length > 0) {
-            addAsParent(provider, newTask.id, addedParents);
-        }
-        if (removedParents && removedParents.length > 0) {
-            removeAsParent(provider, newTask.id, removedParents);
-        }
-
-        const addedChildren = newTask.children?.filter(x => !oldTask.children?.includes(x));
-        const removedChildren = oldTask.children?.filter(x => !newTask.children?.includes(x));
-        if (addedChildren && addedChildren.length > 0) {
-            addAsParent(provider, newTask.id, addedChildren);
-        }
-        if (removedChildren && removedChildren.length > 0) {
-            removeAsParent(provider, newTask.id, removedChildren);
-        }
-    }
+export interface RelationshipUpdate {
+    oldTask: Task | null;
+    newTask: Task | null;
 }
 
-async function addAsParent(provider: ITaskProvider, parentId: string, childIds: string[]) {
-    // Update each child to have this parent
-    const childrenResult = await provider.readTasks(childIds);
-    return childrenResult.match(
+export async function updateRelationships(provider: ITaskProvider, updates: RelationshipUpdate | RelationshipUpdate[]) {
+    // Normalize to array for consistent handling
+    const updateArray = Array.isArray(updates) ? updates : [updates];
+
+    // Collect all relationship changes to process in batches
+    const parentAdditions: Map<string, Set<string>> = new Map(); // parentId -> Set of childIds
+    const parentRemovals: Map<string, Set<string>> = new Map();
+    const childAdditions: Map<string, Set<string>> = new Map(); // childId -> Set of parentIds
+    const childRemovals: Map<string, Set<string>> = new Map();
+
+    // Process each update to collect all changes
+    for (const { oldTask, newTask } of updateArray) {
+        if (!oldTask && newTask) {
+            // Add new task to all relationships
+            if (newTask.children.length > 0) {
+                collectParentAdditions(parentAdditions, newTask.id, newTask.children);
+            }
+            if (newTask.parents.length > 0) {
+                collectChildAdditions(childAdditions, newTask.id, newTask.parents);
+            }
+        }
+        else if (oldTask && !newTask) {
+            // Remove oldTask from all relationships
+            if (oldTask.children.length > 0) {
+                collectParentRemovals(parentRemovals, oldTask.id, oldTask.children);
+            }
+            if (oldTask.parents.length > 0) {
+                collectChildRemovals(childRemovals, oldTask.id, oldTask.parents);
+            }
+        }
+        else if (oldTask && newTask) {
+            const addedParents = newTask.parents?.filter(x => !oldTask.parents?.includes(x));
+            const removedParents = oldTask.parents?.filter(x => !newTask.parents?.includes(x));
+            if (addedParents && addedParents.length > 0) {
+                collectChildAdditions(childAdditions, newTask.id, addedParents);
+            }
+            if (removedParents && removedParents.length > 0) {
+                collectChildRemovals(childRemovals, newTask.id, removedParents);
+            }
+
+            const addedChildren = newTask.children?.filter(x => !oldTask.children?.includes(x));
+            const removedChildren = oldTask.children?.filter(x => !newTask.children?.includes(x));
+            if (addedChildren && addedChildren.length > 0) {
+                collectParentAdditions(parentAdditions, newTask.id, addedChildren);
+            }
+            if (removedChildren && removedChildren.length > 0) {
+                collectParentRemovals(parentRemovals, newTask.id, removedChildren);
+            }
+        }
+    }
+
+    // Execute all updates in batches
+    await Promise.all([
+        processParentAdditions(provider, parentAdditions),
+        processParentRemovals(provider, parentRemovals),
+        processChildAdditions(provider, childAdditions),
+        processChildRemovals(provider, childRemovals)
+    ]);
+}
+
+// Helper functions to collect changes
+function collectParentAdditions(map: Map<string, Set<string>>, parentId: string, childIds: string[]) {
+    if (!map.has(parentId)) {
+        map.set(parentId, new Set());
+    }
+    childIds.forEach(childId => map.get(parentId)!.add(childId));
+}
+
+function collectParentRemovals(map: Map<string, Set<string>>, parentId: string, childIds: string[]) {
+    if (!map.has(parentId)) {
+        map.set(parentId, new Set());
+    }
+    childIds.forEach(childId => map.get(parentId)!.add(childId));
+}
+
+function collectChildAdditions(map: Map<string, Set<string>>, childId: string, parentIds: string[]) {
+    if (!map.has(childId)) {
+        map.set(childId, new Set());
+    }
+    parentIds.forEach(parentId => map.get(childId)!.add(parentId));
+}
+
+function collectChildRemovals(map: Map<string, Set<string>>, childId: string, parentIds: string[]) {
+    if (!map.has(childId)) {
+        map.set(childId, new Set());
+    }
+    parentIds.forEach(parentId => map.get(childId)!.add(parentId));
+}
+
+// Process batch updates
+async function processParentAdditions(provider: ITaskProvider, parentAdditions: Map<string, Set<string>>) {
+    if (parentAdditions.size === 0) return;
+
+    // Get all child IDs that need updating
+    const allChildIds = Array.from(parentAdditions.values()).flatMap(set => Array.from(set));
+    const uniqueChildIds = [...new Set(allChildIds)];
+
+    const childrenResult = await provider.readTasks(uniqueChildIds);
+    await childrenResult.match(
         async (children) => {
             const updates = children.flatMap(child => {
-                if (!child.parents.includes(parentId)) {
+                // Find all parents that should be added to this child
+                const parentsToAdd: string[] = [];
+                parentAdditions.forEach((childIds, parentId) => {
+                    if (childIds.has(child.id) && !child.parents.includes(parentId)) {
+                        parentsToAdd.push(parentId);
+                    }
+                });
+
+                if (parentsToAdd.length > 0) {
                     return {
                         task: child,
-                        updates: { parents: [...child.parents ?? [], parentId] }
+                        updates: { parents: [...child.parents, ...parentsToAdd] }
                     };
-                } else {
-                    // No-op. Parent already assigned
-                    return []
                 }
+                return [];
             });
-            await provider.updateTasks(updates);
+
+            if (updates.length > 0) {
+                const result = await provider.updateTasks(updates);
+                if (result.isErr()) {
+                    result.error.logError();
+                }
+            }
         },
         (err) => {
             err.logError();
-        });
+        }
+    );
 }
 
+async function processParentRemovals(provider: ITaskProvider, parentRemovals: Map<string, Set<string>>) {
+    if (parentRemovals.size === 0) return;
 
-async function addAsChild(provider: ITaskProvider, childId: string, parentIds: string[]) {
-    // Update each parent to include this child
-    for (const parentId of parentIds) {
-        const parentResult = await provider.readTask(parentId);
-        if (parentResult.isOk()) {
-            const parent = parentResult.value;
-            if (!parent.children.includes(childId)) {
-                provider.updateTask(parent.id, { children: [...parent.children, childId] });
-            } else {
-                // No-op. Child already assigned
-                console.warn("Attempted to add a node as a child of its own parent");
+    // Get all child IDs that need updating
+    const allChildIds = Array.from(parentRemovals.values()).flatMap(set => Array.from(set));
+    const uniqueChildIds = [...new Set(allChildIds)];
+
+    const childrenResult = await provider.readTasks(uniqueChildIds);
+    await childrenResult.match(
+        async (children) => {
+            const updates = children.flatMap(child => {
+                // Find all parents that should be removed from this child
+                const parentsToRemove: string[] = [];
+                parentRemovals.forEach((childIds, parentId) => {
+                    if (childIds.has(child.id) && child.parents.includes(parentId)) {
+                        parentsToRemove.push(parentId);
+                    }
+                });
+
+                if (parentsToRemove.length > 0) {
+                    return {
+                        task: child,
+                        updates: { parents: child.parents.filter(p => !parentsToRemove.includes(p)) }
+                    };
+                }
+                return [];
+            });
+
+            if (updates.length > 0) {
+                const result = await provider.updateTasks(updates);
+                if (result.isErr()) {
+                    result.error.logError();
+                }
             }
+        },
+        (err) => {
+            err.logError();
         }
-    }
+    );
 }
 
-async function removeAsParent(provider: ITaskProvider, parentId: string, childIds: string[]) {
-    // Update each child to remove this parent
-    for (const childId of childIds) {
-        const childResult = await provider.readTask(childId);
-        if (childResult.isOk()) {
-            const child = childResult.value;
-            if (child.parents.includes(parentId)) {
-                provider.updateTask(child.id, { parents: child.parents.filter(x => x !== parentId) });
-            } else {
-                // No-op. Not a parent of target
-                console.warn("Attempted to remove a node as a parent of a node that isn't its child");
+async function processChildAdditions(provider: ITaskProvider, childAdditions: Map<string, Set<string>>) {
+    if (childAdditions.size === 0) return;
+
+    // Get all parent IDs that need updating
+    const allParentIds = Array.from(childAdditions.values()).flatMap(set => Array.from(set));
+    const uniqueParentIds = [...new Set(allParentIds)];
+
+    const parentsResult = await provider.readTasks(uniqueParentIds);
+    await parentsResult.match(
+        async (parents) => {
+            const updates = parents.flatMap(parent => {
+                // Find all children that should be added to this parent
+                const childrenToAdd: string[] = [];
+                childAdditions.forEach((parentIds, childId) => {
+                    if (parentIds.has(parent.id) && !parent.children.includes(childId)) {
+                        childrenToAdd.push(childId);
+                    }
+                });
+
+                if (childrenToAdd.length > 0) {
+                    return {
+                        task: parent,
+                        updates: { children: [...parent.children, ...childrenToAdd] }
+                    };
+                }
+                return [];
+            });
+
+            if (updates.length > 0) {
+                const result = await provider.updateTasks(updates);
+                if (result.isErr()) {
+                    result.error.logError();
+                }
             }
+        },
+        (err) => {
+            err.logError();
         }
-    }
+    );
 }
 
-async function removeAsChild(provider: ITaskProvider, childId: string, parentIds: string[]) {
-    // Update each parent to remove this child
-    for (const parentId of parentIds) {
-        const parentResult = await provider.readTask(parentId);
-        if (parentResult.isOk()) {
-            const parent = parentResult.value;
-            if (parent.children.includes(childId)) {
-                provider.updateTask(parent.id, { children: parent.children.filter(id => id !== childId) });
-            } else {
-                // No-op. Not a parent of target
-                console.warn("Attempted to remove a node as a parent of a node that isn't its child");
+async function processChildRemovals(provider: ITaskProvider, childRemovals: Map<string, Set<string>>) {
+    if (childRemovals.size === 0) return;
+
+    // Get all parent IDs that need updating
+    const allParentIds = Array.from(childRemovals.values()).flatMap(set => Array.from(set));
+    const uniqueParentIds = [...new Set(allParentIds)];
+
+    const parentsResult = await provider.readTasks(uniqueParentIds);
+    await parentsResult.match(
+        async (parents) => {
+            const updates = parents.flatMap(parent => {
+                // Find all children that should be removed from this parent
+                const childrenToRemove: string[] = [];
+                childRemovals.forEach((parentIds, childId) => {
+                    if (parentIds.has(parent.id) && parent.children.includes(childId)) {
+                        childrenToRemove.push(childId);
+                    }
+                });
+
+                if (childrenToRemove.length > 0) {
+                    return {
+                        task: parent,
+                        updates: { children: parent.children.filter(c => !childrenToRemove.includes(c)) }
+                    };
+                }
+                return [];
+            });
+
+            if (updates.length > 0) {
+                const result = await provider.updateTasks(updates);
+                if (result.isErr()) {
+                    result.error.logError();
+                }
             }
+        },
+        (err) => {
+            err.logError();
         }
-    }
+    );
 }

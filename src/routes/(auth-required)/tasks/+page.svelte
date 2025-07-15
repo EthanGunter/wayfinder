@@ -38,6 +38,8 @@
 					goto('/tasks');
 				}
 			);
+		} else {
+			currentTask = task;
 		}
 		(await api.getParentsOf(task)).match(
 			(deps) => {
@@ -82,8 +84,8 @@
 			);
 		} else {
 			(await api.createTask({ title: 'New Project' })).match(
-				(newID) => {
-					fetchCurrentTask(newID);
+				(newTask) => {
+					fetchCurrentTask(newTask);
 				},
 				(err) => {
 					err.logError();

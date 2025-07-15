@@ -30,7 +30,9 @@ const taskCRUD: ITaskCRUDProvider = {
     const { data, error } = await client.from('tasks').insert([task]).select('*').single();
     if (error) return err(new IOError(`Failed to create ${createDetails.title}`, error, task));
 
-    updateRelationships(taskProvider, null, new Task({ id: data.id, ...task }));
+    if (task.parents.length > 0 || task.children.length > 0) {
+      updateRelationships(taskProvider, { oldTask: null, newTask: new Task({ id: data.id, ...task }) });
+    }
 
     // Return the generated ID
     return ok(new Task(data));
@@ -70,35 +72,62 @@ const taskCRUD: ITaskCRUDProvider = {
       .single();
     if (error || !data) return err(new IOError(`Failed to update ${task.title}`, error, updates));
 
-    updateRelationships(taskProvider, task, new Task(data));
+    updateRelationships(taskProvider, { oldTask: task, newTask: new Task(data) });
 
     return ok(new Task(data));
   },
   updateTasks: async function (updates: { task: string | Task, updates: Partial<Task> }[]): Promise<Result<Task[], Err>> {
-    // Convert the id to task
-    const ids = updates.flatMap(u => typeof u.task === 'string' ? u.task : []);
-    const readRes = (await taskCRUD.readTasks(ids))
-    if (readRes.isErr()) {
-      return err(readRes.error);
-    }
-    const idToTask = new Map(readRes.value.map(t => [t.id, t]));
-    const normalizedTasks = updates.map(t => {
-      if (typeof t.task === 'string') {
-        t.task = idToTask.get(t.task)!;
-      }
-      return t;
-    }) as { task: Task, updates: Partial<Task> }[];
+    // First, normalize all tasks - convert string IDs to Task objects
+    const stringIds = updates.filter(u => typeof u.task === 'string').map(u => u.task as string);
+    let idToTask = new Map<string, Task>();
 
+    if (stringIds.length > 0) {
+      const readRes = await taskCRUD.readTasks(stringIds);
+      if (readRes.isErr()) {
+        return err(readRes.error);
+      }
+      idToTask = new Map(readRes.value.map(t => [t.id, t]));
+    }
+
+    // Normalize all updates to have Task objects
+    const normalizedUpdates = updates.map(update => ({
+      task: typeof update.task === 'string' ? idToTask.get(update.task)! : update.task,
+      updates: update.updates
+    }));
+
+    // Prepare the data for batch update
+    const updateData = normalizedUpdates.map(({ task, updates }) => ({
+      ...task, // Upsert requires ALL fields for the initial INSERT attempt... Only other option is iterated single .update() calls
+      ...updates,
+      last_edit: new Date().toISOString()
+    }));
+
+    // Perform batch update
     const { data, error } = await client
       .from('tasks')
-      .upsert([{ ...updates, last_edit: new Date().toISOString() }])
+      .upsert(updateData)
       .select();
-    if (error || !data || data.length == 0) return err(new IOError(`Failed to update ${normalizedTasks.map(t => t.task.title).join(', ')}`, error, updates));
 
-    // TODO needs to be plural...
-    updateRelationships(taskProvider, task, new Task(data));
+    if (error || !data || data.length === 0) {
+      return err(new IOError(
+        `Failed to update tasks: ${normalizedUpdates.map(u => u.task.title).join(', ')}`,
+        error,
+        updates
+      ));
+    }
 
-    return ok(new Task(data));
+    // Create Task instances from the returned data
+    const updatedTasks = data.map(d => new Task(d));
+
+    // Update relationships for all changed tasks
+    const relationshipUpdates = normalizedUpdates.map((update, index) => ({
+      oldTask: update.task,
+      newTask: updatedTasks[index]
+    }));
+
+    await updateRelationships(taskProvider, relationshipUpdates);
+
+    return ok(updatedTasks);
   },
 
   /**
@@ -111,7 +140,7 @@ const taskCRUD: ITaskCRUDProvider = {
     if (deleteRes.error) return err(new IOError(`Failed to delete ${id}`, deleteRes.error));
     else if (deleteRes.count === 0) return err(new NotFoundError(id, 'task'));
 
-    updateRelationships(taskProvider, deleteRes.data, null);
+    updateRelationships(taskProvider, { oldTask: new Task(deleteRes.data), newTask: null });
 
     return ok();
   }
