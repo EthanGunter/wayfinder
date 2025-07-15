@@ -26,10 +26,10 @@ export const load: LayoutLoad<{ user: LocalUserProxy, taskAPI: ITaskProvider }> 
     }
 
     taskAPI = await devStore.getTaskProviderOverride(taskAPI);
-    console.log("taskAPIOverride:", devStore.taskProviderOverride);
 
-    // On the home page, offer a "login" & "get started locally" option
     // If the user logs in, make sure to migrate any local data
 
+    // TODO wrap the API so we call the local provider first, then the remote,
+    // TODO and handle rolling back local changes whenever the remote fails...
     return { user, taskAPI };
 };

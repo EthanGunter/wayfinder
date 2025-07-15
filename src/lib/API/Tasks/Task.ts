@@ -5,7 +5,7 @@ import type { CreateTaskDTO, PopulatedTaskDTO } from "./types";
 
 export interface TaskData {
     id: string,
-    filepath?: string // TODO I'd eventually like to make Wayfinder local-plain-text-first, but that's a future feature
+    // filepath?: string // TODO I'd eventually like to make Wayfinder local-plain-text-first, but that's a future feature
     title: string,
     content?: string,
     status: TaskStatus,
@@ -101,7 +101,7 @@ export class Task implements TaskData {
 
     // Helper: Convert TaskData to markdown string
     static toMarkdown(task: TaskData): string {
-        const { content, filepath, ...meta } = task;
+        const { content, /* filepath, */ ...meta } = task;
         return `---\n${yaml.dump(meta)}---\n${content ?? ''}`;
     }
 

@@ -28,6 +28,7 @@ export interface IProvider<T> {
 // TODO break into more specific interfaces
 export type ITaskProvider = IProvider<ITaskProvider> & ITaskCRUDProvider & ITaskRelationProvider & IAdvancedTaskProvider
 
+// TODO Should plural functions return an array of errors?
 /**
  * Manages modifications to markdown files that represent tasks,
  * as well as keeping a database index in sync for rapid querying of data
@@ -39,20 +40,20 @@ export interface ITaskCRUDProvider {
    */
   // TODO-test: sets up relationships if parent(s) or children are populated
   createTask(task: CreateTaskDTO): Promise<Result<Task, Err>>;
-  createTasks(tasks: CreateTaskDTO[]): Promise<Result<Task[], Err>>; // TODO Implement plural operation
+  createTasks(tasks: CreateTaskDTO[]): Promise<Result<Task[], Err>>;
   /**
    * Fetches a task's data by its ID
    */
   readTask(id: string): Promise<Result<Task, NotFoundError | Err>>;
-  readTasks(ids: string[]): Promise<Result<Task[], NotFoundError | Err>>; // TODO Implement plural operation
+  readTasks(ids: string[]): Promise<Result<Task[], NotFoundError | Err>>;
   /**
    * @param task can be passed as an id
    */
   updateTask(task: string | Task, updates: Partial<Task>): Promise<Result<Task, Err>>;
-  updateTasks(list: { task: string | Task, updates: Partial<Task> }[]): Promise<Result<Task[], Err>>; // TODO Implement plural operation
-  
+  updateTasks(list: { task: string | Task, updates: Partial<Task> }[]): Promise<Result<Task[], Err>>;
+
   deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
-  deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>; // TODO Implement plural operation
+  deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>;
 }
 
 export interface ITaskRelationProvider {

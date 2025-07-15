@@ -8,6 +8,7 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
+	import { ErrorTypes } from '$lib/Errors.js';
 
 	const { data } = $props();
 	const api = data.taskAPI;
@@ -33,34 +34,43 @@
 
 		if (typeof task === 'string') {
 			// TODO: Fetch currentTask, children, and parents based on id
-			(await api.readTask(task)).match(
-				(task) => {
-					currentTask = task;
-				},
-				(err) => {
-					err.logError();
-					goto('/tasks');
+			const result = await api.readTask(task);
+			if (result.isErr()) {
+				switch (result.error.type) {
+					case ErrorTypes.NotFoundError:
+						goto('/tasks');
+					default:
+						result.error.logError();
 				}
-			);
+				return;
+			}
+			currentTask = result.value;
 		} else {
 			currentTask = task;
 		}
-		(await api.getParentsOf(task)).match(
-			(deps) => {
-				parents = deps;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
-		(await api.getChildrenOf(task)).match(
-			(deps) => {
-				children = deps;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
+
+		// Now currentTask is guaranteed to be a Task object, not a string
+		if (!currentTask) return;
+		if (currentTask.parents.length > 0) {
+			(await api.getParentsOf(currentTask)).match(
+				(deps) => {
+					parents = deps;
+				},
+				(err) => {
+					err.logError();
+				}
+			);
+		}
+		if (currentTask.children.length > 0) {
+			(await api.getChildrenOf(currentTask)).match(
+				(deps) => {
+					children = deps;
+				},
+				(err) => {
+					err.logError();
+				}
+			);
+		}
 	}
 	async function fetchRootTasks() {
 		// const api = await api;

@@ -8,6 +8,8 @@
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 
+	// TODO if the user is not synced, offer a "login" & "get started locally" option
+
 	const { data } = $props();
 	const api = data.taskAPI;
 

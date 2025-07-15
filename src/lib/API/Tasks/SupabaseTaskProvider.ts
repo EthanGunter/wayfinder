@@ -188,7 +188,7 @@ const taskRelations: ITaskRelationProvider = {
       } else parentTask = parentResult.value;
     } else parentTask = task;
 
-    if (!parentTask.children || parentTask.children.length === 0) {
+    if (parentTask.children.length === 0) {
       return ok([]);
     }
 
@@ -209,7 +209,7 @@ const taskRelations: ITaskRelationProvider = {
       } else childTask = childTaskResult.value;
     } else childTask = task;
 
-    if (!childTask.parents || childTask.parents.length === 0) {
+    if (childTask.parents.length === 0) {
       return ok([]);
     }
 
@@ -246,7 +246,7 @@ const advancedFeatures: IAdvancedTaskProvider = {
     const tasks: Task[] = taskArray.map(t => new Task(t));
 
     // Filter root tasks and create a map for quick lookups
-    const roots: Task[] = tasks.filter(t => !t.parents || t.parents.length === 0);
+    const roots: Task[] = tasks.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(tasks.map(t => [t.id, t] as [string, Task]));
 
     // Sort function to order tasks by priority (highest first)
@@ -263,7 +263,7 @@ const advancedFeatures: IAdvancedTaskProvider = {
         return; // stop searching once all tasks are acquired
 
       // TODO this lil check right here may not be ideal... user testing will tell
-      if (!task.children || task.children.length === 0) { // is leaf node
+      if (task.children.length === 0) { // is leaf node
         if (!task.completed) {// and it's not already completed
           todoList.push(task); // add to todolist
         }

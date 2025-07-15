@@ -1,3 +1,11 @@
+export enum ErrorTypes {
+    ArgumentError = "ArgumentError",
+    NotFoundError = "NotFoundError",
+    ParseError = "ParseError",
+    IOError = "IOError",
+    NotImplementedError = "NotImplementedError",
+}
+
 export class Err {
     stack: string[] = ["call .withTraceDepth() for stacktrace"];
     private traceDepth: number | undefined;
@@ -49,19 +57,19 @@ export class Err {
 
 export class ArgumentError extends Err {
     constructor(argument: string, reason: string) {
-        super(1, 'ArgumentError', `${argument} invalid`, reason);
+        super(1, ErrorTypes.ArgumentError, `${argument} invalid`, reason);
     }
 }
 
 export class NotFoundError extends Err {
     constructor(item: any, type: string = "Item") {
-        super(1, 'NotFoundError', `${type} NotFound`, item);
+        super(1, ErrorTypes.NotFoundError, `${type} NotFound`, item);
     }
 }
 
 export class ParseError extends Err {
     constructor(content: any, targetType: string) {
-        super(1, 'ParseError', `Failed to parse content to ${targetType}`, content);
+        super(1, ErrorTypes.ParseError, `Failed to parse content to ${targetType}`, content);
     }
 }
 
@@ -70,7 +78,7 @@ export class IOError extends Err {
     constructor(message: string, internalError: any, context?: any) {
         super(
             1,
-            "IOError",
+            ErrorTypes.IOError,
             message,
             { internalError, dataToWrite: context }
         );
@@ -79,6 +87,6 @@ export class IOError extends Err {
 
 export class NotImplementedError extends Err {
     constructor(methodName: string) {
-        super(1, "NotImplementedError", `${methodName} not implemented`);
+        super(1, ErrorTypes.NotImplementedError, `${methodName} not implemented`);
     }
 }

@@ -115,7 +115,7 @@
 	<Modal bind:open={showDeleteDialog}>
 		<div class="delete-dialog dialog">
 			<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
-			<!-- {#if task.children && task.children.length > 0}
+			<!-- {#if task.children.length > 0}
 			 // TODO This is currently not true
 				<p>This will also delete <em>all</em> descendants.</p>
 			{/if} -->

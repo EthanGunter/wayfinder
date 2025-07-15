@@ -7,22 +7,22 @@ import { Task } from './Task';
 import { updateRelationships } from '.';
 
 interface MyDB extends DBSchema {
-  files: {
-    key: string;
-    value: { filepath: string; content: string };
-  };
+  // files: {
+  //   key: string;
+  //   value: { filepath: string; content: string };
+  // };
   index: {
     key: string;
     value: Task;
   };
 }
 
-function TryGetIDFromFilepath(key: string): string {
-  if (key.endsWith(".md")) {
-    return key.split("/").slice(-1)[0].split(".")[0];
-  }
-  return key;
-}
+// function TryGetIDFromFilepath(key: string): string {
+//   if (key.endsWith(".md")) {
+//     return key.split("/").slice(-1)[0].split(".")[0];
+//   }
+//   return key;
+// }
 
 let db: IDBPDatabase<MyDB> | null;
 
@@ -30,7 +30,7 @@ const core: IProvider<ITaskProvider> = {
   get: async function (): Promise<ITaskProvider> {
     db = await openDB<MyDB>('wayfinder', 1, {
       upgrade(db) {
-        db.createObjectStore('files', { keyPath: 'filepath' });
+        // db.createObjectStore('files', { keyPath: 'filepath' });
         db.createObjectStore('index', { keyPath: 'id' });
       },
     });
@@ -50,42 +50,93 @@ const taskCRUD: ITaskCRUDProvider = {
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   createTask: async function (task: CreateTaskDTO): Promise<Result<Task, IOError | ParseError>> {
+    assertDB(db);
     const preparedTask = new Task(task);
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
 
-    updateRelationships(browserTaskProvider, null, preparedTask);
+    updateRelationships(browserTaskProvider, { oldTask: null, newTask: preparedTask });
 
-    return (await writeTaskToDB(preparedTask)).match(
-      success => {
-        return ok(new Task(preparedTask));
-      },
-      error => err(error))
+    await db.put('index', preparedTask);
+    return ok(new Task(preparedTask));
   },
 
   /**
-   * @param key Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
+  * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
+  * @error {@link IOError} if the IndexedDB.put() attempt fails
+  */
+  createTasks: async function (tasks: CreateTaskDTO[]): Promise<Result<Task[], IOError | ParseError>> {
+    assertDB(db);
+    const createdTasks: Task[] = [];
+    const transaction = db.transaction('index', 'readwrite');
+
+    try {
+      for (const taskDTO of tasks) {
+        const preparedTask = new Task(taskDTO);
+        preparedTask.created = new Date().toISOString();
+        preparedTask.id = v4();
+
+        updateRelationships(browserTaskProvider, { oldTask: null, newTask: preparedTask });
+
+        await transaction.store.put(preparedTask);
+        createdTasks.push(new Task(preparedTask));
+      }
+
+      await transaction.done;
+      return ok(createdTasks);
+    } catch (e) {
+      return err(new IOError("Batch create", "multiple tasks", e));
+    }
+  },
+
+  /**
+   * @param id Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
    * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  readTask: async function (key: string): Promise<Result<Task, NotFoundError | ParseError>> {
+  readTask: async function (id: string): Promise<Result<Task, NotFoundError | ParseError>> {
     assertDB(db);
-    if (key.endsWith(".md")) {
-      // Filepath
-      // Get the .md file content
-      const file = await db.get('files', key);
-      if (!file) {
-        return err(new NotFoundError(key, 'Task File').withTrace(1));
+    // if (key.endsWith(".md")) {
+    //   // Filepath
+    //   // Get the .md file content
+    //   const file = await db.get('files', key);
+    //   if (!file) {
+    //     return err(new NotFoundError(key, 'Task File').withTrace(1));
+    //   }
+    //   // Parse and return
+    //   return Task.fromMarkdown(file.content, key);
+    // } else {
+    // Task ID
+    const task = await db.get('index', id);
+    if (!task) {
+      return err(new NotFoundError(id, 'Task').withTrace(1));
+    }
+    return ok(task);
+    // }
+  },
+
+  readTasks: async function (ids: string[]): Promise<Result<Task[], NotFoundError | Err>> {
+    assertDB(db);
+    const tasks: Task[] = [];
+    const notFoundIds: string[] = [];
+
+    try {
+      for (const id of ids) {
+        const task = await db.get('index', id);
+        if (task) {
+          tasks.push(task);
+        } else {
+          notFoundIds.push(id);
+        }
       }
-      // Parse and return
-      return Task.fromMarkdown(file.content, key);
-    } else {
-      // Task ID
-      const task = await db.get('index', key);
-      if (!task) {
-        return err(new NotFoundError(key, 'Task').withTrace(1));
+
+      if (notFoundIds.length > 0) {
+        return err(new NotFoundError(notFoundIds.join(', '), 'Tasks').withTrace(1));
       }
-      return ok(task);
+
+      return ok(tasks);
+    } catch (e) {
+      return err(new IOError("Batch read", ids.join(', '), e));
     }
   },
 
@@ -97,46 +148,108 @@ const taskCRUD: ITaskCRUDProvider = {
    */
   updateTask: async function (key: string, updates: Partial<Task>): Promise<Result<Task, Err>> {
     return (await taskCRUD.readTask(key)).match(
-      async task => {
+      async (task) => {
+        assertDB(db);
         const updated: Task = new Task({ ...task, ...updates, last_edit: new Date().toISOString() });
 
-        updateRelationships(browserTaskProvider, task, updated);
+        updateRelationships(browserTaskProvider, { oldTask: task, newTask: updated });
 
-        return (await writeTaskToDB(updated)).match(
-          () => ok(updated),
-          error => err(error)
-        );
+        await db.put('index', updated);
+        return ok(updated);
       },
       error => err(error)
-    )
+    );
+  },
+
+  updateTasks: async function (list: { task: string | Task; updates: Partial<Task>; }[]): Promise<Result<Task[], Err>> {
+    assertDB(db);
+    const updatedTasks: Task[] = [];
+    const transaction = db.transaction('index', 'readwrite');
+
+    try {
+      for (const { task, updates } of list) {
+        // Get the existing task
+        let existingTask: Task;
+        if (typeof task === 'string') {
+          const taskResult = await taskCRUD.readTask(task);
+          if (taskResult.isErr()) {
+            return err(taskResult.error);
+          }
+          existingTask = taskResult.value;
+        } else {
+          existingTask = task;
+        }
+
+        // Create updated task
+        const updated: Task = new Task({
+          ...existingTask,
+          ...updates,
+          last_edit: new Date().toISOString()
+        });
+
+        updateRelationships(browserTaskProvider, { oldTask: existingTask, newTask: updated });
+
+        await transaction.store.put(updated);
+        updatedTasks.push(updated);
+      }
+
+      await transaction.done;
+      return ok(updatedTasks);
+    } catch (e) {
+      return err(new IOError("Batch update", "multiple tasks", e));
+    }
   },
 
   /**
-   * @param key Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
+   * @param id Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
    * @param recursive NOT IMPLEMENTED
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  deleteTask: async function (key: string, recursive?: boolean): Promise<Result<void, Err>> {
+  deleteTask: async function (id: string, recursive?: boolean): Promise<Result<void, Err>> {
     assertDB(db);
     if (recursive) throw new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)");
 
-    key = TryGetIDFromFilepath(key);
-
-    const task = await db.get('index', key);
+    const task = await db.get('index', id);
 
     if (task && task.filepath) {
       try {
-        await db.delete('files', task.filepath);
-        await db.delete('index', key);
+        await db.delete('index', id);
       } catch (e) {
         // TODO Throw an error during development/testing ONLY
         // https://github.com/LZS911/vite-plugin-conditional-compile
-        throw new IOError("Delete", key, e);
+        throw new IOError("Delete", id, e);
       }
-      updateRelationships(browserTaskProvider, task, null);
+      updateRelationships(browserTaskProvider, { oldTask: task, newTask: null });
       return ok();
     }
-    else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"))
+    else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"));
+  },
+
+  deleteTasks: async function (list: { id: string; recursive?: boolean; }[]): Promise<Result<void, Err>> {
+    assertDB(db);
+
+    // Check if any deletion requests are recursive
+    if (list.some(item => item.recursive)) {
+      return err(new NotImplementedError("BrowserTaskStorage.deleteTasks with recursive = true"));
+    }
+
+    const transaction = db.transaction('index', 'readwrite');
+
+    try {
+      for (const { id } of list) {
+        const task = await transaction.store.get(id);
+
+        if (task) {
+          await transaction.store.delete(id);
+          updateRelationships(browserTaskProvider, { oldTask: task, newTask: null });
+        }
+      }
+
+      await transaction.done;
+      return ok();
+    } catch (e) {
+      return err(new IOError("Batch delete", list.map(item => item.id).join(', '), e));
+    }
   }
 }
 
@@ -152,7 +265,7 @@ const taskRelations: ITaskRelationProvider = {
       } else parentTask = parentTaskResult.value;
     } else parentTask = task;
 
-    if (!parentTask.children || parentTask.children.length === 0) {
+    if (parentTask.children.length === 0) {
       return ok([]);
     }
 
@@ -168,29 +281,31 @@ const taskRelations: ITaskRelationProvider = {
     return ok(children);
   },
   getParentsOf: async function (task: string | Task): Promise<Result<Task[], Err>> {
-    const parents: Task[] = [];
     let childTask: Task;
 
+    // Convert id to task object
     if (typeof task === "string") {
-
       const childTaskResult = await taskCRUD.readTask(task);
       if (childTaskResult.isErr()) {
         return err(childTaskResult.error);
       } else childTask = childTaskResult.value;
     } else childTask = task;
 
-    if (childTask.parents) {
-      const parentResult = await taskCRUD.readTask(childTask.parents[0]);
+    // Get the parents
+    if (childTask.parents.length > 0) {
+      const parentResult = await taskCRUD.readTasks(childTask.parents);
       if (parentResult.isErr()) return err(parentResult.error);
-      else parents.push(parentResult.value);
+
+      return ok(parentResult.value);
     }
 
-    return ok(parents);
+    return ok([]);
   },
+  
   getRootTasks: async function (): Promise<Result<Task[], Err>> {
     assertDB(db);
     const allTasks = await db.getAll('index');
-    const rootTasks = allTasks.filter(task => !task.parents);
+    const rootTasks = allTasks.filter(task => task.parents.length === 0);
     return ok(rootTasks);
   }
 }
@@ -208,7 +323,7 @@ const advancedFeatures: IAdvancedTaskProvider = {
     assertDB(db);
     let taskArray: Task[] = await db.getAll('index');
 
-    const roots: Task[] = taskArray.filter(t => !t.parents);
+    const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
 
     const sorter = (a: Task | undefined, b: Task | undefined) => {
@@ -224,7 +339,7 @@ const advancedFeatures: IAdvancedTaskProvider = {
         return; // stop searching once all tasks are acquired
 
       // TODO this lil check right here may not be ideal... user testing will tell
-      if (!task.children || task.children.length === 0) { // is leaf node
+      if (task.children.length === 0) { // is leaf node
         if (!task.completed) {// and it's not already completed
           todoList.push(task); // add to todolist
         }
@@ -280,49 +395,51 @@ function assertDB(db: IDBPDatabase<MyDB> | null): asserts db is IDBPDatabase<MyD
   if (!db) throw new Error("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()")
 }
 
-async function writeTaskToDB(task: Task): Promise<Result<void, IOError>> {
-  assertDB(db);
-  if (!task.filepath) task.filepath = task.id + ".md";
-  const md = Task.toMarkdown(task);
+/** This function manages writing the markdown file, then updating the index */
+// async function writeTaskToDB(task: Task): Promise<Result<void, IOError>> {
+//   assertDB(db);
+//   if (!task.filepath) task.filepath = task.id + ".md";
+//   const md = Task.toMarkdown(task);
 
-  try {
-    // Create the .md file
-    await db.put('files', { filepath: task.filepath, content: md });
-  } catch (e) {
-    return err(new IOError(`Failed to write ${task.filepath}`, e, md));
-  }
+//   try {
+//     // Create the .md file
+//     await db.put('files', { filepath: task.filepath, content: md });
+//   } catch (e) {
+//     return err(new IOError(`Failed to write ${task.filepath}`, e, md));
+//   }
 
-  // Update the DB with the new file's data
-  const updateRes = await updateIndexFromFile(task.filepath);
-  if (updateRes.isErr()) {
-    return err(updateRes.error);
-  }
-  return ok();
-}
+//   // Update the DB with the new file's data
+//   const updateRes = await updateIndexFromFile(task.filepath);
+//   if (updateRes.isErr()) {
+//     return err(updateRes.error);
+//   }
+//   return ok();
+// }
+
 /**
  * @error {@link NotFoundError} if the file doesn't exist in the IndexedDB
  * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
  */
-async function updateIndexFromFile(filepath: string): Promise<Result<void, NotFoundError | ParseError>> {
-  assertDB(db);
-  const file = await db.get('files', filepath);
+// async function updateIndexFromFile(filepath: string): Promise<Result<void, NotFoundError | ParseError>> {
+//   assertDB(db);
+//   const file = await db.get('files', filepath);
 
-  if (!file) {
-    return err(new NotFoundError(filepath, "File"));
-  }
+//   if (!file) {
+//     return err(new NotFoundError(filepath, "File"));
+//   }
 
-  return Task.fromMarkdown(file.content, filepath).match(
-    async task => {
-      await db!.put('index', task);
-      return ok();
-    },
-    error => {
-      return err(error);
-    });
-}
+//   return Task.fromMarkdown(file.content, filepath).match(
+//     async task => {
+//       await db!.put('index', task);
+//       return ok();
+//     },
+//     error => {
+//       return err(error);
+//     });
+// }
 //#endregion
 
 
 //TODO #if TEST
-export { db, updateIndexFromFile, writeTaskToDB }
+export { db, /* updateIndexFromFile,  writeTaskToDB */ }
 //#endif
