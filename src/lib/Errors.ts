@@ -1,4 +1,3 @@
-
 export class Err {
     stack: string[] = ["call .withTraceDepth() for stacktrace"];
     private traceDepth: number | undefined;
@@ -6,7 +5,7 @@ export class Err {
     /**
      * @param inheritanceDepth helps keep the stacktrace clean. -1 doesn't generate a stacktrace
      */
-    constructor(private inheritanceDepth: number, public msg: string, public context?: any) {
+    constructor(private inheritanceDepth: number, public type: string, public msg: string, public context?: any) {
         this.withTrace(3);
     }
 
@@ -32,9 +31,16 @@ export class Err {
         return this;
     }
 
-    /** Lets us hide irrelevant data when the object is thrown or .log()ed */
+    logError() {
+        console.error(this.msg, this.toJSON());
+    }
+    logWarning() {
+        console.warn(this.msg, this.toJSON());
+    }
+    /** TODO turns out the following is not the case... Lets us hide irrelevant data when the object is thrown or .log()ed */
     private toJSON() {
         const cleaned: any = { ...this };
+        delete cleaned.msg;
         delete cleaned.inheritanceDepth;
         delete cleaned.traceDepth;
         return cleaned;
@@ -43,31 +49,36 @@ export class Err {
 
 export class ArgumentError extends Err {
     constructor(argument: string, reason: string) {
-        super(1, `ArgumentError: ${argument} invalid`, reason);
+        super(1, 'ArgumentError', `${argument} invalid`, reason);
     }
 }
 
 export class NotFoundError extends Err {
     constructor(item: any, type: string = "Item") {
-        super(1, `NotFoundError: ${type} NotFound`, item);
+        super(1, 'NotFoundError', `${type} NotFound`, item);
     }
 }
 
 export class ParseError extends Err {
     constructor(content: any, targetType: string) {
-        super(1, `ParseError: Failed to parse content to ${targetType}`, content);
+        super(1, 'ParseError', `Failed to parse content to ${targetType}`, content);
     }
 }
 
 
 export class IOError extends Err {
     constructor(message: string, internalError: any, context?: any) {
-        super(1, message, { internalError, dataToWrite: context });
+        super(
+            1,
+            "IOError",
+            message,
+            { internalError, dataToWrite: context }
+        );
     }
 }
 
-export class NotImplemented extends Err {
+export class NotImplementedError extends Err {
     constructor(methodName: string) {
-        super(1, "Not Implemented", methodName);
+        super(1, "NotImplementedError", `${methodName} not implemented`);
     }
 }
