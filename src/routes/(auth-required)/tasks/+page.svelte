@@ -51,27 +51,24 @@
 
 		// Now currentTask is guaranteed to be a Task object, not a string
 		if (!currentTask) return;
-		if (currentTask.parents.length > 0) {
-			(await api.getParentsOf(currentTask)).match(
-				(deps) => {
-					parents = deps;
-				},
-				(err) => {
-					err.logError();
-				}
-			);
-		}
-		if (currentTask.children.length > 0) {
-			(await api.getChildrenOf(currentTask)).match(
-				(deps) => {
-					children = deps;
-				},
-				(err) => {
-					err.logError();
-				}
-			);
-		}
+		(await api.getParentsOf(currentTask)).match(
+			(deps) => {
+				parents = deps;
+			},
+			(err) => {
+				err.logError();
+			}
+		);
+		(await api.getChildrenOf(currentTask)).match(
+			(deps) => {
+				children = deps;
+			},
+			(err) => {
+				err.logError();
+			}
+		);
 	}
+
 	async function fetchRootTasks() {
 		// const api = await api;
 
@@ -136,7 +133,7 @@
 	}
 </script>
 
-<AppHeader />
+<AppHeader user={data.user} />
 <section class="task-browser page">
 	<!-- TODO: <TasksTutorial /> -->
 	{#if currentTask}

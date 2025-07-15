@@ -86,7 +86,7 @@ export interface IAdvancedTaskProvider {
 }
 
 export interface ITaskExporter {
-  exportData(simplify?: boolean): Promise<string>;
+  exportData(simplify?: boolean): Promise<void>;
   importData(data: string): Promise<number>;
 }
 

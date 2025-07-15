@@ -105,7 +105,7 @@
 	);
 </script>
 
-<AppHeader />
+<AppHeader user={data.user} />
 <div class="page page-todays-tasks">
 	Logged in as {data.user.displayName}
 	<div

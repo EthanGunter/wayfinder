@@ -304,7 +304,7 @@ const advancedFeatures: IAdvancedTaskProvider = {
 }
 
 const dataExporter: ITaskExporter = {
-  exportData: function (simplify?: boolean): Promise<string> {
+  exportData: function (simplify?: boolean): Promise<void> {
     throw new Error("Function not implemented.");
   },
   importData: function (data: string): Promise<number> {

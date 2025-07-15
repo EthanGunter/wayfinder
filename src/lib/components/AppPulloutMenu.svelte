@@ -4,19 +4,12 @@
 	import { page } from '$app/state';
 	import { getUser } from '$lib/API/Auth';
 	import supabase from '$lib/API/SupabaseClient';
+	import browserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 	import { devStore } from '$lib/stores/devStore.svelte';
 	import BugReportModal from './BugReportModal.svelte';
 	import PulloutBlock from './overlays/Pullout.svelte';
 
 	let showPullout = $state(false);
-
-	async function deleteAllTasks() {
-		const user = await getUser();
-		if (!user) throw new Error(`No user could be found to delete all tasks...`);
-		await supabase.from('tasks').delete().eq('user_id', user.id); // basically WHERE true
-		showPullout = false;
-		window.location.reload();
-	}
 </script>
 
 <button onclick={() => (showPullout = true)} aria-label="Open menu">☰ menu</button>
@@ -30,6 +23,11 @@
 				<label for="dev-mode"> Development Mode </label>
 				<input id="dev-mode" type="checkbox" bind:checked={devStore.devMode} />
 			</h2>
+			<span>
+				<button onclick={async () => (await browserTaskProvider.get()).exportData()}>
+					Export Data
+				</button>
+			</span>
 			{#if devStore.devMode}
 				<label for="task-provider-override">Task API Override</label>
 				<select
@@ -45,7 +43,16 @@
 					<option value="browser">Browser</option>
 					<option value="native">Native</option>
 				</select>
-				<button class="alert" onclick={deleteAllTasks}>Delete all tasks</button>
+				<button
+					class="alert"
+					onclick={async () => {
+						const user = await getUser();
+						if (!user) throw new Error(`No user could be found to delete all tasks...`);
+						await supabase.from('tasks').delete().eq('user_id', user.id); // basically WHERE true
+						showPullout = false;
+						window.location.reload();
+					}}>Delete all tasks from Supabase</button
+				>
 			{/if}
 		</div>
 	{/if}

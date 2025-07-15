@@ -5,6 +5,7 @@ import { NotFoundError, Err, ParseError, IOError, NotImplementedError } from '$l
 import { v4 } from 'uuid';
 import { Task } from './Task';
 import { updateRelationships } from '.';
+import JSZip from 'jszip';
 
 interface MyDB extends DBSchema {
   // files: {
@@ -301,7 +302,7 @@ const taskRelations: ITaskRelationProvider = {
 
     return ok([]);
   },
-  
+
   getRootTasks: async function (): Promise<Result<Task[], Err>> {
     assertDB(db);
     const allTasks = await db.getAll('index');
@@ -313,10 +314,9 @@ const taskRelations: ITaskRelationProvider = {
 
 const advancedFeatures: IAdvancedTaskProvider = {
   getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
-    const todaysTaskIds = JSON.parse(localStorage.getItem('todaysTasks') || '[]') as string[];
-    const tasks = await Promise.all(todaysTaskIds.map(id => taskCRUD.readTask(id)));
-    const successfulTasks = tasks.filter(r => r.isOk()).map(r => r.value as Task);
-    return ok(successfulTasks);
+    assertDB(db);
+    const allTasks = await db.getAll('index');
+    return ok(allTasks.filter(t => t.todays_task));
   },
 
   getPrioritizedTasks: async function (limit: number): Promise<Result<Task[], Err>> {
@@ -378,15 +378,42 @@ const advancedFeatures: IAdvancedTaskProvider = {
 }
 
 const dataExporter: ITaskExporter = {
-  exportData: function (simplify?: boolean): Promise<string> {
-    throw new Error('Function not implemented.');
+  exportData: async function (simplify?: boolean): Promise<void> {
+    assertDB(db);
+    const taskData = await db.getAll('index');
+    const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
+
+    // 1. Create a new zip
+    const zip = new JSZip();
+
+    // 2. Add files
+    for (const task of taskData) {
+      // TODO replace with task.filepath
+      let filename;
+      if (nameConflicts.has(task.title))
+        filename = `${task.title} (${task.id.substring(0, 4)}).md`
+      else
+        filename = `${task.title}.md`
+
+      zip.file(filename, Task.toMarkdown(task));
+    }
+
+    // 3. Generate the zip and trigger download
+    zip.generateAsync({ type: 'blob' }).then((content) => {
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'wayfinder-export.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
   },
   importData: function (data: string): Promise<number> {
     throw new Error('Function not implemented.');
   }
 }
 
-const browserTaskProvider: ITaskProvider = { ...core, ...taskCRUD, ...taskRelations, ...advancedFeatures };
+const browserTaskProvider: ITaskProvider & ITaskExporter = { ...core, ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 export default browserTaskProvider;
 
 //#region Utilities

@@ -89,7 +89,7 @@ class DevStore {
 					return await browserTaskProvider.get();
 				case 'supabase':
 					return await supabaseTaskProvider.get();
-				// native would go here when implemented
+				case 'native': throw new Error("Native task provider not implemented");
 			}
 		}
 		return defaultProvider;

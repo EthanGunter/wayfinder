@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import type { LocalUserProxy } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
-	import SearchBar from './SearchBar.svelte';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
 	import UserAccountMenu from './UserAccountMenu.svelte';
+
+	interface Props {
+		user: LocalUserProxy;
+	}
+	const { user }: Props = $props();
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -46,7 +51,7 @@
 			{/if}
 		{/snippet}
 	</SearchBar> -->
-	<UserAccountMenu />
+	<UserAccountMenu {user} />
 </div>
 
 <style lang="scss">
