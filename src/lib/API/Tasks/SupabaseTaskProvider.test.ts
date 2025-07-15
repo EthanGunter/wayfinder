@@ -1,4 +1,4 @@
-import taskProvider from './SupabaseTaskProvider';
+import supabaseTaskProvider from './SupabaseTaskProvider';
 import type { ITaskProvider } from './types';
 import type { TestIStorageImplementation } from './ITaskProvider.test';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const SupabaseITaskProviderTest: TestIStorageImplementation = {
   name: "Supabase",
   getInstance: async () => {
-    return await taskProvider.get();
+    return await supabaseTaskProvider.get();
   },
   afterall: async (provider: ITaskProvider) => {
     // Clean up after tests

@@ -4,12 +4,13 @@
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
-	import api from '$lib/API/Tasks';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
-	import { redirect } from '@sveltejs/kit';
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
+
+	const { data } = $props();
+	const api = data.taskAPI;
 
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);

@@ -34,7 +34,7 @@ const core: IProvider<ITaskProvider> = {
         db.createObjectStore('index', { keyPath: 'id' });
       },
     });
-    return taskProvider;
+    return browserTaskProvider;
   },
 
   close: async function (): Promise<void> {
@@ -54,7 +54,7 @@ const taskCRUD: ITaskCRUDProvider = {
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
 
-    updateRelationships(taskProvider, null, preparedTask);
+    updateRelationships(browserTaskProvider, null, preparedTask);
 
     return (await writeTaskToDB(preparedTask)).match(
       success => {
@@ -100,7 +100,7 @@ const taskCRUD: ITaskCRUDProvider = {
       async task => {
         const updated: Task = new Task({ ...task, ...updates, last_edit: new Date().toISOString() });
 
-        updateRelationships(taskProvider, task, updated);
+        updateRelationships(browserTaskProvider, task, updated);
 
         return (await writeTaskToDB(updated)).match(
           () => ok(updated),
@@ -133,7 +133,7 @@ const taskCRUD: ITaskCRUDProvider = {
         // https://github.com/LZS911/vite-plugin-conditional-compile
         throw new IOError("Delete", key, e);
       }
-      updateRelationships(taskProvider, task, null);
+      updateRelationships(browserTaskProvider, task, null);
       return ok();
     }
     else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"))
@@ -271,8 +271,8 @@ const dataExporter: ITaskExporter = {
   }
 }
 
-const taskProvider: ITaskProvider = { ...core, ...taskCRUD, ...taskRelations, ...advancedFeatures };
-export default taskProvider;
+const browserTaskProvider: ITaskProvider = { ...core, ...taskCRUD, ...taskRelations, ...advancedFeatures };
+export default browserTaskProvider;
 
 //#region Utilities
 

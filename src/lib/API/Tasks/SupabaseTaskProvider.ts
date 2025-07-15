@@ -8,18 +8,19 @@ import type {
   ITaskExporter,
   IAdvancedTaskProvider,
   ITaskRelationProvider,
-  CreateTaskDTO
+  CreateTaskDTO,
+  PopulatedTaskDTO
 } from "./types";
 import { isTask, Task, TaskStatus, type TaskData } from "./Task";
 import supabase from "../SupabaseClient";
 import { updateRelationships } from ".";
 
-let client: SupabaseClient = supabase;
+let client = supabase;
 
 
 /** No-op for Supabase */
 const core: IProvider<ITaskProvider> = {
-  get: async function (): Promise<ITaskProvider> { return taskProvider; },
+  get: async function (): Promise<ITaskProvider> { return supabaseTaskProvider; },
   close: async function (): Promise<void> { }
 }
 
@@ -31,13 +32,26 @@ const taskCRUD: ITaskCRUDProvider = {
     if (error) return err(new IOError(`Failed to create ${createDetails.title}`, error, task));
 
     if (task.parents.length > 0 || task.children.length > 0) {
-      updateRelationships(taskProvider, { oldTask: null, newTask: new Task({ id: data.id, ...task }) });
+      updateRelationships(supabaseTaskProvider, { oldTask: null, newTask: new Task({ id: data.id, ...task }) });
     }
 
     // Return the generated ID
     return ok(new Task(data));
   },
 
+  createTasks: async function (createDetails: CreateTaskDTO[]): Promise<Result<Task[], Err>> {
+    const tasks = createDetails.map(t => Task.populateDTO(t));
+
+    const { data, error } = await client.from('tasks').insert(tasks).select('*');
+    if (error) return err(new IOError(`Failed to create ${createDetails.map(t => t.title).join(', ')}`, error, tasks));
+
+    const updatesWithRelations = data.filter(t => t.parents.length > 0 || t.children.length > 0);
+
+    updateRelationships(supabaseTaskProvider, updatesWithRelations.map(task => ({ oldTask: null, newTask: new Task(task) })));
+
+    // Return the generated ID
+    return ok(data.map(t => new Task(t)));
+  },
   readTask: async function (id: string): Promise<Result<Task, NotFoundError | Err>> {
     const { data, error } = await client.from('tasks').select().eq('id', id).single();
     if (!data) return err(new NotFoundError(id, 'Task'));
@@ -72,7 +86,7 @@ const taskCRUD: ITaskCRUDProvider = {
       .single();
     if (error || !data) return err(new IOError(`Failed to update ${task.title}`, error, updates));
 
-    updateRelationships(taskProvider, { oldTask: task, newTask: new Task(data) });
+    updateRelationships(supabaseTaskProvider, { oldTask: task, newTask: new Task(data) });
 
     return ok(new Task(data));
   },
@@ -125,7 +139,7 @@ const taskCRUD: ITaskCRUDProvider = {
       newTask: updatedTasks[index]
     }));
 
-    await updateRelationships(taskProvider, relationshipUpdates);
+    await updateRelationships(supabaseTaskProvider, relationshipUpdates);
 
     return ok(updatedTasks);
   },
@@ -140,7 +154,24 @@ const taskCRUD: ITaskCRUDProvider = {
     if (deleteRes.error) return err(new IOError(`Failed to delete ${id}`, deleteRes.error));
     else if (deleteRes.count === 0) return err(new NotFoundError(id, 'task'));
 
-    updateRelationships(taskProvider, { oldTask: new Task(deleteRes.data), newTask: null });
+    updateRelationships(supabaseTaskProvider, { oldTask: new Task(deleteRes.data), newTask: null });
+
+    return ok();
+  },
+
+  /**
+   * @param recursive NOT IMPLEMENTED
+   */
+  deleteTasks: async function (list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>> {
+    for (const item of list) {
+      if (item.recursive) throw new NotImplementedError("Recursive delete for SupabaseTaskProvider.deleteTask is not implemented yet");
+    }
+
+    let deleteRes = await client.from('tasks').delete().in('id', list.map(x => x.id)).select();
+    if (deleteRes.error) return err(new IOError(`Failed to delete ${list.map(x => x.id).join(', ')}`, deleteRes.error));
+    else if (deleteRes.count === 0) return err(new NotFoundError(list.map(x => x.id).join(', '), 'task'));
+
+    updateRelationships(supabaseTaskProvider, deleteRes.data.map(task => ({ oldTask: new Task(task), newTask: null })));
 
     return ok();
   }
@@ -281,5 +312,5 @@ const dataExporter: ITaskExporter = {
   }
 }
 
-const taskProvider: ITaskProvider = { ...core, ...taskCRUD, ...taskRelations, ...advancedFeatures };
-export default taskProvider;
+const supabaseTaskProvider: ITaskProvider = { ...core, ...taskCRUD, ...taskRelations, ...advancedFeatures };
+export default supabaseTaskProvider;

@@ -74,7 +74,7 @@
 
 <style lang="scss">
 	.bug-report-menu {
-		background: none;
+		// background: none;
 		border: none;
 		font-size: 1.5em;
 		cursor: pointer;
@@ -82,7 +82,7 @@
 		border-radius: 4px;
 
 		&:hover {
-			background-color: rgba(255, 255, 255, 0.1);
+			// background-color: rgba(255, 255, 255, 0.1);
 		}
 	}
 

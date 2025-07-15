@@ -39,7 +39,7 @@ export interface ITaskCRUDProvider {
    */
   // TODO-test: sets up relationships if parent(s) or children are populated
   createTask(task: CreateTaskDTO): Promise<Result<Task, Err>>;
-  // createTasks(tasks: CreateTaskDTO[]): Promise<Result<Task[], Err>>; // TODO Implement plural operation
+  createTasks(tasks: CreateTaskDTO[]): Promise<Result<Task[], Err>>; // TODO Implement plural operation
   /**
    * Fetches a task's data by its ID
    */
@@ -50,8 +50,9 @@ export interface ITaskCRUDProvider {
    */
   updateTask(task: string | Task, updates: Partial<Task>): Promise<Result<Task, Err>>;
   updateTasks(list: { task: string | Task, updates: Partial<Task> }[]): Promise<Result<Task[], Err>>; // TODO Implement plural operation
+  
   deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
-  // deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>; // TODO Implement plural operation
+  deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>; // TODO Implement plural operation
 }
 
 export interface ITaskRelationProvider {

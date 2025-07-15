@@ -1,18 +1,9 @@
-// TODO Task API's need to take auth into consideration
-
-import SupabaseTaskProvider from './SupabaseTaskProvider';
-import BrowserTaskProvider from './BrowserTaskProvider';
+// Supabase's RLS handles this: TODO Task API's need to take auth into consideration
 import { Task } from './Task';
 import type { ITaskProvider } from './types';
 
 export * from './types';
 export * from './Task'
-
-// TODO TaskProvider should be moved to a +layout file as passed to $data
-// so the most appropriate provider can be determined by the app
-const API: ITaskProvider = await SupabaseTaskProvider.get();
-export default API;
-
 
 export interface RelationshipUpdate {
     oldTask: Task | null;

@@ -29,7 +29,7 @@ export default class SupabaseAuth implements IAuthProvider {
                 id: user.id,
                 email: user.email,
                 displayName: user.user_metadata.displayName,
-                avatarUrl: user.user_metadata.avatarUrl
+                avatarUrl: user.user_metadata.avatarUrl,
             };
         }
     }

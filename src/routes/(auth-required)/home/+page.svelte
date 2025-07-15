@@ -4,11 +4,12 @@
 	import { goto } from '$app/navigation';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
-	import api from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
-	import type { ITaskProvider } from '$lib/API/Tasks/';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
+
+	const { data } = $props();
+	const api = data.taskAPI;
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
@@ -104,6 +105,7 @@
 
 <AppHeader />
 <div class="page page-todays-tasks">
+	Logged in as {data.user.displayName}
 	<div
 		id="todays-tasks-list"
 		use:droppable={{

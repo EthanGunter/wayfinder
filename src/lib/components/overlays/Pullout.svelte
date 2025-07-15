@@ -1,4 +1,5 @@
 <script lang="ts">
+	// TODO convert to using OverlayElement
 	import { mount, onMount, type Snippet } from 'svelte';
 	interface Props {
 		open: boolean; // Whether the menu is open
