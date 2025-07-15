@@ -4,17 +4,20 @@
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
-	import API from '$lib/API/Tasks';
+	import api from '$lib/API/Tasks';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { redirect } from '@sveltejs/kit';
 	import { goto } from '$app/navigation';
+	import debounce from '$lib/debounce';
 
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
 	let parents = $state<Task[]>([]);
 
-	//TODO: Implement real query param reading and task fetching
+	const debouncedUpdate = debounce(api.updateTask, 500);
+
+	// TODO: Implement real query param reading and task fetching
 	$effect(() => {
 		const id = page.url.searchParams.get('id');
 		if (id) fetchCurrentTask(id);
@@ -25,10 +28,10 @@
 	});
 
 	async function fetchCurrentTask(task: string | Task) {
-		const api = await API;
+		// const api = await api;
 
 		if (typeof task === 'string') {
-			//TODO: Fetch currentTask, children, and parents based on id
+			// TODO: Fetch currentTask, children, and parents based on id
 			(await api.readTask(task)).match(
 				(task) => {
 					currentTask = task;
@@ -59,7 +62,7 @@
 		);
 	}
 	async function fetchRootTasks() {
-		const api = await API;
+		// const api = await api;
 
 		(await api.getRootTasks()).match(
 			(roots) => {
@@ -72,7 +75,7 @@
 	}
 
 	async function addTask() {
-		const api = await API;
+		// const api = await api;
 		if (currentTask) {
 			(await api.createTask({ title: 'New Subtask', parents: [currentTask.id] })).match(
 				(newTask) => {
@@ -95,28 +98,27 @@
 	}
 
 	async function onTaskChange(update: Partial<Task>) {
-		// TODO: Do some debouncing to save on server calls
-		API.then((api) => {
-			if (currentTask) {
-				api.updateTask(currentTask.id, update);
-			}
-		});
+		// api.then((api) => {
+		if (currentTask) {
+			debouncedUpdate(currentTask.id, update);
+		}
+		// });
 	}
 
 	function onListOrderChanged(items: Task[]) {
-		API.then((api) => {
-			for (let index = 0; index < items.length; index++) {
-				const item = items[index];
+		// api.then((api) => {
+		for (let index = 0; index < items.length; index++) {
+			const item = items[index];
 
-				api.updateTask(item.id, { priority: items.length - index });
-			}
-		});
+			api.updateTask(item.id, { priority: items.length - index });
+		}
+		// });
 	}
 
 	async function handleTaskDelete(task: Task) {
 		// Remove the task from the visual list
 		children = children.filter((x) => x.id !== task.id);
-		const api = await API;
+		// const api = await api;
 		if ((await api.deleteTask(task.id)).isErr()) {
 			// Something went wrong, add the item back to the list
 		}

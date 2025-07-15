@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskListItem from '$lib/components/TaskListItem.svelte';
-	import API from '$lib/API/Tasks';
+	import api from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
 	import type { ITaskProvider } from '$lib/API/Tasks/';
 	import AppHeader from '$lib/components/AppHeader.svelte';
@@ -12,16 +12,12 @@
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
-	let draggedTask = $state<Task | null>(null);
-	let api = $state<ITaskProvider>();
 
 	onMount(async () => {
-		api = await API;
 		refreshTasks();
 	});
 
 	function refreshTasks() {
-		if (!api) return;
 		api.getTodaysTasks().then((tasks) =>
 			tasks.match(
 				(data) => {
@@ -45,7 +41,6 @@
 	}
 
 	function handleTodaysTaskDrop(e: DropEvent<Task>) {
-		if (!api) return;
 		const task = e.detail.data;
 		if (!task) return;
 
@@ -56,7 +51,6 @@
 	}
 
 	function handleSuggestedTaskDrop(e: DropEvent<Task>) {
-		if (!api) return;
 		const task = e.detail.data;
 		if (!task) return;
 
@@ -65,7 +59,6 @@
 	}
 
 	function todaysTaskChange(task: Task, changes: Partial<Task>) {
-		if (!api) return;
 		//TODO: Implement task change logic
 		if (changes.completed) {
 			api.updateTask(task.id, { todays_task: false });
@@ -74,7 +67,6 @@
 	}
 
 	function suggestedTaskChange(task: Task, changes: Partial<Task>) {
-		if (!api) return;
 		//TODO: Implement suggested task change logic
 		if (changes.completed) {
 			suggestedTasks = suggestedTasks.filter((t) => t.id !== task.id);
@@ -86,7 +78,7 @@
 
 		//TODO: Implement create new project logic
 		let newTaskResult = await api.createTask({
-			title: 'New Task',
+			title: 'New Project',
 			status: TaskStatus.incomplete,
 			priority: 0
 		});
@@ -101,10 +93,6 @@
 		// alert('Start project (stub)');
 	}
 
-	function navigateToTask(task: Task) {
-		goto(`/tasks/?id=${task.id}`);
-	}
-
 	// Filter completed tasks and duplicates
 	let filteredDaysTasks = $derived(
 		todaysList.filter((t) => !t.completed).sort((a, b) => (a.title < b.title ? -1 : 1))
@@ -116,9 +104,6 @@
 
 <AppHeader />
 <div class="page page-todays-tasks">
-	<!-- TODO: <HomepageTutorial /> -->
-	<!-- TODO: <TasksTutorial /> -->
-
 	<div
 		id="todays-tasks-list"
 		use:droppable={{

@@ -27,7 +27,7 @@
 
 <div class={'app-header'}>
 	<AppPulloutMenu />
-	<SearchBar
+	<!-- <SearchBar
 		handleQuery={search}
 		onItemSelected={gotoTask}
 		placeholder="Search tasks..."
@@ -45,7 +45,7 @@
 				</div>
 			{/if}
 		{/snippet}
-	</SearchBar>
+	</SearchBar> -->
 	<UserAccountMenu />
 </div>
 

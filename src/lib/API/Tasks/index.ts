@@ -10,8 +10,8 @@ export * from './Task'
 
 // TODO TaskProvider should be moved to a +layout file as passed to $data
 // so the most appropriate provider can be determined by the app
-const APIPromise: Promise<ITaskProvider> = SupabaseTaskProvider.get();
-export default APIPromise;
+const API: ITaskProvider = await SupabaseTaskProvider.get();
+export default API;
 
 
 export interface RelationshipUpdate {
