@@ -1,5 +1,5 @@
-import SupabaseAuth from '$lib/API/Auth/SupabaseAuth';
 import localAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
+import SupabaseAuth from '$lib/API/Auth/SupabaseAuth';
 import type { StoredUser } from '$lib/API/Auth/types';
 import type { ITaskProvider } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
@@ -19,7 +19,7 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
     }
 
     const dbAuth = new SupabaseAuth();
-    let remoteUser = await dbAuth.getCurrentUser();
+    let remoteUser = currentUser.is_synced && await dbAuth.getCurrentUser();
 
     let user: StoredUser;
     let taskAPI: ITaskProvider;

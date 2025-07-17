@@ -108,7 +108,7 @@
 						<div class="info-display">
 							<div class="info-item">
 								<label>Display Name</label>
-								<p>{user.display_name}</p>
+								<p>{user.display_name ?? 'Anonymous'}</p>
 							</div>
 							<div class="info-item">
 								<label>User ID</label>
@@ -131,7 +131,13 @@
 						>
 							<div class="form-group">
 								<label for="displayName">Display Name</label>
-								<input id="displayName" type="text" bind:value={editedUser.display_name} required />
+								<input
+									id="displayName"
+									placeholder="Anonymous"
+									type="text"
+									bind:value={editedUser.display_name}
+									required
+								/>
 							</div>
 							<div class="form-actions">
 								<button type="submit" class="btn-primary" disabled={isSaving}>

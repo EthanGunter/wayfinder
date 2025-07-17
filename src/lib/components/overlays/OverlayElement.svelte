@@ -5,6 +5,7 @@
 	interface Props extends HTMLAttributes<HTMLDivElement> {
 		open: boolean;
 		dismissable?: boolean;
+		bgStyle?: string;
 		popoverEl?: HTMLDivElement;
 		onopen?: () => void;
 		onclose?: () => void;
@@ -14,6 +15,7 @@
 		popoverEl = $bindable(),
 		open = $bindable(),
 		dismissable = true,
+		bgStyle,
 		onopen,
 		onclose,
 		children,
@@ -77,7 +79,13 @@
 	});
 </script>
 
-<div bind:this={backdropEl} popover="manual" class="overlay-backdrop" onclick={handleClick}></div>
+<div
+	bind:this={backdropEl}
+	style={bgStyle}
+	popover="manual"
+	class="overlay-backdrop"
+	onclick={handleClick}
+></div>
 <div
 	bind:this={popoverEl}
 	class="overlay"

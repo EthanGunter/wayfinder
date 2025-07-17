@@ -202,7 +202,7 @@ function assertDB(db: IDBPDatabase<AuthDB> | null): asserts db is IDBPDatabase<A
 function toLocalUserProxy(user: StoredUser): StoredUser {
   return {
     id: user.id,
-    display_name: user.display_name || '',
+    display_name: user.display_name,
     avatar_url: user.avatar_url,
     is_synced: user.is_synced,
     last_active: new Date(user.last_active)

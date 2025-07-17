@@ -3,7 +3,7 @@
 	import type { StoredUser } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
-	import UserAccountMenu from './UserAccountMenu.svelte';
+	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
 
 	interface Props {
 		user: StoredUser;
@@ -31,7 +31,7 @@
 </script>
 
 <div class={'app-header'}>
-	<AppPulloutMenu />
+	<AppPulloutMenu {user} />
 	<!-- <SearchBar
 		handleQuery={search}
 		onItemSelected={gotoTask}

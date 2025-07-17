@@ -109,7 +109,7 @@
 
 <AppHeader user={data.user} />
 <div class="page page-todays-tasks">
-	Logged in as {data.user.display_name}
+	Logged in as {data.user.display_name ?? 'Anonymous'}
 	<div
 		id="todays-tasks-list"
 		use:droppable={{

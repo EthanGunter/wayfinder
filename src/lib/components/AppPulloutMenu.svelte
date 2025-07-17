@@ -6,7 +6,7 @@
 	import provider from '$lib/API/Tasks/BrowserTaskProvider';
 	import { devStore } from '$lib/stores/devStore.svelte';
 	import BugReportModal from './BugReportModal.svelte';
-	import PulloutBlock from './overlays/Pullout.svelte';
+	import Pullout from './overlays/Pullout.svelte';
 
 	interface Props {
 		user: StoredUser;
@@ -18,7 +18,7 @@
 
 <button onclick={() => (showPullout = true)} aria-label="Open menu">☰ menu</button>
 
-<PulloutBlock bind:open={showPullout} placement="left">
+<Pullout bind:open={showPullout} placement="left">
 	<h1>Settings</h1>
 	<BugReportModal onSubmit={() => (showPullout = false)}>Submit a bug</BugReportModal>
 	{#if DEVELOPMENT}
@@ -57,7 +57,7 @@
 			{/if}
 		</div>
 	{/if}
-</PulloutBlock>
+</Pullout>
 
 <style lang="scss">
 	#devmode-block {
