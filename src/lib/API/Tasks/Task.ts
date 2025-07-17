@@ -5,6 +5,7 @@ import type { CreateTaskDTO, PopulatedTaskDTO } from "./types";
 
 export interface TaskData {
     id: string,
+    user_id: string,
     // filepath?: string // TODO I'd eventually like to make Wayfinder local-plain-text-first, but that's a future feature
     title: string,
     content?: string,
@@ -43,6 +44,7 @@ export function isTask(value: any): value is Task {
 
 export class Task implements TaskData {
     id: string;
+    user_id: string;
     filepath?: string;
     title: string;
     content?: string;
@@ -60,6 +62,7 @@ export class Task implements TaskData {
 
     constructor({
         id,
+        user_id,
         filepath,
         title,
         content,
@@ -72,6 +75,7 @@ export class Task implements TaskData {
         children = []
     }: CreateTaskDTO) {
         this.id = id ?? "NO-ID";
+        this.user_id = user_id;
         this.title = title;
         this.content = content;
         this.filepath = filepath ?? `${title}.md`;
@@ -86,6 +90,7 @@ export class Task implements TaskData {
 
     static populateDTO(dto: CreateTaskDTO): PopulatedTaskDTO {
         return {
+            user_id: dto.user_id,
             priority: dto.priority ?? 0,
             title: dto.title,
             content: dto.content,

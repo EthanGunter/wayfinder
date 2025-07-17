@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { describe, it, expect, beforeEach } from 'vitest';
-import browserTaskProvider, { db, updateIndexFromFile } from './BrowserTaskProvider';
+import provider, { db, updateIndexFromFile } from './BrowserTaskProvider';
 import { NotFoundError } from '$lib/Errors';
 import { TaskStatus, type TaskData } from './Task';
 import type { ITaskProvider } from './types';
@@ -9,7 +9,7 @@ import type { TestIStorageImplementation } from './ITaskProvider.test';
 export const BrowserITaskProviderTest: TestIStorageImplementation = {
   name: "Browser",
   getInstance: async () => {
-    return await browserTaskProvider.get();
+    return await provider.init();
   },
   beforeeach: async (provider: ITaskProvider) => {
     if (db) {
@@ -41,7 +41,7 @@ describe('Unit', () => {
   beforeEach(async () => {
     if (db) {
       // Clear all stores before each test
-      provider = await browserTaskProvider.get();
+      provider = await provider.init();
       await db.clear('files');
       await db.clear('index');
     } else throw new Error("DB not available");

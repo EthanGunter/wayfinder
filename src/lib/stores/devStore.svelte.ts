@@ -1,6 +1,6 @@
 import type { ITaskProvider } from '$lib/API/Tasks';
-import browserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
-import supabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
+import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
+import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 
 // Define available task providers
 export const TASK_PROVIDER_OVERRIDES = {
@@ -86,9 +86,9 @@ class DevStore {
 		if (this.devMode && this.taskProviderOverride !== 'none') {
 			switch (this.taskProviderOverride) {
 				case 'browser':
-					return await browserTaskProvider.get();
+					return await BrowserTaskProvider.get();
 				case 'supabase':
-					return await supabaseTaskProvider.get();
+					return await SupabaseTaskProvider.get();
 				case 'native': throw new Error("Native task provider not implemented");
 			}
 		}

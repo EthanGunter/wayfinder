@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { dev as DEVELOPMENT } from '$app/environment';
-	import { invalidate, invalidateAll } from '$app/navigation';
-	import { page } from '$app/state';
-	import { getUser } from '$lib/API/Auth';
+	import { invalidateAll } from '$app/navigation';
+	import type { StoredUser } from '$lib/API/Auth/types';
 	import supabase from '$lib/API/SupabaseClient';
-	import browserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
+	import provider from '$lib/API/Tasks/BrowserTaskProvider';
 	import { devStore } from '$lib/stores/devStore.svelte';
 	import BugReportModal from './BugReportModal.svelte';
 	import PulloutBlock from './overlays/Pullout.svelte';
+
+	interface Props {
+		user: StoredUser;
+	}
+	const { user }: Props = $props();
 
 	let showPullout = $state(false);
 </script>
@@ -24,9 +28,7 @@
 				<input id="dev-mode" type="checkbox" bind:checked={devStore.devMode} />
 			</h2>
 			<span>
-				<button onclick={async () => (await browserTaskProvider.get()).exportData()}>
-					Export Data
-				</button>
+				<button onclick={async () => (await provider.get()).exportData()}> Export Data </button>
 			</span>
 			{#if devStore.devMode}
 				<label for="task-provider-override">Task API Override</label>
@@ -46,9 +48,8 @@
 				<button
 					class="alert"
 					onclick={async () => {
-						const user = await getUser();
 						if (!user) throw new Error(`No user could be found to delete all tasks...`);
-						await supabase.from('tasks').delete().eq('user_id', user.id); // basically WHERE true
+						await supabase.from(TASK_STORE_NAME).delete().eq('user_id', user.id); // basically WHERE true
 						showPullout = false;
 						window.location.reload();
 					}}>Delete all tasks from Supabase</button

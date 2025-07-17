@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { LocalUserProxy } from '$lib/API/Auth/types';
+	import type { StoredUser } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
 	import UserAccountMenu from './UserAccountMenu.svelte';
 
 	interface Props {
-		user: LocalUserProxy;
+		user: StoredUser;
 	}
 	const { user }: Props = $props();
 

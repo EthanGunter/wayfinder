@@ -1,7 +1,7 @@
 import supabase from '$lib/API/SupabaseClient'
-import type { IAuthProvider, SignInCredentials, SignOutOptions, SignUpDetails, UnsubscribeFn, User } from './types';
+import type { SignInCredentials, SignOutOptions, SignUpDetails, UnsubscribeFn, User } from './types';
 
-export default class SupabaseAuth implements IAuthProvider {
+export default class SupabaseAuth {
     constructor() {
         const { data } = supabase.auth.onAuthStateChange((evt, sesh) => {
             switch (evt) {
@@ -27,9 +27,8 @@ export default class SupabaseAuth implements IAuthProvider {
             const user = userRes.data.user;
             return {
                 id: user.id,
-                email: user.email,
-                displayName: user.user_metadata.displayName,
-                avatarUrl: user.user_metadata.avatarUrl,
+                display_name: user.user_metadata.displayName,
+                avatar_url: user.user_metadata.avatarUrl,
             };
         }
     }

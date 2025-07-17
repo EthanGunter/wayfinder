@@ -12,6 +12,7 @@
 
 	const { data } = $props();
 	const api = data.taskAPI;
+	const user = data.user;
 
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
@@ -39,6 +40,7 @@
 				switch (result.error.type) {
 					case ErrorTypes.NotFoundError:
 						goto('/tasks');
+						break;
 					default:
 						result.error.logError();
 				}
@@ -85,7 +87,9 @@
 	async function addTask() {
 		// const api = await api;
 		if (currentTask) {
-			(await api.createTask({ title: 'New Subtask', parents: [currentTask.id] })).match(
+			(
+				await api.createTask({ user_id: user.id, title: 'New Subtask', parents: [currentTask.id] })
+			).match(
 				(newTask) => {
 					fetchCurrentTask(newTask);
 				},
@@ -94,7 +98,7 @@
 				}
 			);
 		} else {
-			(await api.createTask({ title: 'New Project' })).match(
+			(await api.createTask({ user_id: user.id, title: 'New Project' })).match(
 				(newTask) => {
 					fetchCurrentTask(newTask);
 				},

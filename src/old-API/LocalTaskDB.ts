@@ -11,7 +11,7 @@ class LocalTaskDB extends Dexie {
     todaysTasks!: Table<{ id: string, priority: number }>;
 
     constructor(version: number) {
-        super('tasks');
+        super(TASK_STORE_NAME);
         this.version(version).stores({
             tasks: `id, title, completed, *parentIds`, // search keys // TODO would be a good idea to use nameof here https://stackoverflow.com/questions/50470025/nameof-keyword-in-typescript
             todaysTasks: `id, priority`

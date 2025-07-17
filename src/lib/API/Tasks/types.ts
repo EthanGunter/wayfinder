@@ -7,7 +7,6 @@ import type { Task } from "./Task";
 // All fields in the Omit<> become optional
 export type CreateTaskDTO = Partial<Task> & Omit<Task,
   | "id"
-  | "filepath"
   | "created"
   | "last_edit"
   | "completed"
@@ -15,6 +14,7 @@ export type CreateTaskDTO = Partial<Task> & Omit<Task,
   | "status"
   | "parents"
   | "children"
+// | "filepath"
 >
 export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed">
 
@@ -26,7 +26,7 @@ export interface IProvider<T> {
 
 // TODO narrow error types once concrete classes are implemented
 // TODO break into more specific interfaces
-export type ITaskProvider = IProvider<ITaskProvider> & ITaskCRUDProvider & ITaskRelationProvider & IAdvancedTaskProvider
+export type ITaskProvider = ITaskCRUDProvider & ITaskRelationProvider & IAdvancedTaskProvider
 
 // TODO Should plural functions return an array of errors?
 /**

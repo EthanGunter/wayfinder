@@ -12,6 +12,7 @@
 
 	const { data } = $props();
 	const api = data.taskAPI;
+	const user = data.user;
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
@@ -81,13 +82,14 @@
 
 		//TODO: Implement create new project logic
 		let newTaskResult = await api.createTask({
+			user_id: user.id,
 			title: 'New Project',
 			status: TaskStatus.incomplete,
 			priority: 0
 		});
 		newTaskResult.match(
 			(newTask) => {
-				goto(`/tasks/?id=${newTask}`);
+				goto(`/tasks/?id=${newTask.id}`);
 			},
 			(err) => {
 				err.logError();
@@ -107,7 +109,7 @@
 
 <AppHeader user={data.user} />
 <div class="page page-todays-tasks">
-	Logged in as {data.user.displayName}
+	Logged in as {data.user.display_name}
 	<div
 		id="todays-tasks-list"
 		use:droppable={{

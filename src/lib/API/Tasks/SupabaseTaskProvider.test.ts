@@ -1,4 +1,4 @@
-import supabaseTaskProvider from './SupabaseTaskProvider';
+import provider from './SupabaseTaskProvider';
 import type { ITaskProvider } from './types';
 import type { TestIStorageImplementation } from './ITaskProvider.test';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -6,12 +6,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export const SupabaseITaskProviderTest: TestIStorageImplementation = {
   name: "Supabase",
   getInstance: async () => {
-    return await supabaseTaskProvider.get();
+    return await provider.init();
   },
   afterall: async (provider: ITaskProvider) => {
     // Clean up after tests
     const { client } = (provider as any as { client: SupabaseClient });
-    await client.from('tasks').delete().not('id', 'is', null);
+    await client.from(TASK_STORE_NAME).delete().not('id', 'is', null);
     await provider.close();
   }
 }
@@ -29,7 +29,7 @@ export const SupabaseITaskProviderTest: TestIStorageImplementation = {
 //   afterAll(async () => {
 //     // Clean up after tests
 //     const { client } = (storage as any as { client: SupabaseClient });
-//     await client.from('tasks').delete().not('id', 'is', null);
+//     await client.from(TASK_STORE_NAME).delete().not('id', 'is', null);
 //     await storage.close();
 //   })
 // });

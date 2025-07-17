@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { invalidate } from '$app/navigation';
-	import authProvider from '$lib/API/Auth';
 	import { onDestroy, onMount } from 'svelte';
 
+	const { data, children } = $props();
 	let unsubscribe: Function;
 
 	onMount(() => {
-		unsubscribe = authProvider.onAuthStateChanged(() => {
+		unsubscribe = data.onAuthStateChanged(() => {
 			// Forces the load function of ./+layout.ts to reload the user with updated state
 			invalidate('');
 		});
@@ -16,4 +16,4 @@
 	});
 </script>
 
-<slot />
+{@render children()}

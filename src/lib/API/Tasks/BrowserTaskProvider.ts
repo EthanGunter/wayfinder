@@ -6,43 +6,7 @@ import { v4 } from 'uuid';
 import { Task } from './Task';
 import { updateRelationships } from '.';
 import JSZip from 'jszip';
-
-interface MyDB extends DBSchema {
-  // files: {
-  //   key: string;
-  //   value: { filepath: string; content: string };
-  // };
-  index: {
-    key: string;
-    value: Task;
-  };
-}
-
-// function TryGetIDFromFilepath(key: string): string {
-//   if (key.endsWith(".md")) {
-//     return key.split("/").slice(-1)[0].split(".")[0];
-//   }
-//   return key;
-// }
-
-let db: IDBPDatabase<MyDB> | null;
-
-const core: IProvider<ITaskProvider> = {
-  get: async function (): Promise<ITaskProvider> {
-    db = await openDB<MyDB>('wayfinder', 1, {
-      upgrade(db) {
-        // db.createObjectStore('files', { keyPath: 'filepath' });
-        db.createObjectStore('index', { keyPath: 'id' });
-      },
-    });
-    return browserTaskProvider;
-  },
-
-  close: async function (): Promise<void> {
-    db?.close();
-    db = null;
-  }
-}
+import { TASK_STORE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
 
 
 const taskCRUD: ITaskCRUDProvider = {
@@ -56,9 +20,9 @@ const taskCRUD: ITaskCRUDProvider = {
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
 
-    updateRelationships(browserTaskProvider, { oldTask: null, newTask: preparedTask });
+    updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
-    await db.put('index', preparedTask);
+    await db.put(TASK_STORE_NAME, preparedTask);
     return ok(new Task(preparedTask));
   },
 
@@ -69,7 +33,7 @@ const taskCRUD: ITaskCRUDProvider = {
   createTasks: async function (tasks: CreateTaskDTO[]): Promise<Result<Task[], IOError | ParseError>> {
     assertDB(db);
     const createdTasks: Task[] = [];
-    const transaction = db.transaction('index', 'readwrite');
+    const transaction = db.transaction(TASK_STORE_NAME, 'readwrite');
 
     try {
       for (const taskDTO of tasks) {
@@ -77,7 +41,7 @@ const taskCRUD: ITaskCRUDProvider = {
         preparedTask.created = new Date().toISOString();
         preparedTask.id = v4();
 
-        updateRelationships(browserTaskProvider, { oldTask: null, newTask: preparedTask });
+        updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
         await transaction.store.put(preparedTask);
         createdTasks.push(new Task(preparedTask));
@@ -108,7 +72,7 @@ const taskCRUD: ITaskCRUDProvider = {
     //   return Task.fromMarkdown(file.content, key);
     // } else {
     // Task ID
-    const task = await db.get('index', id);
+    const task = await db.get(TASK_STORE_NAME, id);
     if (!task) {
       return err(new NotFoundError(id, 'Task').withTrace(1));
     }
@@ -123,7 +87,7 @@ const taskCRUD: ITaskCRUDProvider = {
 
     try {
       for (const id of ids) {
-        const task = await db.get('index', id);
+        const task = await db.get(TASK_STORE_NAME, id);
         if (task) {
           tasks.push(task);
         } else {
@@ -132,7 +96,7 @@ const taskCRUD: ITaskCRUDProvider = {
       }
 
       if (notFoundIds.length > 0) {
-        return err(new NotFoundError(notFoundIds.join(', '), 'Tasks').withTrace(1));
+        return err(new NotFoundError(notFoundIds.join(', '), TASK_STORE_NAME).withTrace(1));
       }
 
       return ok(tasks);
@@ -153,9 +117,9 @@ const taskCRUD: ITaskCRUDProvider = {
         assertDB(db);
         const updated: Task = new Task({ ...task, ...updates, last_edit: new Date().toISOString() });
 
-        updateRelationships(browserTaskProvider, { oldTask: task, newTask: updated });
+        updateRelationships(api, { oldTask: task, newTask: updated });
 
-        await db.put('index', updated);
+        await db.put(TASK_STORE_NAME, updated);
         return ok(updated);
       },
       error => err(error)
@@ -165,7 +129,7 @@ const taskCRUD: ITaskCRUDProvider = {
   updateTasks: async function (list: { task: string | Task; updates: Partial<Task>; }[]): Promise<Result<Task[], Err>> {
     assertDB(db);
     const updatedTasks: Task[] = [];
-    const transaction = db.transaction('index', 'readwrite');
+    const transaction = db.transaction(TASK_STORE_NAME, 'readwrite');
 
     try {
       for (const { task, updates } of list) {
@@ -188,7 +152,7 @@ const taskCRUD: ITaskCRUDProvider = {
           last_edit: new Date().toISOString()
         });
 
-        updateRelationships(browserTaskProvider, { oldTask: existingTask, newTask: updated });
+        updateRelationships(api, { oldTask: existingTask, newTask: updated });
 
         await transaction.store.put(updated);
         updatedTasks.push(updated);
@@ -210,17 +174,17 @@ const taskCRUD: ITaskCRUDProvider = {
     assertDB(db);
     if (recursive) throw new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)");
 
-    const task = await db.get('index', id);
+    const task = await db.get(TASK_STORE_NAME, id);
 
     if (task && task.filepath) {
       try {
-        await db.delete('index', id);
+        await db.delete(TASK_STORE_NAME, id);
       } catch (e) {
         // TODO Throw an error during development/testing ONLY
         // https://github.com/LZS911/vite-plugin-conditional-compile
         throw new IOError("Delete", id, e);
       }
-      updateRelationships(browserTaskProvider, { oldTask: task, newTask: null });
+      updateRelationships(api, { oldTask: task, newTask: null });
       return ok();
     }
     else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"));
@@ -234,7 +198,7 @@ const taskCRUD: ITaskCRUDProvider = {
       return err(new NotImplementedError("BrowserTaskStorage.deleteTasks with recursive = true"));
     }
 
-    const transaction = db.transaction('index', 'readwrite');
+    const transaction = db.transaction(TASK_STORE_NAME, 'readwrite');
 
     try {
       for (const { id } of list) {
@@ -242,7 +206,7 @@ const taskCRUD: ITaskCRUDProvider = {
 
         if (task) {
           await transaction.store.delete(id);
-          updateRelationships(browserTaskProvider, { oldTask: task, newTask: null });
+          updateRelationships(api, { oldTask: task, newTask: null });
         }
       }
 
@@ -305,7 +269,7 @@ const taskRelations: ITaskRelationProvider = {
 
   getRootTasks: async function (): Promise<Result<Task[], Err>> {
     assertDB(db);
-    const allTasks = await db.getAll('index');
+    const allTasks = await db.getAll(TASK_STORE_NAME);
     const rootTasks = allTasks.filter(task => task.parents.length === 0);
     return ok(rootTasks);
   }
@@ -315,13 +279,13 @@ const taskRelations: ITaskRelationProvider = {
 const advancedFeatures: IAdvancedTaskProvider = {
   getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
     assertDB(db);
-    const allTasks = await db.getAll('index');
+    const allTasks = await db.getAll(TASK_STORE_NAME);
     return ok(allTasks.filter(t => t.todays_task));
   },
 
   getPrioritizedTasks: async function (limit: number): Promise<Result<Task[], Err>> {
     assertDB(db);
-    let taskArray: Task[] = await db.getAll('index');
+    let taskArray: Task[] = await db.getAll(TASK_STORE_NAME);
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -380,7 +344,7 @@ const advancedFeatures: IAdvancedTaskProvider = {
 const dataExporter: ITaskExporter = {
   exportData: async function (simplify?: boolean): Promise<void> {
     assertDB(db);
-    const taskData = await db.getAll('index');
+    const taskData = await db.getAll(TASK_STORE_NAME);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
 
     // 1. Create a new zip
@@ -413,12 +377,27 @@ const dataExporter: ITaskExporter = {
   }
 }
 
-const browserTaskProvider: ITaskProvider & ITaskExporter = { ...core, ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
-export default browserTaskProvider;
+const api: ITaskProvider & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
+
+let db: IDBPDatabase<TaskDB> | null;
+
+const BrowserTaskProvider: IProvider<ITaskProvider & ITaskExporter> = {
+  get: async function (): Promise<ITaskProvider & ITaskExporter> {
+    db = await tasksDBPromise;
+    return api;
+  },
+
+  close: async function (): Promise<void> {
+    db?.close();
+    db = null;
+  }
+}
+
+export default BrowserTaskProvider;
 
 //#region Utilities
 
-function assertDB(db: IDBPDatabase<MyDB> | null): asserts db is IDBPDatabase<MyDB> {
+function assertDB(db: IDBPDatabase<TaskDB> | null): asserts db is IDBPDatabase<TaskDB> {
   if (!db) throw new Error("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()")
 }
 
@@ -457,7 +436,7 @@ function assertDB(db: IDBPDatabase<MyDB> | null): asserts db is IDBPDatabase<MyD
 
 //   return Task.fromMarkdown(file.content, filepath).match(
 //     async task => {
-//       await db!.put('index', task);
+//       await db!.put(TASK_STORE_NAME, task);
 //       return ok();
 //     },
 //     error => {
