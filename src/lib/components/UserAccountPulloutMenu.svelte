@@ -36,7 +36,13 @@
 			{/if}
 			{#if user.display_name}
 				<!-- If not anonymous account -->
-				<button>Sign out</button>
+				<button
+					onclick={() => {
+						throw new Error('NotImplemented');
+					}}
+				>
+					Sign out
+				</button>
 			{/if}
 			{#if !user.is_synced}
 				<button

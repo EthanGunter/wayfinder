@@ -50,6 +50,6 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
     // TODO: If the user logs in, make sure to migrate any local data
     // TODO: Wrap the task API so we call the local provider first, then the remote,
     // TODO: and handle rolling back local changes whenever the remote fails...
-
-    return { user, onAuthStateChanged: localAuth.onAuthStateChanged, taskAPI };
+    
+    return { user, authAPI: localAuth, taskAPI };
 };

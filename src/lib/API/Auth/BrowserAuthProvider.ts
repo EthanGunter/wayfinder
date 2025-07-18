@@ -55,7 +55,7 @@ const authOperations = {
     const user = await db.get(AUTH_STORE_NAME, currentUserId);
     if (!user) return null;
 
-    return toLocalUserProxy(user);
+    return /*toLocalUserProxy(*/user/*)*/;
   },
 
   signUp: async function (details: { displayName: string; passkey?: string }): Promise<StoredUser> {
@@ -72,7 +72,7 @@ const authOperations = {
       await db.put(AUTH_STORE_NAME, anonymousUser);
       await setCurrentUser(anonymousUser.id);
 
-      return toLocalUserProxy(anonymousUser);
+      return /*toLocalUserProxy(*/anonymousUser/*)*/;
     } else {
       // Create a new user
       const newUser: StoredUser = {
@@ -87,7 +87,7 @@ const authOperations = {
       await db.put(AUTH_STORE_NAME, newUser);
       await setCurrentUser(newUser.id);
 
-      return toLocalUserProxy(newUser);
+      return /*toLocalUserProxy(*/newUser/*)*/;
     }
   },
 
@@ -109,7 +109,7 @@ const authOperations = {
     }
 
     await setCurrentUser(user.id);
-    return toLocalUserProxy(user);
+    return /*toLocalUserProxy(*/user/*)*/;
   },
 
   signOut: async function (): Promise<void> {
@@ -126,13 +126,13 @@ const authOperations = {
     }
 
     await setCurrentUser(user.id);
-    return toLocalUserProxy(user);
+    return /*toLocalUserProxy(*/user/*)*/;
   },
 
   listUsers: async function (): Promise<StoredUser[]> {
     assertDB(db);
     const users = await db.getAll(AUTH_STORE_NAME);
-    return users.map(user => toLocalUserProxy(user));
+    return users.map(user => /*toLocalUserProxy(*/user/*)*/);
   },
 
   updateUser: async function (userId: string, updates: Partial<StoredUser>): Promise<StoredUser> {
@@ -154,10 +154,10 @@ const authOperations = {
 
     // If updating current user, notify listeners
     if (userId === currentUserId) {
-      notifyListeners(toLocalUserProxy(updatedUser));
+      // notifyListeners(toLocalUserProxy(updatedUser));
     }
 
-    return toLocalUserProxy(updatedUser);
+    return /*toLocalUserProxy(*/updatedUser/*)*/;
   },
 
   deleteUser: async function (userId: string): Promise<void> {
@@ -178,7 +178,7 @@ const authOperations = {
     if (currentUserId && db) {
       db.get(AUTH_STORE_NAME, currentUserId).then(user => {
         if (user) {
-          callback(toLocalUserProxy(user));
+          callback(/*toLocalUserProxy(*/user/*)*/);
         } else {
           callback(null);
         }
@@ -199,15 +199,15 @@ function assertDB(db: IDBPDatabase<AuthDB> | null): asserts db is IDBPDatabase<A
   if (!db) throw new Error("Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()");
 }
 
-function toLocalUserProxy(user: StoredUser): StoredUser {
-  return {
-    id: user.id,
-    display_name: user.display_name,
-    avatar_url: user.avatar_url,
-    is_synced: user.is_synced,
-    last_active: new Date(user.last_active)
-  };
-}
+// function toLocalUserProxy(user: StoredUser): StoredUser {
+//   return {
+//     id: user.id,
+//     display_name: user.display_name,
+//     avatar_url: user.avatar_url,
+//     is_synced: user.is_synced,
+//     last_active: new Date(user.last_active)
+//   };
+// }
 
 async function setCurrentUser(userId: string): Promise<void> {
   assertDB(db);
@@ -221,7 +221,7 @@ async function setCurrentUser(userId: string): Promise<void> {
     await db.put(AUTH_STORE_NAME, user);
 
     // Notify listeners
-    notifyListeners(toLocalUserProxy(user));
+    notifyListeners(/* toLocalUserProxy( */user/* ) */);
   }
 }
 
@@ -261,7 +261,7 @@ async function activateNewAnonymousUser(): Promise<StoredUser> {
   await db.put(AUTH_STORE_NAME, anonymousUser);
   await setCurrentUser(anonymousUser.id);
 
-  return toLocalUserProxy(anonymousUser);
+  return /*toLocalUserProxy(*/anonymousUser/*)*/;
 }
 async function getAnonymousUser(): Promise<StoredUser | null> {
   assertDB(db);

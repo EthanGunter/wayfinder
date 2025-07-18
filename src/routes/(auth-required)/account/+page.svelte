@@ -3,14 +3,16 @@
 	import type { User, StoredUser } from '$lib/API/Auth/types';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
+	import debounce from '$lib/debounce';
 
 	// Svelte 5 state
 	const { data } = $props();
-	const user = data.user;
+	const user = $state(data.user);
+	const debouncedUpdateUser = debounce(data.authAPI.updateUser, 200);
 
-	// - [ ] Username
-	// - [ ] Avatar
-	// - [ ] Set/Edit Password
+	// - [x] Avatar
+	// - [x] Username
+	// - [?] Set/Edit Password
 	// - [ ] Theme (comment out for now)
 	// - [ ] Upgrade to sync
 	// 	- ✓ Access your data from any device
@@ -18,28 +20,97 @@
 	// 	- ✓ Real-time synchronization
 	// 	- ✓ Priority support
 	// - [ ] Sign out
+
+	function equals(a: StoredUser, b: StoredUser) {
+		return JSON.stringify(a) === JSON.stringify(b);
+	}
+
+	async function saveUserChanges() {
+		await debouncedUpdateUser(user.id, user);
+		invalidateAll();
+	}
+
+	function handleNameInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
+		event.preventDefault();
+		if (event.currentTarget.value === '') user.display_name = undefined;
+	}
+
+	function handlePasswordInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
+		event.preventDefault();
+		if (event.currentTarget.value === '') user.passkey = undefined;
+	}
+
+	function handleUpgrage() {}
 </script>
 
 <div id="account-page" class="page">
 	<AppHeader {user} />
 	<div class="content">
-		<div class="avatar">
-			{#if user.avatar_url}
-				<img src={user.avatar_url} alt="User avatar" />
-			{:else}
-				<div class="avatar-placeholder">
-					{user.display_name?.charAt(0)?.toUpperCase() || '?'}
-				</div>
-			{/if}
-		</div>
-		<section class="name">
+		<section id="sec-avatar">
+			<div class="avatar">
+				{#if user.avatar_url}
+					<img src={user.avatar_url} alt="User avatar" />
+				{:else}
+					<div class="avatar-placeholder">
+						{user.display_name?.charAt(0)?.toUpperCase() || '?'}
+					</div>
+				{/if}
+			</div>
+			<span>
+				<label for="input_avatar_url">Avatar URL</label>
+				<input id="input_avatar_url" type="text" bind:value={user.avatar_url} />
+			</span>
+		</section>
+		<section id="sec-name">
 			<label for="input_display_name">Name</label>
-			<input id="input_display_name" type="text" bind:value={user.display_name} />
+			<input
+				id="input_display_name"
+				type="text"
+				bind:value={user.display_name}
+				oninput={handleNameInput}
+			/>
 		</section>
-		<section class="password">
-			<button>Password</button>
-			<input id="input_passkey" type="password" bind:value={user.passkey} />
-		</section>
+		<!-- TODO Local Passkey <section id="sec-passkey">
+			<button>Passkey</button>
+			<input
+				id="input_passkey"
+				type="password"
+				bind:value={user.passkey}
+				oninput={handlePasswordInput}
+			/>
+		</section> -->
+		<!-- TODO App themes <section id="sec-theme">
+			<label for="select_theme">Theme</label>
+			<select id="select_theme">
+				<option>Light</option>
+				<option>Dark</option>
+			</select>
+		</section> -->
+		{#if !equals(user, data.user)}
+			<button onclick={saveUserChanges}>Save Changes</button>
+		{/if}
+		{#if !user.is_synced}
+			<div class="upgrade-section">
+				<h2>Upgrade to Cloud Sync</h2>
+				<p>Sync your data across devices and enable premium features</p>
+				<ul class="benefits">
+					<li>✓ Access your data from any device</li>
+					<li>✓ Automatic backups</li>
+					<li>✓ Real-time synchronization</li>
+					<li>✓ Priority support</li>
+				</ul>
+				<!-- TODO Upgrade logic -->
+				<button
+					class="btn-upgrade"
+					onclick={() => {
+						goto('/account/upgrade');
+					}}
+				>
+					Upgrade to Cloud Sync
+				</button>
+			</div>
+		{/if}
+		<!-- TODO Add no-account login page <button class="alert" onclick={data.authAPI.signOut}>Sign out</button> -->
 	</div>
 	<AppFooter />
 </div>
@@ -124,7 +195,7 @@
 		margin-bottom: 2rem;
 	}
 
-	.avatar-section {
+	#sec-avatar {
 		display: flex;
 		flex-direction: column;
 		align-items: center;

@@ -108,7 +108,7 @@
 		<button onclick={rename}> ✏️ Rename </button>
 		<!-- <button onclick={openMoveDialogue}> ↗️ Move </button> -->
 		<button onclick={handleTitleClick}> 🔗 Open </button>
-		<button class="warning" onclick={openDeleteDialogue}> 🗑️ Delete </button>
+		<button class="alert" onclick={openDeleteDialogue}> 🗑️ Delete </button>
 
 		<!-- Delete Confirmation Dialog -->
 	</ContextMenu>
@@ -120,7 +120,7 @@
 				<p>This will also delete <em>all</em> descendants.</p>
 			{/if} -->
 			<div class="dialog-buttons">
-				<button class="warning" onclick={() => resolveDelete(true)}> Yes </button>
+				<button class="alert" onclick={() => resolveDelete(true)}> Yes </button>
 				<button onclick={() => resolveDelete(false)}> Cancel </button>
 			</div>
 		</div>
