@@ -107,60 +107,59 @@
 	);
 </script>
 
-<AppHeader user={data.user} />
 <div class="page page-todays-tasks">
-	Logged in as {data.user.display_name ?? 'Anonymous'}
-	<div
-		id="todays-tasks-list"
-		use:droppable={{
-			accepts: ['task'],
-			onDrop: handleTodaysTaskDrop
-		}}
-	>
-		<h1>Today's Tasks</h1>
-		{#if filteredDaysTasks.length === 0}
-			<h4>Empty todolist!</h4>
-		{/if}
-		{#if filteredSuggestedTasks.length > 0}
-			<h4>Drag some suggestions in!</h4>
-		{/if}
-		{#if suggestedTasks.length === 0 && todaysList.length === 0}
-			<div>
-				<br />
-				<button id="add-task-button" onclick={startProject}>Start a Project</button>
-			</div>
-		{/if}
-
-		<ItemList items={filteredDaysTasks}>
-			{#snippet listItem(task, index)}
-				<TaskListItem {task} />
-			{/snippet}
-		</ItemList>
-	</div>
-
-	{#if todaysList.length < 999}
+	<AppHeader user={data.user} />
+	<div class="content">
+		Logged in as {data.user.display_name ?? 'Anonymous'}
 		<div
-			id="suggested-tasks-list"
+			id="todays-tasks-list"
 			use:droppable={{
 				accepts: ['task'],
-				onDrop: handleSuggestedTaskDrop
+				onDrop: handleTodaysTaskDrop
 			}}
 		>
-			<h2>Suggested Tasks</h2>
-			<ItemList items={filteredSuggestedTasks}>
+			<h1>Today's Tasks</h1>
+			{#if filteredDaysTasks.length === 0}
+				<h4>Empty todolist!</h4>
+			{/if}
+			{#if filteredSuggestedTasks.length > 0}
+				<h4>Drag some suggestions in!</h4>
+			{/if}
+			{#if suggestedTasks.length === 0 && todaysList.length === 0}
+				<div>
+					<br />
+					<button id="add-task-button" onclick={startProject}>Start a Project</button>
+				</div>
+			{/if}
+
+			<ItemList items={filteredDaysTasks}>
 				{#snippet listItem(task, index)}
 					<TaskListItem {task} />
 				{/snippet}
 			</ItemList>
 		</div>
-	{/if}
+
+		{#if todaysList.length < 999}
+			<div
+				id="suggested-tasks-list"
+				use:droppable={{
+					accepts: ['task'],
+					onDrop: handleSuggestedTaskDrop
+				}}
+			>
+				<h2>Suggested Tasks</h2>
+				<ItemList items={filteredSuggestedTasks}>
+					{#snippet listItem(task, index)}
+						<TaskListItem {task} />
+					{/snippet}
+				</ItemList>
+			</div>
+		{/if}
+	</div>
+	<AppFooter />
 </div>
-<AppFooter />
 
 <style>
-	.page-todays-tasks {
-		padding: 1.5em 1em;
-	}
 	.drop-zone {
 		margin-bottom: 2em;
 		min-height: 3em;

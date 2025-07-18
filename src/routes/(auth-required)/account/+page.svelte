@@ -1,239 +1,51 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { User, StoredUser } from '$lib/API/Auth/types';
+	import AppFooter from '$lib/components/AppFooter.svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
 
 	// Svelte 5 state
 	const { data } = $props();
 	const user = data.user;
-	let isEditing = $state(false);
-	let showCreateAccount = $state(false);
-	let isSaving = $state(false);
 
-	// Form states
-	let editedUser = $state<Partial<User>>(data.user);
-	let newAccountData = $state({
-		displayName: '',
-		email: '',
-		pin: ''
-	});
-
-	async function handleSignOut() {
-		try {
-			// Import dynamically to avoid circular dependencies
-			const { default: SupabaseAuth } = await import('$lib/API/Auth/SupabaseAuth');
-			const auth = new SupabaseAuth();
-			await auth.signOut({ signOutSelf: true, signOutOthers: false });
-			goto('/');
-		} catch (error) {
-			console.error('Sign out failed:', error);
-		}
-	}
-
-	async function handleSave() {
-		isSaving = true;
-		try {
-			// TODO: Implement user update API
-			console.log('Saving user data:', editedUser);
-			// For now, just update the local state
-			isEditing = false;
-		} catch (error) {
-			console.error('Save failed:', error);
-		} finally {
-			isSaving = false;
-		}
-	}
-
-	async function handleCreateAccount() {
-		try {
-			const { default: SupabaseAuth } = await import('$lib/API/Auth/SupabaseAuth');
-			const auth = new SupabaseAuth();
-
-			await auth.signUp({
-				type: 'local',
-				pin: newAccountData.pin,
-				username: newAccountData.displayName
-			});
-
-			// Refresh user data
-			invalidateAll();
-			showCreateAccount = false;
-			newAccountData = { displayName: '', email: '', pin: '' };
-		} catch (error) {
-			console.error('Account creation failed:', error);
-		}
-	}
-
-	function handleUpgradeToSync() {
-		// Navigate to upgrade page for proper migration flow
-		goto('/account/upgrade');
-	}
-
-	function isLocalUser(user: User | null): user is StoredUser {
-		return user !== null && 'isSynced' in user;
-	}
+	// - [ ] Username
+	// - [ ] Avatar
+	// - [ ] Set/Edit Password
+	// - [ ] Theme (comment out for now)
+	// - [ ] Upgrade to sync
+	// 	- ✓ Access your data from any device
+	// 	- ✓ Automatic backups
+	// 	- ✓ Real-time synchronization
+	// 	- ✓ Priority support
+	// - [ ] Sign out
 </script>
 
-<div class="account-page">
-	{#if user}
-		<div class="account-container">
-			<header class="account-header">
-				<h1>Account Settings</h1>
-				{#if isLocalUser(user) && !user.is_synced}
-					<span class="badge local">Local Account</span>
-				{:else}
-					<span class="badge synced">Synced Account</span>
-				{/if}
-			</header>
-
-			<div class="user-info">
-				<div class="avatar-section">
-					<div class="avatar">
-						{#if user.avatar_url}
-							<img src={user.avatar_url} alt="User avatar" />
-						{:else}
-							<div class="avatar-placeholder">
-								{user.display_name?.charAt(0)?.toUpperCase() || '?'}
-							</div>
-						{/if}
-					</div>
-					{#if isEditing}
-						<button class="btn-secondary" onclick={() => console.log('Change avatar')}>
-							Change Avatar
-						</button>
-					{/if}
-				</div>
-
-				<div class="info-section">
-					{#if !isEditing}
-						<div class="info-display">
-							<div class="info-item">
-								<label>Display Name</label>
-								<p>{user.display_name ?? 'Anonymous'}</p>
-							</div>
-							<div class="info-item">
-								<label>User ID</label>
-								<p class="mono">{user.id}</p>
-							</div>
-							<div class="info-item">
-								<label>Account Type</label>
-								<p>
-									{isLocalUser(user) && !user.is_synced ? 'Local (Not synced)' : 'Cloud (Synced)'}
-								</p>
-							</div>
-						</div>
-						<button class="btn-primary" onclick={() => (isEditing = true)}> Edit Profile </button>
-					{:else}
-						<form
-							onsubmit={(e) => {
-								e.preventDefault();
-								handleSave();
-							}}
-						>
-							<div class="form-group">
-								<label for="displayName">Display Name</label>
-								<input
-									id="displayName"
-									placeholder="Anonymous"
-									type="text"
-									bind:value={editedUser.display_name}
-									required
-								/>
-							</div>
-							<div class="form-actions">
-								<button type="submit" class="btn-primary" disabled={isSaving}>
-									{isSaving ? 'Saving...' : 'Save Changes'}
-								</button>
-								<button type="button" class="btn-secondary" onclick={() => (isEditing = false)}>
-									Cancel
-								</button>
-							</div>
-						</form>
-					{/if}
-				</div>
-			</div>
-
-			{#if isLocalUser(user) && !user.is_synced}
-				<div class="upgrade-section">
-					<h2>Upgrade to Cloud Sync</h2>
-					<p>Sync your data across devices and enable premium features</p>
-					<ul class="benefits">
-						<li>✓ Access your data from any device</li>
-						<li>✓ Automatic backups</li>
-						<li>✓ Real-time synchronization</li>
-						<li>✓ Priority support</li>
-					</ul>
-					<button class="btn-upgrade" onclick={handleUpgradeToSync}> Upgrade to Cloud Sync </button>
+<div id="account-page" class="page">
+	<AppHeader {user} />
+	<div class="content">
+		<div class="avatar">
+			{#if user.avatar_url}
+				<img src={user.avatar_url} alt="User avatar" />
+			{:else}
+				<div class="avatar-placeholder">
+					{user.display_name?.charAt(0)?.toUpperCase() || '?'}
 				</div>
 			{/if}
-
-			<div class="danger-zone">
-				<h3>Account Actions</h3>
-				<button class="btn-danger" onclick={handleSignOut}> Sign Out </button>
-			</div>
 		</div>
-	{:else}
-		<div class="no-account">
-			<h1>No Account Found</h1>
-			<p>Create an account to get started</p>
-			<button class="btn-primary" onclick={() => (showCreateAccount = true)}>
-				Create Account
-			</button>
-		</div>
-	{/if}
-
-	{#if showCreateAccount}
-		<div class="modal-overlay" onclick={() => (showCreateAccount = false)}>
-			<div class="modal" onclick={(e) => e.stopPropagation()}>
-				<h2>Create New Account</h2>
-				<form
-					onsubmit={(e) => {
-						e.preventDefault();
-						handleCreateAccount();
-					}}
-				>
-					<div class="form-group">
-						<label for="newDisplayName">Display Name</label>
-						<input
-							id="newDisplayName"
-							type="text"
-							bind:value={newAccountData.displayName}
-							required
-						/>
-					</div>
-					<div class="form-group">
-						<label for="newEmail">Email (Optional)</label>
-						<input
-							id="newEmail"
-							type="email"
-							bind:value={newAccountData.email}
-							placeholder="For account recovery"
-						/>
-					</div>
-					<div class="form-group">
-						<label for="newPin">PIN</label>
-						<input
-							id="newPin"
-							type="password"
-							bind:value={newAccountData.pin}
-							pattern="[0-9]"
-							placeholder="4-6 digit PIN"
-							required
-						/>
-					</div>
-					<div class="form-actions">
-						<button type="submit" class="btn-primary">Create Account</button>
-						<button type="button" class="btn-secondary" onclick={() => (showCreateAccount = false)}>
-							Cancel
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
-	{/if}
+		<section class="name">
+			<label for="input_display_name">Name</label>
+			<input id="input_display_name" type="text" bind:value={user.display_name} />
+		</section>
+		<section class="password">
+			<button>Password</button>
+			<input id="input_passkey" type="password" bind:value={user.passkey} />
+		</section>
+	</div>
+	<AppFooter />
 </div>
 
 <style>
-	.account-page {
+	.content {
 		max-width: 800px;
 		margin: 0 auto;
 		padding: 2rem;

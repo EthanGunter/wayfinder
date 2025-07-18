@@ -137,49 +137,47 @@
 	}
 </script>
 
-<AppHeader user={data.user} />
-<section class="task-browser page">
-	<!-- TODO: <TasksTutorial /> -->
-	{#if currentTask}
-		<div class="navigation">
-			<a class="breadcrumb-link" href="/tasks">
-				<!-- Go to root -->
-				Projects
-			</a>
-			{#if parents.length > 0}
-				{#each parents as parent, index}
-					>
-					<a class="breadcrumb-link" href={`/tasks?id=${parent.id}`}>
-						<!-- TODO: Replace with real icon -->
-						{parent.title ?? 'Projects'}
-					</a>
-				{/each}
-			{/if}
-		</div>
-		<TaskEditor bind:task={currentTask} {onTaskChange}>
+<div class="task-browser page">
+	<AppHeader user={data.user} />
+	<div class="content">
+		<!-- TODO: <TasksTutorial /> -->
+		{#if currentTask}
+			<div class="navigation">
+				<a class="breadcrumb-link" href="/tasks">
+					<!-- Go to root -->
+					Projects
+				</a>
+				{#if parents.length > 0}
+					{#each parents as parent, index}
+						>
+						<a class="breadcrumb-link" href={`/tasks?id=${parent.id}`}>
+							<!-- TODO: Replace with real icon -->
+							{parent.title ?? 'Projects'}
+						</a>
+					{/each}
+				{/if}
+			</div>
+			<TaskEditor bind:task={currentTask} {onTaskChange}>
+				<ItemList items={children} accepts={['task']} {onListOrderChanged}>
+					{#snippet listItem(task, index)}
+						<TaskListItem {task} onDelete={handleTaskDelete} />
+					{/snippet}
+				</ItemList>
+			</TaskEditor>
+			<button id="add-task-button" onclick={addTask}>Add Task</button>
+		{:else}
 			<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 				{#snippet listItem(task, index)}
 					<TaskListItem {task} onDelete={handleTaskDelete} />
 				{/snippet}
 			</ItemList>
-		</TaskEditor>
-		<button id="add-task-button" onclick={addTask}>Add Task</button>
-	{:else}
-		<ItemList items={children} accepts={['task']} {onListOrderChanged}>
-			{#snippet listItem(task, index)}
-				<TaskListItem {task} onDelete={handleTaskDelete} />
-			{/snippet}
-		</ItemList>
-		<button id="add-task-button" onclick={addTask}>New Project</button>
-	{/if}
-</section>
-<AppFooter />
+			<button id="add-task-button" onclick={addTask}>New Project</button>
+		{/if}
+	</div>
+	<AppFooter />
+</div>
 
 <style>
-	.task-browser.page {
-		display: flex;
-		padding: 1.5em 1em;
-	}
 	.navigation {
 		display: flex;
 		gap: 0.5em;

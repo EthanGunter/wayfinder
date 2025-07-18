@@ -142,8 +142,10 @@
 		border: 1px solid var(--c-border);
 		border-radius: 1rem;
 		min-height: min-content;
+		min-width: 16rem;
 		background: var(--c-bg);
 		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.title {

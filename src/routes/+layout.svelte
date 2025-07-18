@@ -4,8 +4,6 @@
 	// Import global styles
 	import '$lib/_global-styles.scss';
 	import '$lib/resets.scss';
-	import AppFooter from '$lib/components/AppFooter.svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
 
 	const { children } = $props();
 
@@ -24,8 +22,19 @@
 		top: 0;
 		left: 0;
 		width: 100vw;
-		height: 100%;
+		height: 100vh;
 		// overflow: hidden;
+	}
+
+	:global(.page) {
+		// Layout
+		position: relative;
+		// gap: var(--gap-small);
+		width: 100%;
+		height: 100%;
+
+		// Style
+		background-color: var(--c-bg_-2);
 
 		// Internal layout
 		display: grid;
@@ -39,26 +48,30 @@
 			z-index: 10;
 		}
 
+		:global(.content) {
+			grid-area: content;
+
+			display: flex;
+			flex-direction: column;
+
+			width: 100%;
+			max-width: 800px;
+			margin-left: auto;
+			margin-right: auto;
+			padding: 1rem;
+
+			// justify-content: center;
+			align-items: center;
+			overflow-y: scroll;
+			gap: 1rem;
+			// overflow-x: hidden;
+		}
+
 		> :global(.app-footer) {
 			// Layout
 			height: var(--app-footer-height);
 			grid-area: footer;
 			z-index: 10;
 		}
-	}
-
-	:global(.page) {
-		// Layout
-		position: relative;
-		grid-area: content;
-		display: flex;
-		flex-direction: column;
-		// gap: var(--gap-small);
-		overflow-y: scroll;
-		// overflow-x: hidden;
-		max-width: 100vw;
-
-		// Style
-		background-color: var(--c-bg_-2);
 	}
 </style>

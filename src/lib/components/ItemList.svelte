@@ -182,6 +182,7 @@
 	.item-list {
 		// Fill the containing element
 		height: min-content;
+		max-width: 100%;
 
 		display: flex;
 		flex-direction: column;
