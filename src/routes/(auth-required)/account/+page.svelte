@@ -1,20 +1,33 @@
 <script lang="ts">
+	import UserAvatar from '../../../lib/components/UserAvatar.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { User, StoredUser } from '$lib/API/Auth/types';
+	import type { StoredUser } from '$lib/API/Auth/types';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
+	import { onMount } from 'svelte';
 
 	// Svelte 5 state
 	const { data } = $props();
-	const user = $state(data.user);
+	let user = $state(data.user);
 	const debouncedUpdateUser = debounce(data.authAPI.updateUser, 200);
+
+	onMount(() => {
+		function handleAuthChange(newUser: StoredUser | null) {
+			if (newUser) user = newUser;
+			else throw new Error("Drawing account page with null user shouldn't be possible");
+		}
+		const unsubscribe = data.authAPI.onAuthStateChanged(handleAuthChange);
+		return () => {
+			unsubscribe();
+		};
+	});
 
 	// - [x] Avatar
 	// - [x] Username
 	// - [?] Set/Edit Password
 	// - [ ] Theme (comment out for now)
-	// - [ ] Upgrade to sync
+	// - [x] Upgrade to sync
 	// 	- ✓ Access your data from any device
 	// 	- ✓ Automatic backups
 	// 	- ✓ Real-time synchronization
@@ -26,8 +39,8 @@
 	}
 
 	async function saveUserChanges() {
-		await debouncedUpdateUser(user.id, user);
-		invalidateAll();
+		await debouncedUpdateUser(user);
+		await invalidateAll();
 	}
 
 	function handleNameInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
@@ -39,23 +52,14 @@
 		event.preventDefault();
 		if (event.currentTarget.value === '') user.passkey = undefined;
 	}
-
-	function handleUpgrage() {}
 </script>
 
 <div id="account-page" class="page">
 	<AppHeader {user} />
 	<div class="content">
+		<!-- TODO Extract avatar to reusable component -->
 		<section id="sec-avatar">
-			<div class="avatar">
-				{#if user.avatar_url}
-					<img src={user.avatar_url} alt="User avatar" />
-				{:else}
-					<div class="avatar-placeholder">
-						{user.display_name?.charAt(0)?.toUpperCase() || '?'}
-					</div>
-				{/if}
-			</div>
+			<UserAvatar {user} />
 			<span>
 				<label for="input_avatar_url">Avatar URL</label>
 				<input id="input_avatar_url" type="text" bind:value={user.avatar_url} />
@@ -117,9 +121,6 @@
 
 <style>
 	.content {
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 2rem;
 	}
 
 	.loading {
@@ -352,7 +353,6 @@
 		background: #f8f9fa;
 		border-radius: 8px;
 		padding: 2rem;
-		margin: 2rem 0;
 		text-align: center;
 	}
 

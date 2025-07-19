@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { StoredUser } from '$lib/API/Auth/types';
+	import UserAvatar from './UserAvatar.svelte';
 	import Pullout from './overlays/Pullout.svelte';
 	interface Props {
 		user: StoredUser;
@@ -11,7 +12,7 @@
 
 {#if user}
 	<button id="account-menu-btn" onclick={() => (menuOpen = true)}>
-		{user.display_name ? '😁' : '🙈'}
+		<UserAvatar {user} />
 	</button>
 	<Pullout bind:open={menuOpen} placement="right">
 		<div id="account-menu-pullout">
@@ -58,8 +59,24 @@
 {/if}
 
 <style lang="scss">
+	.user-avatar {
+		width: 1rem;
+		height: 1rem;
+	}
 	#account-menu-btn {
-		font-size: x-large;
+		display: flex;
+		border-radius: 50%;
+		overflow: hidden;
+		width: 3rem;
+		height: 3rem;
+		padding: unset;
+
+		& > * {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
 	}
 	#account-menu-pullout {
 		display: flex;

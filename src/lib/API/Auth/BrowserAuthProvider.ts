@@ -1,4 +1,4 @@
-import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
+import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
 import type { StoredUser, UnsubscribeFn } from './types';
 import type { IProvider } from '../Tasks';
@@ -11,15 +11,13 @@ interface LocalAuthAPI {
   signOut: () => Promise<void>,
   switchUser: (userId: string) => Promise<StoredUser>,
   listUsers: () => Promise<StoredUser[]>,
-  updateUser: (userId: string, updates: Partial<StoredUser>) => Promise<StoredUser>,
+  updateUser: (updates: Partial<StoredUser> & { id: string }) => Promise<StoredUser>,
   deleteUser: (userId: string) => Promise<void>,
   onAuthStateChanged: (callback: (user: StoredUser | null) => void) => UnsubscribeFn,
   getMostRecentUser: () => Promise<StoredUser | null>,
   activateNewAnonymousUser: () => Promise<StoredUser>,
   getAnonymousUser: () => Promise<StoredUser | null>,
 }
-
-
 
 let db: IDBPDatabase<AuthDB> | null;
 let currentUserId: string | null = null;
@@ -81,7 +79,7 @@ const authOperations = {
         last_active: new Date(),
         passkey: details.passkey ? hashPasskey(details.passkey) : undefined,
         auth_provider: 'local',
-        is_synced: false
+        is_synced: false,
       };
 
       await db.put(AUTH_STORE_NAME, newUser);
@@ -135,25 +133,25 @@ const authOperations = {
     return users.map(user => /*toLocalUserProxy(*/user/*)*/);
   },
 
-  updateUser: async function (userId: string, updates: Partial<StoredUser>): Promise<StoredUser> {
+  updateUser: async function (update: Partial<StoredUser> & { id: string }): Promise<StoredUser> {
     assertDB(db);
 
-    const user = await db.get(AUTH_STORE_NAME, userId);
+    const user = await db.get(AUTH_STORE_NAME, update.id);
     if (!user) {
       throw new Error('User not found');
     }
 
     const updatedUser = {
       ...user,
-      ...updates,
+      ...update,
       id: user.id, // Ensure ID can't be changed
-      lastActive: new Date()
+      last_active: new Date()
     };
 
     await db.put(AUTH_STORE_NAME, updatedUser);
 
     // If updating current user, notify listeners
-    if (userId === currentUserId) {
+    if (update.id === currentUserId) {
       // notifyListeners(toLocalUserProxy(updatedUser));
     }
 
@@ -236,7 +234,7 @@ async function getMostRecentUser(): Promise<StoredUser | null> {
   const users = await db.getAll(AUTH_STORE_NAME);
   if (users.length === 0) return null;
 
-  // Sort by lastActive descending
+  // Sort by last_active descending
   users.sort((a, b) => {
     const dateA = new Date(a.last_active).getTime();
     const dateB = new Date(b.last_active).getTime();
@@ -255,7 +253,7 @@ async function activateNewAnonymousUser(): Promise<StoredUser> {
     display_name: undefined, // Anonymous users have no display name
     last_active: new Date(),
     auth_provider: 'local',
-    is_synced: false
+    is_synced: false,
   };
 
   await db.put(AUTH_STORE_NAME, anonymousUser);

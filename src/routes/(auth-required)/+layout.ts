@@ -1,5 +1,5 @@
 import localAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
-import SupabaseAuth from '$lib/API/Auth/SupabaseAuth';
+import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuth';
 import type { StoredUser } from '$lib/API/Auth/types';
 import type { ITaskProvider } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
@@ -18,7 +18,7 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
         currentUser = await localAuth.activateNewAnonymousUser();
     }
 
-    const dbAuth = new SupabaseAuth();
+    const dbAuth = await SupabaseAuthProvider.get();
     let remoteUser = currentUser.is_synced && await dbAuth.getCurrentUser();
 
     let user: StoredUser;

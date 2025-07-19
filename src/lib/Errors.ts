@@ -7,6 +7,10 @@ export enum ErrorTypes {
 }
 
 export class Err {
+    static Wrap(nativeError: Error): Err {
+        return new Err(0, nativeError.name ?? "unknown", nativeError.message, nativeError);
+    }
+
     stack: string[] = ["call .withTraceDepth() for stacktrace"];
     private traceDepth: number | undefined;
     // private inheritanceDepth: number;
