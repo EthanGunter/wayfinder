@@ -23,17 +23,6 @@
 		};
 	});
 
-	// - [x] Avatar
-	// - [x] Username
-	// - [?] Set/Edit Password
-	// - [ ] Theme (comment out for now)
-	// - [x] Upgrade to sync
-	// 	- ✓ Access your data from any device
-	// 	- ✓ Automatic backups
-	// 	- ✓ Real-time synchronization
-	// 	- ✓ Priority support
-	// - [ ] Sign out
-
 	function equals(a: StoredUser, b: StoredUser) {
 		return JSON.stringify(a) === JSON.stringify(b);
 	}
@@ -103,7 +92,6 @@
 					<li>✓ Real-time synchronization</li>
 					<li>✓ Priority support</li>
 				</ul>
-				<!-- TODO Upgrade logic -->
 				<button
 					class="btn-upgrade"
 					onclick={() => {

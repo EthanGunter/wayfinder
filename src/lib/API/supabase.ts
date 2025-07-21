@@ -44,7 +44,7 @@ export type Database = {
           children: string[]
           content: string | undefined
           created: string
-          filepath: string | undefined
+          filepath?: string | undefined
           id: string
           last_edit: string
           parents: string[]

@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { StoredUser } from "./Auth/types";
-import type { Task } from "./Tasks";
+import type { Task, TaskData } from "./Tasks";
 
 export const AUTH_STORE_NAME = 'users';
 export interface AuthDB extends DBSchema {
@@ -12,7 +12,7 @@ export interface AuthDB extends DBSchema {
         };
     };
 }
-export const TASK_STORE_NAME = 'tasks';
+export const TASK_TABLE_NAME = 'tasks';
 export interface TaskDB extends DBSchema {
     // files: {
     //   key: string;
@@ -20,7 +20,7 @@ export interface TaskDB extends DBSchema {
     // };
     tasks: {
         key: string;
-        value: Task;
+        value: TaskData;
         indexes: {
             'by-user': string,
             'by-parents': string,
@@ -38,9 +38,9 @@ const dbPromise = openDB<AuthDB & TaskDB>('wayfinder', 1, {
             const store = db.createObjectStore(AUTH_STORE_NAME, { keyPath: 'id' });
             store.createIndex('by-last-active', 'last_active');
         }
-        if (!db.objectStoreNames.contains(TASK_STORE_NAME))        // db.createObjectStore('files', { keyPath: 'filepath' });
+        if (!db.objectStoreNames.contains(TASK_TABLE_NAME))        // db.createObjectStore('files', { keyPath: 'filepath' });
         {
-            const store = db.createObjectStore(TASK_STORE_NAME, { keyPath: 'id' });
+            const store = db.createObjectStore(TASK_TABLE_NAME, { keyPath: 'id' });
             store.createIndex('by-user', 'user_id');
             store.createIndex('by-parents', 'parents');
             store.createIndex('by-children', 'children');

@@ -1,13 +1,13 @@
 // Supabase's RLS handles this: TODO Task API's need to take auth into consideration
-import { Task } from './Task';
+import { Task, type TaskData } from './Task';
 import type { ITaskProvider } from './types';
 
 export * from './types';
 export * from './Task'
 
 export interface RelationshipUpdate {
-    oldTask: Task | null;
-    newTask: Task | null;
+    oldTask: TaskData | null;
+    newTask: TaskData | null;
 }
 
 export async function updateRelationships(provider: ITaskProvider, updates: RelationshipUpdate | RelationshipUpdate[]) {

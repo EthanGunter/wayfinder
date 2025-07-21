@@ -32,7 +32,7 @@ export enum TaskStatus {
 export function isTask(value: any): value is Task {
     return typeof value === 'object'
         && typeof value.id === 'string'
-        && typeof value.filepath === 'string'
+        // && typeof value.filepath === 'string'
         && typeof value.title === 'string'
         && typeof value.created === 'string'
         && typeof value.last_edit === 'string'
@@ -45,7 +45,7 @@ export function isTask(value: any): value is Task {
 export class Task implements TaskData {
     id: string;
     user_id: string;
-    filepath?: string;
+    // filepath?: string;
     title: string;
     content?: string;
     status: TaskStatus;
@@ -63,7 +63,7 @@ export class Task implements TaskData {
     constructor({
         id,
         user_id,
-        filepath,
+        // filepath,
         title,
         content,
         status = TaskStatus.incomplete,
@@ -78,7 +78,7 @@ export class Task implements TaskData {
         this.user_id = user_id;
         this.title = title;
         this.content = content;
-        this.filepath = filepath ?? `${title}.md`;
+        // this.filepath = filepath ?? `${title}.md`;
         this.status = status;
         this.todays_task = todaysTask;
         this.priority = priority;
@@ -90,11 +90,12 @@ export class Task implements TaskData {
 
     static populateDTO(dto: CreateTaskDTO): PopulatedTaskDTO {
         return {
+            id: dto.id,
             user_id: dto.user_id,
             priority: dto.priority ?? 0,
             title: dto.title,
             content: dto.content,
-            filepath: dto.filepath ?? `${dto.title}.md`,
+            // filepath: dto.filepath ?? `${dto.title}.md`,
             status: dto.status ?? TaskStatus.incomplete,
             todays_task: dto.todays_task ?? false,
             created: dto.created ?? new Date().toISOString(),

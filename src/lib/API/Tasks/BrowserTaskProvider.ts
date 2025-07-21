@@ -3,10 +3,10 @@ import { type CreateTaskDTO, type IAdvancedTaskProvider, type IProvider, type IT
 import { err, ok, Result } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError } from '$lib/Errors';
 import { v4 } from 'uuid';
-import { Task } from './Task';
+import { Task, type TaskData } from './Task';
 import { updateRelationships } from '.';
 import JSZip from 'jszip';
-import { TASK_STORE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
+import { TASK_TABLE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
 
 
 const taskCRUD: ITaskCRUDProvider = {
@@ -22,7 +22,7 @@ const taskCRUD: ITaskCRUDProvider = {
 
     updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
-    await db.put(TASK_STORE_NAME, preparedTask);
+    await db.put(TASK_TABLE_NAME, preparedTask);
     return ok(new Task(preparedTask));
   },
 
@@ -33,7 +33,7 @@ const taskCRUD: ITaskCRUDProvider = {
   createTasks: async function (tasks: CreateTaskDTO[]): Promise<Result<Task[], IOError | ParseError>> {
     assertDB(db);
     const createdTasks: Task[] = [];
-    const transaction = db.transaction(TASK_STORE_NAME, 'readwrite');
+    const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     try {
       for (const taskDTO of tasks) {
@@ -72,11 +72,11 @@ const taskCRUD: ITaskCRUDProvider = {
     //   return Task.fromMarkdown(file.content, key);
     // } else {
     // Task ID
-    const task = await db.get(TASK_STORE_NAME, id);
+    const task = await db.get(TASK_TABLE_NAME, id);
     if (!task) {
       return err(new NotFoundError(id, 'Task').withTrace(1));
     }
-    return ok(task);
+    return ok(new Task(task));
     // }
   },
 
@@ -87,16 +87,16 @@ const taskCRUD: ITaskCRUDProvider = {
 
     try {
       for (const id of ids) {
-        const task = await db.get(TASK_STORE_NAME, id);
+        const task = await db.get(TASK_TABLE_NAME, id);
         if (task) {
-          tasks.push(task);
+          tasks.push(new Task(task));
         } else {
           notFoundIds.push(id);
         }
       }
 
       if (notFoundIds.length > 0) {
-        return err(new NotFoundError(notFoundIds.join(', '), TASK_STORE_NAME).withTrace(1));
+        return err(new NotFoundError(notFoundIds.join(', '), TASK_TABLE_NAME).withTrace(1));
       }
 
       return ok(tasks);
@@ -119,7 +119,7 @@ const taskCRUD: ITaskCRUDProvider = {
 
         updateRelationships(api, { oldTask: task, newTask: updated });
 
-        await db.put(TASK_STORE_NAME, updated);
+        await db.put(TASK_TABLE_NAME, updated);
         return ok(updated);
       },
       error => err(error)
@@ -129,7 +129,7 @@ const taskCRUD: ITaskCRUDProvider = {
   updateTasks: async function (list: { task: string | Task; updates: Partial<Task>; }[]): Promise<Result<Task[], Err>> {
     assertDB(db);
     const updatedTasks: Task[] = [];
-    const transaction = db.transaction(TASK_STORE_NAME, 'readwrite');
+    const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     try {
       for (const { task, updates } of list) {
@@ -174,11 +174,11 @@ const taskCRUD: ITaskCRUDProvider = {
     assertDB(db);
     if (recursive) throw new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)");
 
-    const task = await db.get(TASK_STORE_NAME, id);
+    const task = await db.get(TASK_TABLE_NAME, id);
 
-    if (task && task.filepath) {
+    if (task/*  && task.filepath */) {
       try {
-        await db.delete(TASK_STORE_NAME, id);
+        await db.delete(TASK_TABLE_NAME, id);
       } catch (e) {
         // TODO Throw an error during development/testing ONLY
         // https://github.com/LZS911/vite-plugin-conditional-compile
@@ -198,7 +198,7 @@ const taskCRUD: ITaskCRUDProvider = {
       return err(new NotImplementedError("BrowserTaskStorage.deleteTasks with recursive = true"));
     }
 
-    const transaction = db.transaction(TASK_STORE_NAME, 'readwrite');
+    const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     try {
       for (const { id } of list) {
@@ -215,9 +215,19 @@ const taskCRUD: ITaskCRUDProvider = {
     } catch (e) {
       return err(new IOError("Batch delete", list.map(item => item.id).join(', '), e));
     }
-  }
-}
+  },
 
+  changeOwnership: async function (oldUserID: string, newUserID: string): Promise<Result<Task[], Err>> {
+    assertDB(db);
+    const tasks = await db.getAllFromIndex('tasks', 'by-user', oldUserID);
+    const convertedTasks = tasks.map(t => new Task({ ...t, user_id: newUserID }));
+    for (const task of convertedTasks) {
+      await db!.put('tasks', task);
+    }
+
+    return ok(convertedTasks);
+  },
+}
 
 const taskRelations: ITaskRelationProvider = {
   getChildrenOf: async function (task: string | Task): Promise<Result<Task[], Err>> {
@@ -269,9 +279,9 @@ const taskRelations: ITaskRelationProvider = {
 
   getRootTasks: async function (): Promise<Result<Task[], Err>> {
     assertDB(db);
-    const allTasks = await db.getAll(TASK_STORE_NAME);
+    const allTasks = await db.getAll(TASK_TABLE_NAME);
     const rootTasks = allTasks.filter(task => task.parents.length === 0);
-    return ok(rootTasks);
+    return ok(rootTasks.map(t => new Task(t)));
   }
 }
 
@@ -279,13 +289,13 @@ const taskRelations: ITaskRelationProvider = {
 const advancedFeatures: IAdvancedTaskProvider = {
   getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
     assertDB(db);
-    const allTasks = await db.getAll(TASK_STORE_NAME);
-    return ok(allTasks.filter(t => t.todays_task));
+    const allTasks = await db.getAll(TASK_TABLE_NAME);
+    return ok(allTasks.filter(t => t.todays_task).map(t => new Task(t)));
   },
 
   getPrioritizedTasks: async function (limit: number): Promise<Result<Task[], Err>> {
     assertDB(db);
-    let taskArray: Task[] = await db.getAll(TASK_STORE_NAME);
+    let taskArray: Task[] = (await db.getAll(TASK_TABLE_NAME)).map(t => new Task(t));
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -338,13 +348,13 @@ const advancedFeatures: IAdvancedTaskProvider = {
 
   searchTasks: function (searchTerm: string): Promise<Task[]> {
     throw new Error('Function not implemented.');
-  }
+  },
 }
 
 const dataExporter: ITaskExporter = {
   exportData: async function (simplify?: boolean): Promise<void> {
     assertDB(db);
-    const taskData = await db.getAll(TASK_STORE_NAME);
+    const taskData = await db.getAll(TASK_TABLE_NAME);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
 
     // 1. Create a new zip
@@ -380,10 +390,13 @@ const dataExporter: ITaskExporter = {
 const api: ITaskProvider & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
 let db: IDBPDatabase<TaskDB> | null;
+let remoteDB: ITaskProvider | null
 
-const BrowserTaskProvider: IProvider<ITaskProvider & ITaskExporter> = {
-  get: async function (): Promise<ITaskProvider & ITaskExporter> {
+const BrowserTaskProvider/* : IProvider<ITaskProvider & ITaskExporter> */ = {
+  /** @param remoteAPI The backend task provider that this provider wraps */
+  get: async function (remoteAPI?: ITaskProvider): Promise<ITaskProvider & ITaskExporter> {
     db = await tasksDBPromise;
+    remoteDB = remoteAPI ?? null;
     return api;
   },
 
@@ -398,7 +411,7 @@ export default BrowserTaskProvider;
 //#region Utilities
 
 function assertDB(db: IDBPDatabase<TaskDB> | null): asserts db is IDBPDatabase<TaskDB> {
-  if (!db) throw new Error("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()")
+  if (!db) throw new Error("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()");
 }
 
 /** This function manages writing the markdown file, then updating the index */

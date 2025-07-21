@@ -1,26 +1,31 @@
 <script lang="ts">
-	import { goto, invalidate, invalidateAll } from '$app/navigation';
-	import { AccountIssueTarget, supabaseAuth } from '$lib/API/Auth/SupabaseAuth.js';
+	import { goto } from '$app/navigation';
+	import {
+		AccountIssueTarget,
+		getMigrationNeeds,
+		migrateUser
+	} from '$lib/API/Auth/SupabaseAuth.js';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
-	import debounce from '$lib/debounce';
-	import UserAvatar from '../../../../lib/components/UserAvatar.svelte';
+	import TooltipHover from '$lib/components/overlays/TooltipHover.svelte';
+	import TooltipStatic from '$lib/components/overlays/TooltipStatic.svelte';
 
 	// Svelte 5 state
 	const { data } = $props();
 	const user = $state(data.user);
 	let accountIssues = $state<Map<AccountIssueTarget, Set<string>>>(new Map());
-	let passConfirm = $state('');
-	const debouncedCheckIssues = debounce(checkAccountIssues, 300);
 
 	$effect(() => {
 		if (user && user.is_synced) goto('/account');
 		// TODO Should probably provide a banner or alternative UI later
 	});
+	$effect(() => {
+		checkAccountIssues();
+	});
 
-	function checkAccountIssues() {
+	async function checkAccountIssues() {
 		const uiIssues = new Map();
-		const issues = supabaseAuth.getMigrationNeeds(user);
+		const issues = getMigrationNeeds(user);
 		for (const issue of issues) {
 			if (uiIssues.has(issue.target)) {
 				uiIssues.get(issue.target)!.add(issue.message);
@@ -28,21 +33,7 @@
 				uiIssues.set(issue.target, new Set([issue.message]));
 			}
 		}
-
-		if (!passConfirm || passConfirm === '') {
-			if (uiIssues.has(AccountIssueTarget.passwordConfirm)) {
-				uiIssues.get(AccountIssueTarget.passwordConfirm)!.add('Please confirm password');
-			} else {
-				uiIssues.set(AccountIssueTarget.passwordConfirm, new Set(['Please confirm password']));
-			}
-		} else if (user.passkey && user.passkey !== passConfirm) {
-			if (uiIssues.has(AccountIssueTarget.passwordConfirm)) {
-				uiIssues.get(AccountIssueTarget.passwordConfirm)!.add('Passwords do not match');
-			} else {
-				uiIssues.set(AccountIssueTarget.passwordConfirm, new Set(['Passwords do not match']));
-			}
-		}
-
+		console.log('Recieved issues:', uiIssues);
 		accountIssues = uiIssues;
 	}
 
@@ -50,12 +41,8 @@
 		if (!user || user.is_synced) {
 			throw new Error('Invalid user for migration');
 		}
-
-		await data.authAPI.updateUser(user);
-		invalidateAll();
-
 		const uiIssues = new Map();
-		const migRes = await supabaseAuth.migrateUser(user);
+		const migRes = await migrateUser(user);
 		if (migRes.isErr()) {
 			for (const err of migRes.error) {
 				if (uiIssues.has(err.target)) {
@@ -68,8 +55,6 @@
 			return;
 		}
 	}
-
-	checkAccountIssues();
 </script>
 
 <div id="upgrade-page" class="page">
@@ -80,20 +65,30 @@
 				<h2>You're almost there!</h2>
 				<p>Just a few things to make your local account sync-ready</p>
 			{:else}
-				<h2>✅ Your Account is Ready!</h2>
-				<p>Make sure everything looks correct</p>
+				<h2>Your Account is Ready!</h2>
+				<p>Your local account is ready to be upgraded to cloud sync.</p>
 			{/if}
 
 			<div class="issues-section">
+				<h2>Before You Upgrade</h2>
+				<p>Make sure everthing looks correct</p>
 				<section id="sec-avatar">
-					<UserAvatar {user} />
+					<!-- <div class="avatar">
+						{#if user.avatar_url}
+							<img src={user.avatar_url} alt="User avatar" />
+						{:else}
+							<div class="avatar-placeholder">
+								{user.display_name?.charAt(0)?.toUpperCase() || '?'}
+							</div>
+						{/if}
+					</div> -->
 					<span>
 						<label for="input_avatar_url">Avatar URL</label>
 						<input id="input_avatar_url" type="text" bind:value={user.avatar_url} />
 					</span>
 				</section>
 				<section id="sec-name">
-					<label for="input_display_name">Display Name</label>
+					<label for="input_display_name">Name</label>
 					<input id="input_display_name" type="text" bind:value={user.display_name} />
 				</section>
 				<section id="sec-email">
@@ -103,50 +98,24 @@
 						type="text"
 						bind:value={user.email}
 						class:input-error={accountIssues.has(AccountIssueTarget.email)}
-						oninput={debouncedCheckIssues}
 					/>
 					{#if accountIssues.has(AccountIssueTarget.email)}
-						<div class="validation-errors">
+						<TooltipHover forElement="#input_email" delay={0} position="bottom">
 							{#each accountIssues.get(AccountIssueTarget.email)! as emailIssue}
-								{emailIssue}
+								- {emailIssue}
 							{/each}
-						</div>
+						</TooltipHover>
 					{/if}
 				</section>
-				<section id="sec-passkey">
-					<label for="input_passkey">Password</label>
-					<input
-						id="input_passkey"
-						type="password"
-						bind:value={user.passkey}
-						class:input-error={accountIssues.has(AccountIssueTarget.password)}
-						oninput={debouncedCheckIssues}
-					/>
-					{#if accountIssues.has(AccountIssueTarget.password)}
-						<div class="validation-errors">
-							{#each accountIssues.get(AccountIssueTarget.password)! as passwordIssue}
-								{passwordIssue}
-							{/each}
-						</div>
-					{/if}
-				</section>
-				<section id="sec-passkey-confirm">
-					<label for="input_passkey_confirm">Confirm Password</label>
-					<input
-						id="input_passkey_confirm"
-						type="password"
-						bind:value={passConfirm}
-						class:input-error={accountIssues.has(AccountIssueTarget.passwordConfirm)}
-						oninput={debouncedCheckIssues}
-					/>
-					{#if accountIssues.has(AccountIssueTarget.passwordConfirm)}
-						<div class="validation-errors">
-							{#each accountIssues.get(AccountIssueTarget.passwordConfirm)! as passwordConfirmIssue}
-								{passwordConfirmIssue}
-							{/each}
-						</div>
-					{/if}
-				</section>
+				<!-- TODO Local Passkey <section id="sec-passkey">
+			<button>Passkey</button>
+			<input
+				id="input_passkey"
+				type="password"
+				bind:value={user.passkey}
+				oninput={handlePasswordInput}
+			/>
+		</section> -->
 				<!-- TODO App themes <section id="sec-theme">
 			<label for="select_theme">Theme</label>
 			<select id="select_theme">
@@ -181,42 +150,8 @@
 </div>
 
 <style>
-	:global(#sec-avatar) {
-		flex-direction: row;
-		gap: 2rem;
-		:global(.user-avatar) {
-			align-self: center;
-			width: 8rem;
-		}
-		span {
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			width: 100%;
-		}
-	}
-
-	.issues-section {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		width: 100%;
-
-		section {
-			display: flex;
-			flex-direction: column;
-		}
-	}
 	.input-error {
-		background-color: #ffe5e5;
-	}
-
-	.validation-errors {
-		margin-top: 0.2rem;
-		border-radius: 5px;
-		color: #c97070;
-		text-align: end;
-		font-size: small;
+		background-color: #ffa5a5;
 	}
 
 	.loading,

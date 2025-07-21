@@ -1,7 +1,7 @@
-export { default as localAuthProvider } from './BrowserAuthProvider';
+export { default as BrowserAuthProvider } from './BrowserAuthProvider';
 export type { 
     User, 
-    StoredUser as LocalUserProxy,
+    StoredUser,
     SignInCredentials,
     SignUpDetails,
     UnsubscribeFn

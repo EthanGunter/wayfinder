@@ -54,6 +54,8 @@ export interface ITaskCRUDProvider {
 
   deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
   deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>;
+  
+  changeOwnership(oldUserID: string, newUserID: string): Promise<Result<Task[], Err>>;
 }
 
 export interface ITaskRelationProvider {

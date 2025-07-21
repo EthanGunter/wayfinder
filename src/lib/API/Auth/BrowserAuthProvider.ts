@@ -1,11 +1,13 @@
 import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
 import type { StoredUser, UnsubscribeFn } from './types';
-import type { IProvider } from '../Tasks';
+import type { IProvider, ITaskProvider } from '../Tasks';
 import { AUTH_STORE_NAME, authDBPromise, type AuthDB } from '../localDB';
 
-interface LocalAuthAPI {
-  getCurrentUser: () => Promise<StoredUser | null>
+export interface LocalAuthAPI {
+  getCurrentUser: () => Promise<StoredUser | null>,
+  createUser: (user: StoredUser) => Promise<StoredUser>,
+  getUser: (id: string) => Promise<StoredUser | null>,
   signUp: (details: { displayName: string; passkey?: string }) => Promise<StoredUser>,
   signIn: (userId: string, passkey?: string) => Promise<StoredUser>,
   signOut: () => Promise<void>,
@@ -20,32 +22,23 @@ interface LocalAuthAPI {
 }
 
 let db: IDBPDatabase<AuthDB> | null;
+let remoteAPI: ITaskProvider | null;
 let currentUserId: string | null = null;
 const authStateListeners: Set<(user: StoredUser | null) => void> = new Set();
 
-const localAuthProvider: IProvider<LocalAuthAPI> = {
-  get: async function () {
-    db = await authDBPromise;
+const localAuth = {
+  createUser: async (user: StoredUser): Promise<StoredUser> => {
+    assertDB(db);
+    await db.put(AUTH_STORE_NAME, user);
+    return user;
+  },
+  getUser: async (userId: string): Promise<StoredUser | null> => {
+    assertDB(db);
+    const user = await db.get(AUTH_STORE_NAME, userId);
 
-    // Initialize with most recent user or create anonymous
-    const mostRecentUser = await getMostRecentUser();
-    if (mostRecentUser) {
-      await setCurrentUser(mostRecentUser.id);
-    } else {
-      await activateNewAnonymousUser();
-    }
-    return api;
+    return /*toLocalUserProxy(*/user/*)*/ ?? null;
   },
 
-  close: async function () {
-    db?.close();
-    db = null;
-    currentUserId = null;
-    authStateListeners.clear();
-  }
-};
-
-const authOperations = {
   getCurrentUser: async function (): Promise<StoredUser | null> {
     assertDB(db);
     if (!currentUserId) return null;
@@ -244,7 +237,6 @@ async function getMostRecentUser(): Promise<StoredUser | null> {
   return users[0];
 }
 
-
 async function activateNewAnonymousUser(): Promise<StoredUser> {
   assertDB(db);
 
@@ -261,6 +253,7 @@ async function activateNewAnonymousUser(): Promise<StoredUser> {
 
   return /*toLocalUserProxy(*/anonymousUser/*)*/;
 }
+
 async function getAnonymousUser(): Promise<StoredUser | null> {
   assertDB(db);
   const users = await db.getAll(AUTH_STORE_NAME);
@@ -282,16 +275,36 @@ function verifyPasskey(provided: string, stored: string): boolean {
 
 // #endregion
 
-// Combine all functionality
 const api: LocalAuthAPI = {
-  ...authOperations,
-  // Re-export specific functions that might be needed directly
-  activateNewAnonymousUser,
+  ...localAuth,
+  getMostRecentUser,
   getAnonymousUser,
-  getMostRecentUser
+  activateNewAnonymousUser,
+}
+
+const BrowserAuthProvider: IProvider<LocalAuthAPI> = {
+  get: async function () {
+    db = await authDBPromise;
+
+    // Initialize with most recent user or create anonymous
+    const mostRecentUser = await getMostRecentUser();
+    if (mostRecentUser) {
+      await setCurrentUser(mostRecentUser.id);
+    } else {
+      await activateNewAnonymousUser();
+    }
+    return api;
+  },
+
+  close: async function () {
+    db?.close();
+    db = null;
+    currentUserId = null;
+    authStateListeners.clear();
+  }
 };
 
-export default localAuthProvider;
+export default BrowserAuthProvider;
 
 // Export for testing
 export { db, currentUserId };
