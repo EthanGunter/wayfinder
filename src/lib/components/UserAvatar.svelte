@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { User, StoredUser } from '$lib/API/Auth/types';
+	import type { StoredUser } from '$lib/API/Auth/types';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';

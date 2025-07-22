@@ -23,6 +23,10 @@ export interface IProvider<T> {
   get(): Promise<T>;
   close(): Promise<void>
 }
+export interface IWrappedProvider<T> {
+  get(internal: T): Promise<T>;
+  close(): Promise<void>
+}
 
 // TODO narrow error types once concrete classes are implemented
 // TODO break into more specific interfaces
@@ -54,7 +58,7 @@ export interface ITaskCRUDProvider {
 
   deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
   deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>;
-  
+
   changeOwnership(oldUserID: string, newUserID: string): Promise<Result<Task[], Err>>;
 }
 

@@ -36,11 +36,6 @@
 		event.preventDefault();
 		if (event.currentTarget.value === '') user.display_name = undefined;
 	}
-
-	function handlePasswordInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
-		event.preventDefault();
-		if (event.currentTarget.value === '') user.passkey = undefined;
-	}
 </script>
 
 <div id="account-page" class="page">

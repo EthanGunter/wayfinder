@@ -1,117 +1,60 @@
 import supabase from '$lib/API/SupabaseClient'
 import { err, ok, type Result } from 'neverthrow';
-import type { SignInCredentials, SignOutOptions, SignUpDetails, StoredUser, UnsubscribeFn, User } from './types';
+import {
+    AccountIssueTarget,
+    type IAuthCore,
+    type IAuthProvider,
+    type IMigrationProvider,
+    type MigrationRequirements,
+    type SignInCredentials,
+    type SignOutOptions,
+    type StoredUser,
+    type UnsubscribeFn,
+    type User,
+    type UserData,
+} from './types';
 import type { IProvider } from '../Tasks';
 import type { UserAttributes } from '@supabase/supabase-js';
-import { NotFoundError, Err } from '$lib/Errors';
+import { NotFoundError, Err, InvalidStateError, IOError, type UnknownError, NotImplementedError, NotHandledError, ArgumentError } from '$lib/Errors';
 
-interface AuthProvider {
-    getCurrentUser: () => Promise<User | null>
-    signUp: (details: SignUpDetails) => Promise<User>,
-    signIn: (cred: SignInCredentials) => Promise<User>,
-    signOut: (options?: SignOutOptions) => Promise<Result<void, Err>>,
-    updateUser: (update: Partial<StoredUser> & { id: string }) => Promise<Result<User, Err>>,
-    deleteUser: (userId: string) => Promise<void>,
-    onAuthStateChanged: (callback: (user: User | null) => void) => UnsubscribeFn,
-    getMigrationNeeds: (user: StoredUser) => MigrationRequirements[],
-    migrateUser: (user: StoredUser) => Promise<Result<User, MigrationRequirements[]>>
-}
+const core: IAuthCore = {
+    signUp: async function (creds: SignInCredentials, userData: UserData): Promise<Result<User, UnknownError>> {
+        const authRes = await supabase.auth.signUp({
+            email: creds.email,
+            password: creds.password,
+            options: {
+                data: userData,
+            }
+        })
+        if (authRes.error) { throw new NotHandledError(authRes.error); }
 
-export const supabaseAuth: AuthProvider = {
-    getCurrentUser: async (): Promise<User | null> => {
+        if (authRes.data.user) {
+            return ok(authRes.data.user);
+        } else throw new NotHandledError("supabase.auth.signUp returned a null user");
+    },
+
+    getUser: function (id: string): Promise<Result<User, NotFoundError>> {
+        throw new Error('Function not implemented.');
+    },
+
+    getCurrentUser: async function (): Promise<Result<User, InvalidStateError | UnknownError>> {
         const userRes = await supabase.auth.getUser();
         if (userRes.error) {
-            console.error(userRes.error); // TODO DEV ONLY
-            return null;
+            throw userRes.error; // TODO DEV ONLY
         } else {
             const user = userRes.data.user;
-            return {
+            return ok({
                 id: user.id,
                 display_name: user.user_metadata.displayName,
                 avatar_url: user.user_metadata.avatarUrl,
-            };
+            });
         }
-    },
-
-    signIn: async (cred: SignInCredentials): Promise<any> => {
-        switch (cred.type) {
-            case 'email_password': {
-                const res = await supabase.auth.signInWithPassword({
-                    email: cred.email,
-                    password: cred.password,
-                });
-                if (res.error) {
-                    console.error(res.error);
-                } else return res.data;
-            }
-            default: throw new Error(`Sign-in method not implemented: ${cred.type}`);
-        }
-    },
-
-    signUp: async (details: SignUpDetails): Promise<any> => {
-        switch (details.type) {
-            case 'email_password': {
-                const res = await supabase.auth.signUp({
-                    email: details.email,
-                    password: details.password,
-                });
-                if (res.error) {
-                    console.error(res.error);
-                } else return res.data;
-            }
-            default: throw new Error(`Sign-up method not supported by Supabase: ${details.type}`);
-        }
-    },
-
-    signOut: async (options?: SignOutOptions): Promise<Result<void, Err>> => {
-        let scope: 'global' | 'local' | 'others' = options?.signOutSelf ? (options.signOutOthers ? 'global' : 'local') : 'others';
-        const error = await supabase.auth.signOut({ scope });
-        if (error.error) {
-            Err.Wrap(error.error);
-        }
-        return ok();
-    },
-
-    onAuthStateChanged: (callback: any): UnsubscribeFn => {
-        const { data } = supabase.auth.onAuthStateChange(callback);
-        return data.subscription.unsubscribe;
-    },
-
-    getMigrationNeeds: (user: StoredUser): MigrationRequirements[] => {
-        const issues: MigrationRequirements[] = [];
-
-
-        if (!user.email || user.email == '') {
-            issues.push({ target: AccountIssueTarget.email, message: "Email required" });
-        } else if (!user.email.match(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+[.][A-Za-z.]{2,}$/)) {
-            issues.push({ target: AccountIssueTarget.email, message: "Email format invalid" });
-        }
-
-
-        if (!user.passkey) {
-            issues.push({ target: AccountIssueTarget.password, message: "Password required" });
-        } else if (user.passkey.length < 8) {
-            issues.push({ target: AccountIssueTarget.password, message: "Password must be at least 8 characters" });
-        }
-
-        return issues;
-    },
-
-    // TODO Convert to function* and yield progress results
-    migrateUser: async (user: StoredUser): Promise<Result<User, MigrationRequirements[]>> => {
-        const migNeeds = supabaseAuth.getMigrationNeeds(user);
-        if (migNeeds.length > 0) return err(migNeeds);
-
-        // TODO Manage Supabase account migration
-        console.log("Mocking Supabase migration");
-        // await sup
-        return ok({} as StoredUser);
     },
 
     updateUser: async function (update: Partial<StoredUser> & { id: string; }): Promise<Result<User, Err>> {
         const updatedUser: UserAttributes = {
-            email: update.email,
-            password: update.passkey,
+            // email: update.email,
+            // password: update.password, // TODO This feels like it should be its own, more secure function
             data: {
                 last_synced: update.last_synced,
                 last_active: new Date(),
@@ -120,7 +63,7 @@ export const supabaseAuth: AuthProvider = {
             }
         };
 
-        const userResponse = await supabase.auth.updateUser(updatedUser,)
+        const userResponse = await supabase.auth.updateUser(updatedUser);
         if (userResponse.error) {
             console.error(userResponse.error);
             return err(Err.Wrap(userResponse.error));
@@ -139,27 +82,90 @@ export const supabaseAuth: AuthProvider = {
         // }
     },
 
-    deleteUser: async function (userId: string): Promise<void> {
+    deleteUser: async function (userId: string): Promise<Result<void, UnknownError>> {
         // TODO deleting users requires admin access...
         // Common suggestion is to have a public.users/profiles table with a foreign-key constraint to auth.users...
-        return;
-    }
+        throw new NotImplementedError("SupabaseAuth.deleteUser");
+    },
+
+    signIn: async (cred: SignInCredentials): Promise<any> => {
+        switch (cred.type) {
+            case 'email_password': {
+                const res = await supabase.auth.signInWithPassword({
+                    email: cred.email,
+                    password: cred.password,
+                });
+                if (res.error) {
+                    console.error(res.error);
+                } else return res.data;
+            }
+            default: throw new Error(`${cred.type} sign-in method not implemented`);
+        }
+    },
+
+    signOut: async (options?: SignOutOptions): Promise<Result<void, Err>> => {
+        let scope: 'global' | 'local' | 'others' = options?.signOutSelf ? (options.signOutOthers ? 'global' : 'local') : 'others';
+        const error = await supabase.auth.signOut({ scope });
+        if (error.error) {
+            Err.Wrap(error.error).logError();
+        }
+        return ok();
+    },
+
+    onAuthStateChanged: (callback: any): UnsubscribeFn => {
+        const { data } = supabase.auth.onAuthStateChange(callback);
+        return data.subscription.unsubscribe;
+    },
 }
 
+const migrator: IMigrationProvider = {
+    getMigrationNeeds: function (cred) {
+        const issues: MigrationRequirements[] = [];
 
-interface MigrationRequirements {
-    target: AccountIssueTarget;
-    message: string;
+        switch (cred.type) {
+            case "email_password":
+                if (!cred.email || cred.email == '') {
+                    issues.push({ target: AccountIssueTarget.email, message: "Email required" });
+                } else if (!cred.email.match(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+[.][A-Za-z.]{2,}$/)) {
+                    issues.push({ target: AccountIssueTarget.email, message: "Email format invalid" });
+                }
+
+                if (!cred.password) {
+                    issues.push({ target: AccountIssueTarget.password, message: "Password required" });
+                } else if (cred.password.length < 8) {
+                    issues.push({ target: AccountIssueTarget.password, message: "Password must be at least 8 characters" });
+                }
+                break;
+            default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${cred.type}`));
+        }
+
+        return ok(issues);
+    },
+
+    // TODO Convert to function* and yield progress results
+    migrate: async function (user, creds) {
+        const migNeedsRes = supabaseAuth.getMigrationNeeds(creds);
+        if (migNeedsRes.isErr()) return err(migNeedsRes.error);
+        else if (migNeedsRes.value.length > 0) return err(migNeedsRes.value);
+
+        switch (creds.type) {
+            case "email_password":
+                // TODO Manage Supabase account migration
+                console.log("Mocking Supabase migration");
+                // await sup
+                break;
+            default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${creds.type}`));
+        }
+        throw new NotImplementedError("SupabaseAuth.migrate");
+    },
 }
-export enum AccountIssueTarget {
-    email,
-    password,
-    passwordConfirm
+
+const supabaseAuth: IAuthProvider = {
+    ...core,
+    ...migrator
 }
 
-
-
-const provider: IProvider<AuthProvider> = {
+const provider: IProvider<IAuthProvider> = {
     get: async () => supabaseAuth,
     close: async () => { },
 }

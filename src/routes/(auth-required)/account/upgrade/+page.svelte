@@ -1,18 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import {
-		AccountIssueTarget,
-		getMigrationNeeds,
-		migrateUser
-	} from '$lib/API/Auth/SupabaseAuth.js';
+	import { type SignInCredentials, AccountIssueTarget } from '$lib/API/Auth/types.js';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TooltipHover from '$lib/components/overlays/TooltipHover.svelte';
-	import TooltipStatic from '$lib/components/overlays/TooltipStatic.svelte';
+	import { NotImplementedError } from '$lib/Errors.js';
 
 	// Svelte 5 state
 	const { data } = $props();
 	const user = $state(data.user);
+	let cred = $state<SignInCredentials>({
+		type: 'email_password',
+		email: '',
+		password: ''
+	});
 	let accountIssues = $state<Map<AccountIssueTarget, Set<string>>>(new Map());
 
 	$effect(() => {
@@ -25,16 +26,22 @@
 
 	async function checkAccountIssues() {
 		const uiIssues = new Map();
-		const issues = getMigrationNeeds(user);
-		for (const issue of issues) {
-			if (uiIssues.has(issue.target)) {
-				uiIssues.get(issue.target)!.add(issue.message);
-			} else {
-				uiIssues.set(issue.target, new Set([issue.message]));
+		data.authAPI.getMigrationNeeds(cred).match(
+			(issues) => {
+				for (const issue of issues) {
+					if (uiIssues.has(issue.target)) {
+						uiIssues.get(issue.target)!.add(issue.message);
+					} else {
+						uiIssues.set(issue.target, new Set([issue.message]));
+					}
+				}
+				accountIssues = uiIssues;
+			},
+			(err) => {
+				// Should never happen
+				err.logError(); // TODO Dev only
 			}
-		}
-		console.log('Recieved issues:', uiIssues);
-		accountIssues = uiIssues;
+		);
 	}
 
 	async function handleMigration() {
@@ -42,17 +49,22 @@
 			throw new Error('Invalid user for migration');
 		}
 		const uiIssues = new Map();
-		const migRes = await migrateUser(user);
+		const migRes = await data.authAPI.migrate(user, cred);
 		if (migRes.isErr()) {
-			for (const err of migRes.error) {
-				if (uiIssues.has(err.target)) {
-					uiIssues.get(err.target)!.add(err.message);
-				} else {
-					uiIssues.set(err.target, new Set(err.message));
+			if (migRes.error instanceof NotImplementedError) {
+				// Should never happen
+				migRes.error.logError(); // TODO Dev only
+			} else {
+				for (const err of migRes.error) {
+					if (uiIssues.has(err.target)) {
+						uiIssues.get(err.target)!.add(err.message);
+					} else {
+						uiIssues.set(err.target, new Set(err.message));
+					}
 				}
+				accountIssues = uiIssues;
+				return;
 			}
-			accountIssues = uiIssues;
-			return;
 		}
 	}
 </script>
@@ -96,7 +108,7 @@
 					<input
 						id="input_email"
 						type="text"
-						bind:value={user.email}
+						bind:value={cred.email}
 						class:input-error={accountIssues.has(AccountIssueTarget.email)}
 					/>
 					{#if accountIssues.has(AccountIssueTarget.email)}

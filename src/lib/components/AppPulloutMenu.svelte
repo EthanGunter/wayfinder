@@ -2,6 +2,7 @@
 	import { dev as DEVELOPMENT } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 	import type { StoredUser } from '$lib/API/Auth/types';
+	import { TASK_TABLE_NAME } from '$lib/API/localDB';
 	import supabase from '$lib/API/SupabaseClient';
 	import provider from '$lib/API/Tasks/BrowserTaskProvider';
 	import { devStore } from '$lib/stores/devStore.svelte';
@@ -49,7 +50,7 @@
 					class="alert"
 					onclick={async () => {
 						if (!user) throw new Error(`No user could be found to delete all tasks...`);
-						await supabase.from(TASK_STORE_NAME).delete().eq('user_id', user.id); // basically WHERE true
+						await supabase.from(TASK_TABLE_NAME).delete().eq('user_id', user.id); // basically WHERE true
 						showPullout = false;
 						window.location.reload();
 					}}>Delete all tasks from Supabase</button

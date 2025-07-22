@@ -1,9 +1,12 @@
 export enum ErrorTypes {
+    PlaceholderError = "PlaceholderError",
     ArgumentError = "ArgumentError",
+    InvalidState = "InvalidStateError",
     NotFoundError = "NotFoundError",
     ParseError = "ParseError",
     IOError = "IOError",
     NotImplementedError = "NotImplementedError",
+    NotHandledError = "NotHandledError",
 }
 
 export class Err {
@@ -59,9 +62,16 @@ export class Err {
     };
 }
 
+export type UnknownError = Err;
+
+export class InvalidStateError extends Err {
+    constructor(message: string) {
+        super(1, ErrorTypes.InvalidState, message);
+    }
+}
 export class ArgumentError extends Err {
-    constructor(argument: string, reason: string) {
-        super(1, ErrorTypes.ArgumentError, `${argument} invalid`, reason);
+    constructor(argument: any, reason: string) {
+        super(1, ErrorTypes.ArgumentError, reason, argument);
     }
 }
 
@@ -92,5 +102,13 @@ export class IOError extends Err {
 export class NotImplementedError extends Err {
     constructor(methodName: string) {
         super(1, ErrorTypes.NotImplementedError, `${methodName} not implemented`);
+    }
+}
+
+// TODO This class should automatically send an error to the dev team
+export class NotHandledError extends Err {
+    constructor(error: any) {
+        super(1, ErrorTypes.NotHandledError, `Error not properly handled`, error);
+        this.withTrace(5);
     }
 }
