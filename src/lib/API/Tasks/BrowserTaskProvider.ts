@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { type CreateTaskDTO, type IAdvancedTaskAPI, type ITaskCrudAPI, type ITaskExporter, type ITaskAPI, type ITaskRelationAPI } from './types';
+import { type CreateTaskDTO, type IAdvancedTaskAPI, type ITaskCrudAPI, type ITaskExporter, type ITaskAPI, type ITaskRelationAPI, type ITaskReverter, type ITaskCrudAPIReverter } from './types';
 import { err, ok, Result } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError } from '$lib/Errors';
 import { v4 } from 'uuid';
@@ -8,11 +8,12 @@ import { updateRelationships } from '.';
 import JSZip from 'jszip';
 import { TASK_TABLE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
 import type { ILocalTaskProvider, IProvider } from '../types';
+import type { SyncQueue } from '../SyncQueue';
 
 // TODO: Implement update queue system
 // TODO: Wrap the task API so we call local functions first, then the remote,
 // TODO: and handle rolling back local changes whenever the remote fails...
-const taskCRUD: ITaskCrudAPI = {
+const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
   /**
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
@@ -48,7 +49,7 @@ const taskCRUD: ITaskCrudAPI = {
   * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
   * @error {@link IOError} if the IndexedDB.put() attempt fails
   */
-  createTasks: async function (tasks: CreateTaskDTO[]): Promise<Result<Task[], IOError | ParseError>> {
+  createTasks: async function (tasks: CreateTaskDTO[]) {
     assertDB(db);
     const createdTasks: Task[] = [];
     const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
@@ -103,7 +104,7 @@ const taskCRUD: ITaskCrudAPI = {
    * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  getTask: async function (id: string): Promise<Result<Task, NotFoundError | ParseError>> {
+  getTask: async function (id: string) {
     assertDB(db);
     // if (key.endsWith(".md")) {
     //   // Filepath
@@ -124,7 +125,7 @@ const taskCRUD: ITaskCrudAPI = {
     // }
   },
 
-  getTasks: async function (ids: string[]): Promise<Result<Task[], NotFoundError | Err>> {
+  getTasks: async function (ids: string[]) {
     assertDB(db);
     const tasks: Task[] = [];
     const notFoundIds: string[] = [];
@@ -161,7 +162,7 @@ const taskCRUD: ITaskCrudAPI = {
    * @error {@link IOError} if IndexedDB.put() fails
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  updateTask: async function (key: string, updates: Partial<Task>): Promise<Result<Task, Err>> {
+  updateTask: async function (key: string, updates: Partial<Task>) {
     return (await taskCRUD.getTask(key)).match(
       async (task) => {
         assertDB(db);
@@ -259,7 +260,7 @@ const taskCRUD: ITaskCrudAPI = {
    * @param recursive NOT IMPLEMENTED
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  deleteTask: async function (id: string, recursive?: boolean): Promise<Result<void, Err>> {
+  deleteTask: async function (id: string, recursive?: boolean) {
     assertDB(db);
     if (recursive) Err.throw(new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)"));
 
@@ -287,7 +288,7 @@ const taskCRUD: ITaskCrudAPI = {
     else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"));
   },
 
-  deleteTasks: async function (list: { id: string; recursive?: boolean; }[]): Promise<Result<void, Err>> {
+  deleteTasks: async function (list: { id: string; recursive?: boolean; }[]) {
     assertDB(db);
 
     if (list.some(item => item.recursive)) {
@@ -330,7 +331,7 @@ const taskCRUD: ITaskCrudAPI = {
     }
   },
 
-  changeOwnership: async function (oldUserID: string, newUserID: string): Promise<Result<Task[], Err>> {
+  changeOwnership: async function (oldUserID: string, newUserID: string) {
     assertDB(db);
     const originalTasks = await db.getAllFromIndex('tasks', 'by-user', oldUserID);
     const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
@@ -539,6 +540,8 @@ const BrowserTaskProvider: ILocalTaskProvider = {
     db = null;
   }
 }
+
+export const authSyncQueue: SyncQueue<Omit<ITaskAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, ITaskReverter> | null = null;
 
 export default BrowserTaskProvider;
 
