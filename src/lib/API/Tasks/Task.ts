@@ -1,7 +1,8 @@
 import { ParseError } from "$lib/Errors";
-import { Result, err, ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import yaml from 'js-yaml'
 import type { CreateTaskDTO, PopulatedTaskDTO } from "./types";
+import type { Result } from "../types";
 
 export interface TaskData {
     id: string,

@@ -1,6 +1,6 @@
 import { Err, IOError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Result, err, ok } from "neverthrow";
+import { err, ok } from "neverthrow";
 import type {
   ITaskAPI,
   ITaskCrudAPI,

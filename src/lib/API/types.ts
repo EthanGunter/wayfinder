@@ -1,7 +1,9 @@
-import type { Err } from "$lib/Errors";
-import type { Result } from "neverthrow";
+import type { Err, UnknownError } from "$lib/Errors";
+import type { Result as _Result } from "neverthrow";
 import type { IAuthAPI, ILocalAuthAPI, ILocalAuthFunctions } from "./Auth/types";
 import type { ITaskExporter, ITaskAPI } from "./Tasks";
+
+export type Result<T, E extends Err = UnknownError> = _Result<T, E>
 
 export interface IProvider<T> {
   get(): Promise<T>;
@@ -18,4 +20,4 @@ export interface ILocalAuthProvider {
   close(): Promise<void>
 }
 
-export type BatchResult<T, E extends Err> = Result<T, E>[]
+export type BatchResult<T, TE extends Err = UnknownError, E extends Err = UnknownError> = Result<Result<T, TE>[], E>

@@ -1,9 +1,8 @@
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
-import type { NotFoundError, ParseError, Err } from "$lib/Errors";
-import type { Result, ResultAsync } from "neverthrow";
+import type { NotFoundError, Err } from "$lib/Errors";
 import type { Task, TaskData } from "./Task";
-import type { BatchResult } from "../types";
+import type { BatchResult, Result } from "../types";
 
 // All fields in the Omit<> become optional
 export type CreateTaskDTO = Partial<TaskData> & Omit<TaskData,
@@ -35,7 +34,7 @@ export interface ITaskCrudAPI {
    */
   // TODO-test: sets up relationships if parent(s) or children are populated
   createTask(task: CreateTaskDTO): Promise<Result<Task, Err>>;
-  createTasks(tasks: CreateTaskDTO[]): Promise<BatchResult<Task, Err>>;
+  createTasks(tasks: CreateTaskDTO[]): Promise<BatchResult<Task>>;
   /**
    * Fetches a task's data by its ID
    */
@@ -46,7 +45,7 @@ export interface ITaskCrudAPI {
    * @param task can be passed as an id
    */
   updateTask(task: string | Task, changes: Partial<Task>): Promise<Result<Task, Err>>;
-  updateTasks(list: { task: string | Task, changes: Partial<Task> }[]): Promise<BatchResult<Task, Err>>;
+  updateTasks(list: { task: string | Task, changes: Partial<Task> }[]): Promise<BatchResult<Task>>;
 
   deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
   deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>;

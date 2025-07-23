@@ -1,7 +1,7 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { type CreateTaskDTO, type ITaskAPI } from './types';
-import { Result, err, ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { NotFoundError, IOError, ParseError, NotImplementedError } from '$lib/Errors';
 import * as path from 'path'
 import { v4 } from 'uuid';

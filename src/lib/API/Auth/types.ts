@@ -1,6 +1,6 @@
-import type { Result } from "neverthrow";
 import type { ITaskAPI as ITaskAPI } from "../Tasks";
-import type { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError, UnknownError } from "$lib/Errors";
+import type { InvalidStateError, NotFoundError, NotImplementedError } from "$lib/Errors";
+import type { Result } from "../types";
 
 export interface UserData {
     display_name?: string;
@@ -37,13 +37,13 @@ export enum AccountIssueTarget {
 }
 
 export interface IAuthCore {
-    signUp: (creds: SignInCredentials, userData: UserData) => Promise<Result<User, UnknownError>>,
+    signUp: (creds: SignInCredentials, userData: UserData) => Promise<Result<User>>,
     getUser: (id: string) => Promise<Result<User, NotFoundError>>,
-    getCurrentUser: () => Promise<Result<User, InvalidStateError | UnknownError>>,
-    updateUser: (updates: Partial<User> & { id: string }) => Promise<Result<User, UnknownError>>,
-    deleteUser: (userId: string) => Promise<Result<void, UnknownError>>,
-    signIn: (creds: SignInCredentials) => Promise<Result<User, UnknownError>>,
-    signOut: () => Promise<Result<void, UnknownError>>,
+    getCurrentUser: () => Promise<Result<User, InvalidStateError>>,
+    updateUser: (updates: Partial<User> & { id: string }) => Promise<Result<User>>,
+    deleteUser: (userId: string) => Promise<Result<void>>,
+    signIn: (creds: SignInCredentials) => Promise<Result<User>>,
+    signOut: () => Promise<Result<void>>,
     // onAuthStateChanged: (callback: (user: StoredUser | null) => void) => UnsubscribeFn,
 }
 export type UnsubscribeFn = () => void;
@@ -56,11 +56,11 @@ export interface IAuthCoreReverter {
 }
 
 export interface IMigrationAPI {
-    getMigrationRequirements: (signUpCred: SignInCredentials) => Result<MigrationRequirements[], NotImplementedError | UnknownError>,
+    getMigrationRequirements: (signUpCred: SignInCredentials) => Result<MigrationRequirements[], NotImplementedError>,
     migrate: (user: StoredUser, signUpCred: SignInCredentials, taskProvider: ITaskAPI) => Promise<Result<User, InvalidStateError>>
 }
 export type ILocalMigrationAPI = Omit<IMigrationAPI, "migrate"> & {
-    migrate: (user: StoredUser, signUpCred: SignInCredentials) => Promise<Result<User, InvalidStateError | NotImplementedError | UnknownError>>
+    migrate: (user: StoredUser, signUpCred: SignInCredentials) => Promise<Result<User, InvalidStateError | NotImplementedError>>
 }
 export interface IMigrationReverter {
     undoMigrate: (user: StoredUser, signUpCred: SignInCredentials, taskProvider: ITaskAPI) => Promise<Result<User, InvalidStateError>>
@@ -68,9 +68,9 @@ export interface IMigrationReverter {
 
 // TODO Return results
 export interface ILocalAuthFunctions {
-    createUser: (user: StoredUser) => Promise<Result<StoredUser, UnknownError>>
+    createUser: (user: StoredUser) => Promise<Result<StoredUser>>
     getMostRecentUser: () => Promise<StoredUser | null>,
-    updateUser: (updates: Partial<StoredUser> & { id: string, oldId?: string }) => Promise<Result<StoredUser, UnknownError>>,
+    updateUser: (updates: Partial<StoredUser> & { id: string, oldId?: string }) => Promise<Result<StoredUser>>,
     listUsers: () => Promise<StoredUser[]>,
     switchUser: (userId: string) => Promise<StoredUser>,
     activateNewAnonymousUser: () => Promise<StoredUser>,

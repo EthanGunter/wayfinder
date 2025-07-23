@@ -1,5 +1,5 @@
 // resultMatchers.ts
-import { Result } from 'neverthrow';
+import type { Result } from '$lib/API/types';
 import { Err } from '$lib/Errors';
 import { expect } from 'vitest';
 

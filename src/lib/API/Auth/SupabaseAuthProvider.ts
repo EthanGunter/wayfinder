@@ -1,5 +1,5 @@
 import supabase from '$lib/API/SupabaseClient'
-import { err, ok, type Result } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import {
     AccountIssueTarget,
     type IAuthCore,
@@ -15,13 +15,13 @@ import {
 } from './types';
 import type { ITaskAPI, Task } from '../Tasks';
 import type { UserAttributes } from '@supabase/supabase-js';
-import { NotFoundError, Err, InvalidStateError, IOError, type UnknownError, NotImplementedError, NotHandledError, ArgumentError } from '$lib/Errors';
+import { NotFoundError, Err, InvalidStateError, NotImplementedError, NotHandledError } from '$lib/Errors';
 import BrowserAuthProvider from './BrowserAuthProvider';
 import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 import type { IProvider } from '../types';
 
 const core: IAuthCore = {
-    signUp: async function (creds: SignInCredentials, userData: UserData): Promise<Result<User, UnknownError>> {
+    signUp: async function (creds: SignInCredentials, userData: UserData) {
         const authRes = await supabase.auth.signUp({
             email: creds.email,
             password: creds.password,
@@ -36,11 +36,11 @@ const core: IAuthCore = {
         } else Err.throw(new NotHandledError("supabase.auth.signUp returned a null user"));
     },
 
-    getUser: function (id: string): Promise<Result<User, NotFoundError>> {
+    getUser: function (id: string) {
         Err.throw(new NotImplementedError("SupabaseAuthProvider.getUser"));
     },
 
-    getCurrentUser: async function (): Promise<Result<User, InvalidStateError | UnknownError>> {
+    getCurrentUser: async function () {
         const userRes = await supabase.auth.getUser();
         if (userRes.error) {
             Err.throw(userRes.error); // TODO DEV ONLY
@@ -54,7 +54,7 @@ const core: IAuthCore = {
         }
     },
 
-    updateUser: async function (update: Partial<StoredUser> & { id: string; }): Promise<Result<User, Err>> {
+    updateUser: async function (update: Partial<StoredUser> & { id: string; }) {
         const updatedUser: UserAttributes = {
             // email: update.email,
             // password: update.password, // TODO This feels like it should be its own, more secure function
@@ -85,14 +85,14 @@ const core: IAuthCore = {
         // }
     },
 
-    deleteUser: async function (userId: string): Promise<Result<void, UnknownError>> {
+    deleteUser: async function (userId: string) {
         // TODO deleting users requires admin access...
         // Common suggestion is to have a public.users/profiles table with a foreign-key constraint to auth.users...
         // Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
         Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
     },
 
-    signIn: async (cred: SignInCredentials): Promise<any> => {
+    signIn: async function (cred: SignInCredentials) {
         switch (cred.type) {
             case 'email_password': {
                 const res = await supabase.auth.signInWithPassword({
@@ -107,7 +107,7 @@ const core: IAuthCore = {
         }
     },
 
-    signOut: async (options?: SignOutOptions): Promise<Result<void, Err>> => {
+    signOut: async function (options?: SignOutOptions) {
         let scope: 'global' | 'local' | 'others' = options?.signOutSelf ? (options.signOutOthers ? 'global' : 'local') : 'others';
         const error = await supabase.auth.signOut({ scope });
         if (error.error) {

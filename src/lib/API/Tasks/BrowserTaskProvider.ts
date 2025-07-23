@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { type CreateTaskDTO, type IAdvancedTaskAPI, type ITaskCrudAPI, type ITaskExporter, type ITaskAPI, type ITaskRelationAPI, type ITaskReverter, type ITaskCrudAPIReverter } from './types';
-import { err, ok, Result } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError } from '$lib/Errors';
 import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
@@ -18,7 +18,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
-  createTask: async function (task: CreateTaskDTO): Promise<Result<Task, IOError | ParseError>> {
+  createTask: async function (task: CreateTaskDTO) {
     assertDB(db);
     const preparedTask = new Task(task);
     preparedTask.created = new Date().toISOString();
@@ -69,9 +69,9 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
       await transaction.done;
 
       if (remoteDB) {
-        remoteDB.createTasks(tasks).then(result => {
-          if (result.isErr()) {
-            console.error("Remote createTasks failed, reverting local changes", result.error);
+        remoteDB.createTasks(tasks).then(results => {
+          if (results.isErr()) {
+            console.error("Remote createTasks failed, reverting local changes", results.error);
             const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
             for (const task of createdTasks) {
               tx.store.delete(task.id);
@@ -79,7 +79,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
             }
             tx.done;
           } else {
-            const remoteTasks = result.value;
+            const remoteTasks = results.value;
             const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
             for (let i = 0; i < createdTasks.length; i++) {
               const localTask = createdTasks[i];
@@ -365,7 +365,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
 }
 
 const taskRelations: ITaskRelationAPI = {
-  getChildrenOf: async function (task: string | Task): Promise<Result<Task[], Err>> {
+  getChildrenOf: async function (task: string | Task) {
     // First get the parent task to access its children array
     let parentTask: Task;
     if (typeof task === "string") {
@@ -390,7 +390,7 @@ const taskRelations: ITaskRelationAPI = {
 
     return ok(children);
   },
-  getParentsOf: async function (task: string | Task): Promise<Result<Task[], Err>> {
+  getParentsOf: async function (task: string | Task) {
     let childTask: Task;
 
     // Convert id to task object
@@ -412,7 +412,7 @@ const taskRelations: ITaskRelationAPI = {
     return ok([]);
   },
 
-  getRootTasks: async function (): Promise<Result<Task[], Err>> {
+  getRootTasks: async function () {
     assertDB(db);
     const allTasks = await db.getAll(TASK_TABLE_NAME);
     const rootTasks = allTasks.filter(task => task.parents.length === 0);
@@ -422,13 +422,13 @@ const taskRelations: ITaskRelationAPI = {
 
 
 const advancedFeatures: IAdvancedTaskAPI = {
-  getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
+  getTodaysTasks: async function () {
     assertDB(db);
     const allTasks = await db.getAll(TASK_TABLE_NAME);
     return ok(allTasks.filter(t => t.todays_task).map(t => new Task(t)));
   },
 
-  getPrioritizedTasks: async function (limit: number): Promise<Result<Task[], Err>> {
+  getPrioritizedTasks: async function (limit: number) {
     assertDB(db);
     let taskArray: Task[] = (await db.getAll(TASK_TABLE_NAME)).map(t => new Task(t));
 
@@ -481,13 +481,13 @@ const advancedFeatures: IAdvancedTaskAPI = {
     return ok(todoList);
   },
 
-  searchTasks: function (searchTerm: string): Promise<Task[]> {
+  searchTasks: function (searchTerm: string) {
     Err.throw(new NotImplementedError('BrowserTaskProvider.searchTasks'));
   },
 }
 
 const dataExporter: ITaskExporter = {
-  exportData: async function (simplify?: boolean): Promise<void> {
+  exportData: async function (simplify?: boolean) {
     assertDB(db);
     const taskData = await db.getAll(TASK_TABLE_NAME);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
@@ -517,7 +517,7 @@ const dataExporter: ITaskExporter = {
       URL.revokeObjectURL(url);
     });
   },
-  importData: function (data: string): Promise<number> {
+  importData: function (data: string) {
     Err.throw(new NotImplementedError('BrowserTaskProvider.importData'));
   }
 }
