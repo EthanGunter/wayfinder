@@ -20,9 +20,24 @@ const taskCRUD: ITaskCRUDProvider = {
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
 
+    await db.put(TASK_TABLE_NAME, preparedTask);
     updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
-    await db.put(TASK_TABLE_NAME, preparedTask);
+    if (remoteDB) {
+      remoteDB.createTask(task).then(result => {
+        if (result.isErr()) {
+          console.error("Remote createTask failed, reverting local change", result.error);
+          db?.delete(TASK_TABLE_NAME, preparedTask.id);
+          updateRelationships(api, { oldTask: preparedTask, newTask: null });
+        } else {
+          const remoteTask = result.value;
+          db?.delete(TASK_TABLE_NAME, preparedTask.id);
+          db?.put(TASK_TABLE_NAME, remoteTask);
+          updateRelationships(api, { oldTask: preparedTask, newTask: remoteTask });
+        }
+      });
+    }
+
     return ok(new Task(preparedTask));
   },
 
@@ -48,6 +63,32 @@ const taskCRUD: ITaskCRUDProvider = {
       }
 
       await transaction.done;
+
+      if (remoteDB) {
+        remoteDB.createTasks(tasks).then(result => {
+          if (result.isErr()) {
+            console.error("Remote createTasks failed, reverting local changes", result.error);
+            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
+            for (const task of createdTasks) {
+              tx.store.delete(task.id);
+              updateRelationships(api, { oldTask: task, newTask: null });
+            }
+            tx.done;
+          } else {
+            const remoteTasks = result.value;
+            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
+            for (let i = 0; i < createdTasks.length; i++) {
+              const localTask = createdTasks[i];
+              const remoteTask = remoteTasks[i];
+              tx.store.delete(localTask.id);
+              tx.store.put(remoteTask);
+              updateRelationships(api, { oldTask: localTask, newTask: remoteTask });
+            }
+            tx.done;
+          }
+        });
+      }
+
       return ok(createdTasks);
     } catch (e) {
       return err(new IOError("Batch create", "multiple tasks", e));
@@ -117,9 +158,25 @@ const taskCRUD: ITaskCRUDProvider = {
         assertDB(db);
         const updated: Task = new Task({ ...task, ...updates, last_edit: new Date().toISOString() });
 
+        await db.put(TASK_TABLE_NAME, updated);
         updateRelationships(api, { oldTask: task, newTask: updated });
 
-        await db.put(TASK_TABLE_NAME, updated);
+        if (remoteDB) {
+          remoteDB.updateTask(key, updates).then(result => {
+            if (result.isErr()) {
+              console.error("Remote updateTask failed, reverting local change", result.error);
+              db?.put(TASK_TABLE_NAME, task);
+              updateRelationships(api, { oldTask: updated, newTask: task });
+            } else {
+              const remoteTask = result.value;
+              if (JSON.stringify(remoteTask) !== JSON.stringify(updated)) {
+                db?.put(TASK_TABLE_NAME, remoteTask);
+                updateRelationships(api, { oldTask: updated, newTask: remoteTask });
+              }
+            }
+          });
+        }
+
         return ok(updated);
       },
       error => err(error)
@@ -129,11 +186,11 @@ const taskCRUD: ITaskCRUDProvider = {
   updateTasks: async function (list: { task: string | Task; updates: Partial<Task>; }[]): Promise<Result<Task[], Err>> {
     assertDB(db);
     const updatedTasks: Task[] = [];
+    const originalTasks: Task[] = [];
     const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     try {
       for (const { task, updates } of list) {
-        // Get the existing task
         let existingTask: Task;
         if (typeof task === 'string') {
           const taskResult = await taskCRUD.readTask(task);
@@ -144,8 +201,8 @@ const taskCRUD: ITaskCRUDProvider = {
         } else {
           existingTask = task;
         }
+        originalTasks.push(new Task(existingTask));
 
-        // Create updated task
         const updated: Task = new Task({
           ...existingTask,
           ...updates,
@@ -159,6 +216,29 @@ const taskCRUD: ITaskCRUDProvider = {
       }
 
       await transaction.done;
+
+      if (remoteDB) {
+        remoteDB.updateTasks(list).then(result => {
+          if (result.isErr()) {
+            console.error("Remote updateTasks failed, reverting local changes", result.error);
+            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
+            for (let i = 0; i < originalTasks.length; i++) {
+              tx.store.put(originalTasks[i]);
+              updateRelationships(api, { oldTask: updatedTasks[i], newTask: originalTasks[i] });
+            }
+            tx.done;
+          } else {
+            const remoteTasks = result.value;
+            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
+            for (let i = 0; i < remoteTasks.length; i++) {
+              tx.store.put(remoteTasks[i]);
+              updateRelationships(api, { oldTask: updatedTasks[i], newTask: remoteTasks[i] });
+            }
+            tx.done;
+          }
+        });
+      }
+
       return ok(updatedTasks);
     } catch (e) {
       return err(new IOError("Batch update", "multiple tasks", e));
@@ -176,16 +256,24 @@ const taskCRUD: ITaskCRUDProvider = {
 
     const task = await db.get(TASK_TABLE_NAME, id);
 
-    if (task/*  && task.filepath */) {
+    if (task) {
       try {
         await db.delete(TASK_TABLE_NAME, id);
+        updateRelationships(api, { oldTask: task, newTask: null });
+
+        if (remoteDB) {
+          remoteDB.deleteTask(id, recursive).then(result => {
+            if (result.isErr()) {
+              console.error("Remote deleteTask failed, reverting local change", result.error);
+              db?.put(TASK_TABLE_NAME, task);
+              updateRelationships(api, { oldTask: null, newTask: task });
+            }
+          });
+        }
+        return ok();
       } catch (e) {
-        // TODO Throw an error during development/testing ONLY
-        // https://github.com/LZS911/vite-plugin-conditional-compile
         throw new IOError("Delete", id, e);
       }
-      updateRelationships(api, { oldTask: task, newTask: null });
-      return ok();
     }
     else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"));
   },
@@ -193,24 +281,40 @@ const taskCRUD: ITaskCRUDProvider = {
   deleteTasks: async function (list: { id: string; recursive?: boolean; }[]): Promise<Result<void, Err>> {
     assertDB(db);
 
-    // Check if any deletion requests are recursive
     if (list.some(item => item.recursive)) {
       return err(new NotImplementedError("BrowserTaskStorage.deleteTasks with recursive = true"));
     }
 
     const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
+    const deletedTasks: TaskData[] = [];
 
     try {
       for (const { id } of list) {
         const task = await transaction.store.get(id);
 
         if (task) {
+          deletedTasks.push(task);
           await transaction.store.delete(id);
           updateRelationships(api, { oldTask: task, newTask: null });
         }
       }
 
       await transaction.done;
+
+      if (remoteDB) {
+        remoteDB.deleteTasks(list).then(result => {
+          if (result.isErr()) {
+            console.error("Remote deleteTasks failed, reverting local changes", result.error);
+            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
+            for (const task of deletedTasks) {
+              tx.store.put(task);
+              updateRelationships(api, { oldTask: null, newTask: task });
+            }
+            tx.done;
+          }
+        });
+      }
+
       return ok();
     } catch (e) {
       return err(new IOError("Batch delete", list.map(item => item.id).join(', '), e));
@@ -219,10 +323,31 @@ const taskCRUD: ITaskCRUDProvider = {
 
   changeOwnership: async function (oldUserID: string, newUserID: string): Promise<Result<Task[], Err>> {
     assertDB(db);
-    const tasks = await db.getAllFromIndex('tasks', 'by-user', oldUserID);
-    const convertedTasks = tasks.map(t => new Task({ ...t, user_id: newUserID }));
+    const originalTasks = await db.getAllFromIndex('tasks', 'by-user', oldUserID);
+    const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
+
     for (const task of convertedTasks) {
       await db!.put('tasks', task);
+    }
+
+    if (remoteDB) {
+      remoteDB.changeOwnership(oldUserID, newUserID).then(result => {
+        if (result.isErr()) {
+          console.error("Remote changeOwnership failed, reverting local changes", result.error);
+          const tx = db!.transaction('tasks', 'readwrite');
+          for (const task of originalTasks) {
+            tx.store.put(task);
+          }
+          tx.done;
+        } else {
+          const remoteTasks = result.value;
+          const tx = db!.transaction('tasks', 'readwrite');
+          for (const task of remoteTasks) {
+            tx.store.put(task);
+          }
+          tx.done;
+        }
+      });
     }
 
     return ok(convertedTasks);

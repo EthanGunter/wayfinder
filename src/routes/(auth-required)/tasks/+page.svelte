@@ -8,7 +8,7 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
-	import { ErrorTypes } from '$lib/Errors.js';
+	import { ErrorType } from '$lib/Errors.js';
 
 	const { data } = $props();
 	const api = data.taskAPI;
@@ -38,7 +38,7 @@
 			const result = await api.readTask(task);
 			if (result.isErr()) {
 				switch (result.error.type) {
-					case ErrorTypes.NotFoundError:
+					case ErrorType.NotFoundError:
 						goto('/tasks');
 						break;
 					default:

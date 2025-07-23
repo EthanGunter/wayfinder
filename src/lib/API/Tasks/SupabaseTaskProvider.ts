@@ -173,7 +173,7 @@ const taskCRUD: ITaskCRUDProvider = {
   changeOwnership: async function (oldUserID: string, newUserID: string): Promise<Result<Task[], Err>> {
     const tasks = await client.from(TASK_TABLE_NAME).select().eq('user_id', oldUserID);
     if (tasks.error) {
-      return err(Err.Wrap(tasks.error));
+      return err(Err.wrap(tasks.error));
     }
 
     const convertedTasks = tasks.data.map(t => new Task({ ...t, user_id: newUserID }));

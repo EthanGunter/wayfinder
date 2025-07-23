@@ -4,7 +4,7 @@ import type { IAuthCore, IAuthProvider, ILocalAuth, IMigrationProvider, Migratio
 import type { IProvider, ITaskProvider, IWrappedProvider } from '../Tasks';
 import { AUTH_STORE_NAME, authDBPromise, type AuthDB } from '../localDB';
 import { err, ok, type Result } from 'neverthrow';
-import { ArgumentError, InvalidStateError, NotFoundError, NotImplementedError, type UnknownError } from '$lib/Errors';
+import { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError, type UnknownError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
 
 
@@ -16,6 +16,7 @@ const authStateListeners: Set<(user: StoredUser | null) => void> = new Set();
 
 const core: IAuthCore = {
   signUp: async function (creds: SignInCredentials): Promise<Result<StoredUser, UnknownError>> {
+    // Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
     throw new NotImplementedError("BrowserAuthProvider.signUp");
   },
 
@@ -127,7 +128,7 @@ const local: ILocalAuth = {
 
     const user = await db.get(AUTH_STORE_NAME, userId);
     if (!user) {
-      throw new Error('User not found');
+      throw new Error('User not found'); // TODO Convert to result error
     }
 
     await setCurrentUser(user.id);
@@ -186,19 +187,19 @@ const migrator: IMigrationProvider = {
     assertRemote(remote, "Cannot migrate without a provided remote auth provider");
     return remote.getMigrationNeeds(cred);
   },
-  migrate: async function (cred) {
+  migrate: async function (user, cred) {
     assertRemote(remote, "Cannot migrate without a provided remote auth provider");
-    return remote.migrate(cred);
+    return remote.migrate(user, cred);
   }
 }
 
 // #region UTILITIES
 
 function assertDB(db: IDBPDatabase<AuthDB> | null, errorMessage?: string): asserts db is IDBPDatabase<AuthDB> {
-  if (!db) throw new InvalidStateError(errorMessage ?? "Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()").withTrace(3);
+  if (!db) throw new InvalidStateError(errorMessage ?? "Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()")/* .withTrace(3); */
 }
 function assertRemote(remoteDB: IAuthProvider | null, errorMessage: string): asserts remoteDB is IAuthProvider {
-  if (!remoteDB) throw new InvalidStateError(errorMessage ?? "Attempted to use Remote without a db connection.").withTrace(3);
+  if (!remoteDB) throw new InvalidStateError(errorMessage ?? "Attempted to use Remote without a db connection.")/* .withTrace(3); */
 }
 
 // function toLocalUserProxy(user: StoredUser): StoredUser {
@@ -247,9 +248,9 @@ function verifyPasskey(provided: string, stored: string): boolean {
 
 // #endregion
 
-const api: IAuthProvider = { ...core, ...local, ...migrator }
+const api: IAuthProvider & ILocalAuth = { ...core, ...local, ...migrator }
 
-const BrowserAuthProvider: IWrappedProvider<IAuthProvider> = {
+const BrowserAuthProvider: IWrappedProvider<IAuthProvider, ILocalAuth> = {
   get: async function (internal?: IAuthProvider) {
     db = await authDBPromise;
     remote = internal ?? null;

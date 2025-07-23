@@ -4,7 +4,8 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TooltipHover from '$lib/components/overlays/TooltipHover.svelte';
-	import { NotImplementedError } from '$lib/Errors.js';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import { Err, NotImplementedError } from '$lib/Errors.js';
 
 	// Svelte 5 state
 	const { data } = $props();
@@ -39,7 +40,7 @@
 			},
 			(err) => {
 				// Should never happen
-				err.logError(); // TODO Dev only
+				Err.throw(err); // TODO Dev only
 			}
 		);
 	}
@@ -73,68 +74,65 @@
 	<AppHeader {user} />
 	{#if user && !user.is_synced}
 		<div class="content">
-			{#if accountIssues.size > 0}
-				<h2>You're almost there!</h2>
-				<p>Just a few things to make your local account sync-ready</p>
-			{:else}
-				<h2>Your Account is Ready!</h2>
-				<p>Your local account is ready to be upgraded to cloud sync.</p>
-			{/if}
-
-			<div class="issues-section">
-				<h2>Before You Upgrade</h2>
-				<p>Make sure everthing looks correct</p>
-				<section id="sec-avatar">
-					<!-- <div class="avatar">
-						{#if user.avatar_url}
-							<img src={user.avatar_url} alt="User avatar" />
-						{:else}
-							<div class="avatar-placeholder">
-								{user.display_name?.charAt(0)?.toUpperCase() || '?'}
-							</div>
-						{/if}
-					</div> -->
+			<div class="input-fields">
+				{#if accountIssues.size > 0}
 					<span>
-						<label for="input_avatar_url">Avatar URL</label>
-						<input id="input_avatar_url" type="text" bind:value={user.avatar_url} />
+						<h2>Before You Upgrade</h2>
+						<p>Make sure everthing looks correct</p>
 					</span>
-				</section>
-				<section id="sec-name">
-					<label for="input_display_name">Name</label>
-					<input id="input_display_name" type="text" bind:value={user.display_name} />
-				</section>
-				<section id="sec-email">
-					<label for="input_email">Email</label>
-					<input
-						id="input_email"
-						type="text"
-						bind:value={cred.email}
-						class:input-error={accountIssues.has(AccountIssueTarget.email)}
-					/>
-					{#if accountIssues.has(AccountIssueTarget.email)}
-						<TooltipHover forElement="#input_email" delay={0} position="bottom">
-							{#each accountIssues.get(AccountIssueTarget.email)! as emailIssue}
-								- {emailIssue}
-							{/each}
-						</TooltipHover>
-					{/if}
-				</section>
-				<!-- TODO Local Passkey <section id="sec-passkey">
-			<button>Passkey</button>
-			<input
-				id="input_passkey"
-				type="password"
-				bind:value={user.passkey}
-				oninput={handlePasswordInput}
-			/>
-		</section> -->
-				<!-- TODO App themes <section id="sec-theme">
+				{:else}
+					<span>
+						<h2>Your Account is Ready!</h2>
+						<p>Your local account is ready to be upgraded to cloud sync.</p>
+					</span>
+				{/if}
+				<div class="input-fields">
+					<div class="avatar-field">
+						<UserAvatar {user} />
+						<span>
+							<label for="input_avatar_url">Avatar URL</label>
+							<input id="input_avatar_url" type="text" bind:value={user.avatar_url} />
+						</span>
+					</div>
+					<span>
+						<label for="input_display_name">Name</label>
+						<input id="input_display_name" type="text" bind:value={user.display_name} />
+					</span>
+					<span>
+						<label for="input_email">Email</label>
+						<input
+							id="input_email"
+							type="text"
+							bind:value={cred.email}
+							class:input-error={accountIssues.has(AccountIssueTarget.email)}
+						/>
+						{#if accountIssues.has(AccountIssueTarget.email)}
+							<TooltipHover forElement="#input_email" delay={0} position="bottom">
+								{#each accountIssues.get(AccountIssueTarget.email)! as emailIssue}
+									- {emailIssue}
+								{/each}
+							</TooltipHover>
+						{/if}
+					</span>
+					<!-- TODO Local Passkey -->
+					<span>
+						<label for="input_passkey">Passkey</label>
+						<input
+							id="input_passkey"
+							type="password"
+							bind:value={cred.password}
+							class:input-error={accountIssues.has(AccountIssueTarget.password)}
+						/>
+						<!-- oninput={handlePasswordInput} -->
+					</span>
+					<!-- TODO App themes <section id="sec-theme">
 			<label for="select_theme">Theme</label>
 			<select id="select_theme">
 				<option>Light</option>
 				<option>Dark</option>
 			</select>
 		</section> -->
+				</div>
 			</div>
 			<div class="ready-section">
 				<div class="pricing">
@@ -162,6 +160,24 @@
 </div>
 
 <style>
+	.input-fields {
+		display: grid;
+		gap: 1rem;
+		width: 100%;
+
+		span {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.avatar-field {
+			:global(.user-avatar) {
+				margin: 1rem auto;
+				max-width: 10rem;
+			}
+		}
+	}
+
 	.input-error {
 		background-color: #ffa5a5;
 	}

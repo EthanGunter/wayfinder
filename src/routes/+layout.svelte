@@ -55,6 +55,7 @@
 			flex-direction: column;
 
 			width: 100%;
+			min-width: 20rem;
 			max-width: 35rem;
 			margin-left: auto;
 			margin-right: auto;

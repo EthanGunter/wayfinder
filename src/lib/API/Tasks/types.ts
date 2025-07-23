@@ -23,8 +23,8 @@ export interface IProvider<T> {
   get(): Promise<T>;
   close(): Promise<void>
 }
-export interface IWrappedProvider<T> {
-  get(internal: T): Promise<T>;
+export interface IWrappedProvider<WrappedT, ProviderT> {
+  get(internal: WrappedT): Promise<WrappedT & ProviderT>;
   close(): Promise<void>
 }
 

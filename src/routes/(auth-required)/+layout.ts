@@ -4,12 +4,14 @@ import type { StoredUser } from '$lib/API/Auth/types';
 import type { ITaskProvider } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
+import { Err, ErrorType } from '$lib/Errors';
 import { devStore } from '$lib/stores/devStore.svelte';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = async ({ parent, url }) => {
     // Initialize local auth provider
-    const localAuth = await BrowserAuthProvider.get();
+    const remoteAuth = await SupabaseAuthProvider.get();
+    const localAuth = await BrowserAuthProvider.get(remoteAuth);
 
     // Check local account data first
     let currentUser = await localAuth.getMostRecentUser();
@@ -31,7 +33,6 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
             ...remoteUser,
         };
         const remoteTaskAPI = await SupabaseTaskProvider.get();
-        console.log("Using supabase task API");
         taskAPI = remoteTaskAPI;
         // TODO Wrap remote provider with local-wrapped provider
         // taskAPI = await BrowserTaskProvider.get(remoteTaskAPI);
@@ -41,13 +42,17 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
     } else {
         // Use local auth
         const localUser = await localAuth.getCurrentUser();
-        if (!localUser) {
-            // This shouldn't happen as LocalAuthProvider creates anonymous user on init
-            throw new Error('No user found');
+        if (localUser.isErr()) {
+            if (localUser.error.type == ErrorType.NotFoundError) {
+                // This shouldn't happen as LocalAuthProvider creates anonymous user on init
+                throw new Error('No user found');
+            }
+
+            Err.throw(localUser.error);
         }
-        user = localUser;
+
+        user = localUser.value as StoredUser; // TODO don't cast, convert
         taskAPI = await BrowserTaskProvider.get();
-        console.log("Using browser task API");
     }
 
     taskAPI = await devStore.getTaskProviderOverride(taskAPI);
@@ -58,3 +63,8 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
 
     return { user, authAPI: localAuth, taskAPI };
 };
+
+function customThrow(): never { throw {} }
+class tClass {
+    customThrow: () => never = () => { throw {} }
+}

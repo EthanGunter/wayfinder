@@ -66,7 +66,7 @@ const core: IAuthCore = {
         const userResponse = await supabase.auth.updateUser(updatedUser);
         if (userResponse.error) {
             console.error(userResponse.error);
-            return err(Err.Wrap(userResponse.error));
+            return err(Err.wrap(userResponse.error));
         }
 
         if (!userResponse.data.user) {
@@ -85,6 +85,7 @@ const core: IAuthCore = {
     deleteUser: async function (userId: string): Promise<Result<void, UnknownError>> {
         // TODO deleting users requires admin access...
         // Common suggestion is to have a public.users/profiles table with a foreign-key constraint to auth.users...
+        // Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
         throw new NotImplementedError("SupabaseAuth.deleteUser");
     },
 
@@ -107,7 +108,7 @@ const core: IAuthCore = {
         let scope: 'global' | 'local' | 'others' = options?.signOutSelf ? (options.signOutOthers ? 'global' : 'local') : 'others';
         const error = await supabase.auth.signOut({ scope });
         if (error.error) {
-            Err.Wrap(error.error).logError();
+            throw error.error
         }
         return ok();
     },
@@ -156,7 +157,7 @@ const migrator: IMigrationProvider = {
                 break;
             default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${creds.type}`));
         }
-        throw new NotImplementedError("SupabaseAuth.migrate");
+        Err.throw(new NotImplementedError("SupabaseAuth.migrate"))
     },
 }
 
