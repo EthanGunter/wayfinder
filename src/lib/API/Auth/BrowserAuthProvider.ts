@@ -1,18 +1,20 @@
 import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
-import type { IAuthCore, IAuthAPI, ILocalAuthFunctions, ILocalMigrationAPI, IMigrationAPI, MigrationRequirements, SignInCredentials, StoredUser, UnsubscribeFn, UserData } from './types';
+import type { IAuthCore, IAuthAPI, ILocalAuthFunctions, ILocalMigrationAPI, IMigrationAPI, MigrationRequirements, SignInCredentials, StoredUser, UnsubscribeFn, UserData, ILocalAuthAPI, IAuthAPIReverter, IAuthCoreReverter, IMigrationReverter } from './types';
 import type { ITaskAPI } from '../Tasks';
 import { AUTH_TABLE_NAME, authDBPromise, type AuthDB } from '../localDB';
 import { err, ok, type Result } from 'neverthrow';
 import { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError, type UnknownError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
 import type { ILocalAuthProvider } from '../types';
+import { SyncQueue } from '../SyncQueue';
 
+
+let currentUserId: string | null = null;
 
 let db: IDBPDatabase<AuthDB> | null;
 let remoteAuth: IAuthAPI | null;
 let remoteTask: ITaskAPI | null;
-let currentUserId: string | null = null;
 const authStateListeners: Set<(user: StoredUser | null) => void> = new Set();
 
 // TODO: Wrap the task API so we call local functions first, then the remote,
@@ -45,7 +47,7 @@ const local: ILocalAuthFunctions = {
   listUsers: async function (): Promise<StoredUser[]> {
     assertDB(db);
     const users = await db.getAll(AUTH_TABLE_NAME);
-    return users.map(user => /*toLocalUserProxy(*/ user /*)*/);
+    return users;
   },
 
   updateUser: async function (update) {
@@ -113,10 +115,13 @@ const local: ILocalAuthFunctions = {
   }
 };
 
-const core: IAuthCore = {
+const core: IAuthCore & IAuthCoreReverter = {
   signUp: async function (creds: SignInCredentials): Promise<Result<StoredUser, UnknownError>> {
     // Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
     Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
+  },
+  undoSignUp: (creds, userData) => {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignUp"))
   },
 
   getUser: async function (userId: string): Promise<Result<StoredUser, NotFoundError>> {
@@ -141,6 +146,9 @@ const core: IAuthCore = {
   },
 
   updateUser: local.updateUser,
+  undoUpdateUser: (updates) => {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.undoUpdateUser"));
+  },
 
   deleteUser: async function (userId: string): Promise<Result<void, InvalidStateError>> {
     assertDB(db);
@@ -154,6 +162,9 @@ const core: IAuthCore = {
 
     return ok();
   },
+  undoDeleteUser: (userId) => {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.undoDeleteUser"))
+  },
 
   signIn: async function (creds: SignInCredentials): Promise<Result<StoredUser, UnknownError>> {
     assertDB(db);
@@ -162,46 +173,52 @@ const core: IAuthCore = {
       default: Err.throw(new ArgumentError(creds, `${creds.type} sign in not implemented for local auth`));
     }
   },
+  undoSignIn: (creds) => {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignIn"))
+  },
 
   signOut: async function (): Promise<Result<void, UnknownError>> {
     currentUserId = null;
     invalidateAll(); // TODO does invalidateAll() work here? Test...
     return ok();
   },
+  undoSignOut() {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignOut"))
+  },
+  // onAuthStateChanged: function (callback: (user: StoredUser | null) => void): UnsubscribeFn {
+  //   authStateListeners.add(callback);
 
-  onAuthStateChanged: function (callback: (user: StoredUser | null) => void): UnsubscribeFn {
-    authStateListeners.add(callback);
+  //   // Immediately call with current user
+  //   if (currentUserId && db) {
+  //     db.get(AUTH_TABLE_NAME, currentUserId).then(user => {
+  //       if (user) {
+  //         callback(/*toLocalUserProxy(*/user/*)*/);
+  //       } else {
+  //         callback(null);
+  //       }
+  //     });
+  //   } else {
+  //     callback(null);
+  //   }
 
-    // Immediately call with current user
-    if (currentUserId && db) {
-      db.get(AUTH_TABLE_NAME, currentUserId).then(user => {
-        if (user) {
-          callback(/*toLocalUserProxy(*/user/*)*/);
-        } else {
-          callback(null);
-        }
-      });
-    } else {
-      callback(null);
-    }
-
-    return () => {
-      authStateListeners.delete(callback);
-    };
-  }
+  //   return () => {
+  //     authStateListeners.delete(callback);
+  //   };
+  // }
 }
 
-const migrator: ILocalMigrationAPI = {
+const migrator: ILocalMigrationAPI & IMigrationReverter = {
   getMigrationRequirements: function (cred) {
     assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
-    // assertRemoteMigrator(remoteMigrator, "Cannot migrate without a provided remote migration provider");
     return remoteAuth.getMigrationRequirements(cred);
   },
   migrate: async function (user, cred) {
     assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
     assertRemoteTasks(remoteTask, "Cannot migrate without a provided remote auth provider");
-    // assertRemoteMigrator(remoteMigrator, "Cannot migrate without a provided remote migration provider");
     return remoteAuth.migrate(user, cred, remoteTask);
+  },
+  undoMigrate(user, signUpCred, taskProvider) {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.undoMigrate"))
   },
 }
 
@@ -216,16 +233,6 @@ function assertRemoteAuth(remoteAuth: IAuthAPI | null, errorMessage: string): as
 function assertRemoteTasks(remoteTasks: ITaskAPI | null, errorMessage: string): asserts remoteTasks is ITaskAPI {
   if (!remoteTasks) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote tasks without a provider."));
 }
-
-// function toLocalUserProxy(user: StoredUser): StoredUser {
-//   return {
-//     id: user.id,
-//     display_name: user.display_name,
-//     avatar_url: user.avatar_url,
-//     is_synced: user.is_synced,
-//     last_active: new Date(user.last_active)
-//   };
-// }
 
 async function setCurrentUser(userId: string): Promise<void> {
   assertDB(db);
@@ -245,20 +252,6 @@ async function setCurrentUser(userId: string): Promise<void> {
 
 function notifyListeners(user: StoredUser | null): void {
   authStateListeners.forEach(callback => callback(user));
-}
-
-
-// TODO: Implement proper hashing
-function hashPasskey(passkey: string): string {
-  // For now, just store as-is (NOT SECURE - only for development)
-  // In production, use bcrypt, argon2, or similar
-  return passkey;
-}
-
-function verifyPasskey(provided: string, stored: string): boolean {
-  // TODO: Implement proper verification with hashing
-  // For now, just compare directly (NOT SECURE - only for development)
-  return provided === stored;
 }
 
 // #endregion
@@ -289,6 +282,20 @@ const BrowserAuthProvider: ILocalAuthProvider = {
   }
 };
 
+const syncQueue = new SyncQueue<Omit<IAuthAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, IAuthAPIReverter>({
+  deleteUser: remoteAuth!.deleteUser,
+  undoDeleteUser: core.undoDeleteUser,
+  migrate: remoteAuth!.migrate,
+  undoMigrate: migrator.undoMigrate,
+  signIn: remoteAuth!.signIn,
+  undoSignIn: core.undoSignIn,
+  signOut: remoteAuth!.signOut,
+  undoSignOut: core.undoSignOut,
+  signUp: remoteAuth!.signUp,
+  undoSignUp: core.undoSignUp,
+  updateUser: remoteAuth!.updateUser,
+  undoUpdateUser: core.undoUpdateUser,
+});
 export default BrowserAuthProvider;
 
 // Export for testing

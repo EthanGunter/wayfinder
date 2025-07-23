@@ -116,10 +116,10 @@ const core: IAuthCore = {
         return ok();
     },
 
-    onAuthStateChanged: (callback: any): UnsubscribeFn => {
-        const { data } = supabase.auth.onAuthStateChange(callback);
-        return data.subscription.unsubscribe;
-    },
+    // onAuthStateChanged: (callback: any): UnsubscribeFn => {
+    //     const { data } = supabase.auth.onAuthStateChange(callback);
+    //     return data.subscription.unsubscribe;
+    // },
 }
 
 const migrator: IMigrationAPI = {
