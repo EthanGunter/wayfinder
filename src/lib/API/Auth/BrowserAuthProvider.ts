@@ -286,20 +286,23 @@ const BrowserAuthProvider: ILocalAuthProvider = {
     remoteTask = remoteTaskProvider ?? null;
 
     if (remoteAuthProvider && remoteTaskProvider) {
-      new SyncQueue<Omit<IAuthAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, IAuthAPIReverter>({
-        deleteUser: remoteAuth!.deleteUser,
-        undoDeleteUser: core.undoDeleteUser,
-        migrate: remoteAuth!.migrate,
-        undoMigrate: migrator.undoMigrate,
-        signIn: remoteAuth!.signIn,
-        undoSignIn: core.undoSignIn,
-        signOut: remoteAuth!.signOut,
-        undoSignOut: core.undoSignOut,
-        signUp: remoteAuth!.signUp,
-        undoSignUp: core.undoSignUp,
-        updateUser: remoteAuth!.updateUser,
-        undoUpdateUser: core.undoUpdateUser,
-      });
+      new SyncQueue<Omit<IAuthAPI,
+        | "getCurrentUser"
+        | "getMigrationRequirements"
+        | "getUser">, IAuthAPIReverter>({
+          deleteUser: remoteAuth!.deleteUser,
+          undoDeleteUser: core.undoDeleteUser,
+          migrate: remoteAuth!.migrate,
+          undoMigrate: migrator.undoMigrate,
+          signIn: remoteAuth!.signIn,
+          undoSignIn: core.undoSignIn,
+          signOut: remoteAuth!.signOut,
+          undoSignOut: core.undoSignOut,
+          signUp: remoteAuth!.signUp,
+          undoSignUp: core.undoSignUp,
+          updateUser: remoteAuth!.updateUser,
+          undoUpdateUser: core.undoUpdateUser,
+        });
     }
 
     // Initialize with most recent user or create anonymous
@@ -320,7 +323,10 @@ const BrowserAuthProvider: ILocalAuthProvider = {
   }
 };
 
-export const authSyncQueue: SyncQueue<Omit<IAuthAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, IAuthAPIReverter> | null = null;
+export const authSyncQueue: SyncQueue<Omit<IAuthAPI,
+  | "getCurrentUser"
+  | "getMigrationRequirements"
+  | "getUser">, IAuthAPIReverter> | null = null;
 
 export default BrowserAuthProvider;
 

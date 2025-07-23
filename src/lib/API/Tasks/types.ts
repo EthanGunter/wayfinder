@@ -33,36 +33,33 @@ export interface ITaskCrudAPI {
    * @returns The new task's generated ID
    */
   // TODO-test: sets up relationships if parent(s) or children are populated
-  createTask(task: CreateTaskDTO): Promise<Result<Task, Err>>;
+  createTask(task: CreateTaskDTO): Promise<Result<Task>>;
   createTasks(tasks: CreateTaskDTO[]): Promise<BatchResult<Task>>;
   /**
    * Fetches a task's data by its ID
    */
-  getTask(id: string): Promise<Result<Task, NotFoundError | Err>>;
-  getTasks(ids: string[]): Promise<BatchResult<Task, NotFoundError | Err>>;
-  getAllUserTasks(userId: string): Promise<BatchResult<Task, NotFoundError | Err>>;
+  getTask(id: string): Promise<Result<Task, NotFoundError>>;
+  getTasks(ids: string[]): Promise<BatchResult<Task, NotFoundError>>;
+  getAllUserTasks(userId: string): Promise<BatchResult<Task, NotFoundError>>;
   /**
    * @param task can be passed as an id
    */
-  updateTask(task: string | Task, changes: Partial<Task>): Promise<Result<Task, Err>>;
+  updateTask(task: string | Task, changes: Partial<Task>): Promise<Result<Task>>;
   updateTasks(list: { task: string | Task, changes: Partial<Task> }[]): Promise<BatchResult<Task>>;
 
-  deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
-  deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>;
+  deleteTask(id: string, recursive?: boolean): Promise<Result<void>>;
+  deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void>>;
 
-  changeOwnership(oldUserID: string, newUserID: string): Promise<BatchResult<Task, Err>>;
+  changeOwnership(oldUserID: string, newUserID: string): Promise<BatchResult<Task>>;
 }
 export interface ITaskCrudAPIReverter {
-  undoCreateTask(task: CreateTaskDTO): Promise<Result<Task, Err>>;
-  undoCreateTasks(tasks: CreateTaskDTO[]): Promise<Result<Task[], Err>>;
-  undoGetTask(id: string): Promise<Result<Task, NotFoundError | Err>>;
-  undoGetTasks(ids: string[]): Promise<Result<Task[], NotFoundError | Err>>;
-  undoGetAllUserTasks(userId: string): Promise<Result<Task[], NotFoundError | Err>>;
-  undoUpdateTask(task: string | Task, changes: Partial<Task>): Promise<Result<Task, Err>>;
-  undoUpdateTasks(list: { task: string | Task, changes: Partial<Task> }[]): Promise<Result<Task[], Err>>;
-  undoDeleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
-  undoDeleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>;
-  undoChangeOwnership(oldUserID: string, newUserID: string): Promise<Result<Task[], Err>>;
+  undoCreateTask(createdId: string): Promise<void>;
+  undoCreateTasks(createdIds: string[]): Promise<void>;
+  undoUpdateTask(task: string | Task, changes: Partial<Task>): Promise<void>;
+  undoUpdateTasks(list: { task: string | Task, changes: Partial<Task> }[]): Promise<void>;
+  undoDeleteTask(id: string, recursive?: boolean): Promise<void>;
+  undoDeleteTasks(list: { id: string, recursive?: boolean }[]): Promise<void>;
+  undoChangeOwnership(oldUserID: string, newUserID: string): Promise<void>;
 }
 
 export interface ITaskRelationAPI {

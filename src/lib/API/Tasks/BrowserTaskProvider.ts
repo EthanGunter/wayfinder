@@ -7,8 +7,9 @@ import { Task, type TaskData } from './Task';
 import { updateRelationships } from '.';
 import JSZip from 'jszip';
 import { TASK_TABLE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
-import type { ILocalTaskProvider, IProvider } from '../types';
-import type { SyncQueue } from '../SyncQueue';
+import type { ILocalTaskProvider, IProvider, Result } from '../types';
+import { SyncQueue } from '../SyncQueue';
+import { X } from 'vitest/dist/chunks/reporters.d.BFLkQcL6.js';
 
 // TODO: Implement update queue system
 // TODO: Wrap the task API so we call local functions first, then the remote,
@@ -51,60 +52,46 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
   */
   createTasks: async function (tasks: CreateTaskDTO[]) {
     assertDB(db);
-    const createdTasks: Task[] = [];
+    const createdTasks: Result<Task, Err>[] = [];
     const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
-    try {
-      for (const taskDTO of tasks) {
-        const preparedTask = new Task(taskDTO);
-        preparedTask.created = new Date().toISOString();
-        preparedTask.id = v4();
+    for (const taskDTO of tasks) {
+      const preparedTask = new Task(taskDTO);
+      preparedTask.created = new Date().toISOString();
+      preparedTask.id = v4();
 
-        updateRelationships(api, { oldTask: null, newTask: preparedTask });
+      try {
+        await updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
         await transaction.store.put(preparedTask);
-        createdTasks.push(new Task(preparedTask));
+        createdTasks.push(ok(new Task(preparedTask)));
       }
-
-      await transaction.done;
-
-      if (remoteDB) {
-        remoteDB.createTasks(tasks).then(results => {
-          if (results.isErr()) {
-            console.error("Remote createTasks failed, reverting local changes", results.error);
-            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
-            for (const task of createdTasks) {
-              tx.store.delete(task.id);
-              updateRelationships(api, { oldTask: task, newTask: null });
-            }
-            tx.done;
-          } else {
-            const remoteTasks = results.value;
-            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
-            for (let i = 0; i < createdTasks.length; i++) {
-              const localTask = createdTasks[i];
-              const remoteTask = remoteTasks[i];
-              tx.store.delete(localTask.id);
-              tx.store.put(remoteTask);
-              updateRelationships(api, { oldTask: localTask, newTask: remoteTask });
-            }
-            tx.done;
-          }
-        });
+      catch (e) {
+        createdTasks.push(err(Err.wrap(e as Error)));
       }
-
-      return ok(createdTasks);
-    } catch (e) {
-      return err(new IOError("Batch create", "multiple tasks", e));
     }
-  },
+    
+    await transaction.done;
 
-  /**
-   * @param id Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
-   * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
-   * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
-   */
-  getTask: async function (id: string) {
+    taskSyncQueue?.add(
+      "createTasks",
+      [tasks],
+      'undoCreateTasks',
+      [createdTasks.flatMap(t => t.isOk() ? [t.value.id] : [])],
+      "Failed to create tasks"
+    )
+    return ok(createdTasks);
+  },
+  undoCreateTasks: async function (createdIds) {
+    Err.throw(new NotImplementedError("BrowserTaskProvider.undoCreateTasks"));
+  }
+
+    /**
+     * @param id Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
+     * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
+     * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
+     */
+    getTask: async function (id: string) {
     assertDB(db);
     // if (key.endsWith(".md")) {
     //   // Filepath
@@ -532,6 +519,34 @@ const BrowserTaskProvider: ILocalTaskProvider = {
   get: async function (remoteAPI?) {
     db = await tasksDBPromise;
     remoteDB = remoteAPI ?? null;
+    if (remoteAPI) {
+      taskSyncQueue = new SyncQueue<Omit<ITaskAPI,
+        | "getAllUserTasks"
+        | "getChildrenOf"
+        | "getParentsOf"
+        | "getPrioritizedTasks"
+        | "getRootTasks"
+        | "getTask"
+        | "getTasks"
+        | "getTodaysTasks"
+        | "searchTasks"
+      >, ITaskReverter>({
+        changeOwnership: remoteAPI.changeOwnership,
+        undoChangeOwnership: taskCRUD.undoChangeOwnership,
+        createTask: remoteAPI.createTask,
+        undoCreateTask: taskCRUD.undoCreateTask,
+        createTasks: remoteAPI.createTasks,
+        undoCreateTasks: taskCRUD.undoCreateTasks,
+        deleteTask: remoteAPI.deleteTask,
+        undoDeleteTask: taskCRUD.undoDeleteTask,
+        deleteTasks: remoteAPI.deleteTasks,
+        undoDeleteTasks: taskCRUD.undoDeleteTasks,
+        updateTask: remoteAPI.updateTask,
+        undoUpdateTask: taskCRUD.undoUpdateTask,
+        updateTasks: remoteAPI.updateTasks,
+        undoUpdateTasks: taskCRUD.undoUpdateTasks,
+      });
+    }
     return api;
   },
 
@@ -541,7 +556,17 @@ const BrowserTaskProvider: ILocalTaskProvider = {
   }
 }
 
-export const authSyncQueue: SyncQueue<Omit<ITaskAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, ITaskReverter> | null = null;
+export let taskSyncQueue: SyncQueue<Omit<ITaskAPI,
+  | "getAllUserTasks"
+  | "getChildrenOf"
+  | "getParentsOf"
+  | "getPrioritizedTasks"
+  | "getRootTasks"
+  | "getTask"
+  | "getTasks"
+  | "getTodaysTasks"
+  | "searchTasks"
+>, ITaskReverter> | null = null;
 
 export default BrowserTaskProvider;
 
