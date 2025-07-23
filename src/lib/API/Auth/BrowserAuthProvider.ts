@@ -1,28 +1,127 @@
 import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
-import type { IAuthCore, IAuthProvider, ILocalAuth, IMigrationProvider, MigrationRequirements, SignInCredentials, StoredUser, UnsubscribeFn, UserData } from './types';
-import type { IProvider, ITaskProvider, IWrappedProvider } from '../Tasks';
-import { AUTH_STORE_NAME, authDBPromise, type AuthDB } from '../localDB';
+import type { IAuthCore, IAuthAPI, ILocalAuthFunctions, ILocalMigrationAPI, IMigrationAPI, MigrationRequirements, SignInCredentials, StoredUser, UnsubscribeFn, UserData } from './types';
+import type { ITaskAPI } from '../Tasks';
+import { AUTH_TABLE_NAME, authDBPromise, type AuthDB } from '../localDB';
 import { err, ok, type Result } from 'neverthrow';
 import { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError, type UnknownError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
+import type { ILocalAuthProvider } from '../types';
 
 
 let db: IDBPDatabase<AuthDB> | null;
-let remote: IAuthProvider | null;
+let remoteAuth: IAuthAPI | null;
+let remoteTask: ITaskAPI | null;
 let currentUserId: string | null = null;
 const authStateListeners: Set<(user: StoredUser | null) => void> = new Set();
 
+// TODO: Wrap the task API so we call local functions first, then the remote,
+// TODO: and handle rolling back local changes whenever the remote fails...
+const local: ILocalAuthFunctions = {
+  createUser: async function (user: StoredUser): Promise<Result<StoredUser, UnknownError>> {
+    assertDB(db);
+
+    await db.put(AUTH_TABLE_NAME, user);
+    return ok(user);
+  },
+
+  getMostRecentUser: async function (): Promise<StoredUser | null> {
+    assertDB(db);
+
+    // Get all users and sort by last_active
+    const users = await db.getAll(AUTH_TABLE_NAME);
+    if (users.length === 0) return null;
+
+    // Sort by last_active descending
+    users.sort((a, b) => {
+      const dateA = new Date(a.last_active).getTime();
+      const dateB = new Date(b.last_active).getTime();
+      return dateB - dateA;
+    });
+
+    return users[0];
+  },
+
+  listUsers: async function (): Promise<StoredUser[]> {
+    assertDB(db);
+    const users = await db.getAll(AUTH_TABLE_NAME);
+    return users.map(user => /*toLocalUserProxy(*/ user /*)*/);
+  },
+
+  updateUser: async function (update) {
+    assertDB(db);
+
+    const oldId = update.oldId ?? update.id;
+
+    const user = await db.get(AUTH_TABLE_NAME, oldId);
+    if (!user) {
+      Err.throw(new NotFoundError(oldId, "User"));
+    }
+
+    const updatedUser = {
+      ...user,
+      ...update,
+      last_active: new Date()
+    };
+
+    await db.put(AUTH_TABLE_NAME, updatedUser);
+    if (update.oldId) {
+      await db.delete(AUTH_TABLE_NAME, update.oldId);
+    }
+
+    // If updating current user, notify listeners
+    if (update.id === currentUserId) {
+      // notifyListeners(toLocalUserProxy(updatedUser));
+    }
+
+    return ok(updatedUser);
+  },
+
+  switchUser: async function (userId: string): Promise<StoredUser> {
+    assertDB(db);
+
+    const user = await db.get(AUTH_TABLE_NAME, userId);
+    if (!user) {
+      Err.throw(new NotFoundError(userId, "User"));
+    }
+
+    await setCurrentUser(user.id);
+    return /*toLocalUserProxy(*/ user /*)*/;
+  },
+
+  activateNewAnonymousUser: async function (): Promise<StoredUser> {
+    assertDB(db);
+
+    const anonymousUser: StoredUser = {
+      id: v4(),
+      display_name: undefined, // Anonymous users have no display name
+      last_active: new Date(),
+      auth_provider: 'local',
+      is_synced: false,
+    };
+
+    await db.put(AUTH_TABLE_NAME, anonymousUser);
+    await setCurrentUser(anonymousUser.id);
+
+    return /*toLocalUserProxy(*/anonymousUser/*)*/;
+  },
+
+  getAnonymousUser: async function (): Promise<StoredUser | null> {
+    assertDB(db);
+    const users = await db.getAll(AUTH_TABLE_NAME);
+    return users.find(user => !user.display_name) || null;
+  }
+};
 
 const core: IAuthCore = {
   signUp: async function (creds: SignInCredentials): Promise<Result<StoredUser, UnknownError>> {
     // Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
-    throw new NotImplementedError("BrowserAuthProvider.signUp");
+    Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
   },
 
   getUser: async function (userId: string): Promise<Result<StoredUser, NotFoundError>> {
     assertDB(db);
-    const user = await db.get(AUTH_STORE_NAME, userId);
+    const user = await db.get(AUTH_TABLE_NAME, userId);
     if (user) {
       return ok(user);
     }
@@ -35,36 +134,13 @@ const core: IAuthCore = {
     assertDB(db);
     if (!currentUserId) return err(new InvalidStateError('No user currently signed in'));
 
-    const user = await db.get(AUTH_STORE_NAME, currentUserId);
-    if (!user) throw new Error(`Failed to find the user stored as currentUserId: ${currentUserId}`);
+    const user = await db.get(AUTH_TABLE_NAME, currentUserId);
+    if (!user) Err.throw(new NotFoundError("Failed to find a user stored as currentUserId", currentUserId));
 
     return ok(user);
   },
 
-  updateUser: async function (update: Partial<StoredUser> & { id: string }): Promise<Result<StoredUser, UnknownError>> {
-    assertDB(db);
-
-    const user = await db.get(AUTH_STORE_NAME, update.id);
-    if (!user) {
-      throw new Error('User not found');
-    }
-
-    const updatedUser = {
-      ...user,
-      ...update,
-      id: user.id, // Ensure ID can't be changed
-      last_active: new Date()
-    };
-
-    await db.put(AUTH_STORE_NAME, updatedUser);
-
-    // If updating current user, notify listeners
-    if (update.id === currentUserId) {
-      // notifyListeners(toLocalUserProxy(updatedUser));
-    }
-
-    return ok(updatedUser);
-  },
+  updateUser: local.updateUser,
 
   deleteUser: async function (userId: string): Promise<Result<void, InvalidStateError>> {
     assertDB(db);
@@ -74,7 +150,7 @@ const core: IAuthCore = {
       await this.signOut();
     }
 
-    await db.delete(AUTH_STORE_NAME, userId);
+    await db.delete(AUTH_TABLE_NAME, userId);
 
     return ok();
   },
@@ -83,7 +159,7 @@ const core: IAuthCore = {
     assertDB(db);
 
     switch (creds.type) {
-      default: throw new ArgumentError(creds, `${creds.type} sign in not implemented for local auth`);
+      default: Err.throw(new ArgumentError(creds, `${creds.type} sign in not implemented for local auth`));
     }
   },
 
@@ -98,7 +174,7 @@ const core: IAuthCore = {
 
     // Immediately call with current user
     if (currentUserId && db) {
-      db.get(AUTH_STORE_NAME, currentUserId).then(user => {
+      db.get(AUTH_TABLE_NAME, currentUserId).then(user => {
         if (user) {
           callback(/*toLocalUserProxy(*/user/*)*/);
         } else {
@@ -115,91 +191,30 @@ const core: IAuthCore = {
   }
 }
 
-const local: ILocalAuth = {
-  createUser: async function (user: StoredUser): Promise<Result<StoredUser, UnknownError>> {
-    assertDB(db);
-
-    await db.put(AUTH_STORE_NAME, user);
-    return ok(user);
-  },
-
-  switchUser: async function (userId: string): Promise<StoredUser> {
-    assertDB(db);
-
-    const user = await db.get(AUTH_STORE_NAME, userId);
-    if (!user) {
-      throw new Error('User not found'); // TODO Convert to result error
-    }
-
-    await setCurrentUser(user.id);
-    return /*toLocalUserProxy(*/ user /*)*/;
-  },
-
-  listUsers: async function (): Promise<StoredUser[]> {
-    assertDB(db);
-    const users = await db.getAll(AUTH_STORE_NAME);
-    return users.map(user => /*toLocalUserProxy(*/ user /*)*/);
-  },
-
-  getMostRecentUser: async function (): Promise<StoredUser | null> {
-    assertDB(db);
-
-    // Get all users and sort by last_active
-    const users = await db.getAll(AUTH_STORE_NAME);
-    if (users.length === 0) return null;
-
-    // Sort by last_active descending
-    users.sort((a, b) => {
-      const dateA = new Date(a.last_active).getTime();
-      const dateB = new Date(b.last_active).getTime();
-      return dateB - dateA;
-    });
-
-    return users[0];
-  },
-
-  activateNewAnonymousUser: async function (): Promise<StoredUser> {
-    assertDB(db);
-
-    const anonymousUser: StoredUser = {
-      id: v4(),
-      display_name: undefined, // Anonymous users have no display name
-      last_active: new Date(),
-      auth_provider: 'local',
-      is_synced: false,
-    };
-
-    await db.put(AUTH_STORE_NAME, anonymousUser);
-    await setCurrentUser(anonymousUser.id);
-
-    return /*toLocalUserProxy(*/anonymousUser/*)*/;
-  },
-
-  getAnonymousUser: async function (): Promise<StoredUser | null> {
-    assertDB(db);
-    const users = await db.getAll(AUTH_STORE_NAME);
-    return users.find(user => !user.display_name) || null;
-  }
-};
-
-const migrator: IMigrationProvider = {
-  getMigrationNeeds: function (cred) {
-    assertRemote(remote, "Cannot migrate without a provided remote auth provider");
-    return remote.getMigrationNeeds(cred);
+const migrator: ILocalMigrationAPI = {
+  getMigrationRequirements: function (cred) {
+    assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
+    // assertRemoteMigrator(remoteMigrator, "Cannot migrate without a provided remote migration provider");
+    return remoteAuth.getMigrationRequirements(cred);
   },
   migrate: async function (user, cred) {
-    assertRemote(remote, "Cannot migrate without a provided remote auth provider");
-    return remote.migrate(user, cred);
-  }
+    assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
+    assertRemoteTasks(remoteTask, "Cannot migrate without a provided remote auth provider");
+    // assertRemoteMigrator(remoteMigrator, "Cannot migrate without a provided remote migration provider");
+    return remoteAuth.migrate(user, cred, remoteTask);
+  },
 }
 
 // #region UTILITIES
 
 function assertDB(db: IDBPDatabase<AuthDB> | null, errorMessage?: string): asserts db is IDBPDatabase<AuthDB> {
-  if (!db) throw new InvalidStateError(errorMessage ?? "Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()")/* .withTrace(3); */
+  if (!db) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()"));
 }
-function assertRemote(remoteDB: IAuthProvider | null, errorMessage: string): asserts remoteDB is IAuthProvider {
-  if (!remoteDB) throw new InvalidStateError(errorMessage ?? "Attempted to use Remote without a db connection.")/* .withTrace(3); */
+function assertRemoteAuth(remoteAuth: IAuthAPI | null, errorMessage: string): asserts remoteAuth is IAuthAPI {
+  if (!remoteAuth) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote auth without a provider."));
+}
+function assertRemoteTasks(remoteTasks: ITaskAPI | null, errorMessage: string): asserts remoteTasks is ITaskAPI {
+  if (!remoteTasks) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote tasks without a provider."));
 }
 
 // function toLocalUserProxy(user: StoredUser): StoredUser {
@@ -218,10 +233,10 @@ async function setCurrentUser(userId: string): Promise<void> {
   currentUserId = userId;
 
   // Update last active time
-  const user = await db.get(AUTH_STORE_NAME, userId);
+  const user = await db.get(AUTH_TABLE_NAME, userId);
   if (user) {
     user.last_active = new Date();
-    await db.put(AUTH_STORE_NAME, user);
+    await db.put(AUTH_TABLE_NAME, user);
 
     // Notify listeners
     notifyListeners(/* toLocalUserProxy( */user/* ) */);
@@ -248,12 +263,13 @@ function verifyPasskey(provided: string, stored: string): boolean {
 
 // #endregion
 
-const api: IAuthProvider & ILocalAuth = { ...core, ...local, ...migrator }
+const api = { ...core, ...local, ...migrator }
 
-const BrowserAuthProvider: IWrappedProvider<IAuthProvider, ILocalAuth> = {
-  get: async function (internal?: IAuthProvider) {
+const BrowserAuthProvider: ILocalAuthProvider = {
+  get: async function (remoteAuthProvider, remoteTaskProvider) {
     db = await authDBPromise;
-    remote = internal ?? null;
+    remoteAuth = remoteAuthProvider ?? null;
+    remoteTask = remoteTaskProvider ?? null;
 
     // Initialize with most recent user or create anonymous
     const mostRecentUser = await local.getMostRecentUser();

@@ -9,15 +9,16 @@
 
 	// Svelte 5 state
 	const { data } = $props();
+	const auth = data.auth;
 	let user = $state(data.user);
-	const debouncedUpdateUser = debounce(data.authAPI.updateUser, 200);
+	const debouncedUpdateUser = debounce(auth.updateUser, 200);
 
 	onMount(() => {
 		function handleAuthChange(newUser: StoredUser | null) {
 			if (newUser) user = newUser;
 			else throw new Error("Drawing account page with null user shouldn't be possible");
 		}
-		const unsubscribe = data.authAPI.onAuthStateChanged(handleAuthChange);
+		const unsubscribe = auth.onAuthStateChanged(handleAuthChange);
 		return () => {
 			unsubscribe();
 		};
@@ -98,7 +99,8 @@
 				</ul>
 				<button
 					class="btn-upgrade"
-					onclick={() => {
+					onclick={async () => {
+						await saveUserChanges();
 						goto('/account/upgrade');
 					}}
 				>
@@ -106,7 +108,7 @@
 				</button>
 			</div>
 		{/if}
-		<!-- TODO Add no-account login page <button class="alert" onclick={data.authAPI.signOut}>Sign out</button> -->
+		<!-- TODO Add no-account login page <button class="alert" onclick={auth.signOut}>Sign out</button> -->
 	</div>
 	<AppFooter />
 </div>

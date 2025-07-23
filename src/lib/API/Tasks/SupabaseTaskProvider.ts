@@ -2,12 +2,11 @@ import { Err, IOError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Result, err, ok } from "neverthrow";
 import type {
-  IProvider,
-  ITaskProvider,
-  ITaskCRUDProvider,
+  ITaskAPI,
+  ITaskCrudAPI,
   ITaskExporter,
-  IAdvancedTaskProvider,
-  ITaskRelationProvider,
+  IAdvancedTaskAPI,
+  ITaskRelationAPI,
   CreateTaskDTO,
   PopulatedTaskDTO
 } from "./types";
@@ -15,10 +14,11 @@ import { isTask, Task, TaskStatus, type TaskData } from "./Task";
 import supabase from "../SupabaseClient";
 import { updateRelationships } from ".";
 import { TASK_TABLE_NAME } from "../localDB";
+import type { IProvider } from "../types";
 
 let client = supabase;
 
-const taskCRUD: ITaskCRUDProvider = {
+const taskCRUD: ITaskCrudAPI = {
   createTask: async function (createDetails: CreateTaskDTO): Promise<Result<Task, Err>> {
     const task = Task.populateDTO(createDetails);
 
@@ -46,7 +46,7 @@ const taskCRUD: ITaskCRUDProvider = {
     // Return the generated ID
     return ok(data.map(t => new Task(t)));
   },
-  readTask: async function (id: string): Promise<Result<Task, NotFoundError | Err>> {
+  getTask: async function (id: string): Promise<Result<Task, NotFoundError | Err>> {
     const { data, error } = await client.from(TASK_TABLE_NAME).select().eq('id', id).single();
     if (!data) return err(new NotFoundError(id, 'Task'));
     if (error) return err(new IOError(`Failed to read ${id}`, error));
@@ -54,9 +54,9 @@ const taskCRUD: ITaskCRUDProvider = {
     return ok(new Task(data));
   },
 
-  readTasks: async function (ids: string[]): Promise<Result<Task[], NotFoundError | Err>> {
+  getTasks: async function (ids: string[]): Promise<Result<Task[], NotFoundError | Err>> {
     const { data, error } = await client.from(TASK_TABLE_NAME).select().in('id', ids);
-    if (!data || data.length == 0) return err(new NotFoundError(ids, TASK_TABLE_NAME));
+    if (!data || data.length == 0) return err(new NotFoundError(`Failed to find ids in ${TASK_TABLE_NAME} table`, ids));
     if (error) return err(new IOError(`Failed to read tasks (${ids.join(', ')})`, error));
 
     return ok(data.map(t => new Task(t)));
@@ -65,7 +65,7 @@ const taskCRUD: ITaskCRUDProvider = {
   updateTask: async function (task: string | Task, updates: Partial<Task>): Promise<Result<Task, Err>> {
     // Convert the id to task
     if (typeof task === 'string') {
-      const readRes = (await taskCRUD.readTask(task))
+      const readRes = (await taskCRUD.getTask(task))
       if (readRes.isErr()) {
         return err(readRes.error);
       }
@@ -84,13 +84,13 @@ const taskCRUD: ITaskCRUDProvider = {
 
     return ok(new Task(data));
   },
-  updateTasks: async function (updates: { task: string | Task, updates: Partial<Task> }[]): Promise<Result<Task[], Err>> {
+  updateTasks: async function (updates: { task: string | Task, changes: Partial<Task> }[]): Promise<Result<Task[], Err>> {
     // First, normalize all tasks - convert string IDs to Task objects
     const stringIds = updates.filter(u => typeof u.task === 'string').map(u => u.task as string);
     let idToTask = new Map<string, Task>();
 
     if (stringIds.length > 0) {
-      const readRes = await taskCRUD.readTasks(stringIds);
+      const readRes = await taskCRUD.getTasks(stringIds);
       if (readRes.isErr()) {
         return err(readRes.error);
       }
@@ -100,7 +100,7 @@ const taskCRUD: ITaskCRUDProvider = {
     // Normalize all updates to have Task objects
     const normalizedUpdates = updates.map(update => ({
       task: typeof update.task === 'string' ? idToTask.get(update.task)! : update.task,
-      updates: update.updates
+      updates: update.changes
     }));
 
     // Prepare the data for batch update
@@ -142,7 +142,7 @@ const taskCRUD: ITaskCRUDProvider = {
    * @param recursive NOT IMPLEMENTED
    */
   deleteTask: async function (id: string, recursive?: boolean): Promise<Result<void, Err>> {
-    if (recursive) throw new NotImplementedError("Recursive delete for SupabaseTaskProvider.deleteTask is not implemented yet");
+    if (recursive) Err.throw(new NotImplementedError("Recursive delete for SupabaseTaskProvider.deleteTask is not implemented yet"));
 
     let deleteRes = await client.from(TASK_TABLE_NAME).delete().eq('id', id).select().single();
     if (deleteRes.error) return err(new IOError(`Failed to delete ${id}`, deleteRes.error));
@@ -158,7 +158,7 @@ const taskCRUD: ITaskCRUDProvider = {
    */
   deleteTasks: async function (list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>> {
     for (const item of list) {
-      if (item.recursive) throw new NotImplementedError("Recursive delete for SupabaseTaskProvider.deleteTask is not implemented yet");
+      if (item.recursive) Err.throw(new NotImplementedError("Recursive delete for SupabaseTaskProvider.deleteTask is not implemented yet"));
     }
 
     let deleteRes = await client.from(TASK_TABLE_NAME).delete().in('id', list.map(x => x.id)).select();
@@ -177,17 +177,17 @@ const taskCRUD: ITaskCRUDProvider = {
     }
 
     const convertedTasks = tasks.data.map(t => new Task({ ...t, user_id: newUserID }));
-    taskCRUD.updateTasks(convertedTasks.map(t => ({ task: t, updates: t })));
+    taskCRUD.updateTasks(convertedTasks.map(t => ({ task: t, changes: t })));
     return ok(convertedTasks);
   },
 }
 
-const taskRelations: ITaskRelationProvider = {
+const taskRelations: ITaskRelationAPI = {
   async getChildrenOf(task: string | Task): Promise<Result<Task[], Err>> {
     // First get the parent task to access its children array
     let parentTask: Task;
     if (typeof task === "string") {
-      const parentResult = await taskCRUD.readTask(task);
+      const parentResult = await taskCRUD.getTask(task);
       if (parentResult.isErr()) {
         return err(parentResult.error);
       } else parentTask = parentResult.value;
@@ -208,7 +208,7 @@ const taskRelations: ITaskRelationProvider = {
     let childTask: Task;
 
     if (typeof task === "string") {
-      const childTaskResult = await taskCRUD.readTask(task);
+      const childTaskResult = await taskCRUD.getTask(task);
       if (childTaskResult.isErr()) {
         return err(childTaskResult.error);
       } else childTask = childTaskResult.value;
@@ -232,7 +232,7 @@ const taskRelations: ITaskRelationProvider = {
   }
 }
 
-const advancedFeatures: IAdvancedTaskProvider = {
+const advancedFeatures: IAdvancedTaskAPI = {
   getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
     const { data, error } = await client.from(TASK_TABLE_NAME).select('*').eq('todays_task', true);
     if (error) return err(new IOError(`Failed to fetch today's tasks`, error));
@@ -304,24 +304,15 @@ const advancedFeatures: IAdvancedTaskProvider = {
   },
 
   searchTasks: async function (searchTerm: string): Promise<Task[]> {
-    throw new Error("Function not implemented.");
+    Err.throw(new NotImplementedError('SupabaseTaskProvider.searchTasks'));
   }
 }
 
-const dataExporter: ITaskExporter = {
-  exportData: function (simplify?: boolean): Promise<void> {
-    throw new Error("Function not implemented.");
-  },
-  importData: function (data: string): Promise<number> {
-    throw new Error("Function not implemented.");
-  }
-}
-
-const api: ITaskProvider = { ...taskCRUD, ...taskRelations, ...advancedFeatures };
+const api: ITaskAPI = { ...taskCRUD, ...taskRelations, ...advancedFeatures };
 
 /** No-op for Supabase */
-const SupabaseTaskProvider: IProvider<ITaskProvider> = {
-  get: async function (): Promise<ITaskProvider> { return api; },
+const SupabaseTaskProvider: IProvider<ITaskAPI> = {
+  get: async function (): Promise<ITaskAPI> { return api; },
   close: async function (): Promise<void> { }
 }
 

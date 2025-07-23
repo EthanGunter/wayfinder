@@ -15,7 +15,7 @@ export class Err {
         return new Err(0, nativeError.name ?? "unknown", nativeError.message, nativeError);
     }
     static throw(error: Err): never {
-        error.inheritanceDepth ++;
+        error.inheritanceDepth++;
         error.withTrace();
         if (error.context)
             console.error(error.type + ": " + error.msg, error.context);
@@ -32,7 +32,7 @@ export class Err {
      * @param inheritanceDepth helps keep the stacktrace clean. -1 doesn't generate a stacktrace
      */
     constructor(private inheritanceDepth: number, public type: string, public msg: string, public context?: any) {
-        this.withTrace(); // TODO Dev only
+        // this.withTrace(); // TODO Dev only
     }
 
     /**
@@ -103,8 +103,8 @@ export class Err {
 export type UnknownError = Err;
 
 export class InvalidStateError extends Err {
-    constructor(message: string) {
-        super(1, ErrorType.InvalidState, message);
+    constructor(message: string, context?: any) {
+        super(1, ErrorType.InvalidState, message, context);
     }
 }
 export class ArgumentError extends Err {
@@ -114,8 +114,8 @@ export class ArgumentError extends Err {
 }
 
 export class NotFoundError extends Err {
-    constructor(item: any, type: string = "Item") {
-        super(1, ErrorType.NotFoundError, `${type} NotFound`, item);
+    constructor(msg: string = "Item", key: any) {
+        super(1, ErrorType.NotFoundError, msg, key);
     }
 }
 

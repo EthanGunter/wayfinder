@@ -1,30 +1,31 @@
 import BrowserAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
-import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuth';
+import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuthProvider';
 import type { StoredUser } from '$lib/API/Auth/types';
-import type { ITaskProvider } from '$lib/API/Tasks';
+import type { ITaskAPI } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
+import type { ILocalTaskProvider } from '$lib/API/types';
 import { Err, ErrorType } from '$lib/Errors';
 import { devStore } from '$lib/stores/devStore.svelte';
 import type { LayoutLoad } from './$types';
 
-export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = async ({ parent, url }) => {
+export const load: LayoutLoad = async ({ parent, url }) => {
     // Initialize local auth provider
     const remoteAuth = await SupabaseAuthProvider.get();
-    const localAuth = await BrowserAuthProvider.get(remoteAuth);
+    const auth = await BrowserAuthProvider.get(remoteAuth);
 
     // Check local account data first
-    let currentUser = await localAuth.getMostRecentUser();
+    let currentUser = await auth.getMostRecentUser();
     if (!currentUser) {
         // Create a temp account
-        currentUser = await localAuth.activateNewAnonymousUser();
+        currentUser = await auth.activateNewAnonymousUser();
     }
 
-    const dbAuth = await SupabaseAuthProvider.get();
-    let remoteUser = currentUser.is_synced && await dbAuth.getCurrentUser();
+    // TODO This seems convoluted and unnecessary
+    let remoteUser = currentUser.is_synced && await auth.getCurrentUser();
 
     let user: StoredUser;
-    let taskAPI: ITaskProvider;
+    let tasks: ITaskAPI;
 
     if (remoteUser) {
         // User is synced with remote
@@ -33,15 +34,11 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
             ...remoteUser,
         };
         const remoteTaskAPI = await SupabaseTaskProvider.get();
-        taskAPI = remoteTaskAPI;
-        // TODO Wrap remote provider with local-wrapped provider
-        // taskAPI = await BrowserTaskProvider.get(remoteTaskAPI);
-        // console.log("Using Browser-wrapped supabase task API");
-
-        // TODO: Update local auth provider with remote user info for offline access
+        tasks = await BrowserTaskProvider.get(remoteTaskAPI);
+        console.log("Using Browser-wrapped supabase task API");
     } else {
         // Use local auth
-        const localUser = await localAuth.getCurrentUser();
+        const localUser = await auth.getCurrentUser();
         if (localUser.isErr()) {
             if (localUser.error.type == ErrorType.NotFoundError) {
                 // This shouldn't happen as LocalAuthProvider creates anonymous user on init
@@ -52,16 +49,14 @@ export const load: LayoutLoad<{ user: StoredUser, taskAPI: ITaskProvider }> = as
         }
 
         user = localUser.value as StoredUser; // TODO don't cast, convert
-        taskAPI = await BrowserTaskProvider.get();
+        tasks = await BrowserTaskProvider.get();
     }
 
-    taskAPI = await devStore.getTaskProviderOverride(taskAPI);
+    tasks = await devStore.getTaskProviderOverride(tasks);
 
     // TODO: If the user logs in, make sure to migrate any local data
-    // TODO: Wrap the task API so we call the local provider first, then the remote,
-    // TODO: and handle rolling back local changes whenever the remote fails...
 
-    return { user, authAPI: localAuth, taskAPI };
+    return { user, auth, tasks };
 };
 
 function customThrow(): never { throw {} }

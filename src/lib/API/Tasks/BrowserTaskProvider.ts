@@ -1,15 +1,18 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { type CreateTaskDTO, type IAdvancedTaskProvider, type IProvider, type ITaskCRUDProvider, type ITaskExporter, type ITaskProvider, type ITaskRelationProvider } from './types';
+import { type CreateTaskDTO, type IAdvancedTaskAPI, type ITaskCrudAPI, type ITaskExporter, type ITaskAPI, type ITaskRelationAPI } from './types';
 import { err, ok, Result } from 'neverthrow';
-import { NotFoundError, Err, ParseError, IOError, NotImplementedError } from '$lib/Errors';
+import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError } from '$lib/Errors';
 import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
 import { updateRelationships } from '.';
 import JSZip from 'jszip';
 import { TASK_TABLE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
+import type { ILocalTaskProvider, IProvider } from '../types';
 
-
-const taskCRUD: ITaskCRUDProvider = {
+// TODO: Implement update queue system
+// TODO: Wrap the task API so we call local functions first, then the remote,
+// TODO: and handle rolling back local changes whenever the remote fails...
+const taskCRUD: ITaskCrudAPI = {
   /**
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
@@ -100,7 +103,7 @@ const taskCRUD: ITaskCRUDProvider = {
    * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  readTask: async function (id: string): Promise<Result<Task, NotFoundError | ParseError>> {
+  getTask: async function (id: string): Promise<Result<Task, NotFoundError | ParseError>> {
     assertDB(db);
     // if (key.endsWith(".md")) {
     //   // Filepath
@@ -121,7 +124,7 @@ const taskCRUD: ITaskCRUDProvider = {
     // }
   },
 
-  readTasks: async function (ids: string[]): Promise<Result<Task[], NotFoundError | Err>> {
+  getTasks: async function (ids: string[]): Promise<Result<Task[], NotFoundError | Err>> {
     assertDB(db);
     const tasks: Task[] = [];
     const notFoundIds: string[] = [];
@@ -146,6 +149,12 @@ const taskCRUD: ITaskCRUDProvider = {
     }
   },
 
+  getAllUserTasks: async function (userId) {
+    assertDB(db);
+    const userTasks = await db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
+    return ok(userTasks.map(t => new Task(t)));
+  },
+
   /**
    * @param key Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
    * @error {@link NotFoundError} if the task id doesn't exist
@@ -153,7 +162,7 @@ const taskCRUD: ITaskCRUDProvider = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   updateTask: async function (key: string, updates: Partial<Task>): Promise<Result<Task, Err>> {
-    return (await taskCRUD.readTask(key)).match(
+    return (await taskCRUD.getTask(key)).match(
       async (task) => {
         assertDB(db);
         const updated: Task = new Task({ ...task, ...updates, last_edit: new Date().toISOString() });
@@ -183,17 +192,17 @@ const taskCRUD: ITaskCRUDProvider = {
     );
   },
 
-  updateTasks: async function (list: { task: string | Task; updates: Partial<Task>; }[]): Promise<Result<Task[], Err>> {
+  updateTasks: async function (list) {
     assertDB(db);
     const updatedTasks: Task[] = [];
     const originalTasks: Task[] = [];
     const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     try {
-      for (const { task, updates } of list) {
+      for (const { task, changes: updates } of list) {
         let existingTask: Task;
         if (typeof task === 'string') {
-          const taskResult = await taskCRUD.readTask(task);
+          const taskResult = await taskCRUD.getTask(task);
           if (taskResult.isErr()) {
             return err(taskResult.error);
           }
@@ -252,7 +261,7 @@ const taskCRUD: ITaskCRUDProvider = {
    */
   deleteTask: async function (id: string, recursive?: boolean): Promise<Result<void, Err>> {
     assertDB(db);
-    if (recursive) throw new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)");
+    if (recursive) Err.throw(new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)"));
 
     const task = await db.get(TASK_TABLE_NAME, id);
 
@@ -272,7 +281,7 @@ const taskCRUD: ITaskCRUDProvider = {
         }
         return ok();
       } catch (e) {
-        throw new IOError("Delete", id, e);
+        Err.throw(new IOError("Delete", id, e));
       }
     }
     else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"));
@@ -354,12 +363,12 @@ const taskCRUD: ITaskCRUDProvider = {
   },
 }
 
-const taskRelations: ITaskRelationProvider = {
+const taskRelations: ITaskRelationAPI = {
   getChildrenOf: async function (task: string | Task): Promise<Result<Task[], Err>> {
     // First get the parent task to access its children array
     let parentTask: Task;
     if (typeof task === "string") {
-      const parentTaskResult = await taskCRUD.readTask(task);
+      const parentTaskResult = await taskCRUD.getTask(task);
       if (parentTaskResult.isErr()) {
         return err(parentTaskResult.error);
       } else parentTask = parentTaskResult.value;
@@ -370,7 +379,7 @@ const taskRelations: ITaskRelationProvider = {
     }
 
     // Fetch only the specific child tasks
-    const childPromises = parentTask.children.map(childId => taskCRUD.readTask(childId));
+    const childPromises = parentTask.children.map(childId => taskCRUD.getTask(childId));
     const childResults = await Promise.all(childPromises);
 
     // Filter out any failed reads and extract successful tasks
@@ -385,7 +394,7 @@ const taskRelations: ITaskRelationProvider = {
 
     // Convert id to task object
     if (typeof task === "string") {
-      const childTaskResult = await taskCRUD.readTask(task);
+      const childTaskResult = await taskCRUD.getTask(task);
       if (childTaskResult.isErr()) {
         return err(childTaskResult.error);
       } else childTask = childTaskResult.value;
@@ -393,7 +402,7 @@ const taskRelations: ITaskRelationProvider = {
 
     // Get the parents
     if (childTask.parents.length > 0) {
-      const parentResult = await taskCRUD.readTasks(childTask.parents);
+      const parentResult = await taskCRUD.getTasks(childTask.parents);
       if (parentResult.isErr()) return err(parentResult.error);
 
       return ok(parentResult.value);
@@ -411,7 +420,7 @@ const taskRelations: ITaskRelationProvider = {
 }
 
 
-const advancedFeatures: IAdvancedTaskProvider = {
+const advancedFeatures: IAdvancedTaskAPI = {
   getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
     assertDB(db);
     const allTasks = await db.getAll(TASK_TABLE_NAME);
@@ -472,7 +481,7 @@ const advancedFeatures: IAdvancedTaskProvider = {
   },
 
   searchTasks: function (searchTerm: string): Promise<Task[]> {
-    throw new Error('Function not implemented.');
+    Err.throw(new NotImplementedError('BrowserTaskProvider.searchTasks'));
   },
 }
 
@@ -508,18 +517,18 @@ const dataExporter: ITaskExporter = {
     });
   },
   importData: function (data: string): Promise<number> {
-    throw new Error('Function not implemented.');
+    Err.throw(new NotImplementedError('BrowserTaskProvider.importData'));
   }
 }
 
-const api: ITaskProvider & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
+const api: ITaskAPI & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
 let db: IDBPDatabase<TaskDB> | null;
-let remoteDB: ITaskProvider | null
+let remoteDB: ITaskAPI | null
 
-const BrowserTaskProvider/* : IProvider<ITaskProvider & ITaskExporter> */ = {
+const BrowserTaskProvider: ILocalTaskProvider = {
   /** @param remoteAPI The backend task provider that this provider wraps */
-  get: async function (remoteAPI?: ITaskProvider): Promise<ITaskProvider & ITaskExporter> {
+  get: async function (remoteAPI?) {
     db = await tasksDBPromise;
     remoteDB = remoteAPI ?? null;
     return api;
@@ -536,7 +545,7 @@ export default BrowserTaskProvider;
 //#region Utilities
 
 function assertDB(db: IDBPDatabase<TaskDB> | null): asserts db is IDBPDatabase<TaskDB> {
-  if (!db) throw new Error("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()");
+  if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()"));
 }
 
 /** This function manages writing the markdown file, then updating the index */

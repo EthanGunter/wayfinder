@@ -2,42 +2,32 @@
 
 import type { NotFoundError, ParseError, Err } from "$lib/Errors";
 import type { Result, ResultAsync } from "neverthrow";
-import type { Task } from "./Task";
+import type { Task, TaskData } from "./Task";
 
 // All fields in the Omit<> become optional
-export type CreateTaskDTO = Partial<Task> & Omit<Task,
+export type CreateTaskDTO = Partial<TaskData> & Omit<TaskData,
   | "id"
   | "created"
   | "last_edit"
-  | "completed"
   | "todays_task"
   | "status"
   | "parents"
   | "children"
 // | "filepath"
 >
-export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed">
+export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed" | "equals">
 
-// TODO Move somewhere more appropriate
-export interface IProvider<T> {
-  get(): Promise<T>;
-  close(): Promise<void>
-}
-export interface IWrappedProvider<WrappedT, ProviderT> {
-  get(internal: WrappedT): Promise<WrappedT & ProviderT>;
-  close(): Promise<void>
-}
 
 // TODO narrow error types once concrete classes are implemented
 // TODO break into more specific interfaces
-export type ITaskProvider = ITaskCRUDProvider & ITaskRelationProvider & IAdvancedTaskProvider
+export type ITaskAPI = ITaskCrudAPI & ITaskRelationAPI & IAdvancedTaskAPI
 
 // TODO Should plural functions return an array of errors?
 /**
  * Manages modifications to markdown files that represent tasks,
  * as well as keeping a database index in sync for rapid querying of data
  */
-export interface ITaskCRUDProvider {
+export interface ITaskCrudAPI {
   /**
    * Creates a new task with the given data
    * @returns The new task's generated ID
@@ -48,13 +38,14 @@ export interface ITaskCRUDProvider {
   /**
    * Fetches a task's data by its ID
    */
-  readTask(id: string): Promise<Result<Task, NotFoundError | Err>>;
-  readTasks(ids: string[]): Promise<Result<Task[], NotFoundError | Err>>;
+  getTask(id: string): Promise<Result<Task, NotFoundError | Err>>;
+  getTasks(ids: string[]): Promise<Result<Task[], NotFoundError | Err>>;
+  getAllUserTasks(userId: string): Promise<Result<Task[], NotFoundError | Err>>;
   /**
    * @param task can be passed as an id
    */
-  updateTask(task: string | Task, updates: Partial<Task>): Promise<Result<Task, Err>>;
-  updateTasks(list: { task: string | Task, updates: Partial<Task> }[]): Promise<Result<Task[], Err>>;
+  updateTask(task: string | Task, changes: Partial<Task>): Promise<Result<Task, Err>>;
+  updateTasks(list: { task: string | Task, changes: Partial<Task> }[]): Promise<Result<Task[], Err>>;
 
   deleteTask(id: string, recursive?: boolean): Promise<Result<void, Err>>;
   deleteTasks(list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>>;
@@ -62,7 +53,7 @@ export interface ITaskCRUDProvider {
   changeOwnership(oldUserID: string, newUserID: string): Promise<Result<Task[], Err>>;
 }
 
-export interface ITaskRelationProvider {
+export interface ITaskRelationAPI {
   /**
    * Finds all tasks that must be completed before `id`
    */
@@ -77,7 +68,7 @@ export interface ITaskRelationProvider {
   getRootTasks(): Promise<Result<Task[], Err>>;
 }
 
-export interface IAdvancedTaskProvider {
+export interface IAdvancedTaskAPI {
   /**
    * Gets all tasks that are on the "Today's List"
    */

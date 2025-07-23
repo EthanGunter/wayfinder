@@ -5,10 +5,11 @@
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TooltipHover from '$lib/components/overlays/TooltipHover.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import { Err, NotImplementedError } from '$lib/Errors.js';
+	import { Err, ErrorType, NotImplementedError } from '$lib/Errors.js';
 
 	// Svelte 5 state
 	const { data } = $props();
+	const auth = data.auth;
 	const user = $state(data.user);
 	let cred = $state<SignInCredentials>({
 		type: 'email_password',
@@ -27,7 +28,7 @@
 
 	async function checkAccountIssues() {
 		const uiIssues = new Map();
-		data.authAPI.getMigrationNeeds(cred).match(
+		auth.getMigrationRequirements(cred).match(
 			(issues) => {
 				for (const issue of issues) {
 					if (uiIssues.has(issue.target)) {
@@ -50,21 +51,35 @@
 			throw new Error('Invalid user for migration');
 		}
 		const uiIssues = new Map();
-		const migRes = await data.authAPI.migrate(user, cred);
-		if (migRes.isErr()) {
-			if (migRes.error instanceof NotImplementedError) {
-				// Should never happen
-				migRes.error.logError(); // TODO Dev only
-			} else {
-				for (const err of migRes.error) {
-					if (uiIssues.has(err.target)) {
-						uiIssues.get(err.target)!.add(err.message);
+		/* TODO How do I know what task provider to pass here?
+		 If we're local before migrating, the task api will be local.
+		 The migration API should probably be separate from the auth and task api...
+		 */
+		const migReqResult = auth.getMigrationRequirements(cred);
+		migReqResult.match(
+			(missingRequirements) => {
+				for (const requirement of missingRequirements) {
+					if (uiIssues.has(requirement.target)) {
+						uiIssues.get(requirement.target)!.add(requirement.message);
 					} else {
-						uiIssues.set(err.target, new Set(err.message));
+						uiIssues.set(requirement.target, new Set(requirement.message));
 					}
 				}
 				accountIssues = uiIssues;
-				return;
+			},
+			(error) => {
+				Err.throw(error); // TODO Dev only
+			}
+		);
+		if (migReqResult.isErr() || migReqResult.value.length > 0) return;
+
+		const migRes = await auth.migrate(user, cred);
+		if (migRes.isErr()) {
+			if (migRes.error.type === ErrorType.NotImplementedError) {
+				// Should never happen
+				Err.throw(migRes.error); // TODO Dev only
+			} else {
+				Err.throw(migRes.error);
 			}
 		}
 	}
@@ -109,7 +124,7 @@
 						{#if accountIssues.has(AccountIssueTarget.email)}
 							<TooltipHover forElement="#input_email" delay={0} position="bottom">
 								{#each accountIssues.get(AccountIssueTarget.email)! as emailIssue}
-									- {emailIssue}
+									{emailIssue}
 								{/each}
 							</TooltipHover>
 						{/if}

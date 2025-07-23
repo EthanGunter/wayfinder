@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import provider, { db, updateIndexFromFile } from './BrowserTaskProvider';
 import { NotFoundError } from '$lib/Errors';
 import { TaskStatus, type TaskData } from './Task';
-import type { ITaskProvider } from './types';
+import type { ITaskAPI } from './types';
 import type { TestIStorageImplementation } from './ITaskProvider.test';
 
 export const BrowserITaskProviderTest: TestIStorageImplementation = {
@@ -11,7 +11,7 @@ export const BrowserITaskProviderTest: TestIStorageImplementation = {
   getInstance: async () => {
     return await provider.init();
   },
-  beforeeach: async (provider: ITaskProvider) => {
+  beforeeach: async (provider: ITaskAPI) => {
     if (db) {
       // Clear all stores before each test
       await db.clear('files');
@@ -36,7 +36,7 @@ let _id = 0;
 const idnext = () => { _id++; return _id.toString(); }
 
 describe('Unit', () => {
-  let provider: ITaskProvider;
+  let provider: ITaskAPI;
 
   beforeEach(async () => {
     if (db) {

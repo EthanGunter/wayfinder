@@ -2,7 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { StoredUser } from "./Auth/types";
 import type { Task, TaskData } from "./Tasks";
 
-export const AUTH_STORE_NAME = 'users';
+export const AUTH_TABLE_NAME = 'users';
 export interface AuthDB extends DBSchema {
     users: {
         key: string;
@@ -34,8 +34,8 @@ export interface TaskDB extends DBSchema {
 const dbPromise = openDB<AuthDB & TaskDB>('wayfinder', 1, {
     upgrade(db, oldVer) {
         // Create users store if it doesn't exist
-        if (!db.objectStoreNames.contains(AUTH_STORE_NAME)) {
-            const store = db.createObjectStore(AUTH_STORE_NAME, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(AUTH_TABLE_NAME)) {
+            const store = db.createObjectStore(AUTH_TABLE_NAME, { keyPath: 'id' });
             store.createIndex('by-last-active', 'last_active');
         }
         if (!db.objectStoreNames.contains(TASK_TABLE_NAME))        // db.createObjectStore('files', { keyPath: 'filepath' });

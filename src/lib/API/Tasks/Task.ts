@@ -88,6 +88,19 @@ export class Task implements TaskData {
         this.children = children;
     }
 
+    equals(o: TaskData, ignoreId: boolean = false): boolean {
+        return ignoreId ? true : this.id === o.id
+            && this.user_id === o.user_id
+            && this.title === o.title
+            && this.content === o.content
+            && this.status === o.status
+            && this.priority === o.priority
+            && this.parents === o.parents
+            && this.children === o.children
+            && this.created === o.created
+        // && this.last_edit === o.last_edit // This might cause change between checks on server and local
+    }
+
     static populateDTO(dto: CreateTaskDTO): PopulatedTaskDTO {
         return {
             id: dto.id,

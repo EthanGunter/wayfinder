@@ -11,7 +11,7 @@
 	// TODO if the user is not synced, offer a "login" & "get started locally" option
 
 	const { data } = $props();
-	const api = data.taskAPI;
+	const tasks = data.tasks;
 	const user = data.user;
 
 	let todaysList = $state<Task[]>([]);
@@ -22,7 +22,7 @@
 	});
 
 	function refreshTasks() {
-		api.getTodaysTasks().then((tasks) =>
+		tasks.getTodaysTasks().then((tasks) =>
 			tasks.match(
 				(data) => {
 					todaysList = data;
@@ -32,7 +32,7 @@
 				}
 			)
 		);
-		api.getPrioritizedTasks(15).then((result) =>
+		tasks.getPrioritizedTasks(15).then((result) =>
 			result.match(
 				(tasks) => {
 					suggestedTasks = tasks;
@@ -50,7 +50,7 @@
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			api.updateTask(task.id, { todays_task: true });
+			tasks.updateTask(task.id, { todays_task: true });
 		}
 	}
 
@@ -59,13 +59,13 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		api.updateTask(task.id, { todays_task: false });
+		tasks.updateTask(task.id, { todays_task: false });
 	}
 
 	function todaysTaskChange(task: Task, changes: Partial<Task>) {
 		//TODO: Implement task change logic
 		if (changes.completed) {
-			api.updateTask(task.id, { todays_task: false });
+			tasks.updateTask(task.id, { todays_task: false });
 			todaysList = todaysList.filter((t) => t.id !== task.id);
 		}
 	}
@@ -78,10 +78,10 @@
 	}
 
 	async function startProject() {
-		if (!api) return;
+		if (!tasks) return;
 
 		//TODO: Implement create new project logic
-		let newTaskResult = await api.createTask({
+		let newTaskResult = await tasks.createTask({
 			user_id: user.id,
 			title: 'New Project',
 			status: TaskStatus.incomplete,

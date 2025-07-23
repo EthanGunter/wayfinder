@@ -3,7 +3,7 @@ import { NativeTaskStorage as NativeTaskProvider } from './NativeTaskProvider';
 import { NotFoundError, ParseError } from '$lib/Errors';
 import { Filesystem } from '@capacitor/filesystem';
 import type { TestIStorageImplementation as TestITaskProviderImplementation } from './ITaskProvider.test';
-import type { ITaskProvider } from './types';
+import type { ITaskAPI } from './types';
 
 vi.mock("@capacitor/filesystem");
 vi.mock("@capacitor-community/sqlite");
@@ -14,7 +14,7 @@ export const NativeITaskProviderTest: TestITaskProviderImplementation = {
     getInstance: async () => {
         return await NativeTaskProvider.get('');
     },
-    beforeeach: async (storage: ITaskProvider) => {
+    beforeeach: async (storage: ITaskAPI) => {
         if ('__reset' in fsMock && typeof fsMock.__reset === 'function') {
             fsMock.__reset();
         }

@@ -1,6 +1,6 @@
 // Supabase's RLS handles this: TODO Task API's need to take auth into consideration
 import { Task, type TaskData } from './Task';
-import type { ITaskProvider } from './types';
+import type { ITaskAPI } from './types';
 
 export * from './types';
 export * from './Task'
@@ -10,7 +10,7 @@ export interface RelationshipUpdate {
     newTask: TaskData | null;
 }
 
-export async function updateRelationships(provider: ITaskProvider, updates: RelationshipUpdate | RelationshipUpdate[]) {
+export async function updateRelationships(provider: ITaskAPI, updates: RelationshipUpdate | RelationshipUpdate[]) {
     // Normalize to array for consistent handling
     const updateArray = Array.isArray(updates) ? updates : [updates];
 
@@ -100,14 +100,14 @@ function collectChildRemovals(map: Map<string, Set<string>>, childId: string, pa
 }
 
 // Process batch updates
-async function processParentAdditions(provider: ITaskProvider, parentAdditions: Map<string, Set<string>>) {
+async function processParentAdditions(provider: ITaskAPI, parentAdditions: Map<string, Set<string>>) {
     if (parentAdditions.size === 0) return;
 
     // Get all child IDs that need updating
     const allChildIds = Array.from(parentAdditions.values()).flatMap(set => Array.from(set));
     const uniqueChildIds = [...new Set(allChildIds)];
 
-    const childrenResult = await provider.readTasks(uniqueChildIds);
+    const childrenResult = await provider.getTasks(uniqueChildIds);
     await childrenResult.match(
         async (children) => {
             const updates = children.flatMap(child => {
@@ -141,14 +141,14 @@ async function processParentAdditions(provider: ITaskProvider, parentAdditions: 
     );
 }
 
-async function processParentRemovals(provider: ITaskProvider, parentRemovals: Map<string, Set<string>>) {
+async function processParentRemovals(provider: ITaskAPI, parentRemovals: Map<string, Set<string>>) {
     if (parentRemovals.size === 0) return;
 
     // Get all child IDs that need updating
     const allChildIds = Array.from(parentRemovals.values()).flatMap(set => Array.from(set));
     const uniqueChildIds = [...new Set(allChildIds)];
 
-    const childrenResult = await provider.readTasks(uniqueChildIds);
+    const childrenResult = await provider.getTasks(uniqueChildIds);
     await childrenResult.match(
         async (children) => {
             const updates = children.flatMap(child => {
@@ -182,14 +182,14 @@ async function processParentRemovals(provider: ITaskProvider, parentRemovals: Ma
     );
 }
 
-async function processChildAdditions(provider: ITaskProvider, childAdditions: Map<string, Set<string>>) {
+async function processChildAdditions(provider: ITaskAPI, childAdditions: Map<string, Set<string>>) {
     if (childAdditions.size === 0) return;
 
     // Get all parent IDs that need updating
     const allParentIds = Array.from(childAdditions.values()).flatMap(set => Array.from(set));
     const uniqueParentIds = [...new Set(allParentIds)];
 
-    const parentsResult = await provider.readTasks(uniqueParentIds);
+    const parentsResult = await provider.getTasks(uniqueParentIds);
     await parentsResult.match(
         async (parents) => {
             const updates = parents.flatMap(parent => {
@@ -223,14 +223,14 @@ async function processChildAdditions(provider: ITaskProvider, childAdditions: Ma
     );
 }
 
-async function processChildRemovals(provider: ITaskProvider, childRemovals: Map<string, Set<string>>) {
+async function processChildRemovals(provider: ITaskAPI, childRemovals: Map<string, Set<string>>) {
     if (childRemovals.size === 0) return;
 
     // Get all parent IDs that need updating
     const allParentIds = Array.from(childRemovals.values()).flatMap(set => Array.from(set));
     const uniqueParentIds = [...new Set(allParentIds)];
 
-    const parentsResult = await provider.readTasks(uniqueParentIds);
+    const parentsResult = await provider.getTasks(uniqueParentIds);
     await parentsResult.match(
         async (parents) => {
             const updates = parents.flatMap(parent => {

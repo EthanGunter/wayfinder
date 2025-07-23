@@ -3,8 +3,8 @@ import { err, ok, type Result } from 'neverthrow';
 import {
     AccountIssueTarget,
     type IAuthCore,
-    type IAuthProvider,
-    type IMigrationProvider,
+    type IAuthAPI,
+    type IMigrationAPI,
     type MigrationRequirements,
     type SignInCredentials,
     type SignOutOptions,
@@ -13,9 +13,12 @@ import {
     type User,
     type UserData,
 } from './types';
-import type { IProvider } from '../Tasks';
+import type { ITaskAPI, Task } from '../Tasks';
 import type { UserAttributes } from '@supabase/supabase-js';
 import { NotFoundError, Err, InvalidStateError, IOError, type UnknownError, NotImplementedError, NotHandledError, ArgumentError } from '$lib/Errors';
+import BrowserAuthProvider from './BrowserAuthProvider';
+import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
+import type { IProvider } from '../types';
 
 const core: IAuthCore = {
     signUp: async function (creds: SignInCredentials, userData: UserData): Promise<Result<User, UnknownError>> {
@@ -26,21 +29,21 @@ const core: IAuthCore = {
                 data: userData,
             }
         })
-        if (authRes.error) { throw new NotHandledError(authRes.error); }
+        if (authRes.error) { Err.throw(new NotHandledError(authRes.error)); }
 
         if (authRes.data.user) {
             return ok(authRes.data.user);
-        } else throw new NotHandledError("supabase.auth.signUp returned a null user");
+        } else Err.throw(new NotHandledError("supabase.auth.signUp returned a null user"));
     },
 
     getUser: function (id: string): Promise<Result<User, NotFoundError>> {
-        throw new Error('Function not implemented.');
+        Err.throw(new Error('Function not implemented.'));
     },
 
     getCurrentUser: async function (): Promise<Result<User, InvalidStateError | UnknownError>> {
         const userRes = await supabase.auth.getUser();
         if (userRes.error) {
-            throw userRes.error; // TODO DEV ONLY
+            Err.throw(userRes.error); // TODO DEV ONLY
         } else {
             const user = userRes.data.user;
             return ok({
@@ -86,7 +89,7 @@ const core: IAuthCore = {
         // TODO deleting users requires admin access...
         // Common suggestion is to have a public.users/profiles table with a foreign-key constraint to auth.users...
         // Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
-        throw new NotImplementedError("SupabaseAuth.deleteUser");
+        Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
     },
 
     signIn: async (cred: SignInCredentials): Promise<any> => {
@@ -100,7 +103,7 @@ const core: IAuthCore = {
                     console.error(res.error);
                 } else return res.data;
             }
-            default: throw new Error(`${cred.type} sign-in method not implemented`);
+            default: Err.throw(new Error(`${cred.type} sign-in method not implemented`));
         }
     },
 
@@ -119,8 +122,8 @@ const core: IAuthCore = {
     },
 }
 
-const migrator: IMigrationProvider = {
-    getMigrationNeeds: function (cred) {
+const migrator: IMigrationAPI = {
+    getMigrationRequirements: function (cred) {
         const issues: MigrationRequirements[] = [];
 
         switch (cred.type) {
@@ -144,30 +147,81 @@ const migrator: IMigrationProvider = {
     },
 
     // TODO Convert to function* and yield progress results
-    migrate: async function (user, creds) {
-        const migNeedsRes = supabaseAuth.getMigrationNeeds(creds);
+    migrate: async function (user, creds, taskProvider) {
+        const migNeedsRes = migrator.getMigrationRequirements(creds);
         if (migNeedsRes.isErr()) return err(migNeedsRes.error);
-        else if (migNeedsRes.value.length > 0) return err(migNeedsRes.value);
+        else if (migNeedsRes.value.length > 0) return err(new InvalidStateError("Must resolve the following migration requirements before migrating", migNeedsRes.value));
 
         switch (creds.type) {
             case "email_password":
-                // TODO Manage Supabase account migration
-                console.log("Mocking Supabase migration");
-                // await sup
-                break;
+                return migrateEmailPassword(user, creds, taskProvider);
             default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${creds.type}`));
         }
         Err.throw(new NotImplementedError("SupabaseAuth.migrate"))
     },
 }
 
-const supabaseAuth: IAuthProvider = {
-    ...core,
-    ...migrator
+// TODO revert operations instead of simply throwing
+async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, taskProvider: ITaskAPI) {
+    // TODO Manage Supabase account migration
+    const signUpRes = await supabase.auth.signUp(creds);
+    if (signUpRes.error) {
+        switch (signUpRes.error.code) {
+            case 'identity_already_exists':
+            case 'email_exists':
+            case 'user_already_exists':
+                return err(new ArgumentError(creds, "Account already exists"));
+            default: Err.throw(new Error("Uknown",));
+        }
+    }
+
+    if (!signUpRes.data || !signUpRes.data.user) Err.throw(new Error("Supabase failed to return user data"));
+    const newUser = signUpRes.data.user;
+
+    // Update local user
+    const localAuth = await BrowserAuthProvider.get();
+    localAuth.updateUser({ ...newUser, oldId: user.id, is_synced: true, last_synced: new Date() });
+
+    // Update all task's user_id field for user
+    const localTaskAPI = await BrowserTaskProvider.get();
+    localTaskAPI.changeOwnership(user.id, newUser.id);
+
+    // Copy all local tasks to the remote
+    const locUserTasksResult = await localTaskAPI.getAllUserTasks(newUser.id);
+    const localUserTasks = locUserTasksResult.match(tasks => tasks, error => {
+        Err.throw(error);
+    });
+
+    const remoteTaskCreateResult = await taskProvider.createTasks(localUserTasks);
+    const remoteTasks = remoteTaskCreateResult.match(tasks => tasks, err => {
+        Err.throw(err);
+    });
+
+    // In the event the remote has to generate new ids for conflict resolution,
+    // update the local task set one last time
+    let pairing: Map<Task, Task> = new Map();
+    for (const remote of remoteTasks) {
+        let index;
+        const matchingTask = localUserTasks.find((t, ind) => {
+            if (t.equals(remote, true)) {
+                index = ind; return true;
+            } else return false;
+        });
+        if (!matchingTask) Err.throw(new InvalidStateError("Failed to match remote task to local task during migration."))
+        else
+            pairing.set(matchingTask, remote);
+    }
+    localTaskAPI.updateTasks(Array.from(pairing).map(v => ({
+        task: v[0], // local
+        changes: v[1] // remote
+    })));
+
+    return ok(newUser);
 }
 
-const provider: IProvider<IAuthProvider> = {
-    get: async () => supabaseAuth,
+
+const SupabaseAuthProvider: IProvider<IAuthAPI> = {
+    get: async () => ({ ...core, ...migrator }),
     close: async () => { },
 }
-export default provider;
+export default SupabaseAuthProvider;

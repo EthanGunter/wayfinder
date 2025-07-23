@@ -1,5 +1,5 @@
 import type { Result } from "neverthrow";
-import type { ITaskProvider as ITaskProvider } from "../Tasks";
+import type { ITaskAPI as ITaskAPI } from "../Tasks";
 import type { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError, UnknownError } from "$lib/Errors";
 
 export interface UserData {
@@ -48,19 +48,25 @@ export interface IAuthCore {
 }
 export type UnsubscribeFn = () => void;
 
-export interface IMigrationProvider {
-    getMigrationNeeds: (signUpCred: SignInCredentials) => Result<MigrationRequirements[], NotImplementedError>,
-    migrate: (user: StoredUser, signUpCred: SignInCredentials) => Promise<Result<User, MigrationRequirements[] | NotImplementedError>>
+export interface IMigrationAPI {
+    getMigrationRequirements: (signUpCred: SignInCredentials) => Result<MigrationRequirements[], NotImplementedError | UnknownError>,
+    migrate: (user: StoredUser, signUpCred: SignInCredentials, taskProvider: ITaskAPI) => Promise<Result<User, InvalidStateError>>
+}
+export type ILocalMigrationAPI = Omit<IMigrationAPI, "migrate"> & {
+    migrate: (user: StoredUser, signUpCred: SignInCredentials) => Promise<Result<User, InvalidStateError | NotImplementedError | UnknownError>>
 }
 
 // TODO Return results
-export interface ILocalAuth {
+export interface ILocalAuthFunctions {
     createUser: (user: StoredUser) => Promise<Result<StoredUser, UnknownError>>
     getMostRecentUser: () => Promise<StoredUser | null>,
-    switchUser: (userId: string) => Promise<StoredUser>,
+    updateUser: (updates: Partial<StoredUser> & { id: string, oldId?: string }) => Promise<Result<StoredUser, UnknownError>>,
     listUsers: () => Promise<StoredUser[]>,
+    switchUser: (userId: string) => Promise<StoredUser>,
     activateNewAnonymousUser: () => Promise<StoredUser>,
     getAnonymousUser: () => Promise<StoredUser | null>,
 }
 
-export type IAuthProvider = IAuthCore & IMigrationProvider;
+export type IAuthAPI = IAuthCore & IMigrationAPI
+export type ILocalAuthAPI = IAuthCore & ILocalMigrationAPI & ILocalAuthFunctions
+

@@ -11,14 +11,14 @@
 	import { ErrorType } from '$lib/Errors.js';
 
 	const { data } = $props();
-	const api = data.taskAPI;
+	const tasks = data.tasks;
 	const user = data.user;
 
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
 	let parents = $state<Task[]>([]);
 
-	const debouncedUpdate = debounce(api.updateTask, 500);
+	const debouncedUpdate = debounce(tasks.updateTask, 500);
 
 	// TODO: Implement real query param reading and task fetching
 	$effect(() => {
@@ -35,7 +35,7 @@
 
 		if (typeof task === 'string') {
 			// TODO: Fetch currentTask, children, and parents based on id
-			const result = await api.readTask(task);
+			const result = await tasks.getTask(task);
 			if (result.isErr()) {
 				switch (result.error.type) {
 					case ErrorType.NotFoundError:
@@ -53,7 +53,7 @@
 
 		// Now currentTask is guaranteed to be a Task object, not a string
 		if (!currentTask) return;
-		(await api.getParentsOf(currentTask)).match(
+		(await tasks.getParentsOf(currentTask)).match(
 			(deps) => {
 				parents = deps;
 			},
@@ -61,7 +61,7 @@
 				err.logError();
 			}
 		);
-		(await api.getChildrenOf(currentTask)).match(
+		(await tasks.getChildrenOf(currentTask)).match(
 			(deps) => {
 				children = deps;
 			},
@@ -74,7 +74,7 @@
 	async function fetchRootTasks() {
 		// const api = await api;
 
-		(await api.getRootTasks()).match(
+		(await tasks.getRootTasks()).match(
 			(roots) => {
 				children = roots;
 			},
@@ -88,7 +88,7 @@
 		// const api = await api;
 		if (currentTask) {
 			(
-				await api.createTask({ user_id: user.id, title: 'New Subtask', parents: [currentTask.id] })
+				await tasks.createTask({ user_id: user.id, title: 'New Subtask', parents: [currentTask.id] })
 			).match(
 				(newTask) => {
 					fetchCurrentTask(newTask);
@@ -98,7 +98,7 @@
 				}
 			);
 		} else {
-			(await api.createTask({ user_id: user.id, title: 'New Project' })).match(
+			(await tasks.createTask({ user_id: user.id, title: 'New Project' })).match(
 				(newTask) => {
 					fetchCurrentTask(newTask);
 				},
@@ -122,7 +122,7 @@
 		for (let index = 0; index < items.length; index++) {
 			const item = items[index];
 
-			api.updateTask(item.id, { priority: items.length - index });
+			tasks.updateTask(item.id, { priority: items.length - index });
 		}
 		// });
 	}
@@ -131,7 +131,7 @@
 		// Remove the task from the visual list
 		children = children.filter((x) => x.id !== task.id);
 		// const api = await api;
-		if ((await api.deleteTask(task.id)).isErr()) {
+		if ((await tasks.deleteTask(task.id)).isErr()) {
 			// Something went wrong, add the item back to the list
 		}
 	}

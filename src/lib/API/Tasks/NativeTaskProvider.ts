@@ -1,6 +1,6 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { type CreateTaskDTO, type ITaskProvider } from './types';
+import { type CreateTaskDTO, type ITaskAPI } from './types';
 import { Result, err, ok } from 'neverthrow';
 import { NotFoundError, IOError, ParseError, NotImplementedError } from '$lib/Errors';
 import * as path from 'path'
@@ -9,7 +9,7 @@ import { type TaskData, Task } from './Task';
 
 // TODO Write tests for NativeStorage
 // TODO Document NativeStorage
-export class NativeTaskStorage implements ITaskProvider {
+export class NativeTaskStorage implements ITaskAPI {
     private db: SQLiteDBConnection | null = null;
     private vaultPath: string;
 
