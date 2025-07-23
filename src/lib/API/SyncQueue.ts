@@ -36,7 +36,7 @@ export class SyncQueue<RemoteT, ReverterT> {
             try {
                 const result = await (this.fnMap[entry.fnName])(...entry.args);
                 if (result.isErr()) {
-                    await (this.fnMap[entry.revertFnName] as any)(entry.revertArgs);
+                    await (this.fnMap[entry.revertFnName] as any)(...entry.revertArgs);
                 }
                 this.queue.shift();
             }

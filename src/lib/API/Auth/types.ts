@@ -48,11 +48,11 @@ export interface IAuthCore {
 }
 export type UnsubscribeFn = () => void;
 export interface IAuthCoreReverter {
-    undoSignUp: (creds: SignInCredentials, userData: UserData) => Promise<Result<User, UnknownError>>,
-    undoUpdateUser: (updates: Partial<User> & { id: string }) => Promise<Result<User, UnknownError>>,
-    undoDeleteUser: (userId: string) => Promise<Result<void, UnknownError>>,
-    undoSignIn: (creds: SignInCredentials) => Promise<Result<User, UnknownError>>,
-    undoSignOut: () => Promise<Result<void, UnknownError>>,
+    undoSignUp: (creds: SignInCredentials, userData: UserData) => Promise<void>,
+    undoUpdateUser: (oldUser: StoredUser, newId?: string) => Promise<void>,
+    undoDeleteUser: (oldUser: StoredUser) => Promise<void>,
+    undoSignIn: (creds: SignInCredentials) => Promise<void>,
+    undoSignOut: () => Promise<void>,
 }
 
 export interface IMigrationAPI {

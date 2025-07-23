@@ -1,6 +1,6 @@
 import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
-import type { IAuthCore, IAuthAPI, ILocalAuthFunctions, ILocalMigrationAPI, IMigrationAPI, MigrationRequirements, SignInCredentials, StoredUser, UnsubscribeFn, UserData, ILocalAuthAPI, IAuthAPIReverter, IAuthCoreReverter, IMigrationReverter } from './types';
+import type { IAuthCore, IAuthAPI, ILocalAuthFunctions, ILocalMigrationAPI, SignInCredentials, StoredUser, IAuthAPIReverter, IAuthCoreReverter, IMigrationReverter } from './types';
 import type { ITaskAPI } from '../Tasks';
 import { AUTH_TABLE_NAME, authDBPromise, type AuthDB } from '../localDB';
 import { err, ok, type Result } from 'neverthrow';
@@ -20,14 +20,14 @@ const authStateListeners: Set<(user: StoredUser | null) => void> = new Set();
 // TODO: Wrap the task API so we call local functions first, then the remote,
 // TODO: and handle rolling back local changes whenever the remote fails...
 const local: ILocalAuthFunctions = {
-  createUser: async function (user: StoredUser): Promise<Result<StoredUser, UnknownError>> {
+  createUser: async function (user) {
     assertDB(db);
 
     await db.put(AUTH_TABLE_NAME, user);
     return ok(user);
   },
 
-  getMostRecentUser: async function (): Promise<StoredUser | null> {
+  getMostRecentUser: async function () {
     assertDB(db);
 
     // Get all users and sort by last_active
@@ -44,7 +44,7 @@ const local: ILocalAuthFunctions = {
     return users[0];
   },
 
-  listUsers: async function (): Promise<StoredUser[]> {
+  listUsers: async function () {
     assertDB(db);
     const users = await db.getAll(AUTH_TABLE_NAME);
     return users;
@@ -63,7 +63,7 @@ const local: ILocalAuthFunctions = {
     const updatedUser = {
       ...user,
       ...update,
-      last_active: new Date()
+      // last_active: new Date()
     };
 
     await db.put(AUTH_TABLE_NAME, updatedUser);
@@ -71,15 +71,20 @@ const local: ILocalAuthFunctions = {
       await db.delete(AUTH_TABLE_NAME, update.oldId);
     }
 
-    // If updating current user, notify listeners
-    if (update.id === currentUserId) {
-      // notifyListeners(toLocalUserProxy(updatedUser));
-    }
+    authSyncQueue?.add('updateUser',
+      [update],
+      'undoUpdateUser',
+      [
+        user,
+        updatedUser.oldId ? updatedUser.id : undefined
+      ],
+      "User update failed"
+    );
 
     return ok(updatedUser);
   },
 
-  switchUser: async function (userId: string): Promise<StoredUser> {
+  switchUser: async function (userId) {
     assertDB(db);
 
     const user = await db.get(AUTH_TABLE_NAME, userId);
@@ -91,7 +96,7 @@ const local: ILocalAuthFunctions = {
     return /*toLocalUserProxy(*/ user /*)*/;
   },
 
-  activateNewAnonymousUser: async function (): Promise<StoredUser> {
+  activateNewAnonymousUser: async function () {
     assertDB(db);
 
     const anonymousUser: StoredUser = {
@@ -108,7 +113,7 @@ const local: ILocalAuthFunctions = {
     return /*toLocalUserProxy(*/anonymousUser/*)*/;
   },
 
-  getAnonymousUser: async function (): Promise<StoredUser | null> {
+  getAnonymousUser: async function () {
     assertDB(db);
     const users = await db.getAll(AUTH_TABLE_NAME);
     return users.find(user => !user.display_name) || null;
@@ -116,15 +121,7 @@ const local: ILocalAuthFunctions = {
 };
 
 const core: IAuthCore & IAuthCoreReverter = {
-  signUp: async function (creds: SignInCredentials): Promise<Result<StoredUser, UnknownError>> {
-    // Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
-    Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
-  },
-  undoSignUp: (creds, userData) => {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignUp"))
-  },
-
-  getUser: async function (userId: string): Promise<Result<StoredUser, NotFoundError>> {
+  getUser: async function (userId) {
     assertDB(db);
     const user = await db.get(AUTH_TABLE_NAME, userId);
     if (user) {
@@ -135,7 +132,7 @@ const core: IAuthCore & IAuthCoreReverter = {
     }
   },
 
-  getCurrentUser: async function (): Promise<Result<StoredUser, InvalidStateError>> {
+  getCurrentUser: async function () {
     assertDB(db);
     if (!currentUserId) return err(new InvalidStateError('No user currently signed in'));
 
@@ -146,27 +143,51 @@ const core: IAuthCore & IAuthCoreReverter = {
   },
 
   updateUser: local.updateUser,
-  undoUpdateUser: (updates) => {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.undoUpdateUser"));
+  undoUpdateUser: async function (oldUser, newId) {
+    assertDB(db);
+    if (newId) {
+      await db.delete(AUTH_TABLE_NAME, newId);
+    }
+    await db.put(AUTH_TABLE_NAME, oldUser)
   },
 
-  deleteUser: async function (userId: string): Promise<Result<void, InvalidStateError>> {
+  deleteUser: async function (userId) {
     assertDB(db);
 
-    // Can't delete the current user
-    if (userId === currentUserId) {
-      await this.signOut();
-    }
+    const user = await db.get(AUTH_TABLE_NAME, userId);
 
-    await db.delete(AUTH_TABLE_NAME, userId);
+    if (user) {
+      // Can't delete the current user
+      if (userId === currentUserId) {
+        await this.signOut();
+      }
+
+      await db.delete(AUTH_TABLE_NAME, userId);
+
+      authSyncQueue?.add(
+        'deleteUser',
+        [userId],
+        'undoDeleteUser',
+        [user],
+        `Failed to delete user: ${user.display_name ?? user.id}`
+      )
+    }
 
     return ok();
   },
-  undoDeleteUser: (userId) => {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.undoDeleteUser"))
+  undoDeleteUser: async function (user) {
+    assertDB(db);
+    await db.put(AUTH_TABLE_NAME, user)
   },
 
-  signIn: async function (creds: SignInCredentials): Promise<Result<StoredUser, UnknownError>> {
+  signUp: async function (creds) {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
+  },
+  undoSignUp: (creds, userData) => {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignUp"))
+  },
+
+  signIn: async function (creds) {
     assertDB(db);
 
     switch (creds.type) {
@@ -177,7 +198,7 @@ const core: IAuthCore & IAuthCoreReverter = {
     Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignIn"))
   },
 
-  signOut: async function (): Promise<Result<void, UnknownError>> {
+  signOut: async function () {
     currentUserId = null;
     invalidateAll(); // TODO does invalidateAll() work here? Test...
     return ok();
@@ -264,6 +285,23 @@ const BrowserAuthProvider: ILocalAuthProvider = {
     remoteAuth = remoteAuthProvider ?? null;
     remoteTask = remoteTaskProvider ?? null;
 
+    if (remoteAuthProvider && remoteTaskProvider) {
+      new SyncQueue<Omit<IAuthAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, IAuthAPIReverter>({
+        deleteUser: remoteAuth!.deleteUser,
+        undoDeleteUser: core.undoDeleteUser,
+        migrate: remoteAuth!.migrate,
+        undoMigrate: migrator.undoMigrate,
+        signIn: remoteAuth!.signIn,
+        undoSignIn: core.undoSignIn,
+        signOut: remoteAuth!.signOut,
+        undoSignOut: core.undoSignOut,
+        signUp: remoteAuth!.signUp,
+        undoSignUp: core.undoSignUp,
+        updateUser: remoteAuth!.updateUser,
+        undoUpdateUser: core.undoUpdateUser,
+      });
+    }
+
     // Initialize with most recent user or create anonymous
     const mostRecentUser = await local.getMostRecentUser();
     if (mostRecentUser) {
@@ -282,20 +320,8 @@ const BrowserAuthProvider: ILocalAuthProvider = {
   }
 };
 
-const syncQueue = new SyncQueue<Omit<IAuthAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, IAuthAPIReverter>({
-  deleteUser: remoteAuth!.deleteUser,
-  undoDeleteUser: core.undoDeleteUser,
-  migrate: remoteAuth!.migrate,
-  undoMigrate: migrator.undoMigrate,
-  signIn: remoteAuth!.signIn,
-  undoSignIn: core.undoSignIn,
-  signOut: remoteAuth!.signOut,
-  undoSignOut: core.undoSignOut,
-  signUp: remoteAuth!.signUp,
-  undoSignUp: core.undoSignUp,
-  updateUser: remoteAuth!.updateUser,
-  undoUpdateUser: core.undoUpdateUser,
-});
+export const authSyncQueue: SyncQueue<Omit<IAuthAPI, "getCurrentUser" | "getMigrationRequirements" | "getUser">, IAuthAPIReverter> | null = null;
+
 export default BrowserAuthProvider;
 
 // Export for testing
