@@ -61,6 +61,9 @@ const taskCRUD: ITaskCrudAPI = {
 
     return ok(data.map(t => new Task(t)));
   },
+  getAllUserTasks(userId) {
+    Err.throw(new NotImplementedError("SupabaseTaskProvider.getAllUserTasks"));
+  },
 
   updateTask: async function (task: string | Task, updates: Partial<Task>): Promise<Result<Task, Err>> {
     // Convert the id to task

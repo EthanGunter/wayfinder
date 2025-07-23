@@ -14,7 +14,10 @@ export class Err {
     static wrap(nativeError: Error): Err {
         return new Err(0, nativeError.name ?? "unknown", nativeError.message, nativeError);
     }
-    static throw(error: Err): never {
+    static throw(error: Err | any): never {
+        if (error! instanceof Err) {
+            error = new Err(1, "Unknown", "error occured", error);
+        }
         error.inheritanceDepth++;
         error.withTrace();
         if (error.context)
@@ -32,7 +35,6 @@ export class Err {
      * @param inheritanceDepth helps keep the stacktrace clean. -1 doesn't generate a stacktrace
      */
     constructor(private inheritanceDepth: number, public type: string, public msg: string, public context?: any) {
-        // this.withTrace(); // TODO Dev only
     }
 
     /**

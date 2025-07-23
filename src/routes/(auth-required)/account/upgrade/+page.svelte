@@ -6,6 +6,7 @@
 	import TooltipHover from '$lib/components/overlays/TooltipHover.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { Err, ErrorType, NotImplementedError } from '$lib/Errors.js';
+	import { migrate } from 'svelte/compiler';
 
 	// Svelte 5 state
 	const { data } = $props();
@@ -78,6 +79,9 @@
 			if (migRes.error.type === ErrorType.NotImplementedError) {
 				// Should never happen
 				Err.throw(migRes.error); // TODO Dev only
+			} else if (migRes.error.type === ErrorType.InvalidState) {
+				// User/account already exists
+				migRes.error.logError();
 			} else {
 				Err.throw(migRes.error);
 			}

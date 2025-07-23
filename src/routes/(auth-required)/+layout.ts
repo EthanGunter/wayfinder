@@ -4,7 +4,6 @@ import type { StoredUser } from '$lib/API/Auth/types';
 import type { ITaskAPI } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
-import type { ILocalTaskProvider } from '$lib/API/types';
 import { Err, ErrorType } from '$lib/Errors';
 import { devStore } from '$lib/stores/devStore.svelte';
 import type { LayoutLoad } from './$types';
@@ -12,7 +11,8 @@ import type { LayoutLoad } from './$types';
 export const load: LayoutLoad = async ({ parent, url }) => {
     // Initialize local auth provider
     const remoteAuth = await SupabaseAuthProvider.get();
-    const auth = await BrowserAuthProvider.get(remoteAuth);
+    const remoteTaskAPI = await SupabaseTaskProvider.get();
+    const auth = await BrowserAuthProvider.get(remoteAuth, remoteTaskAPI);
 
     // Check local account data first
     let currentUser = await auth.getMostRecentUser();
@@ -33,7 +33,6 @@ export const load: LayoutLoad = async ({ parent, url }) => {
             ...currentUser,
             ...remoteUser,
         };
-        const remoteTaskAPI = await SupabaseTaskProvider.get();
         tasks = await BrowserTaskProvider.get(remoteTaskAPI);
         console.log("Using Browser-wrapped supabase task API");
     } else {

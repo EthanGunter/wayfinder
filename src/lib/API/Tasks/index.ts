@@ -122,7 +122,7 @@ async function processParentAdditions(provider: ITaskAPI, parentAdditions: Map<s
                 if (parentsToAdd.length > 0) {
                     return {
                         task: child,
-                        updates: { parents: [...child.parents, ...parentsToAdd] }
+                        changes: { parents: [...child.parents, ...parentsToAdd] }
                     };
                 }
                 return [];
@@ -163,7 +163,7 @@ async function processParentRemovals(provider: ITaskAPI, parentRemovals: Map<str
                 if (parentsToRemove.length > 0) {
                     return {
                         task: child,
-                        updates: { parents: child.parents.filter(p => !parentsToRemove.includes(p)) }
+                        changes: { parents: child.parents.filter(p => !parentsToRemove.includes(p)) }
                     };
                 }
                 return [];
@@ -204,7 +204,7 @@ async function processChildAdditions(provider: ITaskAPI, childAdditions: Map<str
                 if (childrenToAdd.length > 0) {
                     return {
                         task: parent,
-                        updates: { children: [...parent.children, ...childrenToAdd] }
+                        changes: { children: [...parent.children, ...childrenToAdd] }
                     };
                 }
                 return [];
@@ -245,7 +245,7 @@ async function processChildRemovals(provider: ITaskAPI, childRemovals: Map<strin
                 if (childrenToRemove.length > 0) {
                     return {
                         task: parent,
-                        updates: { children: parent.children.filter(c => !childrenToRemove.includes(c)) }
+                        changes: { children: parent.children.filter(c => !childrenToRemove.includes(c)) }
                     };
                 }
                 return [];

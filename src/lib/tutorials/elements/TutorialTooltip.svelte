@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Tooltip from '$lib/components/TimedTooltip.svelte';
+	import TooltipTimed from '$lib/components/overlays/TooltipTimed.svelte';
 
 	export interface Props {
 		forElement: string | HTMLElement;
@@ -24,7 +24,7 @@
 	}: Props = $props();
 </script>
 
-<Tooltip {forElement} {position} show>
+<TooltipTimed {forElement} {position} open>
 	{#if title}
 		<h3 class="tutorial-title">{title}</h3>
 	{/if}
@@ -43,7 +43,7 @@
 			{/if}
 		</div>
 	{/if}
-</Tooltip>
+</TooltipTimed>
 
 <style>
 	:global(.tooltip) {

@@ -37,7 +37,7 @@ const core: IAuthCore = {
     },
 
     getUser: function (id: string): Promise<Result<User, NotFoundError>> {
-        Err.throw(new Error('Function not implemented.'));
+        Err.throw(new NotImplementedError("SupabaseAuthProvider.getUser"));
     },
 
     getCurrentUser: async function (): Promise<Result<User, InvalidStateError | UnknownError>> {
@@ -103,7 +103,7 @@ const core: IAuthCore = {
                     console.error(res.error);
                 } else return res.data;
             }
-            default: Err.throw(new Error(`${cred.type} sign-in method not implemented`));
+            default: Err.throw(new NotImplementedError(`SupabaseAuth.${cred.type} sign-in`));
         }
     },
 
@@ -111,7 +111,7 @@ const core: IAuthCore = {
         let scope: 'global' | 'local' | 'others' = options?.signOutSelf ? (options.signOutOthers ? 'global' : 'local') : 'others';
         const error = await supabase.auth.signOut({ scope });
         if (error.error) {
-            throw error.error
+            Err.throw(error.error);
         }
         return ok();
     },
@@ -163,39 +163,48 @@ const migrator: IMigrationAPI = {
 
 // TODO revert operations instead of simply throwing
 async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, taskProvider: ITaskAPI) {
+    console.log("Beginning email signup");
+
     // TODO Manage Supabase account migration
     const signUpRes = await supabase.auth.signUp(creds);
     if (signUpRes.error) {
         switch (signUpRes.error.code) {
             case 'identity_already_exists':
+                return err(new InvalidStateError("Identity already exists", creds));
             case 'email_exists':
+                return err(new InvalidStateError("Account with email already exists", creds.email));
             case 'user_already_exists':
-                return err(new ArgumentError(creds, "Account already exists"));
-            default: Err.throw(new Error("Uknown",));
+                return err(new InvalidStateError("User already exists", creds));
+            default: Err.throw(signUpRes.error);
         }
     }
 
-    if (!signUpRes.data || !signUpRes.data.user) Err.throw(new Error("Supabase failed to return user data"));
+    if (!signUpRes.data || !signUpRes.data.user) Err.throw("Supabase failed to return user data");
     const newUser = signUpRes.data.user;
+    console.log("Email signup completed. Updating local user...");
 
     // Update local user
     const localAuth = await BrowserAuthProvider.get();
     localAuth.updateUser({ ...newUser, oldId: user.id, is_synced: true, last_synced: new Date() });
+    console.log("Local user updated. Updating local tasks...");
 
     // Update all task's user_id field for user
     const localTaskAPI = await BrowserTaskProvider.get();
-    localTaskAPI.changeOwnership(user.id, newUser.id);
+    await localTaskAPI.changeOwnership(user.id, newUser.id);
+    console.log("Local tasks updated. Copying tasks to remote...");
 
     // Copy all local tasks to the remote
     const locUserTasksResult = await localTaskAPI.getAllUserTasks(newUser.id);
     const localUserTasks = locUserTasksResult.match(tasks => tasks, error => {
         Err.throw(error);
     });
+    console.log("Tasks created. Matching remote to local...");
 
     const remoteTaskCreateResult = await taskProvider.createTasks(localUserTasks);
     const remoteTasks = remoteTaskCreateResult.match(tasks => tasks, err => {
         Err.throw(err);
     });
+    console.log("Tasks copied to remote. Syncing local tasks...");
 
     // In the event the remote has to generate new ids for conflict resolution,
     // update the local task set one last time
@@ -215,6 +224,7 @@ async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, 
         task: v[0], // local
         changes: v[1] // remote
     })));
+    console.log("Local tasks updated with remote changes. Returning new user:", user, "=>", newUser);
 
     return ok(newUser);
 }
