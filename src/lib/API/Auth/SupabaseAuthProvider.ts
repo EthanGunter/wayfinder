@@ -16,7 +16,7 @@ import type { UserAttributes } from '@supabase/supabase-js';
 import { NotFoundError, Err, InvalidStateError, NotImplementedError, NotHandledError } from '$lib/Errors';
 import BrowserAuthProvider from './BrowserAuthProvider';
 import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
-import type { IProvider } from '../types';
+import { extractBatchAndLogErrors, type IProvider } from '../types';
 
 const core: IAuthCore = {
     signUp: async function ({ creds, userData }) {
@@ -38,7 +38,7 @@ const core: IAuthCore = {
         Err.throw(new NotImplementedError("SupabaseAuthProvider.getUser"));
     },
 
-    getCurrentUser: async function () {
+    getActiveUser: async function () {
         const userRes = await supabase.auth.getUser();
         if (userRes.error) {
             Err.throw(userRes.error); // TODO DEV ONLY
@@ -191,18 +191,18 @@ async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, 
 
     // Update all task's user_id field for user
     const localTaskAPI = await BrowserTaskProvider.get();
-    await localTaskAPI.changeOwnership(user.id, newUser.id);
+    await localTaskAPI.changeOwnership({ oldUserID: user.id, newUserID: newUser.id });
     console.log("Local tasks updated. Copying tasks to remote...");
 
     // Copy all local tasks to the remote
-    const locUserTasksResult = await localTaskAPI.getAllUserTasks(newUser.id);
-    const localUserTasks = locUserTasksResult.match(tasks => tasks, error => {
+    const locUserTasksResult = await localTaskAPI.getAllUserTasks({ userId: newUser.id });
+    const localUserTasks = locUserTasksResult.match(tasks => extractBatchAndLogErrors(tasks), error => {
         Err.throw(error);
     });
     console.log("Tasks created. Matching remote to local...");
 
-    const remoteTaskCreateResult = await taskProvider.createTasks(localUserTasks);
-    const remoteTasks = remoteTaskCreateResult.match(tasks => tasks, err => {
+    const remoteTaskCreateResult = await taskProvider.createTasks({ createDetails: localUserTasks });
+    const remoteTasks = remoteTaskCreateResult.match(tasks => extractBatchAndLogErrors(tasks), err => {
         Err.throw(err);
     });
     console.log("Tasks copied to remote. Syncing local tasks...");
@@ -221,10 +221,12 @@ async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, 
         else
             pairing.set(matchingTask, remote);
     }
-    localTaskAPI.updateTasks(Array.from(pairing).map(v => ({
-        task: v[0], // local
-        changes: v[1] // remote
-    })));
+    localTaskAPI.updateTasks({
+        updateList: Array.from(pairing).map(v => ({
+            taskOrId: v[0], // local
+            changes: v[1] // remote
+        }))
+    });
     console.log("Local tasks updated with remote changes. Returning new user:", user, "=>", newUser);
 
     return ok(newUser);

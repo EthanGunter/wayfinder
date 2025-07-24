@@ -6,6 +6,7 @@ import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 import { Err, ErrorType } from '$lib/Errors';
 import { devStore } from '$lib/stores/devStore.svelte';
+import { aC } from 'vitest/dist/chunks/reporters.d.BFLkQcL6.js';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ parent, url }) => {
@@ -15,50 +16,40 @@ export const load: LayoutLoad = async ({ parent, url }) => {
     const auth = await BrowserAuthProvider.get(remoteAuth, remoteTaskAPI);
 
     // Check local account data first
-    let currentUser = await auth.getMostRecentUser();
-    if (!currentUser) {
-        // Create a temp account
-        currentUser = await auth.activateNewAnonymousUser();
+    const activeRes = await auth.getActiveUser();
+    if (activeRes.isErr()) {
+        Err.throw(activeRes.error);
     }
-
-    // TODO This seems convoluted and unnecessary
-    let remoteUser = currentUser.is_synced && await auth.getCurrentUser();
+    const activeUser = activeRes.value;
 
     let user: StoredUser;
     let tasks: ITaskAPI;
 
-    if (remoteUser) {
+    if (activeUser.is_synced) {
         // User is synced with remote
+        const remoteRes = await auth.getUser({ id: activeUser.id })
+        if (remoteRes.isErr()) {
+            Err.throw(remoteRes.error); // dev-throw
+        }
+        const remoteUser = remoteRes.value;
+
         user = {
-            ...currentUser,
+            ...activeUser,
             ...remoteUser,
         };
+
         tasks = await BrowserTaskProvider.get(remoteTaskAPI);
         console.log("Using Browser-wrapped supabase task API");
     } else {
         // Use local auth
-        const localUser = await auth.getCurrentUser();
-        if (localUser.isErr()) {
-            if (localUser.error.type == ErrorType.NotFoundError) {
-                // This shouldn't happen as LocalAuthProvider creates anonymous user on init
-                throw new Error('No user found');
-            }
-
-            Err.throw(localUser.error);
-        }
-
-        user = localUser.value as StoredUser; // TODO don't cast, convert
+        user = activeUser;
         tasks = await BrowserTaskProvider.get();
+        console.log("Using Browser-only task API");
     }
 
     tasks = await devStore.getTaskProviderOverride(tasks);
 
-    // TODO: If the user logs in, make sure to migrate any local data
+    // TODO: If the user logs in, make sure to sync data with the server
 
     return { user, auth, tasks };
 };
-
-function customThrow(): never { throw {} }
-class tClass {
-    customThrow: () => never = () => { throw {} }
-}

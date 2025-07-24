@@ -10,7 +10,7 @@ type FunctionMap<T> = {
 type ParamsOf<T> = T extends (arg: infer P) => any ? P : never;
 
 type FailureOfHandler<T> =
-    T extends (result: Result<any, infer F>) => any ? F : never;
+    T extends (result: Result<any, infer F>) => any ? F : "SyncQueue handlers must use single Result<T,E> parameter";
 
 type SyncQueueEntry<RemoteT, CallbackT, RemoteK extends keyof RemoteT, CallbackK extends keyof CallbackT> = {
     fnName: RemoteK;

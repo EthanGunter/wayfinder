@@ -84,6 +84,8 @@ class DevStore {
 	// Methods
 	async getTaskProviderOverride(defaultProvider: ITaskAPI): Promise<ITaskAPI> {
 		if (this.devMode && this.taskProviderOverride !== 'none') {
+			console.log(`Overriding default task provider with ${this.taskProviderOverride}`);
+
 			switch (this.taskProviderOverride) {
 				case 'browser':
 					return await BrowserTaskProvider.get();

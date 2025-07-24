@@ -6,8 +6,8 @@ import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
 import { updateRelationships } from '.';
 import JSZip from 'jszip';
-import { TASK_TABLE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
-import { expandBatch, okBatch, type Result } from '../types';
+import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
+import { extractBatchAndLogErrors, okBatch, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
 
 // TODO: Implement update queue system
@@ -18,7 +18,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
-  createTask: async function ({ task }) {
+  createTask: async function ({ createDetail: task }) {
     assertDB(db);
     const preparedTask = new Task(task);
     preparedTask.created = new Date().toISOString();
@@ -34,7 +34,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
   * @error {@link IOError} if the IndexedDB.put() attempt fails
   */
-  createTasks: async function ({ tasks }) {
+  createTasks: async function ({ createDetails: tasks }) {
     assertDB(db);
     const createdTasks: Result<Task, Err>[] = [];
     const createdIds: string[] = [];
@@ -61,9 +61,9 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
 
     taskSyncQueue?.add(
       "createTasks",
-      { tasks },
+      { createDetails: tasks },
       "handleCreateTasksResponse",
-      { createdIds }, // TODO ??
+      { createdIds },
       "Failed to create tasks"
     )
     return ok(createdTasks);
@@ -350,7 +350,7 @@ const taskRelations: ITaskRelations = {
       const parentsBatch = await taskCRUD.getTasks({ ids: childTask.parents });
       if (parentsBatch.isErr()) return err(parentsBatch.error);
       else {
-        let [parents, errors] = expandBatch(parentsBatch);
+        let parents = extractBatchAndLogErrors(parentsBatch);
         return ok(parents);
       }
 
@@ -428,7 +428,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     return ok(todoList);
   },
 
-  searchTasks: function ({ searchTerm }) {
+  searchTasks: function (searchTerm) {
     Err.throw(new NotImplementedError('BrowserTaskProvider.searchTasks'));
   },
 }
@@ -469,15 +469,16 @@ const dataExporter: ITaskExporter = {
   }
 }
 
-const api: ITaskAPI & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
-let db: IDBPDatabase<TaskDB> | null;
+let db: LocalDB | null;
 let remoteDB: ITaskAPI | null
+
+const api: ITaskAPI & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
 const BrowserTaskProvider: ILocalTaskProvider = {
   /** @param remoteTasks The backend task provider that this provider wraps */
   get: async function (remoteTasks) {
-    db = await tasksDBPromise;
+    db = await dbPromise;
     remoteDB = remoteTasks ?? null;
     if (remoteTasks) {
       taskSyncQueue = new SyncQueue<Omit<ITaskAPI,
@@ -532,7 +533,7 @@ export default BrowserTaskProvider;
 
 //#region Utilities
 
-function assertDB(db: IDBPDatabase<TaskDB> | null): asserts db is IDBPDatabase<TaskDB> {
+function assertDB(db: LocalDB | null): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()"));
 }
 

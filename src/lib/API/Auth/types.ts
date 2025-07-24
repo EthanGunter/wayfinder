@@ -43,13 +43,13 @@ export interface ILocalAuthProvider {
 
 export type IAuthAPI = IAuthCore & IMigrator
 export type IAuthAPIResponseHandler = IAuthCoreResponseHandler & IMigrationResponseHandler;
-export type ILocalAuthAPI = IAuthCore & ILocalMigrator & ILocalAuth
+export type ILocalAuthAPI = Omit<IAuthCore, "getActiveUser"> & ILocalMigrator & ILocalAuth
 
 // NOTE All SyncQueued functions must use the params signature
 export interface IAuthCore {
     signUp(params: { creds: SignInCredentials, userData: UserData }): Promise<Result<User>>,
     getUser(params: { id: string }): Promise<Result<User, NotFoundError>>,
-    getCurrentUser(): Promise<Result<User, InvalidStateError>>,
+    getActiveUser(): Promise<Result<User, InvalidStateError>>,
     updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User>>,
     deleteUser(params: { userId: string }): Promise<Result<void>>,
     signIn(params: { creds: SignInCredentials }): Promise<Result<User>>,
@@ -60,7 +60,6 @@ export interface IAuthCoreResponseHandler {
     handleUpdateUserResponse(response: Result<void, { oldUser: StoredUser, newId?: string }>): Promise<void>,
     handleDeleteUserResponse(response: Result<void, { oldUser: StoredUser }>): Promise<void>,
     handleSignInResponse(response: Result<void, { creds: SignInCredentials }>): Promise<void>,
-    handleSignOutResponse(response: Result<void>): Promise<void>,
 }
 
 export interface IMigrator {
@@ -78,10 +77,9 @@ export type ILocalMigrator = Omit<IMigrator, "migrate"> & {
 
 export interface ILocalAuth {
     createUser(params: { user: StoredUser }): Promise<Result<StoredUser>>
-    getMostRecentUser(): Promise<StoredUser | null>,
+    getActiveUser(): Promise<Result<StoredUser, InvalidStateError>>,
     updateUser(params: { update: Partial<StoredUser> & { id: string, oldId?: string } }): Promise<Result<StoredUser>>,
     listUsers(): Promise<StoredUser[]>,
-    switchUser(params: { userId: string }): Promise<StoredUser>,
-    activateNewAnonymousUser(): Promise<StoredUser>,
-    getAnonymousUser(): Promise<StoredUser | null>,
+    switchUser(params: { userId: string }): Promise<Result<StoredUser, NotFoundError>>,
+    getAnonymousUser(): Promise<Result<StoredUser, InvalidStateError>>,
 }

@@ -36,8 +36,8 @@ export interface ITaskCore {
    * @returns The new task's generated ID
    */
   // TODO-test: sets up relationships if parent(s) or children are populated
-  createTask(params: { task: CreateTaskDTO }): Promise<Result<Task>>;
-  createTasks(params: { tasks: CreateTaskDTO[] }): Promise<BatchResult<Task>>;
+  createTask(params: { createDetail: CreateTaskDTO }): Promise<Result<Task>>;
+  createTasks(params: { createDetails: CreateTaskDTO[] }): Promise<BatchResult<Task>>;
   /**
    * Fetches a task's data by its ID
    */
@@ -93,7 +93,7 @@ export interface ITaskAdvancedFeatures {
   getPrioritizedTasks(limit: number /* , weights: WeightParams = {
     deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
 } */): Promise<Result<Task[], Err>>;
-  searchTasks(params: { searchTerm: string }): Promise<Task[]>;
+  searchTasks(searchTerm: string): Promise<Task[]>;
 }
 
 export interface ITaskExporter {

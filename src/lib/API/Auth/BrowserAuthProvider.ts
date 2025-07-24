@@ -2,45 +2,21 @@ import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
 import type { IAuthCore, IAuthAPI, ILocalAuth, ILocalMigrator, SignInCredentials, StoredUser, IAuthAPIResponseHandler, IAuthCoreResponseHandler, IMigrationResponseHandler, ILocalAuthProvider } from './types';
 import type { ITaskAPI } from '../Tasks';
-import { AUTH_TABLE_NAME, authDBPromise, type AuthDB } from '../localDB';
+import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
 import { SyncQueue } from '../SyncQueue';
 
-
-let currentUserId: string | null = null;
-
-let db: IDBPDatabase<AuthDB> | null;
-let remoteAuth: IAuthAPI | null;
-let remoteTask: ITaskAPI | null;
-const authStateListeners: Set<(user: StoredUser | null) => void> = new Set();
-
 // TODO: Wrap the task API so we call local functions first, then the remote,
 // TODO: and handle rolling back local changes whenever the remote fails...
+// TODO: Force UI to update at appropriate times. onAuthChange callback might be required
 const local: ILocalAuth = {
   createUser: async function ({ user }) {
     assertDB(db);
 
     await db.put(AUTH_TABLE_NAME, user);
     return ok(user);
-  },
-
-  getMostRecentUser: async function () {
-    assertDB(db);
-
-    // Get all users and sort by last_active
-    const users = await db.getAll(AUTH_TABLE_NAME);
-    if (users.length === 0) return null;
-
-    // Sort by last_active descending
-    users.sort((a, b) => {
-      const dateA = new Date(a.last_active).getTime();
-      const dateB = new Date(b.last_active).getTime();
-      return dateB - dateA;
-    });
-
-    return users[0];
   },
 
   listUsers: async function () {
@@ -84,38 +60,50 @@ const local: ILocalAuth = {
   },
 
   switchUser: async function ({ userId }) {
+    if (!userId || userId == '') Err.throw(new ArgumentError(userId, "UserId required to switch user. Use signOut if you want no active user"));
     assertDB(db);
 
+    // Update last active time
     const user = await db.get(AUTH_TABLE_NAME, userId);
-    if (!user) {
-      Err.throw(new NotFoundError(userId, "User"));
+    if (user) {
+      db.put(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME, userId);
+      user.last_active = new Date();
+      await db.put(AUTH_TABLE_NAME, user);
+      return ok(user);
+    } else {
+      return err(new NotFoundError(userId, "User"));
     }
-
-    await setCurrentUser(user.id);
-    return /*toLocalUserProxy(*/ user /*)*/;
-  },
-
-  activateNewAnonymousUser: async function () {
-    assertDB(db);
-
-    const anonymousUser: StoredUser = {
-      id: v4(),
-      display_name: undefined, // Anonymous users have no display name
-      last_active: new Date(),
-      auth_provider: 'local',
-      is_synced: false,
-    };
-
-    await db.put(AUTH_TABLE_NAME, anonymousUser);
-    await setCurrentUser(anonymousUser.id);
-
-    return /*toLocalUserProxy(*/anonymousUser/*)*/;
   },
 
   getAnonymousUser: async function () {
     assertDB(db);
     const users = await db.getAll(AUTH_TABLE_NAME);
-    return users.find(user => !user.display_name) || null;
+    const anon = users.find(user => !user.display_name);
+    if (!anon) {
+      const newAnon: StoredUser = {
+        id: v4(),
+        display_name: undefined, // Anonymous users have no display name
+        last_active: new Date(),
+        auth_provider: 'local',
+        is_synced: false,
+      };
+
+      await db.put(AUTH_TABLE_NAME, newAnon);
+      return ok(newAnon);
+    } else {
+      return ok(anon);
+    }
+  },
+
+  getActiveUser: async function () {
+    assertDB(db);
+    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    if (!activeId) return err(new InvalidStateError('No user currently signed in'));
+
+    const user = await db.get(AUTH_TABLE_NAME, activeId);
+    if (!user) Err.throw(new NotFoundError("Failed to find a user stored as currentUserId", activeId));
+
+    return ok(user);
   }
 };
 
@@ -131,15 +119,7 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
     }
   },
 
-  getCurrentUser: async function () {
-    assertDB(db);
-    if (!currentUserId) return err(new InvalidStateError('No user currently signed in'));
-
-    const user = await db.get(AUTH_TABLE_NAME, currentUserId);
-    if (!user) Err.throw(new NotFoundError("Failed to find a user stored as currentUserId", currentUserId));
-
-    return ok(user);
-  },
+  getActiveUser: local.getActiveUser,
 
   updateUser: local.updateUser,
   handleUpdateUserResponse: async function (response) {
@@ -160,8 +140,9 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
     const user = await db.get(AUTH_TABLE_NAME, userId);
 
     if (user) {
+      const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
       // Can't delete the current user
-      if (userId === currentUserId) {
+      if (userId === activeUserId) {
         await this.signOut();
       }
 
@@ -205,12 +186,10 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
   },
 
   signOut: async function () {
-    currentUserId = null;
+    assertDB(db);
+    await db.put(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME, undefined);
     invalidateAll(); // TODO does invalidateAll() work here? Test...
     return ok();
-  },
-  handleSignOutResponse() {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignOut"))
   },
   // onAuthStateChanged: function (callback: (user: StoredUser | null) => void): UnsubscribeFn {
   //   authStateListeners.add(callback);
@@ -251,7 +230,7 @@ const migrator: ILocalMigrator & IMigrationResponseHandler = {
 
 // #region UTILITIES
 
-function assertDB(db: IDBPDatabase<AuthDB> | null, errorMessage?: string): asserts db is IDBPDatabase<AuthDB> {
+function assertDB(db: LocalDB | null, errorMessage?: string): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()"));
 }
 function assertRemoteAuth(remoteAuth: IAuthAPI | null, errorMessage: string): asserts remoteAuth is IAuthAPI {
@@ -261,39 +240,23 @@ function assertRemoteTasks(remoteTasks: ITaskAPI | null, errorMessage: string): 
   if (!remoteTasks) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote tasks without a provider."));
 }
 
-async function setCurrentUser(userId: string): Promise<void> {
-  assertDB(db);
-
-  currentUserId = userId;
-
-  // Update last active time
-  const user = await db.get(AUTH_TABLE_NAME, userId);
-  if (user) {
-    user.last_active = new Date();
-    await db.put(AUTH_TABLE_NAME, user);
-
-    // Notify listeners
-    notifyListeners(/* toLocalUserProxy( */user/* ) */);
-  }
-}
-
-function notifyListeners(user: StoredUser | null): void {
-  authStateListeners.forEach(callback => callback(user));
-}
-
 // #endregion
+
+let db: LocalDB | null;
+let remoteAuth: IAuthAPI | null;
+let remoteTask: ITaskAPI | null;
 
 const api = { ...core, ...local, ...migrator }
 
 const BrowserAuthProvider: ILocalAuthProvider = {
   get: async function (remoteAuthProvider, remoteTaskProvider) {
-    db = await authDBPromise;
+    db = await dbPromise;
     remoteAuth = remoteAuthProvider ?? null;
     remoteTask = remoteTaskProvider ?? null;
 
     if (remoteAuthProvider && remoteTaskProvider) {
       authSyncQueue = new SyncQueue<Omit<IAuthAPI,
-        | "getCurrentUser"
+        | "getActiveUser"
         | "getMigrationRequirements"
         | "getUser">, IAuthAPIResponseHandler>({
           deleteUser: remoteAuth!.deleteUser,
@@ -303,7 +266,6 @@ const BrowserAuthProvider: ILocalAuthProvider = {
           signIn: remoteAuth!.signIn,
           handleSignInResponse: core.handleSignInResponse,
           signOut: remoteAuth!.signOut,
-          handleSignOutResponse: core.handleSignOutResponse,
           signUp: remoteAuth!.signUp,
           handleSignUpResponse: core.handleSignUpResponse,
           updateUser: remoteAuth!.updateUser,
@@ -311,30 +273,34 @@ const BrowserAuthProvider: ILocalAuthProvider = {
         });
     }
 
-    // Initialize with most recent user or create anonymous
-    const mostRecentUser = await local.getMostRecentUser();
-    if (mostRecentUser) {
-      await setCurrentUser(mostRecentUser.id);
+    // Initialize with active user or create anonymous
+    const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    if (activeUserId) {
+      await api.switchUser({ userId: activeUserId });
     } else {
-      await local.activateNewAnonymousUser();
+      const anonRes = await api.getAnonymousUser();
+      if (anonRes.isOk()) {
+        await api.switchUser({ userId: anonRes.value.id });
+      } else {
+        // 
+      }
     }
+
     return api;
   },
 
   close: async function () {
     db?.close();
     db = null;
-    currentUserId = null;
-    authStateListeners.clear();
   }
 };
 
 export let authSyncQueue: SyncQueue<Omit<IAuthAPI,
-  | "getCurrentUser"
+  | "getActiveUser"
   | "getMigrationRequirements"
   | "getUser">, IAuthAPIResponseHandler> | null = null;
 
 export default BrowserAuthProvider;
 
 // Export for testing
-export { db, currentUserId };
+export { db };

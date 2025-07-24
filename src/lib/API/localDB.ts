@@ -3,7 +3,7 @@ import type { StoredUser } from "./Auth/types";
 import type { Task, TaskData } from "./Tasks";
 
 export const AUTH_TABLE_NAME = 'users';
-export interface AuthDB extends DBSchema {
+interface AuthDB extends DBSchema {
     users: {
         key: string;
         value: StoredUser,
@@ -13,7 +13,7 @@ export interface AuthDB extends DBSchema {
     };
 }
 export const TASK_TABLE_NAME = 'tasks';
-export interface TaskDB extends DBSchema {
+interface TaskDB extends DBSchema {
     // files: {
     //   key: string;
     //   value: { filepath: string; content: string };
@@ -30,24 +30,36 @@ export interface TaskDB extends DBSchema {
         }
     };
 }
+export const APP_TABLE_NAME = 'appdata';
+export const ACTIVEUSER_NAME = 'active-user';
+interface AppDB extends DBSchema {
+    appdata: {
+        key: string;
+        value: string | boolean;
+    };
+}
 
-const dbPromise = openDB<AuthDB & TaskDB>('wayfinder', 1, {
+export const dbPromise = openDB<AppDB & AuthDB & TaskDB>('wayfinder', 1, {
     upgrade(db, oldVer) {
-        // Create users store if it doesn't exist
         if (!db.objectStoreNames.contains(AUTH_TABLE_NAME)) {
             const store = db.createObjectStore(AUTH_TABLE_NAME, { keyPath: 'id' });
             store.createIndex('by-last-active', 'last_active');
         }
-        if (!db.objectStoreNames.contains(TASK_TABLE_NAME))        // db.createObjectStore('files', { keyPath: 'filepath' });
-        {
+        if (!db.objectStoreNames.contains(TASK_TABLE_NAME)) {
             const store = db.createObjectStore(TASK_TABLE_NAME, { keyPath: 'id' });
             store.createIndex('by-user', 'user_id');
             store.createIndex('by-parents', 'parents');
             store.createIndex('by-children', 'children');
             store.createIndex('by-status', 'status');
         }
-    },
-});
 
-export const authDBPromise = dbPromise as unknown as Promise<IDBPDatabase<AuthDB>>;
-export const tasksDBPromise = dbPromise as unknown as Promise<IDBPDatabase<TaskDB>>;
+        if (!db.objectStoreNames.contains(APP_TABLE_NAME)) {
+            const store = db.createObjectStore(APP_TABLE_NAME);
+        }
+    },
+}) as unknown as Promise<LocalDB>;
+
+export type LocalDB = IDBPDatabase<AppDB & AuthDB & TaskDB>;
+// export const DBPromise = dbPromise as unknown as Promise<LocalDB>;
+// export const authDBPromise = dbPromise as unknown as Promise<IDBPDatabase<AppDB & AuthDB>>;
+// export const tasksDBPromise = dbPromise as unknown as Promise<IDBPDatabase<TaskDB>>;

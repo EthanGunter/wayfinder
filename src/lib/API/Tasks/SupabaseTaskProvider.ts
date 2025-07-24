@@ -14,16 +14,16 @@ import { isTask, Task, TaskStatus, type TaskData } from "./Task";
 import supabase from "../SupabaseClient";
 import { updateRelationships } from ".";
 import { TASK_TABLE_NAME } from "../localDB";
-import type { IProvider } from "../types";
+import { extractBatch, extractBatchAndLogErrors, okBatch, type IProvider } from "../types";
 
 let client = supabase;
 
 const taskCRUD: ITaskCore = {
-  createTask: async function (createDetails: CreateTaskDTO): Promise<Result<Task, Err>> {
-    const task = Task.populateDTO(createDetails);
+  createTask: async function ({ createDetail }) {
+    const task = Task.populateDTO(createDetail);
 
     const { data, error } = await client.from(TASK_TABLE_NAME).insert([task]).select('*').single();
-    if (error) return err(new IOError(`Failed to create ${createDetails.title}`, error, task));
+    if (error) return err(new IOError(`Failed to create ${createDetail.title}`, error, task));
 
     if (task.parents.length > 0 || task.children.length > 0) {
       updateRelationships(api, { oldTask: null, newTask: new Task({ id: data.id, ...task }) });
@@ -33,7 +33,7 @@ const taskCRUD: ITaskCore = {
     return ok(new Task(data));
   },
 
-  createTasks: async function (createDetails: CreateTaskDTO[]): Promise<Result<Task[], Err>> {
+  createTasks: async function ({ createDetails }) {
     const tasks = createDetails.map(t => Task.populateDTO(t));
 
     const { data, error } = await client.from(TASK_TABLE_NAME).insert(tasks).select('*');
@@ -44,9 +44,9 @@ const taskCRUD: ITaskCore = {
     updateRelationships(api, updatesWithRelations.map(task => ({ oldTask: null, newTask: new Task(task) })));
 
     // Return the generated ID
-    return ok(data.map(t => new Task(t)));
+    return okBatch(data.map(t => new Task(t)));
   },
-  getTask: async function (id: string): Promise<Result<Task, NotFoundError | Err>> {
+  getTask: async function ({ id }) {
     const { data, error } = await client.from(TASK_TABLE_NAME).select().eq('id', id).single();
     if (!data) return err(new NotFoundError(id, 'Task'));
     if (error) return err(new IOError(`Failed to read ${id}`, error));
@@ -54,55 +54,56 @@ const taskCRUD: ITaskCore = {
     return ok(new Task(data));
   },
 
-  getTasks: async function (ids: string[]): Promise<Result<Task[], NotFoundError | Err>> {
+  getTasks: async function ({ ids }) {
     const { data, error } = await client.from(TASK_TABLE_NAME).select().in('id', ids);
     if (!data || data.length == 0) return err(new NotFoundError(`Failed to find ids in ${TASK_TABLE_NAME} table`, ids));
     if (error) return err(new IOError(`Failed to read tasks (${ids.join(', ')})`, error));
 
-    return ok(data.map(t => new Task(t)));
+    return okBatch(data.map(t => new Task(t)));
   },
   getAllUserTasks(userId) {
     Err.throw(new NotImplementedError("SupabaseTaskProvider.getAllUserTasks"));
   },
 
-  updateTask: async function (task: string | Task, updates: Partial<Task>): Promise<Result<Task, Err>> {
+  updateTask: async function ({ taskOrId, changes }) {
     // Convert the id to task
-    if (typeof task === 'string') {
-      const readRes = (await taskCRUD.getTask(task))
+    if (typeof taskOrId === 'string') {
+      const readRes = (await taskCRUD.getTask({ id: taskOrId }))
       if (readRes.isErr()) {
         return err(readRes.error);
       }
-      task = readRes.value;
+      taskOrId = readRes.value;
     }
 
     const { data, error } = await client
       .from(TASK_TABLE_NAME)
-      .update({ ...updates, last_edit: new Date().toISOString() })
-      .eq('id', task.id)
+      .update({ ...changes, last_edit: new Date().toISOString() })
+      .eq('id', taskOrId.id)
       .select()
       .single();
-    if (error || !data) return err(new IOError(`Failed to update ${task.title}`, error, updates));
+    if (error || !data) return err(new IOError(`Failed to update ${taskOrId.title}`, error, changes));
 
-    updateRelationships(api, { oldTask: task, newTask: new Task(data) });
+    updateRelationships(api, { oldTask: taskOrId, newTask: new Task(data) });
 
     return ok(new Task(data));
   },
-  updateTasks: async function (updates: { task: string | Task, changes: Partial<Task> }[]): Promise<Result<Task[], Err>> {
+  updateTasks: async function ({ updateList }) {
     // First, normalize all tasks - convert string IDs to Task objects
-    const stringIds = updates.filter(u => typeof u.task === 'string').map(u => u.task as string);
+    const stringIds = updateList.filter(u => typeof u.taskOrId === 'string').map(u => u.taskOrId as string);
     let idToTask = new Map<string, Task>();
 
     if (stringIds.length > 0) {
-      const readRes = await taskCRUD.getTasks(stringIds);
+      const readRes = await taskCRUD.getTasks({ ids: stringIds });
       if (readRes.isErr()) {
         return err(readRes.error);
       }
-      idToTask = new Map(readRes.value.map(t => [t.id, t]));
+      const tasks = extractBatchAndLogErrors(readRes);
+      idToTask = new Map(tasks.map(t => [t.id, t]));
     }
 
     // Normalize all updates to have Task objects
-    const normalizedUpdates = updates.map(update => ({
-      task: typeof update.task === 'string' ? idToTask.get(update.task)! : update.task,
+    const normalizedUpdates = updateList.map(update => ({
+      task: typeof update.taskOrId === 'string' ? idToTask.get(update.taskOrId)! : update.taskOrId,
       updates: update.changes
     }));
 
@@ -123,7 +124,7 @@ const taskCRUD: ITaskCore = {
       return err(new IOError(
         `Failed to update tasks: ${normalizedUpdates.map(u => u.task.title).join(', ')}`,
         error,
-        updates
+        updateList
       ));
     }
 
@@ -138,14 +139,14 @@ const taskCRUD: ITaskCore = {
 
     await updateRelationships(api, relationshipUpdates);
 
-    return ok(updatedTasks);
+    return okBatch(updatedTasks);
   },
 
   /**
    * @param recursive NOT IMPLEMENTED
    */
-  deleteTask: async function (id: string, recursive?: boolean): Promise<Result<void, Err>> {
-    if (recursive) Err.throw(new NotImplementedError("Recursive delete for SupabaseTaskProvider.deleteTask is not implemented yet"));
+  deleteTask: async function ({ id, recursive }) {
+    if (recursive) Err.throw(new NotImplementedError("SupabaseTaskProvider.deleteTask(recursive=true)"));
 
     let deleteRes = await client.from(TASK_TABLE_NAME).delete().eq('id', id).select().single();
     if (deleteRes.error) return err(new IOError(`Failed to delete ${id}`, deleteRes.error));
@@ -159,42 +160,42 @@ const taskCRUD: ITaskCore = {
   /**
    * @param recursive NOT IMPLEMENTED
    */
-  deleteTasks: async function (list: { id: string, recursive?: boolean }[]): Promise<Result<void, Err>> {
-    for (const item of list) {
-      if (item.recursive) Err.throw(new NotImplementedError("Recursive delete for SupabaseTaskProvider.deleteTask is not implemented yet"));
+  deleteTasks: async function ({ deleteList }) {
+    for (const item of deleteList) {
+      if (item.recursive) Err.throw(new NotImplementedError("SupabaseTaskProvider.deleteTask(recursive=true)"));
     }
 
-    let deleteRes = await client.from(TASK_TABLE_NAME).delete().in('id', list.map(x => x.id)).select();
-    if (deleteRes.error) return err(new IOError(`Failed to delete ${list.map(x => x.id).join(', ')}`, deleteRes.error));
-    else if (deleteRes.count === 0) return err(new NotFoundError(list.map(x => x.id).join(', '), 'task'));
+    let deleteRes = await client.from(TASK_TABLE_NAME).delete().in('id', deleteList.map(x => x.id)).select();
+    if (deleteRes.error) return err(new IOError(`Failed to delete ${deleteList.map(x => x.id).join(', ')}`, deleteRes.error));
+    else if (deleteRes.count === 0) return err(new NotFoundError(deleteList.map(x => x.id).join(', '), 'task'));
 
     updateRelationships(api, deleteRes.data.map(task => ({ oldTask: new Task(task), newTask: null })));
 
     return ok();
   },
 
-  changeOwnership: async function (oldUserID: string, newUserID: string): Promise<Result<Task[], Err>> {
+  changeOwnership: async function ({ oldUserID, newUserID }) {
     const tasks = await client.from(TASK_TABLE_NAME).select().eq('user_id', oldUserID);
     if (tasks.error) {
       return err(Err.wrap(tasks.error));
     }
 
     const convertedTasks = tasks.data.map(t => new Task({ ...t, user_id: newUserID }));
-    taskCRUD.updateTasks(convertedTasks.map(t => ({ task: t, changes: t })));
-    return ok(convertedTasks);
+    taskCRUD.updateTasks({ updateList: convertedTasks.map(t => ({ taskOrId: t, changes: t })) });
+    return okBatch(convertedTasks);
   },
 }
 
 const taskRelations: ITaskRelations = {
-  async getChildrenOf(task: string | Task): Promise<Result<Task[], Err>> {
+  async getChildrenOf({ taskOrId }) {
     // First get the parent task to access its children array
     let parentTask: Task;
-    if (typeof task === "string") {
-      const parentResult = await taskCRUD.getTask(task);
+    if (typeof taskOrId === "string") {
+      const parentResult = await taskCRUD.getTask({ id: taskOrId });
       if (parentResult.isErr()) {
         return err(parentResult.error);
       } else parentTask = parentResult.value;
-    } else parentTask = task;
+    } else parentTask = taskOrId;
 
     if (parentTask.children.length === 0) {
       return ok([]);
@@ -207,15 +208,15 @@ const taskRelations: ITaskRelations = {
     return ok(data.map(t => new Task(t)));
   },
 
-  async getParentsOf(task: string | Task): Promise<Result<Task[], Err>> {
+  async getParentsOf({ taskOrId }) {
     let childTask: Task;
 
-    if (typeof task === "string") {
-      const childTaskResult = await taskCRUD.getTask(task);
+    if (typeof taskOrId === "string") {
+      const childTaskResult = await taskCRUD.getTask({ id: taskOrId });
       if (childTaskResult.isErr()) {
         return err(childTaskResult.error);
       } else childTask = childTaskResult.value;
-    } else childTask = task;
+    } else childTask = taskOrId;
 
     if (childTask.parents.length === 0) {
       return ok([]);
@@ -227,7 +228,7 @@ const taskRelations: ITaskRelations = {
     return ok(data.map(t => new Task(t)));
   },
 
-  async getRootTasks(): Promise<Result<Task[], Err>> {
+  async getRootTasks() {
     const { data, error } = await client.from(TASK_TABLE_NAME).select('*').or('parents.is.null,parents.eq.{}');
     if (error) return err(new IOError(`Failed to fetch roots`, error));
 
@@ -236,7 +237,7 @@ const taskRelations: ITaskRelations = {
 }
 
 const advancedFeatures: ITaskAdvancedFeatures = {
-  getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
+  getTodaysTasks: async function () {
     const { data, error } = await client.from(TASK_TABLE_NAME).select('*').eq('todays_task', true);
     if (error) return err(new IOError(`Failed to fetch today's tasks`, error));
 
@@ -244,7 +245,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
   },
 
   // TODO Come up with a solution that saves us from fetching ALL nodes for sorting...
-  getPrioritizedTasks: async function (limit: number): Promise<Result<Task[], Err>> {
+  getPrioritizedTasks: async function (limit) {
     // Fetch all tasks from Supabase
     const { data: taskArray, error } = await client.from(TASK_TABLE_NAME).select('*');
     if (error) return err(new IOError(`Failed to fetch tasks for prioritization`, error));
@@ -306,7 +307,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     return ok(todoList);
   },
 
-  searchTasks: async function (searchTerm: string): Promise<Task[]> {
+  searchTasks: async function (searchTerm) {
     Err.throw(new NotImplementedError('SupabaseTaskProvider.searchTasks'));
   }
 }
@@ -315,8 +316,8 @@ const api: ITaskAPI = { ...taskCRUD, ...taskRelations, ...advancedFeatures };
 
 /** No-op for Supabase */
 const SupabaseTaskProvider: IProvider<ITaskAPI> = {
-  get: async function (): Promise<ITaskAPI> { return api; },
-  close: async function (): Promise<void> { }
+  get: async function () { return api; },
+  close: async function () { }
 }
 
 export default SupabaseTaskProvider;
