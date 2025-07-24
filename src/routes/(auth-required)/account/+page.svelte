@@ -13,24 +13,13 @@
 	let user = $state(data.user);
 	const debouncedUpdateUser = debounce(auth.updateUser, 200);
 
-	onMount(() => {
-		function handleAuthChange(newUser: StoredUser | null) {
-			if (newUser) user = newUser;
-			else throw new Error("Drawing account page with null user shouldn't be possible");
-		}
-		const unsubscribe = auth.onAuthStateChanged(handleAuthChange);
-		return () => {
-			unsubscribe();
-		};
-	});
-
 	function equals(a: StoredUser, b: StoredUser) {
 		return JSON.stringify(a) === JSON.stringify(b);
 	}
 
 	async function saveUserChanges() {
-		await debouncedUpdateUser(user);
-		await invalidateAll();
+		await debouncedUpdateUser({ update: user });
+		await invalidateAll(); // TODO This may be unnecessary if onAuthChanged gets implemented
 	}
 
 	function handleNameInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
@@ -40,7 +29,7 @@
 </script>
 
 <div id="account-page" class="page">
-	<AppHeader {user} />
+	<AppHeader {user} authAPI={auth} />
 	<div class="content">
 		<!-- TODO Extract avatar to reusable component -->
 		<div class="input-fields">

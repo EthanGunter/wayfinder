@@ -1,14 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { StoredUser } from '$lib/API/Auth/types';
+	import type { IAuthAPI, StoredUser } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
 
 	interface Props {
 		user: StoredUser;
+		authAPI: IAuthAPI;
 	}
-	const { user }: Props = $props();
+	const { user, authAPI }: Props = $props();
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -51,7 +52,7 @@
 			{/if}
 		{/snippet}
 	</SearchBar> -->
-	<UserAccountMenu {user} />
+	<UserAccountMenu {user} {authAPI} />
 </div>
 
 <style lang="scss">

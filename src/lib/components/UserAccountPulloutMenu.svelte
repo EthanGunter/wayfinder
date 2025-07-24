@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { StoredUser } from '$lib/API/Auth/types';
+	import type { IAuthAPI, StoredUser } from '$lib/API/Auth/types';
 	import UserAvatar from './UserAvatar.svelte';
 	import Pullout from './overlays/Pullout.svelte';
 	interface Props {
 		user: StoredUser;
+		authAPI: IAuthAPI;
 	}
-	const { user }: Props = $props();
+	const { user, authAPI }: Props = $props();
 	let menuOpen = $state(false);
 </script>
 
@@ -39,7 +40,7 @@
 				<!-- If not anonymous account -->
 				<button
 					onclick={() => {
-						throw new Error('NotImplemented');
+						authAPI.logout();
 					}}
 				>
 					Sign out

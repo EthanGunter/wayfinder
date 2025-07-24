@@ -4,8 +4,9 @@ import type { StoredUser } from '$lib/API/Auth/types';
 import type { ITaskAPI } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
-import { Err, ErrorType } from '$lib/Errors';
+import { Err } from '$lib/Errors';
 import { devStore } from '$lib/stores/devStore.svelte';
+import { redirect } from '@sveltejs/kit';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ parent, url }) => {
@@ -15,14 +16,21 @@ export const load: LayoutLoad = async ({ parent, url }) => {
     const auth = await BrowserAuthProvider.get(remoteAuth, remoteTaskAPI);
 
     // Check local account data first
-    const activeRes = await auth.getActiveUser();
-    if (activeRes.isErr()) {
-        Err.throw(activeRes.error);
+    let activeUser = await auth.getActiveUser();
+    if (!activeUser) {
+        const anonRes = await auth.getAnonymousUser();
+        if (anonRes.isOk()) {
+            activeUser = anonRes.value;
+        }
     }
-    const activeUser = activeRes.value;
 
     let user: StoredUser;
     let tasks: ITaskAPI;
+
+    if (!activeUser) {
+        // TODO Capture url and reroute to login page
+        throw redirect(302, '/login');
+    }
 
     if (activeUser.is_synced) {
         // User is synced with remote
@@ -50,5 +58,5 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 
     // TODO: If the user logs in, make sure to sync data with the server
 
-    return { user, auth, tasks };
+    return { auth, user, tasks };
 };

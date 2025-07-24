@@ -20,29 +20,29 @@ describe("IAuthCore", () => {
     })
 
     // --- Sign Up ---
-    describe("signUp()", () => {
-        it("should optimistically create a user locally and then call remote `signUp`");
-        it("should successfully sync the local user with data returned from the remote `signUp`");
-        it("should remove the local user if remote `signUp` fails");
+    describe("register()", () => {
+        it("should optimistically create a user locally and then call remote `register`");
+        it("should successfully sync the local user with data returned from the remote `register`");
+        it("should remove the local user if remote `register` fails");
         it("should not attempt a remote call if local user creation fails validation");
-        it("should return an InvalidStateError if `signUp` is called while already signed in");
+        it("should return an InvalidStateError if `register` is called while already logged in");
     });
 
     // --- Sign In ---
-    describe("signIn()", () => {
+    describe("login()", () => {
         /* TODO SECURITY CONCERN: we might want to provide a user setting that REQUIRES online authentication before allowing access to the content in the app */
-        it("should optimistically sign in the user if there is a local representation");
-        it("should signOut the current user if remote `signIn` fails and current user was the one optimistically signed in");
+        it("should optimistically login the user if there is a local representation");
+        it("should logout the current user if remote `login` fails and current user was the one optimistically logged in");
         /* END SECURITY CONCERN */
         it("should not return until the server responds if there is no local representation");
         // TODO So we can notify the user, and offer for them to create a local account (¿they can sync later?)
         it("should fail with NotFoundError if we're offline and there's no local account");
-        it("should `signOut` the active local user if signing in as a different, existing user");
+        it("should `logout` the active local user if logging in as a different, existing user");
     });
 
     // --- Sign Out ---
-    describe("signOut()", () => {
-        it("should optimistically clear the local user session and then call remote `signOut`");
+    describe("logout()", () => {
+        it("should optimistically clear the local user session and then call remote `logout`");
     });
 
     // --- User Update ---
@@ -60,8 +60,8 @@ describe("IAuthCore", () => {
 
     // --- Get Current User ---
     describe("getCurrentUser()", () => {
-        it("should return the currently signed-in user from local state");
-        it("should return an InvalidStateError if no user is currently signed in");
+        it("should return the currently logged-in user from local state");
+        it("should return an InvalidStateError if no user is currently logged in");
     });
 });
 
@@ -103,7 +103,7 @@ describe("Migration Flow (IMigrationAPI)", () => {
         // The remote ITaskAPI is passed here, so we need to test its usage.
         it("should pass the provided task provider to the remote migration service");
         it("should call `undoMigrate` if the remote migration fails");
-        it("should return InvalidStateError if trying to migrate a non-migratable user (e.g., already signed in)");
+        it("should return InvalidStateError if trying to migrate a non-migratable user (e.g., already logged in)");
     });
 });
 

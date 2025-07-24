@@ -12,7 +12,7 @@
 	const { data } = $props();
 	const auth = data.auth;
 	const user = $state(data.user);
-	let cred = $state<SignInCredentials>({
+	let signUpCred = $state<SignInCredentials>({
 		type: 'email_password',
 		email: '',
 		password: ''
@@ -29,7 +29,7 @@
 
 	async function checkAccountIssues() {
 		const uiIssues = new Map();
-		auth.getMigrationRequirements(cred).match(
+		auth.getMigrationRequirements(signUpCred).match(
 			(issues) => {
 				for (const issue of issues) {
 					if (uiIssues.has(issue.target)) {
@@ -56,7 +56,7 @@
 		 If we're local before migrating, the task api will be local.
 		 The migration API should probably be separate from the auth and task api...
 		 */
-		const migReqResult = auth.getMigrationRequirements(cred);
+		const migReqResult = auth.getMigrationRequirements(signUpCred);
 		migReqResult.match(
 			(missingRequirements) => {
 				for (const requirement of missingRequirements) {
@@ -74,7 +74,7 @@
 		);
 		if (migReqResult.isErr() || migReqResult.value.length > 0) return;
 
-		const migRes = await auth.migrate(user, cred);
+		const migRes = await auth.migrate({ user, signUpCred });
 		if (migRes.isErr()) {
 			if (migRes.error.type === ErrorType.NotImplementedError) {
 				// Should never happen
@@ -90,7 +90,7 @@
 </script>
 
 <div id="upgrade-page" class="page">
-	<AppHeader {user} />
+	<AppHeader {user} authAPI={auth} />
 	{#if user && !user.is_synced}
 		<div class="content">
 			<div class="input-fields">
@@ -122,7 +122,7 @@
 						<input
 							id="input_email"
 							type="text"
-							bind:value={cred.email}
+							bind:value={signUpCred.email}
 							class:input-error={accountIssues.has(AccountIssueTarget.email)}
 						/>
 						{#if accountIssues.has(AccountIssueTarget.email)}
@@ -139,7 +139,7 @@
 						<input
 							id="input_passkey"
 							type="password"
-							bind:value={cred.password}
+							bind:value={signUpCred.password}
 							class:input-error={accountIssues.has(AccountIssueTarget.password)}
 						/>
 						<!-- oninput={handlePasswordInput} -->

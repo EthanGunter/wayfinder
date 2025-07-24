@@ -37,23 +37,22 @@ export enum AccountIssueTarget {
 }
 
 export interface ILocalAuthProvider {
-    get(remoteAuth?: IAuthAPI, remoteTasks?: ITaskAPI): Promise<ILocalAuthAPI & ILocalAuth>;
+    get(remoteAuth?: IAuthAPI, remoteTasks?: ITaskAPI): Promise<ILocalAuthAPI>;
     close(): Promise<void>
 }
 
 export type IAuthAPI = IAuthCore & IMigrator
 export type IAuthAPIResponseHandler = IAuthCoreResponseHandler & IMigrationResponseHandler;
-export type ILocalAuthAPI = Omit<IAuthCore, "getActiveUser"> & ILocalMigrator & ILocalAuth
+export type ILocalAuthAPI = IAuthCore & ILocalMigrator & ILocalAuth
 
 // NOTE All SyncQueued functions must use the params signature
 export interface IAuthCore {
-    signUp(params: { creds: SignInCredentials, userData: UserData }): Promise<Result<User>>,
+    register(params: { creds: SignInCredentials, userData: UserData }): Promise<Result<User>>,
     getUser(params: { id: string }): Promise<Result<User, NotFoundError>>,
-    getActiveUser(): Promise<Result<User, InvalidStateError>>,
     updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User>>,
     deleteUser(params: { userId: string }): Promise<Result<void>>,
-    signIn(params: { creds: SignInCredentials }): Promise<Result<User>>,
-    signOut(): Promise<Result<void>>,
+    login(params: { creds: SignInCredentials }): Promise<Result<User>>,
+    logout(): Promise<Result<void>>,
 }
 export interface IAuthCoreResponseHandler {
     handleSignUpResponse(response: Result<void, { creds: SignInCredentials, userData: UserData }>): Promise<void>,
@@ -77,7 +76,7 @@ export type ILocalMigrator = Omit<IMigrator, "migrate"> & {
 
 export interface ILocalAuth {
     createUser(params: { user: StoredUser }): Promise<Result<StoredUser>>
-    getActiveUser(): Promise<Result<StoredUser, InvalidStateError>>,
+    getActiveUser(): Promise<StoredUser | null>,
     updateUser(params: { update: Partial<StoredUser> & { id: string, oldId?: string } }): Promise<Result<StoredUser>>,
     listUsers(): Promise<StoredUser[]>,
     switchUser(params: { userId: string }): Promise<Result<StoredUser, NotFoundError>>,

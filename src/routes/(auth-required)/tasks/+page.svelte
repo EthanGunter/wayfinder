@@ -11,6 +11,7 @@
 	import { ErrorType } from '$lib/Errors.js';
 
 	const { data } = $props();
+	const auth = data.auth;
 	const tasks = data.tasks;
 	const user = data.user;
 
@@ -35,7 +36,7 @@
 
 		if (typeof task === 'string') {
 			// TODO: Fetch currentTask, children, and parents based on id
-			const result = await tasks.getTask(task);
+			const result = await tasks.getTask({ id: task });
 			if (result.isErr()) {
 				switch (result.error.type) {
 					case ErrorType.NotFoundError:
@@ -53,7 +54,7 @@
 
 		// Now currentTask is guaranteed to be a Task object, not a string
 		if (!currentTask) return;
-		(await tasks.getParentsOf(currentTask)).match(
+		(await tasks.getParentsOf({ taskOrId: currentTask })).match(
 			(deps) => {
 				parents = deps;
 			},
@@ -61,7 +62,7 @@
 				err.logError();
 			}
 		);
-		(await tasks.getChildrenOf(currentTask)).match(
+		(await tasks.getChildrenOf({ taskOrId: currentTask })).match(
 			(deps) => {
 				children = deps;
 			},
@@ -88,7 +89,13 @@
 		// const api = await api;
 		if (currentTask) {
 			(
-				await tasks.createTask({ user_id: user.id, title: 'New Subtask', parents: [currentTask.id] })
+				await tasks.createTask({
+					createDetail: {
+						user_id: user.id,
+						title: 'New Subtask',
+						parents: [currentTask.id]
+					}
+				})
 			).match(
 				(newTask) => {
 					fetchCurrentTask(newTask);
@@ -98,7 +105,7 @@
 				}
 			);
 		} else {
-			(await tasks.createTask({ user_id: user.id, title: 'New Project' })).match(
+			(await tasks.createTask({ createDetail: { user_id: user.id, title: 'New Project' } })).match(
 				(newTask) => {
 					fetchCurrentTask(newTask);
 				},
@@ -112,7 +119,7 @@
 	async function onTaskChange(update: Partial<Task>) {
 		// api.then((api) => {
 		if (currentTask) {
-			debouncedUpdate(currentTask.id, update);
+			debouncedUpdate({ taskOrId: currentTask, changes: update });
 		}
 		// });
 	}
@@ -122,7 +129,7 @@
 		for (let index = 0; index < items.length; index++) {
 			const item = items[index];
 
-			tasks.updateTask(item.id, { priority: items.length - index });
+			tasks.updateTask({ taskOrId: item, changes: { priority: items.length - index } });
 		}
 		// });
 	}
@@ -131,14 +138,14 @@
 		// Remove the task from the visual list
 		children = children.filter((x) => x.id !== task.id);
 		// const api = await api;
-		if ((await tasks.deleteTask(task.id)).isErr()) {
+		if ((await tasks.deleteTask({ id: task.id })).isErr()) {
 			// Something went wrong, add the item back to the list
 		}
 	}
 </script>
 
 <div class="task-browser page">
-	<AppHeader user={data.user} />
+	<AppHeader user={data.user} authAPI={auth} />
 	<div class="content">
 		<!-- TODO: <TasksTutorial /> -->
 		{#if currentTask}

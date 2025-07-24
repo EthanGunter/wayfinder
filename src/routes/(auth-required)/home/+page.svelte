@@ -11,6 +11,7 @@
 	// TODO if the user is not synced, offer a "login" & "get started locally" option
 
 	const { data } = $props();
+	const auth = data.auth;
 	const tasks = data.tasks;
 	const user = data.user;
 
@@ -50,7 +51,7 @@
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			tasks.updateTask(task.id, { todays_task: true });
+			tasks.updateTask({ taskOrId: task, changes: { todays_task: true } });
 		}
 	}
 
@@ -59,13 +60,13 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		tasks.updateTask(task.id, { todays_task: false });
+		tasks.updateTask({ taskOrId: task, changes: { todays_task: false } });
 	}
 
 	function todaysTaskChange(task: Task, changes: Partial<Task>) {
 		//TODO: Implement task change logic
 		if (changes.completed) {
-			tasks.updateTask(task.id, { todays_task: false });
+			tasks.updateTask({ taskOrId: task, changes: { todays_task: false } });
 			todaysList = todaysList.filter((t) => t.id !== task.id);
 		}
 	}
@@ -82,10 +83,12 @@
 
 		//TODO: Implement create new project logic
 		let newTaskResult = await tasks.createTask({
-			user_id: user.id,
-			title: 'New Project',
-			status: TaskStatus.incomplete,
-			priority: 0
+			createDetail: {
+				user_id: user.id,
+				title: 'New Project',
+				status: TaskStatus.incomplete,
+				priority: 0
+			}
 		});
 		newTaskResult.match(
 			(newTask) => {
@@ -108,7 +111,7 @@
 </script>
 
 <div class="page page-todays-tasks">
-	<AppHeader user={data.user} />
+	<AppHeader user={data.user} authAPI={auth} />
 	<div class="content">
 		Logged in as {data.user.display_name ?? 'Anonymous'}
 		<div

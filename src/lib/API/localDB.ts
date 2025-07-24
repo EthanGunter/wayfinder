@@ -35,7 +35,7 @@ export const ACTIVEUSER_NAME = 'active-user';
 interface AppDB extends DBSchema {
     appdata: {
         key: string;
-        value: string | boolean;
+        value: string | boolean | undefined;
     };
 }
 

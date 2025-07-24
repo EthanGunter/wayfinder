@@ -19,7 +19,7 @@ import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 import { extractBatchAndLogErrors, type IProvider } from '../types';
 
 const core: IAuthCore = {
-    signUp: async function ({ creds, userData }) {
+    register: async function ({ creds, userData }) {
         const authRes = await supabase.auth.signUp({
             email: creds.email,
             password: creds.password,
@@ -38,19 +38,20 @@ const core: IAuthCore = {
         Err.throw(new NotImplementedError("SupabaseAuthProvider.getUser"));
     },
 
-    getActiveUser: async function () {
-        const userRes = await supabase.auth.getUser();
-        if (userRes.error) {
-            Err.throw(userRes.error); // TODO DEV ONLY
-        } else {
-            const user = userRes.data.user;
-            return ok({
-                id: user.id,
-                display_name: user.user_metadata.displayName,
-                avatar_url: user.user_metadata.avatarUrl,
-            });
-        }
-    },
+    // TODO we may need this back...
+    // getActiveUser: async function () {
+    //     const userRes = await supabase.auth.getUser();
+    //     if (userRes.error) {
+    //         Err.throw(userRes.error); // TODO DEV ONLY
+    //     } else {
+    //         const user = userRes.data.user;
+    //         return ok({
+    //             id: user.id,
+    //             display_name: user.user_metadata.displayName,
+    //             avatar_url: user.user_metadata.avatarUrl,
+    //         });
+    //     }
+    // },
 
     updateUser: async function ({ update }) {
         const updatedUser: UserAttributes = {
@@ -90,7 +91,7 @@ const core: IAuthCore = {
         Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
     },
 
-    signIn: async function ({ creds }) {
+    login: async function ({ creds }) {
         switch (creds.type) {
             case 'email_password': {
                 const res = await supabase.auth.signInWithPassword({
@@ -108,7 +109,7 @@ const core: IAuthCore = {
         }
     },
 
-    signOut: async function (options?: SignOutOptions) {
+    logout: async function (options?: SignOutOptions) {
         let scope: 'global' | 'local' | 'others' = options?.signOutSelf ? (options.signOutOthers ? 'global' : 'local') : 'others';
         const error = await supabase.auth.signOut({ scope });
         if (error.error) {
