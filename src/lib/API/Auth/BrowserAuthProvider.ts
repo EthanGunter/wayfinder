@@ -1,12 +1,11 @@
 import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
-import type { IAuthCore, IAuthAPI, ILocalAuthFunctions, ILocalMigrationAPI, SignInCredentials, StoredUser, IAuthAPIReverter, IAuthCoreReverter, IMigrationReverter } from './types';
+import type { IAuthCore, IAuthAPI, ILocalAuth, ILocalMigrator, SignInCredentials, StoredUser, IAuthAPIResponseHandler, IAuthCoreResponseHandler, IMigrationResponseHandler, ILocalAuthProvider } from './types';
 import type { ITaskAPI } from '../Tasks';
 import { AUTH_TABLE_NAME, authDBPromise, type AuthDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
-import type { ILocalAuthProvider } from '../types';
 import { SyncQueue } from '../SyncQueue';
 
 
@@ -19,8 +18,8 @@ const authStateListeners: Set<(user: StoredUser | null) => void> = new Set();
 
 // TODO: Wrap the task API so we call local functions first, then the remote,
 // TODO: and handle rolling back local changes whenever the remote fails...
-const local: ILocalAuthFunctions = {
-  createUser: async function (user) {
+const local: ILocalAuth = {
+  createUser: async function ({ user }) {
     assertDB(db);
 
     await db.put(AUTH_TABLE_NAME, user);
@@ -50,7 +49,7 @@ const local: ILocalAuthFunctions = {
     return users;
   },
 
-  updateUser: async function (update) {
+  updateUser: async function ({ update }) {
     assertDB(db);
 
     const oldId = update.oldId ?? update.id;
@@ -72,19 +71,19 @@ const local: ILocalAuthFunctions = {
     }
 
     authSyncQueue?.add('updateUser',
-      [update],
-      'undoUpdateUser',
-      [
-        user,
-        updatedUser.oldId ? updatedUser.id : undefined
-      ],
+      { update },
+      'handleUpdateUserResponse',
+      {
+        oldUser: user,
+        newId: updatedUser.oldId ? updatedUser.id : undefined
+      },
       "User update failed"
     );
 
     return ok(updatedUser);
   },
 
-  switchUser: async function (userId) {
+  switchUser: async function ({ userId }) {
     assertDB(db);
 
     const user = await db.get(AUTH_TABLE_NAME, userId);
@@ -120,15 +119,15 @@ const local: ILocalAuthFunctions = {
   }
 };
 
-const core: IAuthCore & IAuthCoreReverter = {
-  getUser: async function (userId) {
+const core: IAuthCore & IAuthCoreResponseHandler = {
+  getUser: async function ({ id }) {
     assertDB(db);
-    const user = await db.get(AUTH_TABLE_NAME, userId);
+    const user = await db.get(AUTH_TABLE_NAME, id);
     if (user) {
       return ok(user);
     }
     else {
-      return err(new NotFoundError(userId, "User"));
+      return err(new NotFoundError(id, "User"));
     }
   },
 
@@ -143,15 +142,19 @@ const core: IAuthCore & IAuthCoreReverter = {
   },
 
   updateUser: local.updateUser,
-  undoUpdateUser: async function (oldUser, newId) {
-    assertDB(db);
-    if (newId) {
-      await db.delete(AUTH_TABLE_NAME, newId);
+  handleUpdateUserResponse: async function (response) {
+    if (response.isErr()) {
+      const { oldUser, newId } = response.error;
+      // Undo changes
+      assertDB(db);
+      if (newId) {
+        await db.delete(AUTH_TABLE_NAME, newId);
+      }
+      await db.put(AUTH_TABLE_NAME, oldUser)
     }
-    await db.put(AUTH_TABLE_NAME, oldUser)
   },
 
-  deleteUser: async function (userId) {
+  deleteUser: async function ({ userId }) {
     assertDB(db);
 
     const user = await db.get(AUTH_TABLE_NAME, userId);
@@ -166,35 +169,38 @@ const core: IAuthCore & IAuthCoreReverter = {
 
       authSyncQueue?.add(
         'deleteUser',
-        [userId],
-        'undoDeleteUser',
-        [user],
+        { userId },
+        'handleDeleteUserResponse',
+        { oldUser: user },
         `Failed to delete user: ${user.display_name ?? user.id}`
       )
     }
 
     return ok();
   },
-  undoDeleteUser: async function (user) {
-    assertDB(db);
-    await db.put(AUTH_TABLE_NAME, user)
+  handleDeleteUserResponse: async function (response) {
+    if (response.isErr()) {
+      const { oldUser } = response.error;
+      assertDB(db);
+      await db.put(AUTH_TABLE_NAME, oldUser)
+    }
   },
 
-  signUp: async function (creds) {
+  signUp: async function ({ creds }) {
     Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
   },
-  undoSignUp: (creds, userData) => {
+  handleSignUpResponse: async function (response) {
     Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignUp"))
   },
 
-  signIn: async function (creds) {
+  signIn: async function ({ creds }) {
     assertDB(db);
 
     switch (creds.type) {
       default: Err.throw(new ArgumentError(creds, `${creds.type} sign in not implemented for local auth`));
     }
   },
-  undoSignIn: (creds) => {
+  handleSignInResponse: (creds) => {
     Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignIn"))
   },
 
@@ -203,7 +209,7 @@ const core: IAuthCore & IAuthCoreReverter = {
     invalidateAll(); // TODO does invalidateAll() work here? Test...
     return ok();
   },
-  undoSignOut() {
+  handleSignOutResponse() {
     Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignOut"))
   },
   // onAuthStateChanged: function (callback: (user: StoredUser | null) => void): UnsubscribeFn {
@@ -228,17 +234,17 @@ const core: IAuthCore & IAuthCoreReverter = {
   // }
 }
 
-const migrator: ILocalMigrationAPI & IMigrationReverter = {
-  getMigrationRequirements: function (cred) {
+const migrator: ILocalMigrator & IMigrationResponseHandler = {
+  getMigrationRequirements: function (signUpCred) {
     assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
-    return remoteAuth.getMigrationRequirements(cred);
+    return remoteAuth.getMigrationRequirements(signUpCred);
   },
-  migrate: async function (user, cred) {
+  migrate: async function ({ user, signUpCred }) {
     assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
     assertRemoteTasks(remoteTask, "Cannot migrate without a provided remote auth provider");
-    return remoteAuth.migrate(user, cred, remoteTask);
+    return remoteAuth.migrate({ user, signUpCred, taskProvider: remoteTask });
   },
-  undoMigrate(user, signUpCred, taskProvider) {
+  handleMigrateResponse: async function (result) {
     Err.throw(new NotImplementedError("BrowserAuthProvider.undoMigrate"))
   },
 }
@@ -286,22 +292,22 @@ const BrowserAuthProvider: ILocalAuthProvider = {
     remoteTask = remoteTaskProvider ?? null;
 
     if (remoteAuthProvider && remoteTaskProvider) {
-      new SyncQueue<Omit<IAuthAPI,
+      authSyncQueue = new SyncQueue<Omit<IAuthAPI,
         | "getCurrentUser"
         | "getMigrationRequirements"
-        | "getUser">, IAuthAPIReverter>({
+        | "getUser">, IAuthAPIResponseHandler>({
           deleteUser: remoteAuth!.deleteUser,
-          undoDeleteUser: core.undoDeleteUser,
+          handleDeleteUserResponse: core.handleDeleteUserResponse,
           migrate: remoteAuth!.migrate,
-          undoMigrate: migrator.undoMigrate,
+          handleMigrateResponse: migrator.handleMigrateResponse,
           signIn: remoteAuth!.signIn,
-          undoSignIn: core.undoSignIn,
+          handleSignInResponse: core.handleSignInResponse,
           signOut: remoteAuth!.signOut,
-          undoSignOut: core.undoSignOut,
+          handleSignOutResponse: core.handleSignOutResponse,
           signUp: remoteAuth!.signUp,
-          undoSignUp: core.undoSignUp,
+          handleSignUpResponse: core.handleSignUpResponse,
           updateUser: remoteAuth!.updateUser,
-          undoUpdateUser: core.undoUpdateUser,
+          handleUpdateUserResponse: core.handleUpdateUserResponse,
         });
     }
 
@@ -323,10 +329,10 @@ const BrowserAuthProvider: ILocalAuthProvider = {
   }
 };
 
-export const authSyncQueue: SyncQueue<Omit<IAuthAPI,
+export let authSyncQueue: SyncQueue<Omit<IAuthAPI,
   | "getCurrentUser"
   | "getMigrationRequirements"
-  | "getUser">, IAuthAPIReverter> | null = null;
+  | "getUser">, IAuthAPIResponseHandler> | null = null;
 
 export default BrowserAuthProvider;
 

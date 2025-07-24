@@ -1,5 +1,5 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { type CreateTaskDTO, type IAdvancedTaskAPI, type ITaskCrudAPI, type ITaskExporter, type ITaskAPI, type ITaskRelationAPI, type ITaskReverter, type ITaskCrudAPIReverter } from './types';
+import { type IDBPDatabase } from 'idb';
+import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITaskAPI, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider } from './types';
 import { err, ok } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError } from '$lib/Errors';
 import { v4 } from 'uuid';
@@ -7,41 +7,25 @@ import { Task, type TaskData } from './Task';
 import { updateRelationships } from '.';
 import JSZip from 'jszip';
 import { TASK_TABLE_NAME, tasksDBPromise, type TaskDB } from '../localDB';
-import type { ILocalTaskProvider, IProvider, Result } from '../types';
+import { expandBatch, okBatch, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
-import { X } from 'vitest/dist/chunks/reporters.d.BFLkQcL6.js';
 
 // TODO: Implement update queue system
 // TODO: Wrap the task API so we call local functions first, then the remote,
 // TODO: and handle rolling back local changes whenever the remote fails...
-const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
+const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   /**
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
-  createTask: async function (task: CreateTaskDTO) {
+  createTask: async function ({ task }) {
     assertDB(db);
     const preparedTask = new Task(task);
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
 
     await db.put(TASK_TABLE_NAME, preparedTask);
-    updateRelationships(api, { oldTask: null, newTask: preparedTask });
-
-    if (remoteDB) {
-      remoteDB.createTask(task).then(result => {
-        if (result.isErr()) {
-          console.error("Remote createTask failed, reverting local change", result.error);
-          db?.delete(TASK_TABLE_NAME, preparedTask.id);
-          updateRelationships(api, { oldTask: preparedTask, newTask: null });
-        } else {
-          const remoteTask = result.value;
-          db?.delete(TASK_TABLE_NAME, preparedTask.id);
-          db?.put(TASK_TABLE_NAME, remoteTask);
-          updateRelationships(api, { oldTask: preparedTask, newTask: remoteTask });
-        }
-      });
-    }
+    await updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
     return ok(new Task(preparedTask));
   },
@@ -50,9 +34,10 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
   * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
   * @error {@link IOError} if the IndexedDB.put() attempt fails
   */
-  createTasks: async function (tasks: CreateTaskDTO[]) {
+  createTasks: async function ({ tasks }) {
     assertDB(db);
     const createdTasks: Result<Task, Err>[] = [];
+    const createdIds: string[] = [];
     const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     for (const taskDTO of tasks) {
@@ -63,35 +48,39 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
       try {
         await updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
-        await transaction.store.put(preparedTask);
+        const createdId = await transaction.store.put(preparedTask);
         createdTasks.push(ok(new Task(preparedTask)));
+        createdIds.push(createdId);
       }
       catch (e) {
         createdTasks.push(err(Err.wrap(e as Error)));
       }
     }
-    
+
     await transaction.done;
 
     taskSyncQueue?.add(
       "createTasks",
-      [tasks],
-      'undoCreateTasks',
-      [createdTasks.flatMap(t => t.isOk() ? [t.value.id] : [])],
+      { tasks },
+      "handleCreateTasksResponse",
+      { createdIds }, // TODO ??
       "Failed to create tasks"
     )
     return ok(createdTasks);
   },
-  undoCreateTasks: async function (createdIds) {
+  handleCreateTasksResponse: async function (response) {
+    if (response.isErr()) {
+      const { createdIds } = response.error;
+    }
     Err.throw(new NotImplementedError("BrowserTaskProvider.undoCreateTasks"));
-  }
+  },
 
-    /**
-     * @param id Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
-     * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
-     * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
-     */
-    getTask: async function (id: string) {
+  /**
+   * @param id Either a filepath or ID. If a task ID is passed, an attempt to generate the filepath is made, but it's not foolproof
+   * @error {@link NotFoundError} if the task id doesn't exist in the indexedDB
+   * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
+   */
+  getTask: async function ({ id }) {
     assertDB(db);
     // if (key.endsWith(".md")) {
     //   // Filepath
@@ -112,7 +101,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
     // }
   },
 
-  getTasks: async function (ids: string[]) {
+  getTasks: async function ({ ids }) {
     assertDB(db);
     const tasks: Task[] = [];
     const notFoundIds: string[] = [];
@@ -131,16 +120,16 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
         return err(new NotFoundError(notFoundIds.join(', '), TASK_TABLE_NAME).withTrace(1));
       }
 
-      return ok(tasks);
+      return okBatch(tasks);
     } catch (e) {
       return err(new IOError("Batch read", ids.join(', '), e));
     }
   },
 
-  getAllUserTasks: async function (userId) {
+  getAllUserTasks: async function ({ userId }) {
     assertDB(db);
     const userTasks = await db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
-    return ok(userTasks.map(t => new Task(t)));
+    return okBatch(userTasks.map(t => new Task(t)));
   },
 
   /**
@@ -149,64 +138,54 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
    * @error {@link IOError} if IndexedDB.put() fails
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  updateTask: async function (key: string, updates: Partial<Task>) {
-    return (await taskCRUD.getTask(key)).match(
-      async (task) => {
-        assertDB(db);
-        const updated: Task = new Task({ ...task, ...updates, last_edit: new Date().toISOString() });
+  updateTask: async function ({ taskOrId, changes }) {
+    assertDB(db);
+    let task: Task;
+    if (typeof taskOrId == 'string') {
+      const taskResponse = await db.get(TASK_TABLE_NAME, taskOrId);
+      if (!taskResponse) return err(new NotFoundError("Task not found for update", taskOrId));
+      task = new Task(taskResponse);
+    } else {
+      task = taskOrId;
+    }
 
-        await db.put(TASK_TABLE_NAME, updated);
-        updateRelationships(api, { oldTask: task, newTask: updated });
+    const updated: Task = new Task({ ...task, ...changes, last_edit: new Date().toISOString() });
 
-        if (remoteDB) {
-          remoteDB.updateTask(key, updates).then(result => {
-            if (result.isErr()) {
-              console.error("Remote updateTask failed, reverting local change", result.error);
-              db?.put(TASK_TABLE_NAME, task);
-              updateRelationships(api, { oldTask: updated, newTask: task });
-            } else {
-              const remoteTask = result.value;
-              if (JSON.stringify(remoteTask) !== JSON.stringify(updated)) {
-                db?.put(TASK_TABLE_NAME, remoteTask);
-                updateRelationships(api, { oldTask: updated, newTask: remoteTask });
-              }
-            }
-          });
-        }
+    await db.put(TASK_TABLE_NAME, updated);
+    updateRelationships(api, { oldTask: task, newTask: updated });
 
-        return ok(updated);
-      },
-      error => err(error)
-    );
+    // TODO Queue remote updateTask
+
+    return ok(updated);
   },
 
-  updateTasks: async function (list) {
+  updateTasks: async function ({ updateList }) {
     assertDB(db);
     const updatedTasks: Task[] = [];
     const originalTasks: Task[] = [];
     const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     try {
-      for (const { task, changes: updates } of list) {
-        let existingTask: Task;
-        if (typeof task === 'string') {
-          const taskResult = await taskCRUD.getTask(task);
+      for (const { taskOrId, changes: updates } of updateList) {
+        let task: Task;
+        if (typeof taskOrId === 'string') {
+          const taskResult = await taskCRUD.getTask({ id: taskOrId });
           if (taskResult.isErr()) {
             return err(taskResult.error);
           }
-          existingTask = taskResult.value;
+          task = taskResult.value;
         } else {
-          existingTask = task;
+          task = taskOrId;
         }
-        originalTasks.push(new Task(existingTask));
+        originalTasks.push(new Task(task));
 
         const updated: Task = new Task({
-          ...existingTask,
+          ...task,
           ...updates,
           last_edit: new Date().toISOString()
         });
 
-        updateRelationships(api, { oldTask: existingTask, newTask: updated });
+        updateRelationships(api, { oldTask: task, newTask: updated });
 
         await transaction.store.put(updated);
         updatedTasks.push(updated);
@@ -214,32 +193,18 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
 
       await transaction.done;
 
-      if (remoteDB) {
-        remoteDB.updateTasks(list).then(result => {
-          if (result.isErr()) {
-            console.error("Remote updateTasks failed, reverting local changes", result.error);
-            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
-            for (let i = 0; i < originalTasks.length; i++) {
-              tx.store.put(originalTasks[i]);
-              updateRelationships(api, { oldTask: updatedTasks[i], newTask: originalTasks[i] });
-            }
-            tx.done;
-          } else {
-            const remoteTasks = result.value;
-            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
-            for (let i = 0; i < remoteTasks.length; i++) {
-              tx.store.put(remoteTasks[i]);
-              updateRelationships(api, { oldTask: updatedTasks[i], newTask: remoteTasks[i] });
-            }
-            tx.done;
-          }
-        });
-      }
+      // TODO Queue remote update
 
-      return ok(updatedTasks);
+      return okBatch(updatedTasks);
     } catch (e) {
       return err(new IOError("Batch update", "multiple tasks", e));
     }
+  },
+  handleUpdateTasksResponse: async function (response) {
+    if (response.isErr()) {
+      const { updateList } = response.error;
+    }
+    Err.throw(new NotImplementedError("BrowserTaskProvider.handleUpdateTasksResponse"))
   },
 
   /**
@@ -247,7 +212,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
    * @param recursive NOT IMPLEMENTED
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  deleteTask: async function (id: string, recursive?: boolean) {
+  deleteTask: async function ({ id, recursive }) {
     assertDB(db);
     if (recursive) Err.throw(new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)"));
 
@@ -259,7 +224,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
         updateRelationships(api, { oldTask: task, newTask: null });
 
         if (remoteDB) {
-          remoteDB.deleteTask(id, recursive).then(result => {
+          remoteDB.deleteTask({ id, recursive }).then(result => {
             if (result.isErr()) {
               console.error("Remote deleteTask failed, reverting local change", result.error);
               db?.put(TASK_TABLE_NAME, task);
@@ -275,10 +240,10 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
     else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"));
   },
 
-  deleteTasks: async function (list: { id: string; recursive?: boolean; }[]) {
+  deleteTasks: async function ({ deleteList }) {
     assertDB(db);
 
-    if (list.some(item => item.recursive)) {
+    if (deleteList.some(item => item.recursive)) {
       return err(new NotImplementedError("BrowserTaskStorage.deleteTasks with recursive = true"));
     }
 
@@ -286,7 +251,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
     const deletedTasks: TaskData[] = [];
 
     try {
-      for (const { id } of list) {
+      for (const { id } of deleteList) {
         const task = await transaction.store.get(id);
 
         if (task) {
@@ -299,7 +264,7 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
       await transaction.done;
 
       if (remoteDB) {
-        remoteDB.deleteTasks(list).then(result => {
+        remoteDB.deleteTasks({ deleteList }).then(result => {
           if (result.isErr()) {
             console.error("Remote deleteTasks failed, reverting local changes", result.error);
             const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
@@ -314,11 +279,17 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
 
       return ok();
     } catch (e) {
-      return err(new IOError("Batch delete", list.map(item => item.id).join(', '), e));
+      return err(new IOError("Batch delete", deleteList.map(item => item.id).join(', '), e));
     }
   },
+  handleDeleteTasksResponse: async function (response) {
+    if (response.isErr()) {
+      const { deleteList } = response.error;
+    }
+    Err.throw(new NotImplementedError("BrowserTaskProvider.handleDeleteTasksResponse"))
+  },
 
-  changeOwnership: async function (oldUserID: string, newUserID: string) {
+  changeOwnership: async function ({ oldUserID, newUserID }) {
     assertDB(db);
     const originalTasks = await db.getAllFromIndex('tasks', 'by-user', oldUserID);
     const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
@@ -327,47 +298,33 @@ const taskCRUD: ITaskCrudAPI & ITaskCrudAPIReverter = {
       await db!.put('tasks', task);
     }
 
-    if (remoteDB) {
-      remoteDB.changeOwnership(oldUserID, newUserID).then(result => {
-        if (result.isErr()) {
-          console.error("Remote changeOwnership failed, reverting local changes", result.error);
-          const tx = db!.transaction('tasks', 'readwrite');
-          for (const task of originalTasks) {
-            tx.store.put(task);
-          }
-          tx.done;
-        } else {
-          const remoteTasks = result.value;
-          const tx = db!.transaction('tasks', 'readwrite');
-          for (const task of remoteTasks) {
-            tx.store.put(task);
-          }
-          tx.done;
-        }
-      });
-    }
+    // TODO Queue remote update
 
-    return ok(convertedTasks);
+    return okBatch(convertedTasks);
+  },
+  handleChangeOwnershipResponse: async function (response) {
+    const params = response;
+    Err.throw(new NotImplementedError("BrowserTaskProvider.handleChangeOwnershipResponse"))
   },
 }
 
-const taskRelations: ITaskRelationAPI = {
-  getChildrenOf: async function (task: string | Task) {
+const taskRelations: ITaskRelations = {
+  getChildrenOf: async function ({ taskOrId }) {
     // First get the parent task to access its children array
     let parentTask: Task;
-    if (typeof task === "string") {
-      const parentTaskResult = await taskCRUD.getTask(task);
+    if (typeof taskOrId === "string") {
+      const parentTaskResult = await taskCRUD.getTask({ id: taskOrId });
       if (parentTaskResult.isErr()) {
         return err(parentTaskResult.error);
       } else parentTask = parentTaskResult.value;
-    } else parentTask = task;
+    } else parentTask = taskOrId;
 
     if (parentTask.children.length === 0) {
       return ok([]);
     }
 
     // Fetch only the specific child tasks
-    const childPromises = parentTask.children.map(childId => taskCRUD.getTask(childId));
+    const childPromises = parentTask.children.map(childId => taskCRUD.getTask({ id: childId }));
     const childResults = await Promise.all(childPromises);
 
     // Filter out any failed reads and extract successful tasks
@@ -377,26 +334,29 @@ const taskRelations: ITaskRelationAPI = {
 
     return ok(children);
   },
-  getParentsOf: async function (task: string | Task) {
+  getParentsOf: async function ({ taskOrId }) {
     let childTask: Task;
 
     // Convert id to task object
-    if (typeof task === "string") {
-      const childTaskResult = await taskCRUD.getTask(task);
+    if (typeof taskOrId === "string") {
+      const childTaskResult = await taskCRUD.getTask({ id: taskOrId });
       if (childTaskResult.isErr()) {
         return err(childTaskResult.error);
       } else childTask = childTaskResult.value;
-    } else childTask = task;
+    } else childTask = taskOrId;
 
     // Get the parents
     if (childTask.parents.length > 0) {
-      const parentResult = await taskCRUD.getTasks(childTask.parents);
-      if (parentResult.isErr()) return err(parentResult.error);
+      const parentsBatch = await taskCRUD.getTasks({ ids: childTask.parents });
+      if (parentsBatch.isErr()) return err(parentsBatch.error);
+      else {
+        let [parents, errors] = expandBatch(parentsBatch);
+        return ok(parents);
+      }
 
-      return ok(parentResult.value);
+    } else {
+      return ok([]);
     }
-
-    return ok([]);
   },
 
   getRootTasks: async function () {
@@ -408,7 +368,7 @@ const taskRelations: ITaskRelationAPI = {
 }
 
 
-const advancedFeatures: IAdvancedTaskAPI = {
+const advancedFeatures: ITaskAdvancedFeatures = {
   getTodaysTasks: async function () {
     assertDB(db);
     const allTasks = await db.getAll(TASK_TABLE_NAME);
@@ -468,13 +428,13 @@ const advancedFeatures: IAdvancedTaskAPI = {
     return ok(todoList);
   },
 
-  searchTasks: function (searchTerm: string) {
+  searchTasks: function ({ searchTerm }) {
     Err.throw(new NotImplementedError('BrowserTaskProvider.searchTasks'));
   },
 }
 
 const dataExporter: ITaskExporter = {
-  exportData: async function (simplify?: boolean) {
+  exportData: async function ({ simplify }) {
     assertDB(db);
     const taskData = await db.getAll(TASK_TABLE_NAME);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
@@ -504,7 +464,7 @@ const dataExporter: ITaskExporter = {
       URL.revokeObjectURL(url);
     });
   },
-  importData: function (data: string) {
+  importData: function ({ data }) {
     Err.throw(new NotImplementedError('BrowserTaskProvider.importData'));
   }
 }
@@ -515,11 +475,11 @@ let db: IDBPDatabase<TaskDB> | null;
 let remoteDB: ITaskAPI | null
 
 const BrowserTaskProvider: ILocalTaskProvider = {
-  /** @param remoteAPI The backend task provider that this provider wraps */
-  get: async function (remoteAPI?) {
+  /** @param remoteTasks The backend task provider that this provider wraps */
+  get: async function (remoteTasks) {
     db = await tasksDBPromise;
-    remoteDB = remoteAPI ?? null;
-    if (remoteAPI) {
+    remoteDB = remoteTasks ?? null;
+    if (remoteTasks) {
       taskSyncQueue = new SyncQueue<Omit<ITaskAPI,
         | "getAllUserTasks"
         | "getChildrenOf"
@@ -531,20 +491,20 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         | "getTodaysTasks"
         | "searchTasks"
       >, ITaskReverter>({
-        changeOwnership: remoteAPI.changeOwnership,
-        undoChangeOwnership: taskCRUD.undoChangeOwnership,
-        createTask: remoteAPI.createTask,
-        undoCreateTask: taskCRUD.undoCreateTask,
-        createTasks: remoteAPI.createTasks,
-        undoCreateTasks: taskCRUD.undoCreateTasks,
-        deleteTask: remoteAPI.deleteTask,
-        undoDeleteTask: taskCRUD.undoDeleteTask,
-        deleteTasks: remoteAPI.deleteTasks,
-        undoDeleteTasks: taskCRUD.undoDeleteTasks,
-        updateTask: remoteAPI.updateTask,
-        undoUpdateTask: taskCRUD.undoUpdateTask,
-        updateTasks: remoteAPI.updateTasks,
-        undoUpdateTasks: taskCRUD.undoUpdateTasks,
+        changeOwnership: remoteTasks.changeOwnership,
+        handleChangeOwnershipResponse: taskCRUD.handleChangeOwnershipResponse,
+        createTask: remoteTasks.createTask,
+        // handleCreateTaskResponse: taskCRUD.handleCreateTaskResponse,
+        createTasks: remoteTasks.createTasks,
+        handleCreateTasksResponse: taskCRUD.handleCreateTasksResponse,
+        deleteTask: remoteTasks.deleteTask,
+        // handleDeleteTaskResponse: taskCRUD.handleDeleteTaskResponse,
+        deleteTasks: remoteTasks.deleteTasks,
+        handleDeleteTasksResponse: taskCRUD.handleDeleteTasksResponse,
+        updateTask: remoteTasks.updateTask,
+        // handleUpdateTaskResponse: taskCRUD.handleUpdateTaskResponse,
+        updateTasks: remoteTasks.updateTasks,
+        handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
     }
     return api;

@@ -3,10 +3,10 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { err, ok } from "neverthrow";
 import type {
   ITaskAPI,
-  ITaskCrudAPI,
+  ITaskCore,
   ITaskExporter,
-  IAdvancedTaskAPI,
-  ITaskRelationAPI,
+  ITaskAdvancedFeatures,
+  ITaskRelations,
   CreateTaskDTO,
   PopulatedTaskDTO
 } from "./types";
@@ -18,7 +18,7 @@ import type { IProvider } from "../types";
 
 let client = supabase;
 
-const taskCRUD: ITaskCrudAPI = {
+const taskCRUD: ITaskCore = {
   createTask: async function (createDetails: CreateTaskDTO): Promise<Result<Task, Err>> {
     const task = Task.populateDTO(createDetails);
 
@@ -185,7 +185,7 @@ const taskCRUD: ITaskCrudAPI = {
   },
 }
 
-const taskRelations: ITaskRelationAPI = {
+const taskRelations: ITaskRelations = {
   async getChildrenOf(task: string | Task): Promise<Result<Task[], Err>> {
     // First get the parent task to access its children array
     let parentTask: Task;
@@ -235,7 +235,7 @@ const taskRelations: ITaskRelationAPI = {
   }
 }
 
-const advancedFeatures: IAdvancedTaskAPI = {
+const advancedFeatures: ITaskAdvancedFeatures = {
   getTodaysTasks: async function (): Promise<Result<Task[], Err>> {
     const { data, error } = await client.from(TASK_TABLE_NAME).select('*').eq('todays_task', true);
     if (error) return err(new IOError(`Failed to fetch today's tasks`, error));

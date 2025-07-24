@@ -4,13 +4,11 @@ import {
     AccountIssueTarget,
     type IAuthCore,
     type IAuthAPI,
-    type IMigrationAPI,
+    type IMigrator,
     type MigrationRequirements,
     type SignInCredentials,
     type SignOutOptions,
     type StoredUser,
-    type UnsubscribeFn,
-    type User,
     type UserData,
 } from './types';
 import type { ITaskAPI, Task } from '../Tasks';
@@ -21,7 +19,7 @@ import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 import type { IProvider } from '../types';
 
 const core: IAuthCore = {
-    signUp: async function (creds: SignInCredentials, userData: UserData) {
+    signUp: async function ({ creds, userData }) {
         const authRes = await supabase.auth.signUp({
             email: creds.email,
             password: creds.password,
@@ -36,7 +34,7 @@ const core: IAuthCore = {
         } else Err.throw(new NotHandledError("supabase.auth.signUp returned a null user"));
     },
 
-    getUser: function (id: string) {
+    getUser: function ({ id }) {
         Err.throw(new NotImplementedError("SupabaseAuthProvider.getUser"));
     },
 
@@ -54,7 +52,7 @@ const core: IAuthCore = {
         }
     },
 
-    updateUser: async function (update: Partial<StoredUser> & { id: string; }) {
+    updateUser: async function ({ update }) {
         const updatedUser: UserAttributes = {
             // email: update.email,
             // password: update.password, // TODO This feels like it should be its own, more secure function
@@ -85,25 +83,28 @@ const core: IAuthCore = {
         // }
     },
 
-    deleteUser: async function (userId: string) {
+    deleteUser: async function ({ userId }) {
         // TODO deleting users requires admin access...
         // Common suggestion is to have a public.users/profiles table with a foreign-key constraint to auth.users...
         // Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
         Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
     },
 
-    signIn: async function (cred: SignInCredentials) {
-        switch (cred.type) {
+    signIn: async function ({ creds }) {
+        switch (creds.type) {
             case 'email_password': {
                 const res = await supabase.auth.signInWithPassword({
-                    email: cred.email,
-                    password: cred.password,
+                    email: creds.email,
+                    password: creds.password,
                 });
                 if (res.error) {
                     console.error(res.error);
-                } else return res.data;
+                } else {
+                    const { session, user, weakPassword } = res.data;
+                    return ok(user);
+                }
             }
-            default: Err.throw(new NotImplementedError(`SupabaseAuth.${cred.type} sign-in`));
+            default: Err.throw(new NotImplementedError(`SupabaseAuth.${creds.type} sign-in`));
         }
     },
 
@@ -122,7 +123,7 @@ const core: IAuthCore = {
     // },
 }
 
-const migrator: IMigrationAPI = {
+const migrator: IMigrator = {
     getMigrationRequirements: function (cred) {
         const issues: MigrationRequirements[] = [];
 
@@ -147,15 +148,15 @@ const migrator: IMigrationAPI = {
     },
 
     // TODO Convert to function* and yield progress results
-    migrate: async function (user, creds, taskProvider) {
-        const migNeedsRes = migrator.getMigrationRequirements(creds);
+    migrate: async function ({ user, signUpCred, taskProvider }) {
+        const migNeedsRes = migrator.getMigrationRequirements(signUpCred);
         if (migNeedsRes.isErr()) return err(migNeedsRes.error);
         else if (migNeedsRes.value.length > 0) return err(new InvalidStateError("Must resolve the following migration requirements before migrating", migNeedsRes.value));
 
-        switch (creds.type) {
+        switch (signUpCred.type) {
             case "email_password":
-                return migrateEmailPassword(user, creds, taskProvider);
-            default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${creds.type}`));
+                return migrateEmailPassword(user, signUpCred, taskProvider);
+            default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${signUpCred.type}`));
         }
         Err.throw(new NotImplementedError("SupabaseAuth.migrate"))
     },
@@ -185,7 +186,7 @@ async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, 
 
     // Update local user
     const localAuth = await BrowserAuthProvider.get();
-    localAuth.updateUser({ ...newUser, oldId: user.id, is_synced: true, last_synced: new Date() });
+    localAuth.updateUser({ update: { ...newUser, oldId: user.id, is_synced: true, last_synced: new Date() } });
     console.log("Local user updated. Updating local tasks...");
 
     // Update all task's user_id field for user
