@@ -6,7 +6,6 @@ import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 import { Err, ErrorType } from '$lib/Errors';
 import { devStore } from '$lib/stores/devStore.svelte';
-import { aC } from 'vitest/dist/chunks/reporters.d.BFLkQcL6.js';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ parent, url }) => {
