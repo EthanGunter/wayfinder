@@ -56,7 +56,7 @@ export interface IAuthCore {
 }
 export interface IAuthCoreResponseHandler {
     handleSignUpResponse(response: Result<void, { creds: SignInCredentials, userData: UserData }>): Promise<void>,
-    handleUpdateUserResponse(response: Result<void, { oldUser: StoredUser, newId?: string }>): Promise<void>,
+    handleUpdateUserResponse(response: Result<void, { oldUser: StoredUser }>): Promise<void>,
     handleDeleteUserResponse(response: Result<void, { oldUser: StoredUser }>): Promise<void>,
     handleSignInResponse(response: Result<void, { creds: SignInCredentials }>): Promise<void>,
 }
@@ -75,10 +75,11 @@ export type ILocalMigrator = Omit<IMigrator, "migrate"> & {
 }
 
 export interface ILocalAuth {
-    createUser(params: { user: StoredUser }): Promise<Result<StoredUser>>
+    // createUser(params: { user: StoredUser }): Promise<Result<StoredUser>>
+    // updateUser(params: { update: Partial<StoredUser> & { id: string, oldId?: string } }): Promise<Result<StoredUser>>,
+    updateUserId(oldId: string, newID: string): Promise<Result<StoredUser, NotFoundError>>
     getActiveUser(): Promise<StoredUser | null>,
-    updateUser(params: { update: Partial<StoredUser> & { id: string, oldId?: string } }): Promise<Result<StoredUser>>,
     listUsers(): Promise<StoredUser[]>,
-    switchUser(params: { userId: string }): Promise<Result<StoredUser, NotFoundError>>,
-    getAnonymousUser(): Promise<Result<StoredUser, InvalidStateError>>,
+    switchUser(newUser: string): Promise<Result<StoredUser, NotFoundError>>,
+    getDefaultUser(): Promise<Result<StoredUser, InvalidStateError>>,
 }

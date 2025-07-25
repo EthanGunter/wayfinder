@@ -18,7 +18,7 @@ export const load: LayoutLoad = async ({ parent, url }) => {
     // Check local account data first
     let activeUser = await auth.getActiveUser();
     if (!activeUser) {
-        const anonRes = await auth.getAnonymousUser();
+        const anonRes = await auth.getDefaultUser();
         if (anonRes.isOk()) {
             activeUser = anonRes.value;
         }

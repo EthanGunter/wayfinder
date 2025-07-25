@@ -1,5 +1,5 @@
-import { beforeEach, describe, it } from "vitest"
-import type { IAuthAPI, IAuthAPIResponseHandler } from "./types";
+import { beforeEach, describe, it, test } from "vitest"
+import type { IAuthAPI, IAuthAPIResponseHandler, SignInCredentials } from "./types";
 import { mock, type MockProxy } from 'vitest-mock-extended'
 import type { ITaskAPI, ITaskReverter } from "../Tasks";
 import type { SyncQueue } from "../SyncQueue";
@@ -35,14 +35,14 @@ describe("IAuthCore", () => {
         it("should logout the current user if remote `login` fails and current user was the one optimistically logged in");
         /* END SECURITY CONCERN */
         it("should not return until the server responds if there is no local representation");
-        // TODO So we can notify the user, and offer for them to create a local account (¿they can sync later?)
-        it("should fail with NotFoundError if we're offline and there's no local account");
         it("should `logout` the active local user if logging in as a different, existing user");
+        // TODO So we can notify the user, and offer for them to create a local account (¿they can merge accounts later?)
+        it("should fail with NotFoundError if we're offline and there's no local account");
     });
 
     // --- Sign Out ---
     describe("logout()", () => {
-        it("should optimistically clear the local user session and then call remote `logout`");
+        it("should call remote.logout() and cause getActiveUser() to return null");
     });
 
     // --- User Update ---
@@ -56,24 +56,23 @@ describe("IAuthCore", () => {
     describe("deleteUser()", () => {
         it("should optimistically delete the user locally and then call remote `deleteUser`");
         it("should restore the user locally if remote `deleteUser` fails");
+        it("should cause getActiveUser() to return null if the active user was deleted");
     });
 
     // --- Get Current User ---
-    describe("getCurrentUser()", () => {
+    describe("getActiveUser()", () => {
         it("should return the currently logged-in user from local state");
         it("should return an InvalidStateError if no user is currently logged in");
     });
 });
 
 describe("ILocalAuth", () => {
-    describe("createUser()", () => {
-
+    describe("updateUserId()", () => {
+        it("should put the old user in the local data environment, and delete the old one");
+        it("should return a NotFoundError if the oldId cannot be found");
     });
-    describe("getMostRecentUser()", () => {
-        it("should retrieve the most recently active user with `getMostRecentUser()`");
-    });
-    describe("updateUser()", () => {
-
+    describe("getActiveUser()", () => {
+        it("should retrieve the most recently logged in user");
     });
     describe("listUsers()", () => {
         it("should list all user profiles stored locally with `listUsers()`");
@@ -82,33 +81,33 @@ describe("ILocalAuth", () => {
         it("should switch the active user context with `switchUser(userId)`");
         it("should return an error if `switchUser(userId)` is called with a non-existent user ID");
     });
-    describe("activateNewAnonymousUser()", () => {
-        it("should create a new anonymous user with `activateNewAnonymousUser()` if none exists");
-        it("should return the existing anonymous user if `activateNewAnonymousUser()` is called again");
-    });
-    describe("getAnonymousUser()", () => {
-        it("should retrieve the anonymous user with `getAnonymousUser()`");
+    describe("getDefaultUser()", () => {
+        it("should create and return an anonymous user if there are no users");
+        it("should return a user if there is only one (and they are not security protected)");
+        it("should throw a InvalidStateError if there are non-anonymous users");
     });
 });
 
 // Tests for the migration flow.
-describe("Migration Flow (IMigrationAPI)", () => {
+describe("IMigrator", () => {
     describe("getMigrationRequirements()", () => {
-        it("should return correct requirements for a given credential type");
+        describe("should return correct requirements for a given credential type", () => {
+            const email_password: SignInCredentials = { type: "email_password", email: "", password: "" } as SignInCredentials;
+            test(`${email_password.type} returns ${Object.getOwnPropertyNames(email_password).join(", ")}`);
+        });
         it("should return NotImplementedError for an unsupported credential type");
     });
 
     describe("migrate()", () => {
-        it("should successfully migrate an anonymous user to a permanent user");
-        // The remote ITaskAPI is passed here, so we need to test its usage.
+        it("should successfully migrate an anonymous user to a remote user");
         it("should pass the provided task provider to the remote migration service");
-        it("should call `undoMigrate` if the remote migration fails");
-        it("should return InvalidStateError if trying to migrate a non-migratable user (e.g., already logged in)");
+        it("should undo the local changes if the remote migration fails");
+        it("should return InvalidStateError if trying to migrate a user that's already migrated");
     });
 });
 
 // Final edge cases and cleanup.
 describe("General Edge Cases", () => {
-    it("should handle the `undo` function itself failing gracefully (e.g., log a critical error)");
+    it("should handle the `responseHandler` functions itself failing gracefully (e.g., log a critical error)");
     it("should correctly handle being closed while a remote operation is in-flight");
 });

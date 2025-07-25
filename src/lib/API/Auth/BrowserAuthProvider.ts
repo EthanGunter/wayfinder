@@ -12,11 +12,27 @@ import { SyncQueue } from '../SyncQueue';
 // TODO: and handle rolling back local changes whenever the remote fails...
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required
 const local: ILocalAuth = {
-  createUser: async function ({ user }) {
+  /* createUser: async function ({ user }) {
     assertDB(db);
 
     await db.put(USER_TABLE_NAME, user);
     return ok(user);
+  }, */
+  updateUserId: async function (oldId, newId) {
+    assertDB(db);
+
+    const user = await db.get(USER_TABLE_NAME, oldId);
+    if (!user) {
+      return err(new NotFoundError(oldId, "User"));
+    }
+
+    const updatedUser = { ...user, id: newId };
+    await db.put(USER_TABLE_NAME, updatedUser);
+    if (oldId) {
+      await db.delete(USER_TABLE_NAME, oldId);
+    }
+
+    return ok(updatedUser);
   },
 
   listUsers: async function () {
@@ -25,78 +41,42 @@ const local: ILocalAuth = {
     return users;
   },
 
-  updateUser: async function ({ update }) {
-    assertDB(db);
-
-    const oldId = update.oldId ?? update.id;
-
-    const user = await db.get(USER_TABLE_NAME, oldId);
-    if (!user) {
-      Err.throw(new NotFoundError(oldId, "User"));
-    }
-
-    const updatedUser = {
-      ...user,
-      ...update,
-      // last_active: new Date()
-    };
-
-    await db.put(USER_TABLE_NAME, updatedUser);
-    if (update.oldId) {
-      await db.delete(USER_TABLE_NAME, update.oldId);
-    }
-
-    authSyncQueue?.add('updateUser',
-      { update },
-      'handleUpdateUserResponse',
-      {
-        oldUser: user,
-        newId: updatedUser.oldId ? updatedUser.id : undefined
-      },
-      "User update failed"
-    );
-
-    return ok(updatedUser);
-  },
-
-  switchUser: async function ({ userId }) {
-    if (!userId || userId == '') Err.throw(new ArgumentError(userId, "UserId required to switch user. Use signOut if you want no active user"));
+  switchUser: async function (newUserId) {
+    if (!newUserId || newUserId == '') Err.throw(new ArgumentError(newUserId, "UserId required to switch user. Use signOut if you want no active user"));
     assertDB(db);
 
     // Update last active time
-    const user = await db.get(USER_TABLE_NAME, userId);
+    const user = await db.get(USER_TABLE_NAME, newUserId);
     if (user) {
-      await db.put(APP_TABLE_NAME, userId, ACTIVEUSER_COLUMN_NAME);
+      await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
       user.last_active = new Date();
       await db.put(USER_TABLE_NAME, user);
       return ok(user);
     } else {
-      return err(new NotFoundError(userId, "User"));
+      return err(new NotFoundError(newUserId, "User"));
     }
   },
 
-  getAnonymousUser: async function () {
+  getDefaultUser: async function () {
     assertDB(db);
     const users = await db.getAll(USER_TABLE_NAME);
-    const anon = users.find(user => !user.display_name);
-    if (!anon) {
-      if (users.length === 0) {
-        // Only create the anonymous user the first time
-        const newAnon: StoredUser = {
-          id: v4(),
-          display_name: undefined, // Anonymous users have no display name
-          last_active: new Date(),
-          auth_provider: 'local',
-          is_synced: false,
-        };
+    if (users.length === 0) {
+      // Only create the anonymous user the first time
+      const newAnon: StoredUser = {
+        id: v4(),
+        display_name: undefined, // Anonymous users have no display name
+        last_active: new Date(),
+        auth_provider: 'local',
+        is_synced: false,
+      };
 
-        await db.put(USER_TABLE_NAME, newAnon);
-        return ok(newAnon);
-      } else {
-        return err(new InvalidStateError("Will not create anonymous user if there are non-anonymous users available"));
-      }
-    } else {
+      await db.put(USER_TABLE_NAME, newAnon);
+      return ok(newAnon);
+    } else if (users.length === 1) {
+      const anon = users[0];
       return ok(anon);
+    } else {
+      return err(new InvalidStateError("There are too many users to select a default"));
     }
   },
 
@@ -122,15 +102,44 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
     }
   },
 
-  updateUser: local.updateUser,
+  updateUser: async function ({ update }) {
+    assertDB(db);
+
+    // const oldId = update.oldId ?? update.id; // TODO This should be its own local function
+
+    const user = await db.get(USER_TABLE_NAME, update.id);
+    if (!user) {
+      Err.throw(new NotFoundError(update.id, "User"));
+    }
+
+    const updatedUser = {
+      ...user,
+      ...update,
+      // last_active: new Date()
+    };
+
+    await db.put(USER_TABLE_NAME, updatedUser);
+    if (update.id) {
+      await db.delete(USER_TABLE_NAME, update.id);
+    }
+
+    authSyncQueue?.add('updateUser',
+      { update },
+      'handleUpdateUserResponse',
+      {
+        oldUser: user,
+      },
+      "User update failed"
+    );
+
+    return ok(updatedUser);
+  },
+
   handleUpdateUserResponse: async function (response) {
     if (response.isErr()) {
-      const { oldUser, newId } = response.error;
+      const { oldUser } = response.error;
       // Undo changes
       assertDB(db);
-      if (newId) {
-        await db.delete(USER_TABLE_NAME, newId);
-      }
       await db.put(USER_TABLE_NAME, oldUser)
     }
   },
@@ -280,9 +289,9 @@ const BrowserAuthProvider: ILocalAuthProvider = {
       // All this does is update the last_active field...
       // await api.switchUser({ userId: activeUserId });
     } else {
-      const anonRes = await api.getAnonymousUser();
+      const anonRes = await api.getDefaultUser();
       if (anonRes.isOk()) {
-        await api.switchUser({ userId: anonRes.value.id });
+        await api.switchUser(anonRes.value.id);
       } else {
         // 
       }
