@@ -1,12 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { StoredUser } from "./Auth/types";
+import type { LocalUser } from "./Auth/types";
 import type { Task, TaskData } from "./Tasks";
 
 export const AUTH_TABLE_NAME = 'users';
 interface AuthDB extends DBSchema {
     users: {
         key: string;
-        value: StoredUser,
+        value: LocalUser,
         indexes: {
             'by-last-active': string;
         };

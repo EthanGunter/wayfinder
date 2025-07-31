@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { IAuthAPI, StoredUser } from '$lib/API/Auth/types';
+	import type { IAuthAPI, LocalUser } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
 
 	interface Props {
-		user: StoredUser;
+		user: LocalUser;
 		authAPI: IAuthAPI;
 	}
 	const { user, authAPI }: Props = $props();

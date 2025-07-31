@@ -1,5 +1,6 @@
 import { err, ok } from "neverthrow";
 import type { Result } from "./types";
+import type { Err } from "$lib/Errors";
 
 type FunctionMap<T> = {
     [K in keyof T]: T[K] extends (...args: any[]) => any
@@ -15,9 +16,8 @@ type FailureOfHandler<T> =
 type SyncQueueEntry<RemoteT, CallbackT, RemoteK extends keyof RemoteT, CallbackK extends keyof CallbackT> = {
     fnName: RemoteK;
     args: ParamsOf<RemoteT[RemoteK]>;
-    revertFnName: CallbackK;
+    handlerFnName: CallbackK;
     revertArgs: FailureOfHandler<CallbackT[CallbackK]>,
-    uiErrorMessage: string
 };
 
 
@@ -32,26 +32,26 @@ export class SyncQueue<RemoteT, CallbackT> {
     add<RemoteK extends keyof RemoteT, CallbackK extends keyof CallbackT>(
         fnName: RemoteK,
         args: ParamsOf<RemoteT[RemoteK]>,
-        revertFnName: CallbackK,
+        handlerFnName: CallbackK,
         revertArgs: FailureOfHandler<CallbackT[CallbackK]>,
-        uiErrorMessage: string
     ) {
-        this.queue.push({ fnName, args, revertFnName, revertArgs, uiErrorMessage });
+        this.queue.push({ fnName, args, handlerFnName: handlerFnName, revertArgs });
     }
 
     async process() {
         for (const entry of [...this.queue]) {
             try {
                 const result = await (this.fnMap[entry.fnName])(entry.args);
+
                 if (result.isErr()) {
-                    await (this.fnMap[entry.revertFnName] as any)(err(entry.revertArgs));
+                    await (this.fnMap[entry.handlerFnName] as any)(err(entry.revertArgs));
                 } else {
-                    await (this.fnMap[entry.revertFnName] as any)(ok(entry.revertArgs));
+                    await (this.fnMap[entry.handlerFnName] as any)(ok(entry.revertArgs));
                 }
                 this.queue.shift();
             }
             catch (e) {
-                await (this.fnMap[entry.revertFnName] as any)(err(entry.revertArgs));
+                await (this.fnMap[entry.handlerFnName] as any)(err(entry.revertArgs));
                 throw e;
             }
         }

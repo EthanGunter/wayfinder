@@ -64,7 +64,6 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
       { createDetails: tasks },
       "handleCreateTasksResponse",
       { createdIds },
-      "Failed to create tasks"
     )
     return ok(createdTasks);
   },
@@ -480,6 +479,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
   get: async function (remoteTasks) {
     db = await dbPromise;
     remoteDB = remoteTasks ?? null;
+    
     if (remoteTasks) {
       taskSyncQueue = new SyncQueue<Omit<ITaskAPI,
         | "getAllUserTasks"
@@ -508,16 +508,11 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
     }
-    return api;
+    return [api, taskSyncQueue];
   },
-
-  close: async function (): Promise<void> {
-    db?.close();
-    db = null;
-  }
 }
 
-export let taskSyncQueue: SyncQueue<Omit<ITaskAPI,
+let taskSyncQueue: SyncQueue<Omit<ITaskAPI,
   | "getAllUserTasks"
   | "getChildrenOf"
   | "getParentsOf"

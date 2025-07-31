@@ -3,6 +3,7 @@
 import type { NotFoundError, Err } from "$lib/Errors";
 import type { Task, TaskData } from "./Task";
 import type { BatchResult, Result } from "../types";
+import { SyncQueue } from "../SyncQueue";
 
 // All fields in the Omit<> become optional
 export type CreateTaskDTO = Partial<TaskData> & Omit<TaskData,
@@ -20,11 +21,23 @@ export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed" | "
 
 
 export interface ILocalTaskProvider {
-  get(remoteTasks?: ITaskAPI): Promise<ITaskAPI & ITaskExporter>;
-  close(): Promise<void>
+  get(wrappedTasks?: ITaskAPI): Promise<ILocalTasks>;
+  getSyncQueue(): TaskSyncQueue | null;
 }
 export type ITaskAPI = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ITaskReverter = ITaskCoreResponseHandler
+export type ILocalTasks = ITaskAPI & ITaskExporter;
+export type TaskSyncQueue = SyncQueue<Omit<ITaskAPI,
+  | "getAllUserTasks"
+  | "getChildrenOf"
+  | "getParentsOf"
+  | "getPrioritizedTasks"
+  | "getRootTasks"
+  | "getTask"
+  | "getTasks"
+  | "getTodaysTasks"
+  | "searchTasks"
+>, ITaskReverter>;
 
 /**
  * Manages modifications to markdown files that represent tasks,

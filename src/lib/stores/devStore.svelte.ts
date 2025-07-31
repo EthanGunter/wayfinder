@@ -87,8 +87,6 @@ class DevStore {
 			console.log(`Overriding default task provider with ${this.taskProviderOverride}`);
 
 			switch (this.taskProviderOverride) {
-				case 'browser':
-					return await BrowserTaskProvider.get();
 				case 'supabase':
 					return await SupabaseTaskProvider.get();
 				case 'native': throw new Error("Native task provider not implemented");

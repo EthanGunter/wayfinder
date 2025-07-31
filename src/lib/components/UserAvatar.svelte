@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { StoredUser } from '$lib/API/Auth/types';
+	import type { LocalUser } from '$lib/API/Auth/types';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 
 	interface Props {
-		user: StoredUser;
+		user: LocalUser;
 	}
 	const { user }: Props = $props();
 </script>

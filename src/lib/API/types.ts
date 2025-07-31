@@ -45,5 +45,5 @@ export function extractBatchAndLogErrors<T, TE extends Err = UnknownError, E ext
 
 export interface IProvider<T> {
   get(): Promise<T>;
-  close(): Promise<void>
+  // close(): Promise<void>
 }

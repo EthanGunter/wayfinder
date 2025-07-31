@@ -29,7 +29,7 @@
 
 	async function checkAccountIssues() {
 		const uiIssues = new Map();
-		auth.getMigrationRequirements(signUpCred).match(
+		auth.getRegistrationRequirements(signUpCred).match(
 			(issues) => {
 				for (const issue of issues) {
 					if (uiIssues.has(issue.target)) {
@@ -56,7 +56,7 @@
 		 If we're local before migrating, the task api will be local.
 		 The migration API should probably be separate from the auth and task api...
 		 */
-		const migReqResult = auth.getMigrationRequirements(signUpCred);
+		const migReqResult = auth.getRegistrationRequirements(signUpCred);
 		migReqResult.match(
 			(missingRequirements) => {
 				for (const requirement of missingRequirements) {
@@ -74,7 +74,7 @@
 		);
 		if (migReqResult.isErr() || migReqResult.value.length > 0) return;
 
-		const migRes = await auth.migrate({ user, signUpCred });
+		const migRes = await auth.migrateRegisteredUser({ registeredUser: user, signUpCred });
 		if (migRes.isErr()) {
 			if (migRes.error.type === ErrorType.NotImplementedError) {
 				// Should never happen

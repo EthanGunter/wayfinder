@@ -1,96 +1,15 @@
-import { type IDBPDatabase } from 'idb';
 import { v4 } from 'uuid';
-import type { IAuthCore, IAuthAPI, ILocalAuth, ILocalMigrator, SignInCredentials, StoredUser, IAuthAPIResponseHandler, IAuthCoreResponseHandler, IMigrationResponseHandler, ILocalAuthProvider } from './types';
-import type { ITaskAPI } from '../Tasks';
+import type { IAuth, IAuthLocalFunctions, LocalUser, ILocalAuthProvider, IAuthLocal, IAuthResponseHandler, AuthSyncQueue, ILocalAuth } from './types';
+import type { ILocalTaskProvider, ITaskAPI, TaskSyncQueue } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME as USER_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
-import { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
-import { invalidateAll } from '$app/navigation';
+import { ArgumentError, Err, ErrorType, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
 import { SyncQueue } from '../SyncQueue';
+import { extractBatch, extractBatchAndLogErrors, type IProvider } from '../types';
 
-// TODO: Wrap the task API so we call local functions first, then the remote,
-// TODO: and handle rolling back local changes whenever the remote fails...
-// TODO: Force UI to update at appropriate times. onAuthChange callback might be required
-const local: ILocalAuth = {
-  /* createUser: async function ({ user }) {
-    assertDB(db);
+// TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
 
-    await db.put(USER_TABLE_NAME, user);
-    return ok(user);
-  }, */
-  updateUserId: async function (oldId, newId) {
-    assertDB(db);
-
-    const user = await db.get(USER_TABLE_NAME, oldId);
-    if (!user) {
-      return err(new NotFoundError(oldId, "User"));
-    }
-
-    const updatedUser = { ...user, id: newId };
-    await db.put(USER_TABLE_NAME, updatedUser);
-    if (oldId) {
-      await db.delete(USER_TABLE_NAME, oldId);
-    }
-
-    return ok(updatedUser);
-  },
-
-  listUsers: async function () {
-    assertDB(db);
-    const users = await db.getAll(USER_TABLE_NAME);
-    return users;
-  },
-
-  switchUser: async function (newUserId) {
-    if (!newUserId || newUserId == '') Err.throw(new ArgumentError(newUserId, "UserId required to switch user. Use signOut if you want no active user"));
-    assertDB(db);
-
-    // Update last active time
-    const user = await db.get(USER_TABLE_NAME, newUserId);
-    if (user) {
-      await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
-      user.last_active = new Date();
-      await db.put(USER_TABLE_NAME, user);
-      return ok(user);
-    } else {
-      return err(new NotFoundError(newUserId, "User"));
-    }
-  },
-
-  getDefaultUser: async function () {
-    assertDB(db);
-    const users = await db.getAll(USER_TABLE_NAME);
-    if (users.length === 0) {
-      // Only create the anonymous user the first time
-      const newAnon: StoredUser = {
-        id: v4(),
-        display_name: undefined, // Anonymous users have no display name
-        last_active: new Date(),
-        auth_provider: 'local',
-        is_synced: false,
-      };
-
-      await db.put(USER_TABLE_NAME, newAnon);
-      return ok(newAnon);
-    } else if (users.length === 1) {
-      const anon = users[0];
-      return ok(anon);
-    } else {
-      return err(new InvalidStateError("There are too many users to select a default"));
-    }
-  },
-
-  getActiveUser: async function () {
-    assertDB(db);
-    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    if (activeId) {
-      const user = await db.get(USER_TABLE_NAME, activeId);
-      return user ?? null;
-    } else return null;
-  }
-};
-
-const core: IAuthCore & IAuthCoreResponseHandler = {
+const auth: IAuthLocal = {
   getUser: async function ({ id }) {
     assertDB(db);
     const user = await db.get(USER_TABLE_NAME, id);
@@ -119,22 +38,17 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
     };
 
     await db.put(USER_TABLE_NAME, updatedUser);
-    if (update.id) {
-      await db.delete(USER_TABLE_NAME, update.id);
-    }
 
-    authSyncQueue?.add('updateUser',
+
+    authSyncQueue!.add('updateUser',
       { update },
       'handleUpdateUserResponse',
       {
         oldUser: user,
-      },
-      "User update failed"
-    );
+      });
 
     return ok(updatedUser);
   },
-
   handleUpdateUserResponse: async function (response) {
     if (response.isErr()) {
       const { oldUser } = response.error;
@@ -158,12 +72,11 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
 
       await db.delete(USER_TABLE_NAME, userId);
 
-      authSyncQueue?.add(
+      authSyncQueue!.add(
         'deleteUser',
         { userId },
         'handleDeleteUserResponse',
-        { oldUser: user },
-        `Failed to delete user: ${user.display_name ?? user.id}`
+        { oldUser: user }
       )
     }
 
@@ -177,28 +90,111 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
     }
   },
 
-  register: async function ({ creds }) {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.signUp"));
+  getRegistrationRequirements: function (signUpCred) {
+    assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
+    assertTasksProvider(tasks, "Cannot migrate without a provided remote tasks provider");
+    return remoteAuth.getRegistrationRequirements(signUpCred);
   },
-  handleSignUpResponse: async function (response) {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignUp"))
+
+  register: async function ({ creds, userData }) {
+    if (userData.last_synced) {
+      return err(new InvalidStateError("Attempted to register a user that is already synced with a server", userData))
+    }
+
+    const reqsResult = this.getRegistrationRequirements(creds);
+    if (reqsResult.isErr()) {
+      return err(reqsResult.error);
+    } else if (reqsResult.value.length > 0) {
+      return err(new ArgumentError(creds, `Registration credentials had errors. Make sure to call getRegistrationRequirements() before register()`));
+    }
+
+    assertDB(db);
+    assertRemoteAuth(remoteAuth, `Cannot migrate without remote auth provider`);
+    assertTasksProvider(tasks, `Attempted account data migration without remote task provider. Aborting`);
+
+    const registerResult = await remoteAuth.register({ creds, userData });
+
+    if (registerResult.isErr()) {
+      return err(registerResult.error);
+    }
+    const registeredUser = registerResult.value;
+
+    // Update the local user with registered user data
+    await db.delete(USER_TABLE_NAME, userData.id);
+    await db.put(USER_TABLE_NAME, { ...registeredUser, last_synced: new Date(), last_active: new Date() });
+
+    // Update all task ids with new registered user id
+    // TODO:Design This will probably queue an update with the server...
+    const changeResult = await tasks.changeOwnership({ oldUserID: userData.id, newUserID: registeredUser.id });
+    if (changeResult.isErr()) {
+      // TODO There's no handler for failed task migration after registration succeeds.
+      // the tasks API will rollback any failures, but the registration process won't know...
+    }
+    const [userTasks, taskErrors] = extractBatch(changeResult);
+
+    // TODO:Design So this may be redundant or dangerous...
+    // taskSyncQueue.add(
+    //   'createTasks', { createDetails: userTasks },
+    //   'handleCreateTasksResponse', { createdIds: userTasks.map(t => t.id) }
+    // );
+
+    // Switch to the new representation of the user
+    await local.switchUser(registeredUser.id);
+
+    return ok(registeredUser);
   },
+
+  /*   handleRegisterResponse: async function (response) {
+      assertDB(db);
+  
+      if (response.isErr()) {
+        const { creds, lastLoggedIn, oldUser } = response.error;
+        // If failed, switch back to the old user
+        lastLoggedIn ?
+          await api.switchUser(lastLoggedIn) : await api.logout();
+  
+        // Revert the user info
+        await db.put(USER_TABLE_NAME, oldUser);
+  
+        // TODO Let the user know that registration failed
+      } else {
+        const { oldUser, registeredUser } = response.value;
+  
+        local.migrateRegisteredUser({ oldUser, registeredUser })
+      }
+  
+      Err.throw(new NotImplementedError("BrowserAuth.handleRegisterResponse"))
+    }, */
 
   login: async function ({ creds }) {
     assertDB(db);
+    assertRemoteAuth(remoteAuth);
 
+    authSyncQueue!.add(
+      "login", {
+      creds
+    },
+      'handleLoginResponse', {
+      creds
+    });
+
+    // TODO I don't know how to handle login security locally...
     switch (creds.type) {
-      default: Err.throw(new ArgumentError(creds, `${creds.type} sign in not implemented for local auth`));
+      default: return err(new ArgumentError(creds, `${creds.type} sign in not implemented for local auth`));
     }
   },
-  handleSignInResponse: (creds) => {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.undoSignIn"))
+  handleLoginResponse: (response) => {
+    Err.throw(new NotImplementedError("BrowserAuthProvider.handleLoginResponse"))
   },
 
   logout: async function () {
     assertDB(db);
+    assertRemoteAuth(remoteAuth);
+
     await db.put(APP_TABLE_NAME, undefined, ACTIVEUSER_COLUMN_NAME);
-    invalidateAll(); // TODO I think notification is a better approach than invalidateAll()
+
+    remoteAuth.logout();
+    // invalidateAll(); // TODO I think notification is a better approach than invalidateAll()
     return ok();
   },
   // onAuthStateChanged: function (callback: (user: StoredUser | null) => void): UnsubscribeFn {
@@ -223,95 +219,162 @@ const core: IAuthCore & IAuthCoreResponseHandler = {
   // }
 }
 
-const migrator: ILocalMigrator & IMigrationResponseHandler = {
-  getMigrationRequirements: function (signUpCred) {
-    assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
-    return remoteAuth.getMigrationRequirements(signUpCred);
+const local: IAuthLocalFunctions = {
+  createUser: async function ({ user }) {
+    assertDB(db);
+
+    await db.put(USER_TABLE_NAME, user);
+    return ok(user);
   },
-  migrate: async function ({ user, signUpCred }) {
-    assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
-    assertRemoteTasks(remoteTask, "Cannot migrate without a provided remote auth provider");
-    return remoteAuth.migrate({ user, signUpCred, taskProvider: remoteTask });
+
+  removeUser: async function (userId) {
+    assertDB(db);
+
+    await db.delete(USER_TABLE_NAME, userId);
   },
-  handleMigrateResponse: async function (result) {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.undoMigrate"))
+
+  listUsers: async function () {
+    assertDB(db);
+    const users = await db.getAll(USER_TABLE_NAME);
+    return users;
   },
-}
+
+  switchUser: async function (newUserId) {
+    if (!newUserId || newUserId == '') Err.throw(new ArgumentError(newUserId, "UserId required to switch user. Use signOut if you want no active user"));
+
+    const active = await this.getActiveUser();
+    if (newUserId == active?.id) return ok(active);
+
+    assertDB(db);
+    // Update last active time
+    const user = await db.get(USER_TABLE_NAME, newUserId);
+    if (user) {
+      await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
+      user.last_active = new Date();
+      await db.put(USER_TABLE_NAME, user);
+      return ok(user);
+    } else {
+      return err(new NotFoundError(newUserId, "User"));
+    }
+  },
+
+  getDefaultUser: async function () {
+    assertDB(db);
+    const users = await db.getAll(USER_TABLE_NAME);
+    if (users.length === 0) {
+      // Only create the anonymous user the first time
+      const newAnon: LocalUser = {
+        id: v4(),
+        display_name: undefined, // Anonymous users have no display name
+        last_active: new Date(),
+        auth_provider: 'local',
+      };
+
+      await db.put(USER_TABLE_NAME, newAnon);
+      return ok(newAnon);
+    } else if (users.length === 1) {
+      const anon = users[0];
+      return ok(anon);
+    } else {
+      return err(new InvalidStateError("There are too many users to select a default"));
+    }
+  },
+
+  getActiveUser: async function () {
+    assertDB(db);
+    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    if (activeId) {
+      const user = await db.get(USER_TABLE_NAME, activeId);
+      return user ?? null;
+    } else return null;
+  },
+};
 
 // #region UTILITIES
+
+function assert(
+  condition: unknown,
+  message?: string
+): asserts condition {
+  if (!condition) {
+    throw new Error(message ?? "Assertion failed");
+  }
+}
 
 function assertDB(db: LocalDB | null, errorMessage?: string): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()"));
 }
-function assertRemoteAuth(remoteAuth: IAuthAPI | null, errorMessage: string): asserts remoteAuth is IAuthAPI {
+function assertRemoteAuth(remoteAuth: IAuth | null, errorMessage?: string): asserts remoteAuth is IAuth {
   if (!remoteAuth) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote auth without a provider."));
 }
-function assertRemoteTasks(remoteTasks: ITaskAPI | null, errorMessage: string): asserts remoteTasks is ITaskAPI {
+function assertTasksProvider(remoteTasks: ITaskAPI | null, errorMessage?: string): asserts remoteTasks is ITaskAPI {
   if (!remoteTasks) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote tasks without a provider."));
 }
-
 // #endregion
 
-let db: LocalDB | null;
-let remoteAuth: IAuthAPI | null;
-let remoteTask: ITaskAPI | null;
+let db: LocalDB | null = null;
+let remoteAuth: IAuth | null = null;
+let authSyncQueue: AuthSyncQueue | null = null;
+let tasks: ITaskAPI | null = null;
+let taskSyncQueue: TaskSyncQueue | null = null;
 
-const api = { ...core, ...local, ...migrator }
+const api: ILocalAuth = { ...auth, ...local }
+
 
 const BrowserAuthProvider: ILocalAuthProvider = {
-  get: async function (remoteAuthProvider, remoteTaskProvider) {
+  get: async function (
+    authProvider?: IProvider<IAuth>,
+    taskProvider?: ILocalTaskProvider,
+  ) {
     db = await dbPromise;
-    remoteAuth = remoteAuthProvider ?? null;
-    remoteTask = remoteTaskProvider ?? null;
-
-    if (remoteAuthProvider && remoteTaskProvider) {
-      authSyncQueue = new SyncQueue<Omit<IAuthAPI,
-        | "getActiveUser"
-        | "getMigrationRequirements"
-        | "getUser">, IAuthAPIResponseHandler>({
-          deleteUser: remoteAuth!.deleteUser,
-          handleDeleteUserResponse: core.handleDeleteUserResponse,
-          migrate: remoteAuth!.migrate,
-          handleMigrateResponse: migrator.handleMigrateResponse,
-          login: remoteAuth!.login,
-          handleSignInResponse: core.handleSignInResponse,
-          logout: remoteAuth!.logout,
-          register: remoteAuth!.register,
-          handleSignUpResponse: core.handleSignUpResponse,
-          updateUser: remoteAuth!.updateUser,
-          handleUpdateUserResponse: core.handleUpdateUserResponse,
-        });
-    }
 
     // Initialize with active user or create anonymous
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    if (activeUserId) {
-      // All this does is update the last_active field...
-      // await api.switchUser({ userId: activeUserId });
-    } else {
+    if (!activeUserId) {
       const anonRes = await api.getDefaultUser();
       if (anonRes.isOk()) {
         await api.switchUser(anonRes.value.id);
       } else {
-        // 
+        // Multiple users and no-one's logged in. 
+        // UI flow should just route to the login page.
       }
+    }
+
+    if (authProvider) {
+      if (!taskProvider) {
+        Err.throw(new InvalidStateError("Must provide task provider if remote auth provider is given", { wrappedAuthProvider: authProvider, wrappedTaskProvider: taskProvider }));
+      } else {
+        tasks = await taskProvider.get();
+        taskSyncQueue = taskProvider.getSyncQueue();
+        if (!taskSyncQueue)
+          Err.throw(new InvalidStateError("Received remote auth provider, but received task provider does not have a remote"));
+      }
+
+      remoteAuth = await authProvider.get();
+
+      authSyncQueue = new SyncQueue<Omit<IAuth,
+        | "getActiveUser"
+        | "getRegistrationRequirements"
+        | "getUser">, IAuthResponseHandler>({
+          deleteUser: remoteAuth.deleteUser,
+          handleDeleteUserResponse: auth.handleDeleteUserResponse,
+          login: remoteAuth.login,
+          handleLoginResponse: auth.handleLoginResponse,
+          logout: remoteAuth.logout,
+          register: remoteAuth.register,
+          // handleRegisterResponse: auth.handleRegisterResponse,
+          updateUser: remoteAuth.updateUser,
+          handleUpdateUserResponse: auth.handleUpdateUserResponse,
+        });
+
     }
 
     return api;
   },
 
-  close: async function () {
-    db?.close();
-    db = null;
-  }
+  getSyncQueue() {
+    return authSyncQueue;
+  },
 };
 
-export let authSyncQueue: SyncQueue<Omit<IAuthAPI,
-  | "getActiveUser"
-  | "getMigrationRequirements"
-  | "getUser">, IAuthAPIResponseHandler> | null = null;
-
 export default BrowserAuthProvider;
-
-// Export for testing
-export { db };

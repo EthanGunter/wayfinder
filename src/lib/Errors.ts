@@ -14,7 +14,21 @@ export class Err {
     static wrap(nativeError: Error): Err {
         return new Err(0, nativeError.name ?? "unknown", nativeError.message, nativeError);
     }
+    static DEV(error: Err | any): never {
+        // TODO link to bug report system. Unhandled errors shouldn't happen
+        if (error! instanceof Err) {
+            error = new Err(1, "Unknown", "error occured", error);
+        }
+        error.inheritanceDepth++;
+        error.withTrace();
+        if (error.context)
+            console.error("HANDLER NOT IMPLEMENTED for: ", error.type + ": " + error.msg, error.context);
+        else
+            console.error("HANDLER NOT IMPLEMENTED for: ", error.type + ": " + error.msg);
+        throw error.stack;
+    }
     static throw(error: Err | any): never {
+        // TODO link to bug report system. Unhandled errors shouldn't happen
         if (error! instanceof Err) {
             error = new Err(1, "Unknown", "error occured", error);
         }
@@ -67,6 +81,7 @@ export class Err {
     }
 
     logError() {
+        // TODO link to bug report system. Unhandled errors shouldn't happen
         if (this.context) {
             if (this.stack)
                 console.error(this.type + ": " + this.msg, this.context, this.stack);
@@ -81,6 +96,7 @@ export class Err {
         }
     }
     logWarning() {
+        // TODO link to bug report system. Unhandled warnings shouldn't happen
         if (this.context)
             console.warn(this.type + ": " + this.msg, this.context);
         else

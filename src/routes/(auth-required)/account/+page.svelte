@@ -1,7 +1,7 @@
 <script lang="ts">
 	import UserAvatar from '../../../lib/components/UserAvatar.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { StoredUser } from '$lib/API/Auth/types';
+	import type { LocalUser } from '$lib/API/Auth/types';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
@@ -13,7 +13,7 @@
 	let user = $state(data.user);
 	const debouncedUpdateUser = debounce(auth.updateUser, 200);
 
-	function equals(a: StoredUser, b: StoredUser) {
+	function equals(a: LocalUser, b: LocalUser) {
 		return JSON.stringify(a) === JSON.stringify(b);
 	}
 

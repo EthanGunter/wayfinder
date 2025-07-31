@@ -2,24 +2,42 @@ import supabase from '$lib/API/SupabaseClient'
 import { err, ok } from 'neverthrow';
 import {
     AccountIssueTarget,
-    type IAuthCore,
-    type IAuthAPI,
-    type IMigrator,
+    type IAuth,
     type MigrationRequirements,
     type SignInCredentials,
     type SignOutOptions,
-    type StoredUser,
-    type UserData,
+    type LocalUser,
 } from './types';
 import type { ITaskAPI, Task } from '../Tasks';
 import type { UserAttributes } from '@supabase/supabase-js';
 import { NotFoundError, Err, InvalidStateError, NotImplementedError, NotHandledError } from '$lib/Errors';
-import BrowserAuthProvider from './BrowserAuthProvider';
-import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 import { extractBatchAndLogErrors, type IProvider } from '../types';
 
-const core: IAuthCore = {
-    register: async function ({ creds, userData }) {
+const core: IAuth = {
+    getRegistrationRequirements: function (cred) {
+        const issues: MigrationRequirements[] = [];
+
+        switch (cred.type) {
+            case "email_password":
+                if (!cred.email || cred.email == '') {
+                    issues.push({ target: AccountIssueTarget.email, message: "Email required" });
+                } else if (!cred.email.match(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+[.][A-Za-z.]{2,}$/)) {
+                    issues.push({ target: AccountIssueTarget.email, message: "Email format invalid" });
+                }
+
+                if (!cred.password) {
+                    issues.push({ target: AccountIssueTarget.password, message: "Password required" });
+                } else if (cred.password.length < 8) {
+                    issues.push({ target: AccountIssueTarget.password, message: "Password must be at least 8 characters" });
+                }
+                break;
+            default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${cred.type}`));
+        }
+
+        return ok(issues);
+    },
+
+    register: async function ({ creds, userData: userData }) {
         const authRes = await supabase.auth.signUp({
             email: creds.email,
             password: creds.password,
@@ -125,32 +143,9 @@ const core: IAuthCore = {
 }
 
 const migrator: IMigrator = {
-    getMigrationRequirements: function (cred) {
-        const issues: MigrationRequirements[] = [];
-
-        switch (cred.type) {
-            case "email_password":
-                if (!cred.email || cred.email == '') {
-                    issues.push({ target: AccountIssueTarget.email, message: "Email required" });
-                } else if (!cred.email.match(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+[.][A-Za-z.]{2,}$/)) {
-                    issues.push({ target: AccountIssueTarget.email, message: "Email format invalid" });
-                }
-
-                if (!cred.password) {
-                    issues.push({ target: AccountIssueTarget.password, message: "Password required" });
-                } else if (cred.password.length < 8) {
-                    issues.push({ target: AccountIssueTarget.password, message: "Password must be at least 8 characters" });
-                }
-                break;
-            default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${cred.type}`));
-        }
-
-        return ok(issues);
-    },
-
     // TODO Convert to function* and yield progress results
     migrate: async function ({ user, signUpCred, taskProvider }) {
-        const migNeedsRes = migrator.getMigrationRequirements(signUpCred);
+        const migNeedsRes = core.getRegistrationRequirements(signUpCred);
         if (migNeedsRes.isErr()) return err(migNeedsRes.error);
         else if (migNeedsRes.value.length > 0) return err(new InvalidStateError("Must resolve the following migration requirements before migrating", migNeedsRes.value));
 
@@ -159,12 +154,11 @@ const migrator: IMigrator = {
                 return migrateEmailPassword(user, signUpCred, taskProvider);
             default: return err(new NotImplementedError(`SupabaseAuth.migrate => ${signUpCred.type}`));
         }
-        Err.throw(new NotImplementedError("SupabaseAuth.migrate"))
     },
 }
 
 // TODO revert operations instead of simply throwing
-async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, taskProvider: ITaskAPI) {
+async function migrateEmailPassword(user: LocalUser, creds: SignInCredentials, taskProvider: ITaskAPI) {
     console.log("Beginning email signup");
 
     // TODO Manage Supabase account migration
@@ -187,7 +181,7 @@ async function migrateEmailPassword(user: StoredUser, creds: SignInCredentials, 
 
     // Update local user
     const localAuth = await BrowserAuthProvider.get();
-    localAuth.updateUser({ update: { ...newUser, oldId: user.id, is_synced: true, last_synced: new Date() } });
+    localAuth.updateUser({ update: { ...newUser, last_synced: new Date() } });
     console.log("Local user updated. Updating local tasks...");
 
     // Update all task's user_id field for user

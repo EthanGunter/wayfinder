@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { dev as DEVELOPMENT } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
-	import type { StoredUser } from '$lib/API/Auth/types';
+	import type { LocalUser } from '$lib/API/Auth/types';
 	import { TASK_TABLE_NAME } from '$lib/API/localDB';
 	import supabase from '$lib/API/SupabaseClient';
 	import provider from '$lib/API/Tasks/BrowserTaskProvider';
@@ -10,7 +10,7 @@
 	import Pullout from './overlays/Pullout.svelte';
 
 	interface Props {
-		user: StoredUser;
+		user: LocalUser;
 	}
 	const { user }: Props = $props();
 
@@ -29,7 +29,7 @@
 				<input id="dev-mode" type="checkbox" bind:checked={devStore.devMode} />
 			</h2>
 			<span>
-				<button onclick={async () => (await provider.get()).exportData()}> Export Data </button>
+				<button onclick={async () => (await provider.get())[0].exportData({})}> Export Data </button>
 			</span>
 			{#if devStore.devMode}
 				<label for="task-provider-override">Task API Override</label>
@@ -43,7 +43,7 @@
 				>
 					<option value="none">Default</option>
 					<option value="supabase">Supabase</option>
-					<option value="browser">Browser</option>
+					<!-- <option value="browser">Browser</option> -->
 					<option value="native">Native</option>
 				</select>
 				<button
