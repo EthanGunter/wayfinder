@@ -16,7 +16,7 @@ export class Err {
     }
     static DEV(error: Err | any): never {
         // TODO link to bug report system. Unhandled errors shouldn't happen
-        if (error! instanceof Err) {
+        if (!(error instanceof Err)) {
             error = new Err(1, "Unknown", "error occured", error);
         }
         error.inheritanceDepth++;
@@ -29,7 +29,7 @@ export class Err {
     }
     static throw(error: Err | any): never {
         // TODO link to bug report system. Unhandled errors shouldn't happen
-        if (error! instanceof Err) {
+        if (!(error instanceof Err)) {
             error = new Err(1, "Unknown", "error occured", error);
         }
         error.inheritanceDepth++;

@@ -49,11 +49,10 @@ describe("IAuth", () => {
         mockRemoteAuth = mock<IAuth>();
         mockTasks = mock<ILocalTasks>();
         mockTasksSyncQueue = mock<TaskSyncQueue>();
-        let mockAuthProvider = { get: () => Promise.resolve(mockRemoteAuth) }
-        let mockTaskProvider = { get: () => Promise.resolve(mockTasks), getSyncQueue: () => mockTasksSyncQueue }
+        mockTasks.getSyncQueue.mockReturnValue(mockTasksSyncQueue);
         // TODO We now need a way to mock the Browser task provider, since it's no longer dependency injected
-        localAuth = await BrowserAuthProvider.get(mockAuthProvider, mockTaskProvider);
-        syncQueue = BrowserAuthProvider.getSyncQueue();
+        localAuth = await BrowserAuthProvider.get(mockRemoteAuth, mockTasks);
+        syncQueue = localAuth.getSyncQueue();
 
         localUser1Data = {
             // id: v4(),

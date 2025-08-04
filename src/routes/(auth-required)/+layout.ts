@@ -12,7 +12,7 @@ import { page } from '$app/state';
 
 export const load: LayoutLoad = async ({ parent, url }) => {
     // Initialize local auth provider for initial checks
-    const [tempAuth] = await BrowserAuthProvider.get();
+    const tempAuth = await BrowserAuthProvider.get();
 
     // Check local account data first
     let activeUser = await tempAuth.getActiveUser();
@@ -50,15 +50,15 @@ export const load: LayoutLoad = async ({ parent, url }) => {
         };
 
         const remoteTask = await SupabaseTaskProvider.get();
-        const [taskAPI] = await BrowserTaskProvider.get(remoteTask);
+        const taskAPI = await BrowserTaskProvider.get(remoteTask);
         tasks = taskAPI;
-        [auth] = await BrowserAuthProvider.get(remoteAuth, taskAPI);
+        auth = await BrowserAuthProvider.get(remoteAuth, taskAPI);
         console.log("Using Browser-wrapped supabase task API");
     } else {
         // Use local auth
         user = activeUser;
-        [tasks] = await BrowserTaskProvider.get();
-        [auth] = await BrowserAuthProvider.get();
+        tasks = await BrowserTaskProvider.get();
+        auth = await BrowserAuthProvider.get();
         console.log("Using Browser-only task API");
     }
 

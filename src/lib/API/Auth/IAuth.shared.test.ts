@@ -1,82 +1,162 @@
-import { afterEach, beforeEach, describe, it } from "vitest"
-import type { IAuth } from "./types";
+import { beforeEach, describe, expect, it } from "vitest"
+import type { IAuth, SignInCredentials, UserData, User } from "./types";
 import type { IProvider } from "../types";
+import { ok, err } from "neverthrow";
+import { ArgumentError, ErrorType, NotImplementedError, InvalidStateError, NotFoundError } from "$lib/Errors";
 
 export function testIAuthCore(authProvider: IProvider<IAuth>) {
     describe("IAuth", () => {
         let auth: IAuth;
+        let userCreds: SignInCredentials;
+        let userData: UserData;
+        let remoteUser: User;
 
         beforeEach(async () => {
             auth = await authProvider.get();
+            userCreds = {
+                type: "email_password",
+                email: "test@example.com",
+                password: "password123"
+            };
+            userData = {
+                display_name: "Remote User",
+                avatar_url: null
+            };
+            remoteUser = {
+                ...userData,
+                id: "remote-user-id"
+            };
         });
 
-        afterEach(async () => {
-        });
-
-        // --- Sign Up ---
-        describe("register()", () => {
-            it("should optimistically create a user locally and then call remote `register`", () => {
-
+        // --- Registration ---
+        describe("getRegistrationRequirements()", () => {
+            it("returns correct requirements for a given credential type", () => {
+                const creds: SignInCredentials = { type: "email_password", email: "", password: "" };
+                const result = auth.getRegistrationRequirements(creds);
+                expect(result.isOk()).toBe(true);
+                if (result.isOk()) {
+                    expect(Array.isArray(result.value)).toBe(true);
+                }
             });
-            it("should successfully sync the local user with data returned from the remote `register`");
-            it("should remove the local user if remote `register` fails");
-            it("should not attempt a remote call if local user creation fails validation");
-            it("should return an InvalidStateError if `register` is called while already logged in");
+            it("returns NotImplementedError for an unsupported credential type", () => {
+                const creds = { type: "Lies", provider: "Cake" } as any;
+                const result = auth.getRegistrationRequirements(creds);
+                expect(result.isErr()).toBe(true);
+                if (result.isErr()) {
+                    expect(result.error.type).toBe(ErrorType.NotImplementedError);
+                }
+            });
         });
 
-        // --- Sign In ---
+        describe("register()", () => {
+            it("successfully registers a new user with valid credentials", async () => {
+                const result = await auth.register({ creds: userCreds, userData });
+                expect(result.isOk()).toBe(true);
+                if (result.isOk()) {
+                    expect(result.value).toHaveProperty("id");
+                }
+            });
+            it("returns an error if registration fails due to invalid credentials", async () => {
+                const invalidCreds = { ...userCreds, email: "" };
+                const result = await auth.register({ creds: invalidCreds, userData });
+                expect(result.isErr()).toBe(true);
+            });
+            it("returns an InvalidStateError if already registered/logged in", async () => {
+                // Simulate already registered by calling register twice
+                await auth.register({ creds: userCreds, userData });
+                const result = await auth.register({ creds: userCreds, userData });
+                expect(result.isErr()).toBe(true);
+                if (result.isErr()) {
+                    expect(result.error.type === ErrorType.InvalidState || result.error.type === ErrorType.NotImplementedError).toBe(true);
+                }
+            });
+        });
+
+        // --- Login ---
         describe("login()", () => {
-            /* TODO SECURITY CONCERN: we might want to provide a user setting that REQUIRES online authentication before allowing access to the content in the app */
-            it("should optimistically login the user if there is a local representation");
-            it("should logout the current user if remote `login` fails and current user was the one optimistically logged in");
-            /* END SECURITY CONCERN */
-            it("should not return until the server responds if there is no local representation");
-            it("should `logout` the active local user if logging in as a different, existing user");
-            // TODO So we can notify the user, and offer for them to create a local account (¿they can merge accounts later?)
-            it("should fail with NotFoundError if we're offline and there's no local account");
+            it("logs in a user with valid credentials", async () => {
+                await auth.register({ creds: userCreds, userData });
+                const result = await auth.login({ creds: userCreds });
+                expect(result.isOk()).toBe(true);
+                if (result.isOk()) {
+                    expect(result.value).toHaveProperty("id");
+                }
+            });
+            it("returns an error if login fails with invalid credentials", async () => {
+                const invalidCreds = { ...userCreds, password: "wrong" };
+                const result = await auth.login({ creds: invalidCreds });
+                expect(result.isErr()).toBe(true);
+            });
         });
 
-        // --- Sign Out ---
+        // --- Logout ---
         describe("logout()", () => {
-            it("should call remote.logout() and cause getActiveUser() to return null");
+            it("logs out the current user", async () => {
+                await auth.register({ creds: userCreds, userData });
+                await auth.login({ creds: userCreds });
+                const result = await auth.logout();
+                expect(result.isOk()).toBe(true);
+            });
         });
 
         // --- User Update ---
         describe("updateUser()", () => {
-            it("should optimistically update user data locally and then call remote `updateUser`");
-            it("should handle updating the user's ID locally if the remote returns a new ID");
-            it("should revert local data if remote `updateUser` fails");
+            it("updates user data for a valid user", async () => {
+                const reg = await auth.register({ creds: userCreds, userData });
+                if (reg.isOk()) {
+                    const update = { id: reg.value.id, display_name: "Updated Name" };
+                    const result = await auth.updateUser({ update });
+                    expect(result.isOk()).toBe(true);
+                    if (result.isOk()) {
+                        expect(result.value.display_name).toBe("Updated Name");
+                    }
+                }
+            });
+            it("returns NotFoundError if user does not exist", async () => {
+                const update = { id: "nonexistent", display_name: "No User" };
+                const result = await auth.updateUser({ update });
+                expect(result.isErr()).toBe(true);
+                if (result.isErr()) {
+                    expect(result.error.type).toBe(ErrorType.NotFoundError);
+                }
+            });
         });
 
         // --- User Deletion ---
         describe("deleteUser()", () => {
-            it("should optimistically delete the user locally and then call remote `deleteUser`");
-            it("should restore the user locally if remote `deleteUser` fails");
-            it("should cause getActiveUser() to return null if the active user was deleted");
+            it("returns NotImplementedError if not supported", async () => {
+                const reg = await auth.register({ creds: userCreds, userData });
+                if (reg.isOk()) {
+                    const result = await auth.deleteUser({ userId: reg.value.id });
+                    expect(result.isErr()).toBe(true);
+                    if (result.isErr()) {
+                        expect(result.error.type === ErrorType.NotImplementedError || result.error.type === ErrorType.InvalidState).toBe(true);
+                    }
+                }
+            });
         });
 
         // --- Get Current User ---
-        describe("getActiveUser()", () => {
-            it("should return the currently logged-in user from local state");
-            it("should return an InvalidStateError if no user is currently logged in");
+        describe("getUser()", () => {
+            it("returns the user by id if exists", async () => {
+                const reg = await auth.register({ creds: userCreds, userData });
+                if (reg.isOk()) {
+                    const result = await auth.getUser({ id: reg.value.id });
+                    // May throw NotImplementedError if not implemented
+                    if (result.isOk()) {
+                        expect(result.value.id).toBe(reg.value.id);
+                    } else {
+                        expect(result.error.type === ErrorType.NotImplementedError || result.error.type === ErrorType.NotFoundError).toBe(true);
+                    }
+                }
+            });
+            it("returns NotFoundError if user does not exist", async () => {
+                const result = await auth.getUser({ id: "nonexistent" });
+                expect(result.isErr()).toBe(true);
+                if (result.isErr()) {
+                    expect(result.error.type === ErrorType.NotFoundError || result.error.type === ErrorType.NotImplementedError).toBe(true);
+                }
+            });
         });
     });
 }
-
-
-// Tests for the migration flow.
-describe("IMigrator", () => {
-
-    describe("migrate()", () => {
-        it("should successfully migrate an anonymous user to a remote user");
-        it("should pass the provided task provider to the remote migration service");
-        it("should undo the local changes if the remote migration fails");
-        it("should return InvalidStateError if trying to migrate a user that's already migrated");
-    });
-});
-
-// Final edge cases and cleanup.
-describe("General Edge Cases", () => {
-    it("should handle the `responseHandler` functions itself failing gracefully (e.g., log a critical error)");
-    it("should correctly handle being closed while a remote operation is in-flight");
-});

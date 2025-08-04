@@ -1,6 +1,6 @@
 import { v4 } from 'uuid';
 import type { IAuth, IAuthLocalFunctions, LocalUser, ILocalAuthProvider, IAuthLocal, IAuthResponseHandler, AuthSyncQueue, ILocalAuth } from './types';
-import type { ILocalTaskProvider, ITaskAPI, TaskSyncQueue } from '../Tasks';
+import type { ILocalTaskProvider, ILocalTasks, ITaskAPI, TaskSyncQueue } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME as USER_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, ErrorType, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
@@ -40,7 +40,7 @@ const auth: IAuthLocal = {
     await db.put(USER_TABLE_NAME, updatedUser);
 
 
-    authSyncQueue!.add('updateUser',
+    _authSyncQueue!.add('updateUser',
       { update },
       'handleUpdateUserResponse',
       {
@@ -72,7 +72,7 @@ const auth: IAuthLocal = {
 
       await db.delete(USER_TABLE_NAME, userId);
 
-      authSyncQueue!.add(
+      _authSyncQueue!.add(
         'deleteUser',
         { userId },
         'handleDeleteUserResponse',
@@ -91,9 +91,9 @@ const auth: IAuthLocal = {
   },
 
   getRegistrationRequirements: function (signUpCred) {
-    assertRemoteAuth(remoteAuth, "Cannot migrate without a provided remote auth provider");
-    assertTasksProvider(tasks, "Cannot migrate without a provided remote tasks provider");
-    return remoteAuth.getRegistrationRequirements(signUpCred);
+    assertRemoteAuth(_remoteAuth, "Cannot migrate without a provided remote auth provider");
+    assertTasksProvider(_tasks, "Cannot migrate without a provided remote tasks provider");
+    return _remoteAuth.getRegistrationRequirements(signUpCred);
   },
 
   register: async function ({ creds, userData }) {
@@ -109,10 +109,10 @@ const auth: IAuthLocal = {
     }
 
     assertDB(db);
-    assertRemoteAuth(remoteAuth, `Cannot migrate without remote auth provider`);
-    assertTasksProvider(tasks, `Attempted account data migration without remote task provider. Aborting`);
+    assertRemoteAuth(_remoteAuth, `Cannot migrate without remote auth provider`);
+    assertTasksProvider(_tasks, `Attempted account data migration without remote task provider. Aborting`);
 
-    const registerResult = await remoteAuth.register({ creds, userData });
+    const registerResult = await _remoteAuth.register({ creds, userData });
 
     if (registerResult.isErr()) {
       return err(registerResult.error);
@@ -125,7 +125,7 @@ const auth: IAuthLocal = {
 
     // Update all task ids with new registered user id
     // TODO:Design This will probably queue an update with the server...
-    const changeResult = await tasks.changeOwnership({ oldUserID: userData.id, newUserID: registeredUser.id });
+    const changeResult = await _tasks.changeOwnership({ oldUserID: userData.id, newUserID: registeredUser.id });
     if (changeResult.isErr()) {
       // TODO There's no handler for failed task migration after registration succeeds.
       // the tasks API will rollback any failures, but the registration process won't know...
@@ -168,9 +168,9 @@ const auth: IAuthLocal = {
 
   login: async function ({ creds }) {
     assertDB(db);
-    assertRemoteAuth(remoteAuth);
+    assertRemoteAuth(_remoteAuth);
 
-    authSyncQueue!.add(
+    _authSyncQueue!.add(
       "login", {
       creds
     },
@@ -189,11 +189,11 @@ const auth: IAuthLocal = {
 
   logout: async function () {
     assertDB(db);
-    assertRemoteAuth(remoteAuth);
+    assertRemoteAuth(_remoteAuth);
 
     await db.put(APP_TABLE_NAME, undefined, ACTIVEUSER_COLUMN_NAME);
 
-    remoteAuth.logout();
+    _remoteAuth.logout();
     // invalidateAll(); // TODO I think notification is a better approach than invalidateAll()
     return ok();
   },
@@ -216,7 +216,11 @@ const auth: IAuthLocal = {
   //   return () => {
   //     authStateListeners.delete(callback);
   //   };
-  // }
+  // },
+
+  getSyncQueue() {
+    return _authSyncQueue;
+  },
 }
 
 const local: IAuthLocalFunctions = {
@@ -313,18 +317,18 @@ function assertTasksProvider(remoteTasks: ITaskAPI | null, errorMessage?: string
 // #endregion
 
 let db: LocalDB | null = null;
-let remoteAuth: IAuth | null = null;
-let authSyncQueue: AuthSyncQueue | null = null;
-let tasks: ITaskAPI | null = null;
-let taskSyncQueue: TaskSyncQueue | null = null;
+let _remoteAuth: IAuth | null = null;
+let _authSyncQueue: AuthSyncQueue | null = null;
+let _tasks: ITaskAPI | null = null;
+let _taskSyncQueue: TaskSyncQueue | null = null;
 
 const api: ILocalAuth = { ...auth, ...local }
 
 
 const BrowserAuthProvider: ILocalAuthProvider = {
   get: async function (
-    authProvider?: IProvider<IAuth>,
-    taskProvider?: ILocalTaskProvider,
+    remoteAuth?: IAuth,
+    tasks?: ILocalTasks,
   ) {
     db = await dbPromise;
 
@@ -340,19 +344,19 @@ const BrowserAuthProvider: ILocalAuthProvider = {
       }
     }
 
-    if (authProvider) {
-      if (!taskProvider) {
-        Err.throw(new InvalidStateError("Must provide task provider if remote auth provider is given", { wrappedAuthProvider: authProvider, wrappedTaskProvider: taskProvider }));
+    if (remoteAuth) {
+      if (!tasks) {
+        Err.throw(new InvalidStateError("Must provide task provider if remote auth provider is given", { wrappedAuthProvider: remoteAuth, wrappedTaskProvider: tasks }));
       } else {
-        tasks = await taskProvider.get();
-        taskSyncQueue = taskProvider.getSyncQueue();
-        if (!taskSyncQueue)
+        _tasks = tasks;
+        _taskSyncQueue = tasks.getSyncQueue();
+        if (!_taskSyncQueue)
           Err.throw(new InvalidStateError("Received remote auth provider, but received task provider does not have a remote"));
       }
 
-      remoteAuth = await authProvider.get();
+      _remoteAuth = remoteAuth;
 
-      authSyncQueue = new SyncQueue<Omit<IAuth,
+      _authSyncQueue = new SyncQueue<Omit<IAuth,
         | "getActiveUser"
         | "getRegistrationRequirements"
         | "getUser">, IAuthResponseHandler>({
@@ -370,10 +374,6 @@ const BrowserAuthProvider: ILocalAuthProvider = {
     }
 
     return api;
-  },
-
-  getSyncQueue() {
-    return authSyncQueue;
   },
 };
 

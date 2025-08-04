@@ -1,4 +1,4 @@
-import type { ILocalTaskProvider, ITaskAPI as ITaskAPI, TaskSyncQueue } from "../Tasks";
+import type { ILocalTaskProvider, ILocalTasks, ITaskAPI as ITaskAPI, TaskSyncQueue } from "../Tasks";
 import type { ArgumentError, InvalidStateError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import type { IProvider, Result } from "../types";
 import type { SyncQueue } from "../SyncQueue";
@@ -40,13 +40,13 @@ export enum AccountIssueTarget {
 
 export interface ILocalAuthProvider {
     get(): Promise<ILocalAuth>;
-    get(remoteAuthProvider: IProvider<IAuth>, localTaskProvider: ILocalTaskProvider): Promise<ILocalAuth>;
-    getSyncQueue(): AuthSyncQueue | null;
+    get(remoteAuth: IAuth, localTaskProvider: ILocalTasks): Promise<ILocalAuth>;
 }
 
 export type IAuthLocal = Omit<IAuth, "register"> & IAuthResponseHandler & {
     /** Registers a remote user account, then migrates the local user's data to the remote provider */
     register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+    getSyncQueue: () => AuthSyncQueue | null;
 };
 export type ILocalAuth = IAuthLocal & IAuthLocalFunctions;
 export type AuthSyncQueue = SyncQueue<Omit<IAuth,
@@ -61,9 +61,9 @@ export interface IAuth {
     /** Responsible for creating a new user account with the given credentials */
     register(params: { creds: SignInCredentials, userData: UserData }): Promise<Result<User, NotImplementedError | ArgumentError>>,
     getUser(params: { id: string }): Promise<Result<User, NotFoundError>>,
-    updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User>>,
+    updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
     deleteUser(params: { userId: string }): Promise<Result<void>>,
-    login(params: { creds: SignInCredentials }): Promise<Result<User>>,
+    login(params: { creds: SignInCredentials }): Promise<Result<User, ArgumentError>>,
     logout(): Promise<Result<void>>,
 }
 
