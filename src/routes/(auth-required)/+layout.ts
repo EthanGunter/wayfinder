@@ -1,7 +1,7 @@
 import BrowserAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
 import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuthProvider';
 import type { ILocalAuth, LocalUser } from '$lib/API/Auth/types';
-import type { ITaskAPI } from '$lib/API/Tasks';
+import type { ITasks } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 import { Err } from '$lib/Errors';
@@ -27,7 +27,7 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 
     let user: LocalUser;
     let auth: ILocalAuth;
-    let tasks: ITaskAPI;
+    let tasks: ITasks;
 
     if (!activeUser) {
         // TODO Capture url and reroute to login page

@@ -1,7 +1,7 @@
 // Supabase's RLS handles this: TODO Task API's need to take auth into consideration
 import { extractBatchAndLogErrors } from '../types';
 import { Task, type TaskData } from './Task';
-import type { ITaskAPI } from './types';
+import type { ITasks } from './types';
 
 export * from './types';
 export * from './Task'
@@ -11,7 +11,7 @@ export interface RelationshipUpdate {
     newTask: TaskData | null;
 }
 
-export async function updateRelationships(provider: ITaskAPI, updates: RelationshipUpdate | RelationshipUpdate[]) {
+export async function updateRelationships(provider: ITasks, updates: RelationshipUpdate | RelationshipUpdate[]) {
     // Normalize to array for consistent handling
     const updateArray = Array.isArray(updates) ? updates : [updates];
 
@@ -101,7 +101,7 @@ function collectChildRemovals(map: Map<string, Set<string>>, childId: string, pa
 }
 
 // Process batch updates
-async function processParentAdditions(provider: ITaskAPI, parentAdditions: Map<string, Set<string>>) {
+async function processParentAdditions(provider: ITasks, parentAdditions: Map<string, Set<string>>) {
     if (parentAdditions.size === 0) return;
 
     // Get all child IDs that need updating
@@ -144,7 +144,7 @@ async function processParentAdditions(provider: ITaskAPI, parentAdditions: Map<s
     );
 }
 
-async function processParentRemovals(provider: ITaskAPI, parentRemovals: Map<string, Set<string>>) {
+async function processParentRemovals(provider: ITasks, parentRemovals: Map<string, Set<string>>) {
     if (parentRemovals.size === 0) return;
 
     // Get all child IDs that need updating
@@ -187,7 +187,7 @@ async function processParentRemovals(provider: ITaskAPI, parentRemovals: Map<str
     );
 }
 
-async function processChildAdditions(provider: ITaskAPI, childAdditions: Map<string, Set<string>>) {
+async function processChildAdditions(provider: ITasks, childAdditions: Map<string, Set<string>>) {
     if (childAdditions.size === 0) return;
 
     // Get all parent IDs that need updating
@@ -229,7 +229,7 @@ async function processChildAdditions(provider: ITaskAPI, childAdditions: Map<str
     );
 }
 
-async function processChildRemovals(provider: ITaskAPI, childRemovals: Map<string, Set<string>>) {
+async function processChildRemovals(provider: ITasks, childRemovals: Map<string, Set<string>>) {
     if (childRemovals.size === 0) return;
 
     // Get all parent IDs that need updating

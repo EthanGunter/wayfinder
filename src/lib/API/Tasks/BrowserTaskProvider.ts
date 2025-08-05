@@ -1,5 +1,5 @@
 import { type IDBPDatabase } from 'idb';
-import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITaskAPI, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider } from './types';
+import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider } from './types';
 import { err, ok } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError } from '$lib/Errors';
 import { v4 } from 'uuid';
@@ -19,12 +19,12 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   createTask: async function ({ createDetail: task }) {
-    assertDB(db);
+    assertDB(_db);
     const preparedTask = new Task(task);
     preparedTask.created = new Date().toISOString();
     preparedTask.id = v4();
 
-    await db.put(TASK_TABLE_NAME, preparedTask);
+    await _db.put(TASK_TABLE_NAME, preparedTask);
     await updateRelationships(api, { oldTask: null, newTask: preparedTask });
 
     return ok(new Task(preparedTask));
@@ -35,10 +35,10 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   * @error {@link IOError} if the IndexedDB.put() attempt fails
   */
   createTasks: async function ({ createDetails: tasks }) {
-    assertDB(db);
+    assertDB(_db);
     const createdTasks: Result<Task, Err>[] = [];
     const createdIds: string[] = [];
-    const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
+    const transaction = _db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     for (const taskDTO of tasks) {
       const preparedTask = new Task(taskDTO);
@@ -59,7 +59,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
 
     await transaction.done;
 
-    taskSyncQueue?.add(
+    _taskSyncQueue?.add(
       "createTasks",
       { createDetails: tasks },
       "handleCreateTasksResponse",
@@ -80,7 +80,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   getTask: async function ({ id }) {
-    assertDB(db);
+    assertDB(_db);
     // if (key.endsWith(".md")) {
     //   // Filepath
     //   // Get the .md file content
@@ -92,7 +92,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
     //   return Task.fromMarkdown(file.content, key);
     // } else {
     // Task ID
-    const task = await db.get(TASK_TABLE_NAME, id);
+    const task = await _db.get(TASK_TABLE_NAME, id);
     if (!task) {
       return err(new NotFoundError(id, 'Task').withTrace(1));
     }
@@ -101,13 +101,13 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   },
 
   getTasks: async function ({ ids }) {
-    assertDB(db);
+    assertDB(_db);
     const tasks: Task[] = [];
     const notFoundIds: string[] = [];
 
     try {
       for (const id of ids) {
-        const task = await db.get(TASK_TABLE_NAME, id);
+        const task = await _db.get(TASK_TABLE_NAME, id);
         if (task) {
           tasks.push(new Task(task));
         } else {
@@ -126,8 +126,8 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   },
 
   getAllUserTasks: async function ({ userId }) {
-    assertDB(db);
-    const userTasks = await db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
+    assertDB(_db);
+    const userTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
     return okBatch(userTasks.map(t => new Task(t)));
   },
 
@@ -138,10 +138,10 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   updateTask: async function ({ taskOrId, changes }) {
-    assertDB(db);
+    assertDB(_db);
     let task: Task;
     if (typeof taskOrId == 'string') {
-      const taskResponse = await db.get(TASK_TABLE_NAME, taskOrId);
+      const taskResponse = await _db.get(TASK_TABLE_NAME, taskOrId);
       if (!taskResponse) return err(new NotFoundError("Task not found for update", taskOrId));
       task = new Task(taskResponse);
     } else {
@@ -150,7 +150,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
 
     const updated: Task = new Task({ ...task, ...changes, last_edit: new Date().toISOString() });
 
-    await db.put(TASK_TABLE_NAME, updated);
+    await _db.put(TASK_TABLE_NAME, updated);
     updateRelationships(api, { oldTask: task, newTask: updated });
 
     // TODO Queue remote updateTask
@@ -159,10 +159,10 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   },
 
   updateTasks: async function ({ updateList }) {
-    assertDB(db);
+    assertDB(_db);
     const updatedTasks: Task[] = [];
     const originalTasks: Task[] = [];
-    const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
+    const transaction = _db.transaction(TASK_TABLE_NAME, 'readwrite');
 
     try {
       for (const { taskOrId, changes: updates } of updateList) {
@@ -212,21 +212,21 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link IOError} if IndexedDB.delete() fails
    */
   deleteTask: async function ({ id, recursive }) {
-    assertDB(db);
+    assertDB(_db);
     if (recursive) Err.throw(new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)"));
 
-    const task = await db.get(TASK_TABLE_NAME, id);
+    const task = await _db.get(TASK_TABLE_NAME, id);
 
     if (task) {
       try {
-        await db.delete(TASK_TABLE_NAME, id);
+        await _db.delete(TASK_TABLE_NAME, id);
         updateRelationships(api, { oldTask: task, newTask: null });
 
-        if (remoteDB) {
-          remoteDB.deleteTask({ id, recursive }).then(result => {
+        if (_remoteDB) {
+          _remoteDB.deleteTask({ id, recursive }).then(result => {
             if (result.isErr()) {
               console.error("Remote deleteTask failed, reverting local change", result.error);
-              db?.put(TASK_TABLE_NAME, task);
+              _db?.put(TASK_TABLE_NAME, task);
               updateRelationships(api, { oldTask: null, newTask: task });
             }
           });
@@ -240,13 +240,13 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   },
 
   deleteTasks: async function ({ deleteList }) {
-    assertDB(db);
+    assertDB(_db);
 
     if (deleteList.some(item => item.recursive)) {
       return err(new NotImplementedError("BrowserTaskStorage.deleteTasks with recursive = true"));
     }
 
-    const transaction = db.transaction(TASK_TABLE_NAME, 'readwrite');
+    const transaction = _db.transaction(TASK_TABLE_NAME, 'readwrite');
     const deletedTasks: TaskData[] = [];
 
     try {
@@ -262,11 +262,11 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
 
       await transaction.done;
 
-      if (remoteDB) {
-        remoteDB.deleteTasks({ deleteList }).then(result => {
+      if (_remoteDB) {
+        _remoteDB.deleteTasks({ deleteList }).then(result => {
           if (result.isErr()) {
             console.error("Remote deleteTasks failed, reverting local changes", result.error);
-            const tx = db!.transaction(TASK_TABLE_NAME, 'readwrite');
+            const tx = _db!.transaction(TASK_TABLE_NAME, 'readwrite');
             for (const task of deletedTasks) {
               tx.store.put(task);
               updateRelationships(api, { oldTask: null, newTask: task });
@@ -289,12 +289,12 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   },
 
   changeOwnership: async function ({ oldUserID, newUserID }) {
-    assertDB(db);
-    const originalTasks = await db.getAllFromIndex('tasks', 'by-user', oldUserID);
+    assertDB(_db);
+    const originalTasks = await _db.getAllFromIndex('tasks', 'by-user', oldUserID);
     const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
 
     for (const task of convertedTasks) {
-      await db!.put('tasks', task);
+      await _db!.put('tasks', task);
     }
 
     // TODO Queue remote update
@@ -359,8 +359,8 @@ const taskRelations: ITaskRelations = {
   },
 
   getRootTasks: async function () {
-    assertDB(db);
-    const allTasks = await db.getAll(TASK_TABLE_NAME);
+    assertDB(_db);
+    const allTasks = await _db.getAll(TASK_TABLE_NAME);
     const rootTasks = allTasks.filter(task => task.parents.length === 0);
     return ok(rootTasks.map(t => new Task(t)));
   }
@@ -369,14 +369,14 @@ const taskRelations: ITaskRelations = {
 
 const advancedFeatures: ITaskAdvancedFeatures = {
   getTodaysTasks: async function () {
-    assertDB(db);
-    const allTasks = await db.getAll(TASK_TABLE_NAME);
+    assertDB(_db);
+    const allTasks = await _db.getAll(TASK_TABLE_NAME);
     return ok(allTasks.filter(t => t.todays_task).map(t => new Task(t)));
   },
 
   getPrioritizedTasks: async function (limit: number) {
-    assertDB(db);
-    let taskArray: Task[] = (await db.getAll(TASK_TABLE_NAME)).map(t => new Task(t));
+    assertDB(_db);
+    let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME)).map(t => new Task(t));
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -434,8 +434,8 @@ const advancedFeatures: ITaskAdvancedFeatures = {
 
 const dataExporter: ITaskExporter = {
   exportData: async function ({ simplify }) {
-    assertDB(db);
-    const taskData = await db.getAll(TASK_TABLE_NAME);
+    assertDB(_db);
+    const taskData = await _db.getAll(TASK_TABLE_NAME);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
 
     // 1. Create a new zip
@@ -469,19 +469,19 @@ const dataExporter: ITaskExporter = {
 }
 
 
-let db: LocalDB | null;
-let remoteDB: ITaskAPI | null
+let _db: LocalDB | null;
+let _remoteDB: ITasks | null
 
-const api: ITaskAPI & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
+const api: ITasks & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
 const BrowserTaskProvider: ILocalTaskProvider = {
   /** @param remoteTasks The backend task provider that this provider wraps */
   get: async function (remoteTasks) {
-    db = await dbPromise;
-    remoteDB = remoteTasks ?? null;
-    
+    _db = await dbPromise;
+    _remoteDB = remoteTasks ?? null;
+
     if (remoteTasks) {
-      taskSyncQueue = new SyncQueue<Omit<ITaskAPI,
+      _taskSyncQueue = new SyncQueue<Omit<ITasks,
         | "getAllUserTasks"
         | "getChildrenOf"
         | "getParentsOf"
@@ -508,11 +508,11 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
     }
-    return [api, taskSyncQueue];
+    return { ...api, getSyncQueue: () => _taskSyncQueue };
   },
 }
 
-let taskSyncQueue: SyncQueue<Omit<ITaskAPI,
+let _taskSyncQueue: SyncQueue<Omit<ITasks,
   | "getAllUserTasks"
   | "getChildrenOf"
   | "getParentsOf"
@@ -575,8 +575,3 @@ function assertDB(db: LocalDB | null): asserts db is LocalDB {
 //     });
 // }
 //#endregion
-
-
-//TODO #if TEST
-export { db, /* updateIndexFromFile,  writeTaskToDB */ }
-//#endif

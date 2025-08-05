@@ -1,4 +1,4 @@
-import type { ILocalTaskProvider, ILocalTasks, ITaskAPI as ITaskAPI, TaskSyncQueue } from "../Tasks";
+import type { ILocalTaskProvider, ITasksLocal, ITasks as ITasks, TaskSyncQueue } from "../Tasks";
 import type { ArgumentError, InvalidStateError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import type { IProvider, Result } from "../types";
 import type { SyncQueue } from "../SyncQueue";
@@ -40,15 +40,12 @@ export enum AccountIssueTarget {
 
 export interface ILocalAuthProvider {
     get(): Promise<ILocalAuth>;
-    get(remoteAuth: IAuth, localTaskProvider: ILocalTasks): Promise<ILocalAuth>;
+    get(remoteAuth: IAuth, localTaskProvider: ITasksLocal): Promise<ILocalAuth>;
 }
 
-export type IAuthLocal = Omit<IAuth, "register"> & IAuthResponseHandler & {
-    /** Registers a remote user account, then migrates the local user's data to the remote provider */
-    register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+export type ILocalAuth = IAuthResponseHandler & Omit<IAuth, "register"> & IAuthLocalFunctions & {
     getSyncQueue: () => AuthSyncQueue | null;
-};
-export type ILocalAuth = IAuthLocal & IAuthLocalFunctions;
+}
 export type AuthSyncQueue = SyncQueue<Omit<IAuth,
     | "getActiveUser"
     | "getRegistrationRequirements"
@@ -95,4 +92,7 @@ export interface IAuthLocalFunctions {
     removeUser(userId: string): Promise<void>
     /** Sets the active user for this device */
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
+    /** Registers a remote user account, then migrates the local user's data to the remote provider */
+    register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
 }
+

@@ -2,7 +2,7 @@ import { Err, IOError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { err, ok } from "neverthrow";
 import type {
-  ITaskAPI,
+  ITasks,
   ITaskCore,
   ITaskExporter,
   ITaskAdvancedFeatures,
@@ -312,10 +312,10 @@ const advancedFeatures: ITaskAdvancedFeatures = {
   }
 }
 
-const api: ITaskAPI = { ...taskCRUD, ...taskRelations, ...advancedFeatures };
+const api: ITasks = { ...taskCRUD, ...taskRelations, ...advancedFeatures };
 
 /** No-op for Supabase */
-const SupabaseTaskProvider: IProvider<ITaskAPI> = {
+const SupabaseTaskProvider: IProvider<ITasks> = {
   get: async function () { return api; },
   close: async function () { }
 }

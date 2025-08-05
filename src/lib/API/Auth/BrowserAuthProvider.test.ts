@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, afterEach, beforeEach, it, test } from "vi
 import BrowserAuthProvider from './BrowserAuthProvider';
 import type { AuthSyncQueue, IAuth, IAuthLocalFunctions, ILocalAuth, SignInCredentials, LocalUser, User, UserData } from "./types";
 import { mock, type MockProxy } from 'vitest-mock-extended'
-import { type TaskSyncQueue, type ITaskAPI, type ILocalTasks, type ILocalTaskProvider, Task } from "../Tasks";
+import { type TaskSyncQueue, type ITasks, type ITasksLocal, type ILocalTaskProvider, Task } from "../Tasks";
 import { v4 } from "uuid";
 import { dbPromise, type LocalDB } from '../localDB';
 import { ArgumentError, ErrorType, NotImplementedError } from '$lib/Errors';
@@ -24,7 +24,7 @@ let localDB: LocalDB;
 let localAuth: ILocalAuth;
 let syncQueue: AuthSyncQueue | null;
 let mockRemoteAuth: MockProxy<IAuth>;
-let mockTasks: MockProxy<ILocalTasks>;
+let mockTasks: MockProxy<ITasksLocal>;
 let mockTasksSyncQueue: MockProxy<TaskSyncQueue>;
 
 let localUser1: LocalUser;
@@ -47,7 +47,7 @@ describe("IAuth", () => {
         localDB.clear('tasks');
 
         mockRemoteAuth = mock<IAuth>();
-        mockTasks = mock<ILocalTasks>();
+        mockTasks = mock<ITasksLocal>();
         mockTasksSyncQueue = mock<TaskSyncQueue>();
         mockTasks.getSyncQueue.mockReturnValue(mockTasksSyncQueue);
         // TODO We now need a way to mock the Browser task provider, since it's no longer dependency injected

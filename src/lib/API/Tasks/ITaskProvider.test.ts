@@ -1,18 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, test } from 'vitest';
 import { NotFoundError } from '$lib/Errors';
-import type { ITaskAPI } from './types';
+import type { ITasks } from './types';
 import { BrowserITaskProviderTest } from './BrowserTaskProvider.test';
 // import { NativeITaskProviderTest } from './NativeTaskProvider.test';
 // import { SupabaseITaskProviderTest } from './SupabaseTaskProvider.test';
 import { v4 } from 'uuid';
+import type { Task } from './Task';
 
 export interface TestIStorageImplementation {
     name: string,
-    getInstance: () => Promise<ITaskAPI>,
+    getInstance: () => Promise<ITasks>,
     // beforeall?: (implementation: T) => Promise<void>,
-    beforeeach?: (implementation: ITaskAPI) => Promise<void>,
-    aftereach?: (implementation: ITaskAPI) => Promise<void>,
-    afterall?: (implementation: ITaskAPI) => Promise<void>
+    beforeeach?: (implementation: ITasks) => Promise<void>,
+    aftereach?: (implementation: ITasks) => Promise<void>,
+    afterall?: (implementation: ITasks) => Promise<void>
 }
 
 const storageImplementations: TestIStorageImplementation[] = [
@@ -25,15 +26,15 @@ const storageImplementations: TestIStorageImplementation[] = [
 for (const { name, getInstance, ...vitefn } of storageImplementations) {
     describe(`${name} IStorage compliance`, () => {
         //#region Setup
-        let provider: ITaskAPI;
+        let provider: ITasks;
 
-        async function createSampleTask(title: string): Promise<string> {
+        async function createSampleTask(title: string): Promise<Task> {
             const createData = {
-                filepath: `${title}.md`,
+                user_id: "",
                 title,
                 content: 'Sample content',
             };
-            const createResult = await provider.createTask(createData);
+            const createResult = await provider.createTask({ createDetail: createData });
             expect(createResult).toBeOk();
             expect(typeof createResult._unsafeUnwrap()).toBe('string');
 
@@ -45,7 +46,7 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
             await vitefn.beforeeach?.(provider);
         });
 
-        afterEach(async () => { await vitefn.aftereach?.(provider); provider.close() });
+        afterEach(async () => { await vitefn.aftereach?.(provider); });
 
         afterAll(async () => { await vitefn.afterall?.(provider); });
         //#endregion
@@ -63,14 +64,13 @@ for (const { name, getInstance, ...vitefn } of storageImplementations) {
 
             // Create a task with the first task as a child and the second task as a parent
             const createData = {
-                filepath: 'Task with relationships.md',
                 title: 'Task with relationships',
                 content: 'Task that depends on Task 1 and blocks Task 2',
                 dependsOn: [task1Id],
                 parent: task2Id
             };
 
-            const createResult = await provider.createTask(createData);
+            const createResult = await provider.createTask({ createDetail: createData });
             expect(createResult).toBeOk();
             const task3Id = createResult._unsafeUnwrap();
 

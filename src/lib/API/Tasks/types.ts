@@ -21,12 +21,12 @@ export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed" | "
 
 
 export interface ILocalTaskProvider {
-  get(wrappedTasks?: ITaskAPI): Promise<ILocalTasks>;
+  get(wrappedTasks?: ITasks): Promise<ITasksLocal>;
 }
-export type ITaskAPI = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
+export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ITaskReverter = ITaskCoreResponseHandler
-export type ILocalTasks = ITaskAPI & ITaskExporter & { getSyncQueue: () => TaskSyncQueue | null };
-export type TaskSyncQueue = SyncQueue<Omit<ITaskAPI,
+export type ITasksLocal = ITasks & ITaskExporter & { getSyncQueue: () => TaskSyncQueue | null };
+export type TaskSyncQueue = SyncQueue<Omit<ITasks,
   | "getAllUserTasks"
   | "getChildrenOf"
   | "getParentsOf"

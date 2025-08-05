@@ -1,4 +1,4 @@
-import type { ITaskAPI } from '$lib/API/Tasks';
+import type { ITasks } from '$lib/API/Tasks';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 
@@ -82,7 +82,7 @@ class DevStore {
 	}
 
 	// Methods
-	async getTaskProviderOverride(defaultProvider: ITaskAPI): Promise<ITaskAPI> {
+	async getTaskProviderOverride(defaultProvider: ITasks): Promise<ITasks> {
 		if (this.devMode && this.taskProviderOverride !== 'none') {
 			console.log(`Overriding default task provider with ${this.taskProviderOverride}`);
 

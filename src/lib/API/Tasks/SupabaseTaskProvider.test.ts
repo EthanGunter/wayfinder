@@ -1,5 +1,5 @@
 import provider from './SupabaseTaskProvider';
-import type { ITaskAPI } from './types';
+import type { ITasks } from './types';
 import type { TestIStorageImplementation } from './ITaskProvider.test';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -8,7 +8,7 @@ export const SupabaseITaskProviderTest: TestIStorageImplementation = {
   getInstance: async () => {
     return await provider.init();
   },
-  afterall: async (provider: ITaskAPI) => {
+  afterall: async (provider: ITasks) => {
     // Clean up after tests
     const { client } = (provider as any as { client: SupabaseClient });
     await client.from(TASK_STORE_NAME).delete().not('id', 'is', null);

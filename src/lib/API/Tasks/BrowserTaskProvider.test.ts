@@ -1,73 +1,104 @@
 import 'fake-indexeddb/auto'
-import { describe, it, expect, beforeEach } from 'vitest';
-import provider, { db, updateIndexFromFile } from './BrowserTaskProvider';
-import { NotFoundError } from '$lib/Errors';
-import { TaskStatus, type TaskData } from './Task';
-import type { ITaskAPI } from './types';
-import type { TestIStorageImplementation } from './ITaskProvider.test';
+import { describe, it, beforeEach, beforeAll, assert } from 'vitest';
+import type { CreateTaskDTO, ITasks, ITasksLocal, TaskSyncQueue } from './types';
+import { APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
+import BrowserTaskProvider from './BrowserTaskProvider';
+import { mock, type MockProxy } from 'vitest-mock-extended';
+import type { LocalUser } from '../Auth/types';
 
-export const BrowserITaskProviderTest: TestIStorageImplementation = {
-  name: "Browser",
-  getInstance: async () => {
-    return await provider.init();
-  },
-  beforeeach: async (provider: ITaskAPI) => {
-    if (db) {
-      // Clear all stores before each test
-      await db.clear('files');
-      await db.clear('index');
-    } else throw new Error("DB not available to clear");
-  },
+
+//#region Setup
+
+let db: LocalDB;
+let mockRemoteTasks: MockProxy<ITasks>;
+let syncQueue: TaskSyncQueue | null;
+let tasks: ITasksLocal;
+
+const user1: LocalUser = {
+  id: "User1",
+  last_active: new Date(),
+}
+const user2: LocalUser = {
+  id: "User2",
+  last_active: new Date(),
 }
 
-function sampleTask(id: string): TaskData {
+function taskDetail(id?: string, userId?: string): CreateTaskDTO {
   return {
     id,
-    filepath: `${id}.md`,
-    title: `Task ${id}`,
-    content: 'Sample content',
-    created: new Date().toISOString(),
-    last_edit: new Date().toISOString(),
-    status: TaskStatus.incomplete
-  };
+    title: `${userId} - Test Task`,
+    user_id: userId ?? user1.id,
+  }
 }
 
-let _id = 0;
-const idnext = () => { _id++; return _id.toString(); }
+beforeAll(async () => {
+  db = await dbPromise;
+});
+beforeEach(async () => {
+  mockRemoteTasks = mock<ITasks>();
+  syncQueue = mock<TaskSyncQueue>();
+  tasks = await BrowserTaskProvider.get(mockRemoteTasks);
+  syncQueue = tasks.getSyncQueue();
+  assert(!!syncQueue);
 
-describe('Unit', () => {
-  let provider: ITaskAPI;
-
-  beforeEach(async () => {
-    if (db) {
-      // Clear all stores before each test
-      provider = await provider.init();
-      await db.clear('files');
-      await db.clear('index');
-    } else throw new Error("DB not available");
-  });
-
-  // TODO rather than checking that updateIndexFromFile works, we should be checking that the behavior is correct 
-  // (validating that both a file exists and the db has as task data in sync with the markdown)
-  it('should update index from file', async () => {
-    const task = sampleTask(idnext());
-    const createRes = await provider.createTask(task);
-    expect(createRes).toBeOk();
-    const id = createRes._unsafeUnwrap();
-
-    const result = await updateIndexFromFile(task.filepath);
-    expect(result).toBeOk();
-
-    // Optionally, check that the index store has the task
-    const indexed = await db!.get('index', id);
-    expect(indexed).toMatchObject(task);
-  });
-
-  it('should return NotFoundError if updateIndexFromFile is called on missing file', async () => {
-    const result = await updateIndexFromFile('missing');
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr()).toBeInstanceOf(NotFoundError);
-  });
+  if (db) {
+    // Clear all stores before each test
+    await db.clear(APP_TABLE_NAME);
+    await db.clear(TASK_TABLE_NAME);
+    await db.clear(AUTH_TABLE_NAME);
+  } else throw new Error("DB not available to clear");
 });
 
-// describe('Integration', () => { });
+//#endregion
+
+
+describe('ITaskCore', () => {
+  // describe('createTask', () => { });
+  describe('createTasks', () => { });
+  // describe('getTask', () => { });
+  describe('getTasks', () => { });
+  describe('getAllUserTasks', () => { });
+  // describe('updateTask', () => { });
+  describe('updateTasks', () => { });
+  // describe('deleteTask', () => { });
+  describe('deleteTasks', () => { });
+  describe('changeOwnership', () => { });
+});
+
+describe('ITaskRelations', () => {
+  describe('getChildrenOf', () => { });
+  describe('getParentsOf', () => { });
+  describe('getRootTasks', () => { });
+});
+
+describe('ITaskAdvancedFeatures', () => {
+  describe('getTodaysTasks', () => { });
+  describe('getPrioritizedTasks', () => { });
+  describe('searchTasks', () => { });
+});
+
+describe('ITaskExporter', () => {
+  describe('exportData', () => { });
+  describe('importData', () => { });
+});
+
+
+
+
+
+//#region legacy
+/* export const BrowserITaskProviderTest: TestIStorageImplementation = {
+  name: "Browser",
+  getInstance: async () => {
+    return await provider.get();
+  },
+  beforeeach: async (provider: ITasks) => {
+    if (db) {
+      // Clear all stores before each test
+      await db.clear(APP_TABLE_NAME);
+      await db.clear(TASK_TABLE_NAME);
+      await db.clear(AUTH_TABLE_NAME);
+    } else throw new Error("DB not available to clear");
+  },
+} */
+//#endregion
