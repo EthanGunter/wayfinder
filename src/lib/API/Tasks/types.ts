@@ -1,22 +1,10 @@
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
-import type { NotFoundError, Err } from "$lib/Errors";
+import type { NotFoundError, Err, ArgumentError } from "$lib/Errors";
 import type { Task, TaskData } from "./Task";
 import type { BatchResult, Result } from "../types";
 import { SyncQueue } from "../SyncQueue";
 
-// All fields in the Omit<> become optional
-export type CreateTaskDTO = Partial<TaskData> & Omit<TaskData,
-  | "id"
-  | "created"
-  | "last_edit"
-  | "todays_task"
-  | "status"
-  | "parents"
-  | "children"
-// | "filepath"
->
-export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed" | "equals">
 
 
 
@@ -47,9 +35,8 @@ export interface ITaskCore {
    * Creates a new task with the given data
    * @returns The new task's generated ID
    */
-  // TODO-test: sets up relationships if parent(s) or children are populated
-  createTask(params: { createDetail: CreateTaskDTO }): Promise<Result<Task>>;
-  createTasks(params: { createDetails: CreateTaskDTO[] }): Promise<BatchResult<Task>>;
+  createTask(params: { createDetail: CreateTaskParams }): Promise<Result<Task>>;
+  createTasks(params: { createDetails: CreateTaskParams[] }): Promise<BatchResult<Task, ArgumentError>>;
   /**
    * Fetches a task's data by its ID
    */
@@ -59,23 +46,20 @@ export interface ITaskCore {
   /**
    * @param task can be passed as an id
    */
-  updateTask(params: { taskOrId: string | Task, changes: Partial<Task> }): Promise<Result<Task>>;
-  updateTasks(params: { updateList: { taskOrId: string | Task, changes: Partial<Task> }[] }): Promise<BatchResult<Task>>;
+  updateTask(params: { update: UpdateTaskParams }): Promise<Result<Task>>;
+  updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task>>;
 
-  deleteTask(params: { id: string, recursive?: boolean }): Promise<Result<void>>;
-  deleteTasks(params: { deleteList: { id: string, recursive?: boolean }[] }): Promise<Result<void>>;
+  deleteTask(params: { deleteArg: DeleteTaskParams }): Promise<Result<void>>;
+  deleteTasks(params: { deleteArgs: DeleteTaskParams[] }): Promise<Result<void>>;
 
   changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<BatchResult<Task>>;
 }
 
 // TODO Singular api will likely just wrap multi api for convenience, no need for more handlers
 export interface ITaskCoreResponseHandler {
-  // handleCreateTaskResponse(response: Result<void,{ createdId: string }>): Promise<void>;
   handleCreateTasksResponse(response: Result<void, { createdIds: string[] }>): Promise<void>;
-  // handleUpdateTaskResponse(response: Result<void,{ task: string | Task, changes: Partial<Task> }>): Promise<void>;
-  handleUpdateTasksResponse(response: Result<void, { updateList: { task: string | Task, changes: Partial<Task> }[] }>): Promise<void>;
-  // handleDeleteTaskResponse(response: Result<void,{ id: string, recursive?: boolean }>): Promise<void>;
-  handleDeleteTasksResponse(response: Result<void, { deleteList: { id: string, recursive?: boolean }[] }>): Promise<void>;
+  handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[] }>): Promise<void>;
+  handleDeleteTasksResponse(response: Result<void, { oldState: Task[] }>): Promise<void>;
   handleChangeOwnershipResponse(response: Result<void, { oldUserID: string, newUserID: string }>): Promise<void>;
 }
 
@@ -112,3 +96,23 @@ export interface ITaskExporter {
   exportData(params: { simplify?: boolean }): Promise<void>;
   importData(params: { data: string }): Promise<number>;
 }
+
+
+// #region Shared function parameter types
+
+// All fields in the Omit<> become optional
+export type CreateTaskParams = Partial<TaskData> & Omit<TaskData,
+  | "id"
+  | "created"
+  | "last_edit"
+  | "todays_task"
+  | "status"
+  | "parents"
+  | "children"
+// | "filepath"
+>
+export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed" | "equals">
+export type UpdateTaskParams = { taskOrId: string | Task, changes: Partial<Task> };
+export type DeleteTaskParams = { taskOrId: string | Task, recursive?: boolean };
+
+//#endregion

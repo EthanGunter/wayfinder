@@ -7,12 +7,12 @@ import type {
   ITaskExporter,
   ITaskAdvancedFeatures,
   ITaskRelations,
-  CreateTaskDTO,
+  CreateTaskParams,
   PopulatedTaskDTO
 } from "./types";
 import { isTask, Task, TaskStatus, type TaskData } from "./Task";
 import supabase from "../SupabaseClient";
-import { updateRelationships } from ".";
+import { getRelationshipUpdates } from ".";
 import { TASK_TABLE_NAME } from "../localDB";
 import { extractBatch, extractBatchAndLogErrors, okBatch, type IProvider } from "../types";
 
@@ -26,7 +26,7 @@ const taskCRUD: ITaskCore = {
     if (error) return err(new IOError(`Failed to create ${createDetail.title}`, error, task));
 
     if (task.parents.length > 0 || task.children.length > 0) {
-      updateRelationships(api, { oldTask: null, newTask: new Task({ id: data.id, ...task }) });
+      getRelationshipUpdates(api, { oldTask: null, newTask: new Task({ id: data.id, ...task }) });
     }
 
     // Return the generated ID
@@ -41,7 +41,7 @@ const taskCRUD: ITaskCore = {
 
     const updatesWithRelations = data.filter(t => t.parents.length > 0 || t.children.length > 0);
 
-    updateRelationships(api, updatesWithRelations.map(task => ({ oldTask: null, newTask: new Task(task) })));
+    getRelationshipUpdates(api, updatesWithRelations.map(task => ({ oldTask: null, newTask: new Task(task) })));
 
     // Return the generated ID
     return okBatch(data.map(t => new Task(t)));
@@ -83,7 +83,7 @@ const taskCRUD: ITaskCore = {
       .single();
     if (error || !data) return err(new IOError(`Failed to update ${taskOrId.title}`, error, changes));
 
-    updateRelationships(api, { oldTask: taskOrId, newTask: new Task(data) });
+    getRelationshipUpdates(api, { oldTask: taskOrId, newTask: new Task(data) });
 
     return ok(new Task(data));
   },
@@ -137,7 +137,7 @@ const taskCRUD: ITaskCore = {
       newTask: updatedTasks[index]
     }));
 
-    await updateRelationships(api, relationshipUpdates);
+    await getRelationshipUpdates(api, relationshipUpdates);
 
     return okBatch(updatedTasks);
   },
@@ -152,7 +152,7 @@ const taskCRUD: ITaskCore = {
     if (deleteRes.error) return err(new IOError(`Failed to delete ${id}`, deleteRes.error));
     else if (deleteRes.count === 0) return err(new NotFoundError(id, 'task'));
 
-    updateRelationships(api, { oldTask: new Task(deleteRes.data), newTask: null });
+    getRelationshipUpdates(api, { oldTask: new Task(deleteRes.data), newTask: null });
 
     return ok();
   },
@@ -169,7 +169,7 @@ const taskCRUD: ITaskCore = {
     if (deleteRes.error) return err(new IOError(`Failed to delete ${deleteList.map(x => x.id).join(', ')}`, deleteRes.error));
     else if (deleteRes.count === 0) return err(new NotFoundError(deleteList.map(x => x.id).join(', '), 'task'));
 
-    updateRelationships(api, deleteRes.data.map(task => ({ oldTask: new Task(task), newTask: null })));
+    getRelationshipUpdates(api, deleteRes.data.map(task => ({ oldTask: new Task(task), newTask: null })));
 
     return ok();
   },
@@ -317,7 +317,7 @@ const api: ITasks = { ...taskCRUD, ...taskRelations, ...advancedFeatures };
 /** No-op for Supabase */
 const SupabaseTaskProvider: IProvider<ITasks> = {
   get: async function () { return api; },
-  close: async function () { }
+  // close: async function () { }
 }
 
 export default SupabaseTaskProvider;

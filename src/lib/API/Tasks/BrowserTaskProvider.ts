@@ -1,77 +1,42 @@
 import { type IDBPDatabase } from 'idb';
-import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider } from './types';
+import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type DeleteTaskParams } from './types';
 import { err, ok } from 'neverthrow';
-import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError } from '$lib/Errors';
+import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError } from '$lib/Errors';
 import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
-import { updateRelationships } from '.';
+import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
 import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
-import { extractBatchAndLogErrors, okBatch, type Result } from '../types';
+import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
+import { error } from '@sveltejs/kit';
 
-// TODO: Implement update queue system
-// TODO: Wrap the task API so we call local functions first, then the remote,
-// TODO: and handle rolling back local changes whenever the remote fails...
+
+//#region Task CRUD
 const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   /**
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   createTask: async function ({ createDetail: task }) {
-    assertDB(_db);
-    const preparedTask = new Task(task);
-    preparedTask.created = new Date().toISOString();
-    preparedTask.id = v4();
-
-    await _db.put(TASK_TABLE_NAME, preparedTask);
-    await updateRelationships(api, { oldTask: null, newTask: preparedTask });
-
-    return ok(new Task(preparedTask));
+    const [success, errors] = extractBatch(await this.createTasks({ createDetails: [task] }));
+    if (errors.length > 0) {
+      return err(errors[0]);
+    } else {
+      return ok(success[0]);
+    }
   },
 
   /**
   * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
   * @error {@link IOError} if the IndexedDB.put() attempt fails
   */
-  createTasks: async function ({ createDetails: tasks }) {
-    assertDB(_db);
-    const createdTasks: Result<Task, Err>[] = [];
-    const createdIds: string[] = [];
-    const transaction = _db.transaction(TASK_TABLE_NAME, 'readwrite');
-
-    for (const taskDTO of tasks) {
-      const preparedTask = new Task(taskDTO);
-      preparedTask.created = new Date().toISOString();
-      preparedTask.id = v4();
-
-      try {
-        await updateRelationships(api, { oldTask: null, newTask: preparedTask });
-
-        const createdId = await transaction.store.put(preparedTask);
-        createdTasks.push(ok(new Task(preparedTask)));
-        createdIds.push(createdId);
-      }
-      catch (e) {
-        createdTasks.push(err(Err.wrap(e as Error)));
-      }
-    }
-
-    await transaction.done;
-
-    _taskSyncQueue?.add(
-      "createTasks",
-      { createDetails: tasks },
-      "handleCreateTasksResponse",
-      { createdIds },
-    )
-    return ok(createdTasks);
-  },
+  createTasks: ({ createDetails }) => _createTasksLocal(createDetails),
   handleCreateTasksResponse: async function (response) {
     if (response.isErr()) {
       const { createdIds } = response.error;
+      await _deleteTasksLocal(createdIds.map(i => ({ taskOrId: i })), false);
     }
-    Err.throw(new NotImplementedError("BrowserTaskProvider.undoCreateTasks"));
   },
 
   /**
@@ -80,24 +45,12 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   getTask: async function ({ id }) {
-    assertDB(_db);
-    // if (key.endsWith(".md")) {
-    //   // Filepath
-    //   // Get the .md file content
-    //   const file = await db.get('files', key);
-    //   if (!file) {
-    //     return err(new NotFoundError(key, 'Task File').withTrace(1));
-    //   }
-    //   // Parse and return
-    //   return Task.fromMarkdown(file.content, key);
-    // } else {
-    // Task ID
-    const task = await _db.get(TASK_TABLE_NAME, id);
-    if (!task) {
-      return err(new NotFoundError(id, 'Task').withTrace(1));
+    const [success, errors] = extractBatch(await this.getTasks({ ids: [id] }));
+    if (errors.length > 0) {
+      return err(errors[0]);
+    } else {
+      return ok(success[0]);
     }
-    return ok(new Task(task));
-    // }
   },
 
   getTasks: async function ({ ids }) {
@@ -115,11 +68,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
         }
       }
 
-      if (notFoundIds.length > 0) {
-        return err(new NotFoundError(notFoundIds.join(', '), TASK_TABLE_NAME).withTrace(1));
-      }
-
-      return okBatch(tasks);
+      return okBatch(tasks, notFoundIds.map(e => new NotFoundError(e, TASK_TABLE_NAME)));
     } catch (e) {
       return err(new IOError("Batch read", ids.join(', '), e));
     }
@@ -137,73 +86,22 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link IOError} if IndexedDB.put() fails
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  updateTask: async function ({ taskOrId, changes }) {
-    assertDB(_db);
-    let task: Task;
-    if (typeof taskOrId == 'string') {
-      const taskResponse = await _db.get(TASK_TABLE_NAME, taskOrId);
-      if (!taskResponse) return err(new NotFoundError("Task not found for update", taskOrId));
-      task = new Task(taskResponse);
+  updateTask: async function ({ update }) {
+    const [success, errors] = extractBatch(await this.updateTasks({ updates: [update] }));
+    if (errors.length > 0) {
+      return err(errors[0]);
     } else {
-      task = taskOrId;
-    }
-
-    const updated: Task = new Task({ ...task, ...changes, last_edit: new Date().toISOString() });
-
-    await _db.put(TASK_TABLE_NAME, updated);
-    updateRelationships(api, { oldTask: task, newTask: updated });
-
-    // TODO Queue remote updateTask
-
-    return ok(updated);
-  },
-
-  updateTasks: async function ({ updateList }) {
-    assertDB(_db);
-    const updatedTasks: Task[] = [];
-    const originalTasks: Task[] = [];
-    const transaction = _db.transaction(TASK_TABLE_NAME, 'readwrite');
-
-    try {
-      for (const { taskOrId, changes: updates } of updateList) {
-        let task: Task;
-        if (typeof taskOrId === 'string') {
-          const taskResult = await taskCRUD.getTask({ id: taskOrId });
-          if (taskResult.isErr()) {
-            return err(taskResult.error);
-          }
-          task = taskResult.value;
-        } else {
-          task = taskOrId;
-        }
-        originalTasks.push(new Task(task));
-
-        const updated: Task = new Task({
-          ...task,
-          ...updates,
-          last_edit: new Date().toISOString()
-        });
-
-        updateRelationships(api, { oldTask: task, newTask: updated });
-
-        await transaction.store.put(updated);
-        updatedTasks.push(updated);
-      }
-
-      await transaction.done;
-
-      // TODO Queue remote update
-
-      return okBatch(updatedTasks);
-    } catch (e) {
-      return err(new IOError("Batch update", "multiple tasks", e));
+      return ok(success[0]);
     }
   },
+
+  updateTasks: ({ updates }) => _updateTasksLocal(updates),
   handleUpdateTasksResponse: async function (response) {
     if (response.isErr()) {
-      const { updateList } = response.error;
+      assertDB(_db);
+      const { oldState } = response.error;
+      await _updateTasksLocal(oldState.map(t => ({ taskOrId: t.updatedId, changes: t.task })), false);
     }
-    Err.throw(new NotImplementedError("BrowserTaskProvider.handleUpdateTasksResponse"))
   },
 
   /**
@@ -211,101 +109,164 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @param recursive NOT IMPLEMENTED
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  deleteTask: async function ({ id, recursive }) {
-    assertDB(_db);
-    if (recursive) Err.throw(new NotImplementedError("BrowserTaskStorage.deleteTask(recursive = true)"));
-
-    const task = await _db.get(TASK_TABLE_NAME, id);
-
-    if (task) {
-      try {
-        await _db.delete(TASK_TABLE_NAME, id);
-        updateRelationships(api, { oldTask: task, newTask: null });
-
-        if (_remoteDB) {
-          _remoteDB.deleteTask({ id, recursive }).then(result => {
-            if (result.isErr()) {
-              console.error("Remote deleteTask failed, reverting local change", result.error);
-              _db?.put(TASK_TABLE_NAME, task);
-              updateRelationships(api, { oldTask: null, newTask: task });
-            }
-          });
-        }
-        return ok();
-      } catch (e) {
-        Err.throw(new IOError("Delete", id, e));
-      }
-    }
-    else return err(new NotImplementedError("BrowserTaskStorage.deleteTask where !task.filepath"));
+  deleteTask: async function ({ deleteArg }) {
+    return await this.deleteTasks({ deleteArgs: [deleteArg] });
   },
 
-  deleteTasks: async function ({ deleteList }) {
-    assertDB(_db);
-
-    if (deleteList.some(item => item.recursive)) {
-      return err(new NotImplementedError("BrowserTaskStorage.deleteTasks with recursive = true"));
-    }
-
-    const transaction = _db.transaction(TASK_TABLE_NAME, 'readwrite');
-    const deletedTasks: TaskData[] = [];
-
-    try {
-      for (const { id } of deleteList) {
-        const task = await transaction.store.get(id);
-
-        if (task) {
-          deletedTasks.push(task);
-          await transaction.store.delete(id);
-          updateRelationships(api, { oldTask: task, newTask: null });
-        }
-      }
-
-      await transaction.done;
-
-      if (_remoteDB) {
-        _remoteDB.deleteTasks({ deleteList }).then(result => {
-          if (result.isErr()) {
-            console.error("Remote deleteTasks failed, reverting local changes", result.error);
-            const tx = _db!.transaction(TASK_TABLE_NAME, 'readwrite');
-            for (const task of deletedTasks) {
-              tx.store.put(task);
-              updateRelationships(api, { oldTask: null, newTask: task });
-            }
-            tx.done;
-          }
-        });
-      }
-
-      return ok();
-    } catch (e) {
-      return err(new IOError("Batch delete", deleteList.map(item => item.id).join(', '), e));
-    }
-  },
+  deleteTasks: ({ deleteArgs }) => _deleteTasksLocal(deleteArgs),
   handleDeleteTasksResponse: async function (response) {
     if (response.isErr()) {
-      const { deleteList } = response.error;
+      assertDB(_db);
+      const { oldState } = response.error;
+      await _createTasksLocal(oldState, false);
     }
-    Err.throw(new NotImplementedError("BrowserTaskProvider.handleDeleteTasksResponse"))
   },
 
-  changeOwnership: async function ({ oldUserID, newUserID }) {
-    assertDB(_db);
-    const originalTasks = await _db.getAllFromIndex('tasks', 'by-user', oldUserID);
-    const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
-
-    for (const task of convertedTasks) {
-      await _db!.put('tasks', task);
-    }
-
-    // TODO Queue remote update
-
-    return okBatch(convertedTasks);
-  },
+  changeOwnership: ({ oldUserID, newUserID }) => _changeOwnershipLocal(oldUserID, newUserID),
   handleChangeOwnershipResponse: async function (response) {
-    const params = response;
-    Err.throw(new NotImplementedError("BrowserTaskProvider.handleChangeOwnershipResponse"))
+    if (response.isErr()) {
+      assertDB(_db);
+      const { oldUserID, newUserID } = response.error;
+      await _changeOwnershipLocal(newUserID, oldUserID, false);
+    }
   },
 }
+async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolean = true) {
+  if (tasks.length === 0) return okBatch([], []);
+
+  assertDB(_db);
+  const createdTasks: Task[] = [];
+  const errors: ArgumentError[] = [];
+
+  for (const taskDTO of tasks) {
+    if (taskDTO.id) {
+      const result = await taskCRUD.getTask({ id: taskDTO.id });
+      if (result.isOk()) {
+        errors.push(new ArgumentError(taskDTO, `Attempted to create a task with an id that already exists. Use update if you wish to overwrite.`));
+        continue;
+      }
+    }
+
+    const preparedTask = new Task(taskDTO);
+    preparedTask.created = new Date().toISOString();
+    if (!taskDTO.id) {
+      preparedTask.id = v4();
+    }
+
+    await _db.put(TASK_TABLE_NAME, preparedTask);
+
+    createdTasks.push(preparedTask);
+  }
+
+  const relUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
+  await _updateTasksLocal(relUpdates, false); // Relationship updates should be handled by the server
+
+  if (updateServer) {
+    _taskSyncQueue?.add(
+      "createTasks",
+      { createDetails: tasks },
+      "handleCreateTasksResponse",
+      { createdIds: createdTasks.map(t => t.id) },
+    );
+  }
+
+  return okBatch(createdTasks, errors);
+};
+async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: boolean = true) {
+  if (updates.length === 0) return okBatch([], []);
+
+  assertDB(_db);
+  const updatedTasks: Map<Task, Task> = new Map();
+  const errors: Err[] = [];
+
+  for (const { taskOrId, changes: changes } of updates) {
+    // const result = await api.updateTask({ taskOrId, changes: updates });
+    const [task, error] = await getTaskOrID(taskOrId);
+    if (error) { errors.push(error); continue; }
+    const updated: Task = new Task({ ...task, ...changes, last_edit: new Date().toISOString() });
+
+    await _db.put(TASK_TABLE_NAME, updated);
+
+    // We can use the updates id since id can't be changed via update
+    updatedTasks.set(task, updated);
+  }
+
+  const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
+  await _updateTasksLocal(relUpdates, false);
+
+  if (updateServer) {
+    // Queue sync command
+    _taskSyncQueue!.add(
+      "updateTasks",
+      { updates },
+      'handleUpdateTasksResponse',
+      { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) }
+    );
+  }
+
+  return okBatch(updatedTasks.values().toArray(), errors);
+};
+async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: boolean = true) {
+  if (deleteArgs.length === 0) return ok();
+
+  assertDB(_db);
+  
+  const deletedTasks: Task[] = [];
+  const errors: NotFoundError[] = [];
+  for (const { taskOrId, recursive } of deleteArgs) {
+
+    const [task, error] = await getTaskOrID(taskOrId);
+    if (error) {
+      errors.push(error);
+      continue;
+    }
+
+    if (recursive && task.children.length > 0) {
+      // TODO:handle-error
+      const result = await _deleteTasksLocal(task.children.map(c => ({ taskOrId: c, recursive })));
+    }
+
+    deletedTasks.push(task);
+    await _db.delete(TASK_TABLE_NAME, task.id);
+    const relUpdates = await getRelationshipUpdates(api, { oldTask: task, newTask: null });
+    await _updateTasksLocal(relUpdates, false);
+  }
+
+  if (updateServer) {
+    // Queue Sync command
+    _taskSyncQueue!.add(
+      'deleteTasks',
+      { deleteArgs },
+      'handleDeleteTasksResponse',
+      { oldState: deletedTasks }
+    );
+  }
+  if (errors.length > 0) {
+    return err(new IOError("Batch delete", errors));
+  }
+  return ok();
+};
+async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updateServer: boolean = true): Promise<BatchResult<Task>> {
+  assertDB(_db);
+  const originalTasks = await _db.getAllFromIndex('tasks', 'by-user', oldUserID);
+  const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
+
+  for (const task of convertedTasks) {
+    await _db!.put('tasks', task);
+  }
+
+  if (updateServer) {
+    _taskSyncQueue!.add(
+      'changeOwnership',
+      { oldUserID, newUserID },
+      'handleChangeOwnershipResponse',
+      { oldUserID, newUserID },
+    );
+  }
+
+  return okBatch(convertedTasks);
+}
+//#endregion
 
 const taskRelations: ITaskRelations = {
   getChildrenOf: async function ({ taskOrId }) {
@@ -365,7 +326,6 @@ const taskRelations: ITaskRelations = {
     return ok(rootTasks.map(t => new Task(t)));
   }
 }
-
 
 const advancedFeatures: ITaskAdvancedFeatures = {
   getTodaysTasks: async function () {
@@ -463,6 +423,7 @@ const dataExporter: ITaskExporter = {
       URL.revokeObjectURL(url);
     });
   },
+
   importData: function ({ data }) {
     Err.throw(new NotImplementedError('BrowserTaskProvider.importData'));
   }
@@ -470,7 +431,6 @@ const dataExporter: ITaskExporter = {
 
 
 let _db: LocalDB | null;
-let _remoteDB: ITasks | null
 
 const api: ITasks & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
@@ -478,7 +438,6 @@ const BrowserTaskProvider: ILocalTaskProvider = {
   /** @param remoteTasks The backend task provider that this provider wraps */
   get: async function (remoteTasks) {
     _db = await dbPromise;
-    _remoteDB = remoteTasks ?? null;
 
     if (remoteTasks) {
       _taskSyncQueue = new SyncQueue<Omit<ITasks,
@@ -495,15 +454,12 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         changeOwnership: remoteTasks.changeOwnership,
         handleChangeOwnershipResponse: taskCRUD.handleChangeOwnershipResponse,
         createTask: remoteTasks.createTask,
-        // handleCreateTaskResponse: taskCRUD.handleCreateTaskResponse,
         createTasks: remoteTasks.createTasks,
         handleCreateTasksResponse: taskCRUD.handleCreateTasksResponse,
         deleteTask: remoteTasks.deleteTask,
-        // handleDeleteTaskResponse: taskCRUD.handleDeleteTaskResponse,
         deleteTasks: remoteTasks.deleteTasks,
         handleDeleteTasksResponse: taskCRUD.handleDeleteTasksResponse,
         updateTask: remoteTasks.updateTask,
-        // handleUpdateTaskResponse: taskCRUD.handleUpdateTaskResponse,
         updateTasks: remoteTasks.updateTasks,
         handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
@@ -530,6 +486,21 @@ export default BrowserTaskProvider;
 
 function assertDB(db: LocalDB | null): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()"));
+}
+
+async function getTaskOrID(taskOrId: Task | string): Promise<[Task, null] | [null, NotFoundError]> {
+  assertDB(_db);
+
+  if (typeof taskOrId == 'string') {
+    const taskResponse = await _db.get(TASK_TABLE_NAME, taskOrId);
+    if (!taskResponse) {
+      return [null, new NotFoundError("Task not found for update", taskOrId)];
+    }
+
+    return [new Task(taskResponse), null];
+  } else {
+    return [taskOrId, null];
+  }
 }
 
 /** This function manages writing the markdown file, then updating the index */

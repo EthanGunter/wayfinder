@@ -1,6 +1,6 @@
 import { err, ok } from "neverthrow";
 import type { Result } from "./types";
-import type { Err } from "$lib/Errors";
+import { Err } from "$lib/Errors";
 
 type FunctionMap<T> = {
     [K in keyof T]: T[K] extends (...args: any[]) => any
@@ -41,7 +41,10 @@ export class SyncQueue<RemoteT, CallbackT> {
     async process() {
         for (const entry of [...this.queue]) {
             try {
-                const result = await (this.fnMap[entry.fnName])(entry.args);
+                const fn = this.fnMap[entry.fnName];
+                if (!fn) Err.throw(`${entry.fnName.toString()} not found in syncQueue`);
+                const result = await fn(entry.args);
+                if (!result) Err.throw(`${entry.fnName.toString()} returned an undefined result`)
 
                 if (result.isErr()) {
                     await (this.fnMap[entry.handlerFnName] as any)(err(entry.revertArgs));

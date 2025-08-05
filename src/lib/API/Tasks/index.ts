@@ -1,7 +1,8 @@
 // Supabase's RLS handles this: TODO Task API's need to take auth into consideration
+import { Err } from '$lib/Errors';
 import { extractBatchAndLogErrors } from '../types';
 import { Task, type TaskData } from './Task';
-import type { ITasks } from './types';
+import type { ITasks, UpdateTaskParams } from './types';
 
 export * from './types';
 export * from './Task'
@@ -11,7 +12,7 @@ export interface RelationshipUpdate {
     newTask: TaskData | null;
 }
 
-export async function updateRelationships(provider: ITasks, updates: RelationshipUpdate | RelationshipUpdate[]) {
+export async function getRelationshipUpdates(provider: ITasks, updates: RelationshipUpdate | RelationshipUpdate[]): Promise<UpdateTaskParams[]> {
     // Normalize to array for consistent handling
     const updateArray = Array.isArray(updates) ? updates : [updates];
 
@@ -63,12 +64,13 @@ export async function updateRelationships(provider: ITasks, updates: Relationshi
     }
 
     // Execute all updates in batches
-    await Promise.all([
-        processParentAdditions(provider, parentAdditions),
+    const relationUpdates = await Promise.all([
+        getParentUpdates(provider, parentAdditions),
         processParentRemovals(provider, parentRemovals),
         processChildAdditions(provider, childAdditions),
         processChildRemovals(provider, childRemovals)
     ]);
+    return relationUpdates.flat();
 }
 
 // Helper functions to collect changes
@@ -101,58 +103,47 @@ function collectChildRemovals(map: Map<string, Set<string>>, childId: string, pa
 }
 
 // Process batch updates
-async function processParentAdditions(provider: ITasks, parentAdditions: Map<string, Set<string>>) {
-    if (parentAdditions.size === 0) return;
+async function getParentUpdates(provider: ITasks, parentAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+    if (parentAdditions.size === 0) return [];
 
     // Get all child IDs that need updating
     const allChildIds = Array.from(parentAdditions.values()).flatMap(set => Array.from(set));
     const uniqueChildIds = [...new Set(allChildIds)];
 
     const childrenResult = await provider.getTasks({ ids: uniqueChildIds });
-    await childrenResult.match(
-        async (childResults) => {
-            const children = extractBatchAndLogErrors(childResults);
+    const children = extractBatchAndLogErrors(childrenResult);
 
-            const updates = children.flatMap(child => {
-                // Find all parents that should be added to this child
-                const parentsToAdd: string[] = [];
-                parentAdditions.forEach((childIds, parentId) => {
-                    if (childIds.has(child.id) && !child.parents.includes(parentId)) {
-                        parentsToAdd.push(parentId);
-                    }
-                });
-
-                if (parentsToAdd.length > 0) {
-                    return {
-                        taskOrId: child,
-                        changes: { parents: [...child.parents, ...parentsToAdd] }
-                    };
-                }
-                return [];
-            });
-
-            if (updates.length > 0) {
-                const result = await provider.updateTasks({ updateList: updates });
-                if (result.isErr()) {
-                    result.error.logError();
-                }
+    const updates = children.flatMap(child => {
+        // Find all parents that should be added to this child
+        const parentsToAdd: string[] = [];
+        parentAdditions.forEach((childIds, parentId) => {
+            if (childIds.has(child.id) && !child.parents.includes(parentId)) {
+                parentsToAdd.push(parentId);
             }
-        },
-        (err) => {
-            err.logError();
+        });
+
+        if (parentsToAdd.length > 0) {
+            return {
+                taskOrId: child,
+                changes: { parents: [...child.parents, ...parentsToAdd] }
+            };
         }
-    );
+        return [];
+    });
+
+    return updates;
+
 }
 
-async function processParentRemovals(provider: ITasks, parentRemovals: Map<string, Set<string>>) {
-    if (parentRemovals.size === 0) return;
+async function processParentRemovals(provider: ITasks, parentRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+    if (parentRemovals.size === 0) return [];
 
     // Get all child IDs that need updating
     const allChildIds = Array.from(parentRemovals.values()).flatMap(set => Array.from(set));
     const uniqueChildIds = [...new Set(allChildIds)];
 
     const childrenResult = await provider.getTasks({ ids: uniqueChildIds });
-    await childrenResult.match(
+    return await childrenResult.match(
         async (childResults) => {
             const children = extractBatchAndLogErrors(childResults);
 
@@ -174,28 +165,24 @@ async function processParentRemovals(provider: ITasks, parentRemovals: Map<strin
                 return [];
             });
 
-            if (updates.length > 0) {
-                const result = await provider.updateTasks({ updateList: updates });
-                if (result.isErr()) {
-                    result.error.logError();
-                }
-            }
+            // TODO Return as collection
+            return updates;
         },
         (err) => {
-            err.logError();
+            Err.DEV(err);
         }
     );
 }
 
-async function processChildAdditions(provider: ITasks, childAdditions: Map<string, Set<string>>) {
-    if (childAdditions.size === 0) return;
+async function processChildAdditions(provider: ITasks, childAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+    if (childAdditions.size === 0) return [];
 
     // Get all parent IDs that need updating
     const allParentIds = Array.from(childAdditions.values()).flatMap(set => Array.from(set));
     const uniqueParentIds = [...new Set(allParentIds)];
 
     const parentsResult = await provider.getTasks({ ids: uniqueParentIds });
-    await parentsResult.match(
+    return await parentsResult.match(
         async (parentResults) => {
             const parents = extractBatchAndLogErrors(parentResults);
             const updates = parents.flatMap(parent => {
@@ -216,28 +203,23 @@ async function processChildAdditions(provider: ITasks, childAdditions: Map<strin
                 return [];
             });
 
-            if (updates.length > 0) {
-                const result = await provider.updateTasks({ updateList: updates });
-                if (result.isErr()) {
-                    result.error.logError();
-                }
-            }
+            return updates;
         },
         (err) => {
-            err.logError();
+            Err.DEV(err);
         }
     );
 }
 
-async function processChildRemovals(provider: ITasks, childRemovals: Map<string, Set<string>>) {
-    if (childRemovals.size === 0) return;
+async function processChildRemovals(provider: ITasks, childRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+    if (childRemovals.size === 0) return [];
 
     // Get all parent IDs that need updating
     const allParentIds = Array.from(childRemovals.values()).flatMap(set => Array.from(set));
     const uniqueParentIds = [...new Set(allParentIds)];
 
     const parentsResult = await provider.getTasks({ ids: uniqueParentIds });
-    await parentsResult.match(
+    return await parentsResult.match(
         async (parentResults) => {
             const parents = extractBatchAndLogErrors(parentResults);
             const updates = parents.flatMap(parent => {
@@ -258,15 +240,10 @@ async function processChildRemovals(provider: ITasks, childRemovals: Map<string,
                 return [];
             });
 
-            if (updates.length > 0) {
-                const result = await provider.updateTasks({ updateList: updates });
-                if (result.isErr()) {
-                    result.error.logError();
-                }
-            }
+            return updates;
         },
         (err) => {
-            err.logError();
+            Err.DEV(err);
         }
     );
 }

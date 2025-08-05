@@ -30,7 +30,7 @@ export class Err {
     static throw(error: Err | any): never {
         // TODO link to bug report system. Unhandled errors shouldn't happen
         if (!(error instanceof Err)) {
-            error = new Err(1, "Unknown", "error occured", error);
+            error = new Err(1, "Unknown", "", error);
         }
         error.inheritanceDepth++;
         error.withTrace();
@@ -146,11 +146,19 @@ export class ParseError extends Err {
 
 export class IOError extends Err {
     constructor(message: string, internalError: any, context?: any) {
+        let internal;
+        if (typeof internalError === "string") {
+            internal = internalError;
+        } else if (internalError instanceof Error) {
+            internal = internalError.message;
+        } else {
+            internal = JSON.stringify(internalError);
+        }
         super(
             1,
             ErrorType.IOError,
             message,
-            { internalError, dataToWrite: context }
+            { internalError: internal, dataToWrite: context }
         );
     }
 }

@@ -1,7 +1,7 @@
 import { ParseError } from "$lib/Errors";
 import { err, ok } from "neverthrow";
 import yaml from 'js-yaml'
-import type { CreateTaskDTO, PopulatedTaskDTO } from "./types";
+import type { CreateTaskParams, PopulatedTaskDTO } from "./types";
 import type { Result } from "../types";
 
 export interface TaskData {
@@ -74,7 +74,7 @@ export class Task implements TaskData {
         last_edit: last_edit = new Date().toISOString(),
         parents = [],
         children = []
-    }: CreateTaskDTO) {
+    }: CreateTaskParams) {
         this.id = id ?? "NO-ID";
         this.user_id = user_id;
         this.title = title;
@@ -102,7 +102,7 @@ export class Task implements TaskData {
         // && this.last_edit === o.last_edit // This might cause change between checks on server and local
     }
 
-    static populateDTO(dto: CreateTaskDTO): PopulatedTaskDTO {
+    static populateDTO(dto: CreateTaskParams): PopulatedTaskDTO {
         return {
             id: dto.id,
             user_id: dto.user_id,
