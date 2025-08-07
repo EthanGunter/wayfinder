@@ -1,4 +1,4 @@
-import { Toast } from "@capacitor/toast";
+/* import { Toast } from "@capacitor/toast";
 import { LocalNotifications, ScheduleOptions } from "@capacitor/local-notifications"
 
 export const DEVELOPMENT = import.meta.env.MODE === "development";
@@ -48,3 +48,4 @@ export async function errorNotification(error: any) {
         LocalNotifications.schedule(options);
     }
 }
+ */

@@ -21,19 +21,13 @@ export const load: LayoutLoad = async ({ parent, url }) => {
         if (anonRes.isOk()) {
             activeUser = anonRes.value;
         } else {
-            Err.throw(anonRes.error)
+            throw redirect(302, `/login?redirectTo=${page.url}`);
         }
     }
 
     let user: LocalUser;
     let auth: ILocalAuth;
     let tasks: ITasks;
-
-    if (!activeUser) {
-        // TODO Capture url and reroute to login page
-
-        throw redirect(302, `/login?redirectTo=${page.url}`);
-    }
 
     if (activeUser.last_synced) {
         // User is synced with remote

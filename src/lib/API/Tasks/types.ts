@@ -46,10 +46,10 @@ export interface ITaskCore {
   /**
    * @param task can be passed as an id
    */
-  updateTask(params: { update: UpdateTaskParams }): Promise<Result<Task>>;
+  updateTask(params: UpdateTaskParams): Promise<Result<Task>>;
   updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task>>;
 
-  deleteTask(params: { deleteArg: DeleteTaskParams }): Promise<Result<void>>;
+  deleteTask(params: DeleteTaskParams): Promise<Result<void>>;
   deleteTasks(params: { deleteArgs: DeleteTaskParams[] }): Promise<Result<void>>;
 
   changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<BatchResult<Task>>;

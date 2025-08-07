@@ -64,6 +64,10 @@ export interface IAuth {
     logout(): Promise<Result<void>>,
 }
 
+export interface IAuthAPI extends IAuth {
+    // Additional methods specific to the API implementation
+}
+
 // Result<SuccessData, FailureData>
 export interface IAuthResponseHandler {
     // handleRegisterResponse(response: Result<{ oldUser: StoredUser, registeredUser: User }, { creds: SignInCredentials, lastLoggedIn: string | undefined, oldUser: StoredUser }>): Promise<void>,
@@ -94,5 +98,7 @@ export interface IAuthLocalFunctions {
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
     /** Registers a remote user account, then migrates the local user's data to the remote provider */
     register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+    /** Migrates a registered user from local to remote */
+    migrateRegisteredUser(params: { registeredUser: LocalUser, signUpCred: SignInCredentials }): Promise<Result<User, NotImplementedError | ArgumentError>>,
 }
 

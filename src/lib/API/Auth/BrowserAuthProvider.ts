@@ -1,11 +1,12 @@
 import { v4 } from 'uuid';
 import type { IAuth, IAuthLocalFunctions, LocalUser, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue, ILocalAuth } from './types';
 import type { ILocalTaskProvider, ITasksLocal, ITasks, TaskSyncQueue } from '../Tasks';
-import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME as USER_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
+import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, ErrorType, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
 import { SyncQueue } from '../SyncQueue';
 import { extractBatch, extractBatchAndLogErrors, type IProvider } from '../types';
+import { AUTH_TABLE_NAME } from '../SupabaseClient';
 
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
 
@@ -13,7 +14,7 @@ const local: IAuthLocalFunctions = {
   createUser: async function ({ user }) {
     assertDB(db);
 
-    await db.put(USER_TABLE_NAME, user);
+    await db.put(AUTH_TABLE_NAME, user);
     return ok(user);
   },
 
@@ -41,8 +42,8 @@ const local: IAuthLocalFunctions = {
     const registeredUser = registerResult.value;
 
     // Update the local user with registered user data
-    await db.delete(USER_TABLE_NAME, userData.id);
-    await db.put(USER_TABLE_NAME, { ...registeredUser, last_synced: new Date(), last_active: new Date() });
+    await db.delete(AUTH_TABLE_NAME, userData.id);
+    await db.put(AUTH_TABLE_NAME, { ...registeredUser, last_synced: new Date(), last_active: new Date() });
 
     // Update all task ids with new registered user id
     // TODO:Design This will probably queue an update with the server...
@@ -67,12 +68,12 @@ const local: IAuthLocalFunctions = {
   removeUser: async function (userId) {
     assertDB(db);
 
-    await db.delete(USER_TABLE_NAME, userId);
+    await db.delete(AUTH_TABLE_NAME, userId);
   },
 
   listUsers: async function () {
     assertDB(db);
-    const users = await db.getAll(USER_TABLE_NAME);
+    const users = await db.getAll(AUTH_TABLE_NAME);
     return users;
   },
 
@@ -84,11 +85,11 @@ const local: IAuthLocalFunctions = {
 
     assertDB(db);
     // Update last active time
-    const user = await db.get(USER_TABLE_NAME, newUserId);
+    const user = await db.get(AUTH_TABLE_NAME, newUserId);
     if (user) {
       await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
       user.last_active = new Date();
-      await db.put(USER_TABLE_NAME, user);
+      await db.put(AUTH_TABLE_NAME, user);
       return ok(user);
     } else {
       return err(new NotFoundError(newUserId, "User"));
@@ -97,7 +98,7 @@ const local: IAuthLocalFunctions = {
 
   getDefaultUser: async function () {
     assertDB(db);
-    const users = await db.getAll(USER_TABLE_NAME);
+    const users = await db.getAll(AUTH_TABLE_NAME);
     if (users.length === 0) {
       // Only create the anonymous user the first time
       const newAnon: LocalUser = {
@@ -107,7 +108,7 @@ const local: IAuthLocalFunctions = {
         auth_provider: 'local',
       };
 
-      await db.put(USER_TABLE_NAME, newAnon);
+      await db.put(AUTH_TABLE_NAME, newAnon);
       return ok(newAnon);
     } else if (users.length === 1) {
       const anon = users[0];
@@ -121,9 +122,45 @@ const local: IAuthLocalFunctions = {
     assertDB(db);
     const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     if (activeId) {
-      const user = await db.get(USER_TABLE_NAME, activeId);
+      const user = await db.get(AUTH_TABLE_NAME, activeId);
       return user ?? null;
     } else return null;
+  },
+
+  migrateRegisteredUser: async function ({ registeredUser, signUpCred }) {
+    // This method is similar to register but for already registered users
+    if (registeredUser.last_synced) {
+      return err(new InvalidStateError("Attempted to migrate a user that is already synced with a server", registeredUser))
+    }
+
+    const reqsResult = auth.getRegistrationRequirements(signUpCred);
+    if (reqsResult.isErr()) {
+      return err(reqsResult.error);
+    } else if (reqsResult.value.length > 0) {
+      return err(new ArgumentError(signUpCred, `Migration credentials had errors. Make sure to call getRegistrationRequirements() before migrateRegisteredUser()`));
+    }
+
+    assertDB(db);
+    assertRemoteAuth(_remoteAuth, `Cannot migrate without remote auth provider`);
+    assertTasksProvider(_tasks, `Attempted account data migration without remote task provider. Aborting`);
+
+    // For migration, we assume the user already exists remotely, so we just need to link them
+    const remoteUser = await _remoteAuth.getUser({ id: registeredUser.id });
+    if (remoteUser.isErr()) {
+      return err(remoteUser.error);
+    }
+
+    // Update the local user with synced status
+    await db.put(AUTH_TABLE_NAME, { ...registeredUser, last_synced: new Date(), last_active: new Date() });
+
+    // Update all task ids with new registered user id
+    const changeResult = await _tasks.changeOwnership({ oldUserID: registeredUser.id, newUserID: remoteUser.value.id });
+    if (changeResult.isErr()) {
+      // Log the error but don't fail the migration
+      console.warn('Failed to change task ownership during migration:', changeResult.error);
+    }
+
+    return ok(remoteUser.value);
   },
 };
 
@@ -131,7 +168,7 @@ const local: IAuthLocalFunctions = {
 const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
   getUser: async function ({ id }) {
     assertDB(db);
-    const user = await db.get(USER_TABLE_NAME, id);
+    const user = await db.get(AUTH_TABLE_NAME, id);
     if (user) {
       return ok(user);
     }
@@ -145,7 +182,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
     // const oldId = update.oldId ?? update.id; // TODO This should be its own local function
 
-    const user = await db.get(USER_TABLE_NAME, update.id);
+    const user = await db.get(AUTH_TABLE_NAME, update.id);
     if (!user) {
       Err.throw(new NotFoundError(update.id, "User"));
     }
@@ -156,7 +193,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
       // last_active: new Date()
     };
 
-    await db.put(USER_TABLE_NAME, updatedUser);
+    await db.put(AUTH_TABLE_NAME, updatedUser);
 
 
     _authSyncQueue!.add('updateUser',
@@ -173,14 +210,14 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
       const { oldUser } = response.error;
       // Undo changes
       assertDB(db);
-      await db.put(USER_TABLE_NAME, oldUser)
+      await db.put(AUTH_TABLE_NAME, oldUser)
     }
   },
 
   deleteUser: async function ({ userId }) {
     assertDB(db);
 
-    const user = await db.get(USER_TABLE_NAME, userId);
+    const user = await db.get(AUTH_TABLE_NAME, userId);
 
     if (user) {
       const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
@@ -189,7 +226,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
         await this.logout();
       }
 
-      await db.delete(USER_TABLE_NAME, userId);
+      await db.delete(AUTH_TABLE_NAME, userId);
 
       _authSyncQueue!.add(
         'deleteUser',
@@ -205,7 +242,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     if (response.isErr()) {
       const { oldUser } = response.error;
       assertDB(db);
-      await db.put(USER_TABLE_NAME, oldUser)
+      await db.put(AUTH_TABLE_NAME, oldUser)
     }
   },
 
@@ -225,7 +262,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
           await api.switchUser(lastLoggedIn) : await api.logout();
   
         // Revert the user info
-        await db.put(USER_TABLE_NAME, oldUser);
+        await db.put(AUTH_TABLE_NAME, oldUser);
   
         // TODO Let the user know that registration failed
       } else {

@@ -1,5 +1,4 @@
 import { Err, IOError, NotFoundError, NotImplementedError } from "$lib/Errors";
-import { SupabaseClient } from "@supabase/supabase-js";
 import { err, ok } from "neverthrow";
 import type {
   ITasks,
@@ -8,12 +7,12 @@ import type {
   ITaskAdvancedFeatures,
   ITaskRelations,
   CreateTaskParams,
-  PopulatedTaskDTO
+  PopulatedTaskDTO,
+  DeleteTaskParams
 } from "./types";
 import { isTask, Task, TaskStatus, type TaskData } from "./Task";
-import supabase from "../SupabaseClient";
+import supabase, { TASK_TABLE_NAME } from "../SupabaseClient";
 import { getRelationshipUpdates } from ".";
-import { TASK_TABLE_NAME } from "../localDB";
 import { extractBatch, extractBatchAndLogErrors, okBatch, type IProvider } from "../types";
 
 let client = supabase;
@@ -87,9 +86,9 @@ const taskCRUD: ITaskCore = {
 
     return ok(new Task(data));
   },
-  updateTasks: async function ({ updateList }) {
+  updateTasks: async function ({ updates }) {
     // First, normalize all tasks - convert string IDs to Task objects
-    const stringIds = updateList.filter(u => typeof u.taskOrId === 'string').map(u => u.taskOrId as string);
+    const stringIds = updates.filter(u => typeof u.taskOrId === 'string').map(u => u.taskOrId as string);
     let idToTask = new Map<string, Task>();
 
     if (stringIds.length > 0) {
@@ -102,7 +101,7 @@ const taskCRUD: ITaskCore = {
     }
 
     // Normalize all updates to have Task objects
-    const normalizedUpdates = updateList.map(update => ({
+    const normalizedUpdates = updates.map(update => ({
       task: typeof update.taskOrId === 'string' ? idToTask.get(update.taskOrId)! : update.taskOrId,
       updates: update.changes
     }));
@@ -124,7 +123,7 @@ const taskCRUD: ITaskCore = {
       return err(new IOError(
         `Failed to update tasks: ${normalizedUpdates.map(u => u.task.title).join(', ')}`,
         error,
-        updateList
+        updates
       ));
     }
 
@@ -145,8 +144,15 @@ const taskCRUD: ITaskCore = {
   /**
    * @param recursive NOT IMPLEMENTED
    */
-  deleteTask: async function ({ id, recursive }) {
+  deleteTask: async function ({ taskOrId, recursive }) {
     if (recursive) Err.throw(new NotImplementedError("SupabaseTaskProvider.deleteTask(recursive=true)"));
+
+    let id: string;
+    if (typeof taskOrId === "string") {
+      id = taskOrId;
+    } else {
+      id = taskOrId.id;
+    }
 
     let deleteRes = await client.from(TASK_TABLE_NAME).delete().eq('id', id).select().single();
     if (deleteRes.error) return err(new IOError(`Failed to delete ${id}`, deleteRes.error));
@@ -160,14 +166,14 @@ const taskCRUD: ITaskCore = {
   /**
    * @param recursive NOT IMPLEMENTED
    */
-  deleteTasks: async function ({ deleteList }) {
-    for (const item of deleteList) {
+  deleteTasks: async function ({ deleteArgs }) {
+    for (const item of deleteArgs) {
       if (item.recursive) Err.throw(new NotImplementedError("SupabaseTaskProvider.deleteTask(recursive=true)"));
     }
 
-    let deleteRes = await client.from(TASK_TABLE_NAME).delete().in('id', deleteList.map(x => x.id)).select();
-    if (deleteRes.error) return err(new IOError(`Failed to delete ${deleteList.map(x => x.id).join(', ')}`, deleteRes.error));
-    else if (deleteRes.count === 0) return err(new NotFoundError(deleteList.map(x => x.id).join(', '), 'task'));
+    let deleteRes = await client.from(TASK_TABLE_NAME).delete().in('id', deleteArgs.map((x: DeleteTaskParams) => typeof x.taskOrId === 'string' ? x.taskOrId : x.taskOrId.id)).select();
+    if (deleteRes.error) return err(new IOError(`Failed to delete ${deleteArgs.map((x: DeleteTaskParams) => typeof x.taskOrId === 'string' ? x.taskOrId : x.taskOrId.id).join(', ')}`, deleteRes.error));
+    else if (deleteRes.count === 0) return err(new NotFoundError(deleteArgs.map((x: DeleteTaskParams) => typeof x.taskOrId === 'string' ? x.taskOrId : x.taskOrId.id).join(', '), 'task'));
 
     getRelationshipUpdates(api, deleteRes.data.map(task => ({ oldTask: new Task(task), newTask: null })));
 
@@ -181,7 +187,7 @@ const taskCRUD: ITaskCore = {
     }
 
     const convertedTasks = tasks.data.map(t => new Task({ ...t, user_id: newUserID }));
-    taskCRUD.updateTasks({ updateList: convertedTasks.map(t => ({ taskOrId: t, changes: t })) });
+    taskCRUD.updateTasks({ updates: convertedTasks.map(t => ({ taskOrId: t, changes: t })) });
     return okBatch(convertedTasks);
   },
 }

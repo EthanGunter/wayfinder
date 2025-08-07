@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto'
 import { describe, it, beforeEach, beforeAll, assert, expect, vi, type MockInstance } from 'vitest';
 import type { CreateTaskParams, ITasks, ITasksLocal, TaskSyncQueue } from './types';
-import { APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
+import { APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
+import { TASK_TABLE_NAME, AUTH_TABLE_NAME } from '../SupabaseClient';
 import BrowserTaskProvider from './BrowserTaskProvider';
 import { mock, type MockProxy } from 'vitest-mock-extended';
 import type { LocalUser } from '../Auth/types';
@@ -688,7 +689,7 @@ describe('ITaskAdvancedFeatures', () => {
   });
 });
 
-describe('ITaskExporter', () => {
+describe.todo('ITaskExporter', () => {
   describe('exportData', () => {
     it.todo('respects the simplify flag if provided');
   });

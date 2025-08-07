@@ -1,8 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { LocalUser } from "./Auth/types";
 import type { Task, TaskData } from "./Tasks";
+import { AUTH_TABLE_NAME, TASK_TABLE_NAME } from "./SupabaseClient";
 
-export const AUTH_TABLE_NAME = 'users';
 interface AuthDB extends DBSchema {
     users: {
         key: string;
@@ -12,7 +12,6 @@ interface AuthDB extends DBSchema {
         };
     };
 }
-export const TASK_TABLE_NAME = 'tasks';
 interface TaskDB extends DBSchema {
     // files: {
     //   key: string;
@@ -30,6 +29,7 @@ interface TaskDB extends DBSchema {
         }
     };
 }
+
 export const APP_TABLE_NAME = 'appdata';
 export const ACTIVEUSER_NAME = 'active-user';
 interface AppDB extends DBSchema {

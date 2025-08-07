@@ -2,7 +2,7 @@
 	import { dev as DEVELOPMENT } from '$app/environment';
 	import { invalidateAll } from '$app/navigation';
 	import type { LocalUser } from '$lib/API/Auth/types';
-	import { TASK_TABLE_NAME } from '$lib/API/localDB';
+	import { TASK_TABLE_NAME } from '$lib/API/SupabaseClient';
 	import supabase from '$lib/API/SupabaseClient';
 	import provider from '$lib/API/Tasks/BrowserTaskProvider';
 	import { devStore } from '$lib/stores/devStore.svelte';
@@ -29,7 +29,10 @@
 				<input id="dev-mode" type="checkbox" bind:checked={devStore.devMode} />
 			</h2>
 			<span>
-				<button onclick={async () => (await provider.get())[0].exportData({})}> Export Data </button>
+				<button onclick={async () => {
+					const tasks = await provider.get();
+					tasks.exportData({});
+				}}> Export Data </button>
 			</span>
 			{#if devStore.devMode}
 				<label for="task-provider-override">Task API Override</label>

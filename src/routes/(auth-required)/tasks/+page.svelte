@@ -138,7 +138,7 @@
 		// Remove the task from the visual list
 		children = children.filter((x) => x.id !== task.id);
 		// const api = await api;
-		if ((await tasks.deleteTask({ id: task.id })).isErr()) {
+		if ((await tasks.deleteTask({ taskOrId: task.id })).isErr()) {
 			// Something went wrong, add the item back to the list
 		}
 	}

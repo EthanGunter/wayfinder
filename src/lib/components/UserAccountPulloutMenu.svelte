@@ -46,7 +46,7 @@
 					Sign out
 				</button>
 			{/if}
-			{#if !user.is_synced}
+			{#if !user.last_synced}
 				<button
 					onclick={() => {
 						goto('/account/upgrade');

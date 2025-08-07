@@ -6,10 +6,11 @@ import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
-import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
+import { dbPromise, type LocalDB } from '../localDB';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
 import { error } from '@sveltejs/kit';
+import { TASK_TABLE_NAME } from '../SupabaseClient';
 
 
 //#region Task CRUD
@@ -86,7 +87,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link IOError} if IndexedDB.put() fails
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
-  updateTask: async function ({ update }) {
+  updateTask: async function (update) {
     const [success, errors] = extractBatch(await this.updateTasks({ updates: [update] }));
     if (errors.length > 0) {
       return err(errors[0]);
@@ -109,7 +110,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @param recursive NOT IMPLEMENTED
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  deleteTask: async function ({ deleteArg }) {
+  deleteTask: async function (deleteArg) {
     return await this.deleteTasks({ deleteArgs: [deleteArg] });
   },
 
@@ -210,7 +211,7 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
   if (deleteArgs.length === 0) return ok();
 
   assertDB(_db);
-  
+
   const deletedTasks: Task[] = [];
   const errors: NotFoundError[] = [];
   for (const { taskOrId, recursive } of deleteArgs) {

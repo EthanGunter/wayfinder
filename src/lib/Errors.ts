@@ -12,7 +12,7 @@ export enum ErrorType {
 const STACK_REG = /at (.*)\(https?:\/\/[a-z\-]*(?::[0-9]*|\.[a-z]*)(\/.*?)\?.=.*:([0-9]+):([0-9]+)/;
 export class Err {
     static wrap(nativeError: Error): Err {
-        return new Err(0, nativeError.name ?? "unknown", nativeError.message, nativeError);
+        return new Err(1, nativeError.name ?? "unknown", nativeError.message, JSON.stringify(nativeError, undefined, 2));
     }
     static DEV(error: Err | any): never {
         // TODO link to bug report system. Unhandled errors shouldn't happen
@@ -30,7 +30,7 @@ export class Err {
     static throw(error: Err | any): never {
         // TODO link to bug report system. Unhandled errors shouldn't happen
         if (!(error instanceof Err)) {
-            error = new Err(1, "Unknown", "", error);
+            error = new Err(1, "Unknown", "", JSON.stringify(error, undefined, 2));
         }
         error.inheritanceDepth++;
         error.withTrace();
@@ -152,7 +152,7 @@ export class IOError extends Err {
         } else if (internalError instanceof Error) {
             internal = internalError.message;
         } else {
-            internal = JSON.stringify(internalError);
+            internal = internalError;
         }
         super(
             1,

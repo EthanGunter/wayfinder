@@ -20,7 +20,7 @@
 	let accountIssues = $state<Map<AccountIssueTarget, Set<string>>>(new Map());
 
 	$effect(() => {
-		if (user && user.is_synced) goto('/account');
+		if (user && user.last_synced) goto('/account');
 		// TODO Should probably provide a banner or alternative UI later
 	});
 	$effect(() => {
@@ -48,7 +48,7 @@
 	}
 
 	async function handleMigration() {
-		if (!user || user.is_synced) {
+		if (!user || user.last_synced) {
 			throw new Error('Invalid user for migration');
 		}
 		const uiIssues = new Map();
@@ -91,7 +91,7 @@
 
 <div id="upgrade-page" class="page">
 	<AppHeader {user} authAPI={auth} />
-	{#if user && !user.is_synced}
+	{#if user && !user.last_synced}
 		<div class="content">
 			<div class="input-fields">
 				{#if accountIssues.size > 0}

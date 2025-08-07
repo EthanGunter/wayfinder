@@ -1,5 +1,4 @@
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
-import { testIAuthCore } from "./IAuth.shared.test";
 import SupabaseAuthProvider from "./SupabaseAuthProvider";
 import type { IAuth, SignInCredentials, User, UserData } from "./types";
 import { ErrorType } from "$lib/Errors";

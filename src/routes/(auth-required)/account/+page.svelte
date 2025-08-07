@@ -76,7 +76,7 @@
 				}}>Log Diff</button
 			>
 		{/if}
-		{#if !user.is_synced}
+		{#if !user.last_synced}
 			<div class="upgrade-section">
 				<h2>Upgrade to Cloud Sync</h2>
 				<p>Sync your data across devices and enable premium features</p>
