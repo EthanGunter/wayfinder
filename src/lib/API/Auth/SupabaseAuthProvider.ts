@@ -8,8 +8,8 @@ import {
 } from './types';
 import { type IProvider } from '../types';
 import type { AuthError, UserAttributes } from '@supabase/auth-js';
-import { NotFoundError, Err, NotImplementedError, NotHandledError, ArgumentError, ErrorType, InvalidStateError } from '$lib/Errors';
-import { User } from './User';
+import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError } from '$lib/Errors';
+import { type User } from './User';
 import type { Tables } from '../supabase';
 
 const core: IAuth = {
@@ -48,12 +48,12 @@ const core: IAuth = {
                 case 'invalid_credentials':
                     return err(new ArgumentError(creds, authRes.error.message));
                 default:
-                    Err.throw(new NotHandledError(authRes.error));
+                    Err.UNHANDLED(authRes.error);
             }
         }
 
         if (!authRes.data.user) {
-            Err.throw(new NotHandledError("supabase.auth.signUp returned a null user"));
+            Err.UNHANDLED("supabase.auth.signUp returned a null user");
         }
 
         // Then, create the user record in our public.users table
@@ -73,10 +73,10 @@ const core: IAuth = {
         if (insertError) {
             // If we can't create the user record, we should clean up the auth user
             // TODO: Implement cleanup of auth user if public.users insert fails
-            Err.throw(new NotHandledError(insertError));
+            Err.UNHANDLED(insertError);
         }
 
-        return ok(User.fromRaw(userDataForDB));
+        return ok(userDataForDB);
     },
 
     getUser: async function ({ id }) {
@@ -95,7 +95,7 @@ const core: IAuth = {
             return err(new NotFoundError(id, "User account has been deleted"));
         }
 
-        return ok(User.fromRaw(userData));
+        return ok(userData);
     },
 
     updateUser: async function ({ update }) {
@@ -132,7 +132,7 @@ const core: IAuth = {
             return err(new NotFoundError(update.id, "User"));
         }
 
-        return ok(User.fromRaw(updatedUser));
+        return ok(updatedUser);
     },
 
     // TODO Need to update all access to check for deleted users
@@ -173,7 +173,7 @@ const core: IAuth = {
                         .select('*')
                         .eq('id', user.id)
                         .single();
-                    
+
                     if (userError || !userData) {
                         // User exists in auth but not in our users table - this shouldn't happen
                         // but we'll handle it gracefully
@@ -184,8 +184,8 @@ const core: IAuth = {
                     if (userData.status === 'deleted') {
                         return err(new ArgumentError(user.id, "User account has been deleted"));
                     }
-                    
-                    return ok(User.fromRaw(userData));
+
+                    return ok(userData);
                 }
             }
             default: Err.throw(new NotImplementedError(`SupabaseAuth.${creds.type} sign-in`));

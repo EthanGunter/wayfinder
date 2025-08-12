@@ -7,6 +7,7 @@ export enum ErrorType {
     IOError = "Error - InputOutput",
     NotImplementedError = "Error - NotImplemented",
     NotHandledError = "Error - NotHandled",
+    InputRequired = "Error - InputRequired"
 }
 
 const STACK_REG = /at (.*)\(https?:\/\/[a-z\-]*(?::[0-9]*|\.[a-z]*)(\/.*?)\?.=.*:([0-9]+):([0-9]+)/;
@@ -14,10 +15,10 @@ export class Err {
     static wrap(nativeError: Error): Err {
         return new Err(1, nativeError.name ?? "unknown", nativeError.message, JSON.stringify(nativeError, undefined, 2));
     }
-    static DEV(error: Err | any): never {
+    static UNHANDLED(error: Err | any, message?: string): never {
         // TODO link to bug report system. Unhandled errors shouldn't happen
         if (!(error instanceof Err)) {
-            error = new Err(1, "Unknown", "error occured", error);
+            error = new Err(1, "Unknown", message ?? "", error);
         }
         error.inheritanceDepth++;
         error.withTrace();
@@ -130,6 +131,11 @@ export class ArgumentError extends Err {
         super(1, ErrorType.ArgumentError, reason, argument);
     }
 }
+export class InputRequiredError extends Err {
+    constructor(message: string, context?: any) {
+        super(1, ErrorType.InputRequired, message, context);
+    }
+}
 
 export class NotFoundError extends Err {
     constructor(msg: string = "Item", key: any) {
@@ -166,13 +172,5 @@ export class IOError extends Err {
 export class NotImplementedError extends Err {
     constructor(methodName: string) {
         super(1, ErrorType.NotImplementedError, `${methodName}`);
-    }
-}
-
-// TODO This class should automatically send an error to the dev team
-export class NotHandledError extends Err {
-    constructor(error: any) {
-        super(1, ErrorType.NotHandledError, `Error not properly handled`, error);
-        this.withTrace(5);
     }
 }

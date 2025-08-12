@@ -1,6 +1,6 @@
 import BrowserAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
 import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuthProvider';
-import { LocalUser } from '$lib/API/Auth/User';
+import { isAnonymous, type LocalUser } from '$lib/API/Auth/User';
 import type { ILocalAuth } from '$lib/API/Auth/types';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
@@ -29,7 +29,7 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 
     let user: LocalUser;
 
-    if (activeUser.isAnonymous()) {
+    if (isAnonymous(activeUser)) {
         // Anonymous user - local only
         user = activeUser;
     } else {
@@ -43,13 +43,13 @@ export const load: LayoutLoad = async ({ parent, url }) => {
             // Remote user exists - merge data
             // TODO need to establish a way to ensure the local and remote are *always* in sync
             const remoteUser = remoteRes.value;
-            
+
             // Create a new LocalUser instance with merged data
-            user = LocalUser.fromRawWithLocal({
+            user = {
                 ...activeUser,
                 ...remoteUser,
                 created_at: activeUser.created_at,
-            });
+            };
         }
     }
 

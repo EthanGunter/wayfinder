@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { LocalUser } from '$lib/API/Auth/User';
+	import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
 	import type { IAuthAPI } from '$lib/API/Auth/types';
 	import UserAvatar from './UserAvatar.svelte';
 	import Pullout from './overlays/Pullout.svelte';
@@ -47,7 +47,7 @@
 					Sign out
 				</button>
 			{/if}
-			{#if !user.hasFeature('task-sync')}
+			{#if !userHasFeature(user, 'task-sync')}
 				<button
 					onclick={() => {
 						goto('/account/upgrade');

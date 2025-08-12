@@ -4,8 +4,7 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
-	import { onMount } from 'svelte';
-	import type { LocalUser } from '$lib/API/Auth/User';
+	import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
 
 	// Svelte 5 state
 	const { data } = $props();
@@ -18,13 +17,31 @@
 	}
 
 	async function saveUserChanges() {
-		await debouncedUpdateUser({ update: user });
-		await invalidateAll(); // TODO This may be unnecessary if onAuthChanged gets implemented
+		// Only pass the fields that actually changed, not the entire user object
+		const changedFields: Partial<LocalUser> = {};
+
+		if (user.display_name !== data.user.display_name) {
+			changedFields.display_name = user.display_name;
+		}
+		if (user.avatar_url !== data.user.avatar_url) {
+			changedFields.avatar_url = user.avatar_url;
+		}
+
+		// Only update if there are actual changes
+		if (Object.keys(changedFields).length > 0) {
+			await debouncedUpdateUser({
+				update: {
+					id: user.id,
+					...changedFields
+				}
+			});
+			await invalidateAll(); // TODO This may be unnecessary if onAuthChanged gets implemented
+		}
 	}
 
 	function handleNameInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
 		event.preventDefault();
-		if (event.currentTarget.value === '') user.display_name = undefined;
+		// if (event.currentTarget.value === '') user.display_name = data.user.display_name;
 	}
 </script>
 
@@ -47,6 +64,7 @@
 					type="text"
 					bind:value={user.display_name}
 					oninput={handleNameInput}
+					placeholder="Really cool username"
 				/>
 			</span>
 			<!-- TODO Local Passkey <section id="sec-passkey">
@@ -68,15 +86,8 @@
 		</div>
 		{#if !equals(user, data.user)}
 			<button onclick={saveUserChanges}>Save Changes</button>
-
-			<!-- TODO Delete me -->
-			<button
-				onclick={() => {
-					console.log(JSON.stringify(user, null, 4), JSON.stringify(data.user, null, 4));
-				}}>Log Diff</button
-			>
 		{/if}
-		{#if !user.hasFeature('task-sync')}
+		{#if !userHasFeature(user, 'task-sync')}
 			<div class="upgrade-section">
 				<h2>Upgrade to Cloud Sync</h2>
 				<p>Sync your data across devices and enable premium features</p>

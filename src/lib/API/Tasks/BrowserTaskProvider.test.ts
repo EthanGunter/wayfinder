@@ -8,7 +8,8 @@ import { mock, type MockProxy } from 'vitest-mock-extended';
 import { extractBatch, okBatch } from '../types';
 import { Err, ErrorType, NotImplementedError } from '$lib/Errors';
 import { err, ok } from 'neverthrow';
-import { LocalUser } from '../Auth/User';
+import { type LocalUser } from '../Auth/User';
+import { createTestUser } from '../Auth/testHelpers';
 
 
 //#region Setup
@@ -18,21 +19,11 @@ let mockRemoteTasks: MockProxy<ITasks>;
 let syncAddSpy: MockInstance;
 let tasks: ILocalTasks;
 
-const user1 = LocalUser.fromRaw({
+const user1 = createTestUser({
   id: "User1",
-  display_name: "User1",
-  created_at: "",
-  features: [],
-  status: "active",
-  avatar_url: null
 });
-const user2 = LocalUser.fromRaw({
+const user2 = createTestUser({
   id: "User2",
-  display_name: "User2",
-  created_at: "",
-  features: [],
-  status: "active",
-  avatar_url: null
 });
 
 function taskDetail(userId?: string, id?: string): CreateTaskParams {

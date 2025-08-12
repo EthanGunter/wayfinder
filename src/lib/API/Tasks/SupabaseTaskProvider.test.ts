@@ -1,23 +1,24 @@
 import { it, beforeEach, beforeAll, assert, describe, expect } from 'vitest';
 import type { CreateTaskParams, ITasks } from './types';
-import type { User } from '../Auth/types';
 import SupabaseTaskProvider from './SupabaseTaskProvider';
 import supabase, { TASK_TABLE_NAME } from '../SupabaseClient';
 import { ErrorType, type NotImplementedError } from '$lib/Errors';
 import type { err } from 'neverthrow';
 import { extractBatch, type okBatch } from '../types';
+import type { User } from '../Auth/User';
+import { createTestUser } from '../Auth/testHelpers';
 
 
 //#region Setup
 
 let tasks: ITasks;
 
-const user1: User = {
+const user1: User = createTestUser({
   id: "User1",
-}
-const user2: User = {
+})
+const user2: User = createTestUser({
   id: "User2",
-}
+})
 
 function taskDetail(userId?: string, id?: string): CreateTaskParams {
   return {

@@ -108,6 +108,9 @@
 	let filteredSuggestedTasks = $derived(
 		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
 	);
+
+	// Check if user has any tasks at all
+	let hasAnyTasks = $derived(todaysList.length > 0 || suggestedTasks.length > 0);
 </script>
 
 <div class="page page-todays-tasks">
@@ -158,6 +161,27 @@
 				</ItemList>
 			</div>
 		{/if}
+
+		<!-- Non-invasive auth options when no tasks exist -->
+		{#if !hasAnyTasks && user.display_name === 'anonymous'}
+			<div class="auth-options">
+				<div class="auth-message">
+					<h3>Welcome to Wayfinder!</h3>
+					<p>You're currently using the app as a guest. Your tasks will be saved locally on this device.</p>
+				</div>
+				<div class="auth-buttons">
+					<button class="btn-secondary" onclick={() => goto('/login')}>
+						Sign In
+					</button>
+					<button class="btn-primary" onclick={() => goto('/login')}>
+						Create Account
+					</button>
+				</div>
+				<div class="auth-note">
+					<p>You can continue using the app as a guest and sign up later to sync your data.</p>
+				</div>
+			</div>
+		{/if}
 	</div>
 	<AppFooter />
 </div>
@@ -184,5 +208,75 @@
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
+	}
+
+	.auth-options {
+		margin-top: 3rem;
+		padding: 2rem;
+		background: var(--background-modifier-hover, #f8f9fa);
+		border-radius: 8px;
+		text-align: center;
+		border: 1px solid var(--color-border, #e1e5e9);
+	}
+
+	.auth-message h3 {
+		margin: 0 0 0.5rem 0;
+		color: var(--color-text, #333);
+		font-size: 1.5rem;
+	}
+
+	.auth-message p {
+		margin: 0 0 1.5rem 0;
+		color: var(--color-text-secondary, #666);
+		font-size: 1rem;
+		line-height: 1.5;
+	}
+
+	.auth-buttons {
+		display: flex;
+		gap: 1rem;
+		justify-content: center;
+		margin-bottom: 1.5rem;
+	}
+
+	.btn-primary, .btn-secondary {
+		padding: 0.75rem 1.5rem;
+		border: none;
+		border-radius: 6px;
+		font-size: 1rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		text-decoration: none;
+		display: inline-block;
+	}
+
+	.btn-primary {
+		background: var(--color-accent, #007acc);
+		color: white;
+	}
+
+	.btn-primary:hover {
+		background: var(--color-accent-hover, #005a9e);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+	}
+
+	.btn-secondary {
+		background: transparent;
+		color: var(--color-text, #333);
+		border: 1px solid var(--color-border, #ccc);
+	}
+
+	.btn-secondary:hover {
+		background: var(--background-modifier-hover, #f0f0f0);
+		border-color: var(--color-border-hover, #999);
+	}
+
+	.auth-note p {
+		margin: 0;
+		color: var(--color-text-tertiary, #888);
+		font-size: 0.9rem;
+		font-style: italic;
 	}
 </style>

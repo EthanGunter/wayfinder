@@ -59,10 +59,8 @@ export interface IAuthAPI extends IAuth {
 
 // Result<SuccessData, FailureData>
 export interface IAuthResponseHandler {
-    // handleRegisterResponse(response: Result<{ oldUser: StoredUser, registeredUser: User }, { creds: SignInCredentials, lastLoggedIn: string | undefined, oldUser: StoredUser }>): Promise<void>,
     handleUpdateUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
     handleDeleteUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
-    handleLoginResponse(response: Result<void, { creds: SignInCredentials }>): Promise<void>,
 }
 
 export interface IAuthLocalFunctions {

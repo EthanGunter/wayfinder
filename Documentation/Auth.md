@@ -1,68 +1,57 @@
 # Flow
-1. User downloads / accesses the app for the first time and an anonymous user account is created on their local device
-	- When a user first encounters the app, we don't want them thinking about Auth. How do you make important account decisions when you don't even know what the app is?
-2. (optional) Users may create multiple local user accounts if they so desire, and as such have the option to modify their local account's info, like username, icon, and authentication method
-	- Local authentication methods include: password, fingerprint, etc. (I'm not sure what's available to us yet)
-3. If a user decides to pay for the sync feature of Wayfinder:
-	1. They will be asked to make any necessary changes to the currently signed in local user so it's compatible with remote auth providers
-	2. A remote user account will be created, and all of the local data for that user will be uploaded via the database provider
-	3. Local data will be updated with the remote account's id so it's still available in the event of plan suspension, or offline state.
+On first open (or when no local user exists) the app creates a local anonymous user so people can use the app immediately. From that anonymous state the user can:
+- Continue as guest (Act as if logged in, and use anon account in place)
+- Register (create a new account and attach local data to that account).
+- Login to an existing account (behavior differs depending on whether the anonymous account has local data).
+## States & available actions
+- Initial: No local user → create anonymous user (anon).
+  - Available actions: Continue as guest, Register, Login.
 
->[!warning]
->  In this version of Wayfinder, if the account is synced, and is offline, **the data will be read only**
->  *Remote backup requires conflict management incase a change comes in after an offline change is made to the same data.* 
+- Continue as guest
+  - Effect: provides a user id for local tasks to be associated with temporarily.
+  - Later: user may still Register or Login from settings.
 
-# Interfaces
-*Actual implementation may differ, see code for specifics*
-## IAuthProvider
-```ts
-interface IAuthProvider {
-  getCurrentUser(): Promise<User | null>;
-  signIn(credentials: SignInCredentials): Promise<AuthResult>;
-  signUp(details: SignUpDetails): Promise<AuthResult>;
-  signOut(): Promise<void>;
-  onAuthStateChanged(callback: (user: User | null) => void): UnsubscribeFn;
-}
-```
-### Implementations
-- SupabaseAuth
-- LocalAuth
+- Register (while using anon)
+  - Effect: create server account, migrate/attach local anon items to new account, delete anon record/token.
+  - UX: confirm success and show items now belong to the account.
+  - Failure: keep local anon data and show retry/backup options.
 
-## IMigrationProvider
-```ts
-/* Provides services to handle the account migration from local to remote */
-interface IMigrationProvider {
-	/* Gets a list of things needed before the migratino can take place */
-	getAccountIssues(): AccountIssues[]
-	/* Creates the remote account and uploads all of its data */
-	migrateAccount(localAccount, ITaskDataProvider): Promise<void>
-}
-```
-### Implementations
-- LocalToSupabaseMigrator
+- Login (existing account)
+  - If anon has zero local items:
+    - Effect: silently discard anon and sign in to account.
+  - If anon has local items:
+    - Present decision modal with three explicit choices:
+      1. Merge local items into the account (recommended) — upload/migrate items to the signed-in account, dedupe if needed, then delete anon.
+      2. Discard local items and sign in — delete local anon data (with backup/confirmation) and sign in.
+      3. Create a new account to preserve these items — route to registration to attach them to a newly created account.
+  - If user logs into a different account than expected: treat like any login with local items — present same choices.
+## TL;DR:
+If anon has *no* local items: logging in / registering simply replaces the anon session. 
+If anon *has* local items: the user must choose Merge (attach items to the signed-in account), Discard (delete local items), or Create account (preserve items by registering). Always back up before destructive actions.
+```mermaid 
+flowchart TD
+  Start([App open: no local user]) --> CreateAnon[Create anonymous user]
+  CreateAnon --> Register[Register]
+  CreateAnon --> Login[Login]
 
-# Data Types
-## User
-```ts
-interface User {
-	id: string;
-	displayName: string;
-	email?: string;
-}
+  Migrate[Migrate local items to new account]
+  Register --> Migrate
+  Migrate --> DeleteAnonReg[Delete anon, sign in as new user]
+  DeleteAnonReg --> SignedIn
 
-type LocalUserProxy = User & {
-	isSynced: boolean
-}
-```
+  Login --> SignedIn
 
-## Sign in options
-```ts
-type SignInCredentials =
-  | { type: 'local'; pin: string }
-  | { type: 'email_password'; email: string; password: string }
-  | { type: 'passwordless_email'; email: string }
-  | { type: 'oauth'; provider: 'google' | 'apple' | 'github'; token?: string }
-```
+  Login --> |If Local Data| Modal[Show modal: Merge / Discard / Create account]
+  Modal --> |Merge| Migrate
+  Modal --> |Discard| Discard[Discard local items and sign in]
+  Modal --> |Create New| CreateAccount[Create seperate account to keep items]
+  
+  CreateAccount --> CreateLogin[Store new account and login as requested]
+  CreateLogin --> SignedIn
+
+  Discard --> ConfirmDiscard[Are you sure??]
+  ConfirmDiscard --> SignedIn
+  ```
 
 # Things to track
 ## Concurrent users

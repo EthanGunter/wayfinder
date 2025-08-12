@@ -169,7 +169,7 @@ async function processParentRemovals(provider: ITasks, parentRemovals: Map<strin
             return updates;
         },
         (err) => {
-            Err.DEV(err);
+            Err.UNHANDLED(err);
         }
     );
 }
@@ -206,7 +206,7 @@ async function processChildAdditions(provider: ITasks, childAdditions: Map<strin
             return updates;
         },
         (err) => {
-            Err.DEV(err);
+            Err.UNHANDLED(err);
         }
     );
 }
@@ -243,7 +243,7 @@ async function processChildRemovals(provider: ITasks, childRemovals: Map<string,
             return updates;
         },
         (err) => {
-            Err.DEV(err);
+            Err.UNHANDLED(err);
         }
     );
 }

@@ -1,7 +1,9 @@
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 import SupabaseAuthProvider from "./SupabaseAuthProvider";
-import type { IAuth, SignInCredentials, User, UserData } from "./types";
+import type { IAuth, SignInCredentials, UserData } from "./types";
 import { ErrorType } from "$lib/Errors";
+import type { User } from "./User";
+import { createTestUser } from "./testHelpers";
 
 // In-memory user store for mocking
 const usersByEmail = new Map<string, User>();
@@ -81,10 +83,9 @@ describe("IAuth", () => {
             email: "test@example.com",
             password: "password123"
         };
-        userData = {
+        userData = createTestUser({
             display_name: "Remote User",
-            avatar_url: null
-        };
+        });
         remoteUser = {
             ...userData,
             id: "remote-user-id"

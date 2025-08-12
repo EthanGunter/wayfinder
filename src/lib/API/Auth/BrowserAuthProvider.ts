@@ -1,12 +1,13 @@
 import { v4 } from 'uuid';
 import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue, ILocalAuth, UserData } from './types';
-import { User, LocalUser } from './User';
+import { getDefaultUserFeatures } from './User';
 import type { ILocalTaskProvider, ILocalTasks, ITasks, TaskSyncQueue } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
-import { ArgumentError, Err, ErrorType, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
+import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
 import { SyncQueue } from '../SyncQueue';
 import { AUTH_TABLE_NAME } from '../SupabaseClient';
+import { extractBatchAndLogErrors } from '../types';
 
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
 
@@ -20,7 +21,7 @@ const local: IAuthLocalFunctions = {
 
   register: async function ({ creds, userData }) {
     if (userData.display_name === 'anonymous') {
-      return err(new InvalidStateError("Attempted to register a user that should already be synced with a server", userData))
+      return err(new InvalidStateError("Cannot register an account with 'anonymous' display name", userData))
     }
 
     const reqsResult = auth.getRegistrationRequirements(creds);
@@ -32,24 +33,37 @@ const local: IAuthLocalFunctions = {
 
     assertDB(db);
     assertRemoteAuth(_remoteAuth, `Cannot register without remote auth provider`);
-    assertTasksProvider(_tasks, `Attempted account registration without task provider. Aborting`);
+    assertTasks(_tasks, `Attempted account registration without task provider. Aborting`);
 
+    // Check if there's an anonymous user with local data that needs migration
+    const currentUser = await local.getActiveUser();
+    const hasAnonymousWithData = currentUser &&
+      currentUser.display_name === 'anonymous' &&
+      await _hasLocalData(currentUser.id);
+
+    // Create the new account on the server
     const registerResult = await _remoteAuth.register({ creds, userData });
-
     if (registerResult.isErr()) {
       return err(registerResult.error);
     }
     const registeredUser = registerResult.value;
 
     // Create local user with registered user data
-    const localUser: LocalUser = LocalUser.fromUser(registeredUser);
-    await db.put(AUTH_TABLE_NAME, localUser);
+    await db.put(AUTH_TABLE_NAME, registeredUser);
 
-    // Update all task ids with new registered user id
-    const changeResult = await _tasks.changeOwnership({ oldUserID: userData.id, newUserID: registeredUser.id });
-    if (changeResult.isErr()) {
-      // Log the error but don't fail the registration
-      Err.throw(changeResult.error, 'Failed to change task ownership during registration:');
+    // If we have anonymous user with local data, migrate it to the new account
+    if (hasAnonymousWithData && currentUser) {
+      const changeResult = await _tasks.changeOwnership({
+        oldUserID: currentUser.id,
+        newUserID: registeredUser.id
+      });
+      if (changeResult.isErr()) {
+        // Log the error but don't fail the registration
+        Err.UNHANDLED(changeResult.error, 'Failed to change task ownership during registration:');
+      }
+
+      // Remove the anonymous user since data has been migrated
+      await db.delete(AUTH_TABLE_NAME, currentUser.id);
     }
 
     // Switch to the new representation of the user
@@ -97,19 +111,15 @@ const local: IAuthLocalFunctions = {
         display_name: 'anonymous',
         created_at: new Date().toISOString(),
         status: 'active',
-        features: User.getDefaultFeatures(),
+        features: getDefaultUserFeatures(),
       };
 
-      const newAnon = User.fromRaw(userData);
-      const localUser: LocalUser = LocalUser.fromUser(newAnon);
 
-      await db.put(AUTH_TABLE_NAME, localUser);
-      return ok(localUser);
+      await db.put(AUTH_TABLE_NAME, userData);
+      return ok(userData);
     } else if (users.length === 1) {
       const userData = users[0];
-      const user = LocalUser.fromRaw(userData) as User;
-      const localUser: LocalUser = LocalUser.fromUser(user);
-      return ok(localUser);
+      return ok(userData);
     } else {
       return err(new InvalidStateError("There are too many users to select a default"));
     }
@@ -120,7 +130,7 @@ const local: IAuthLocalFunctions = {
     const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     if (activeId) {
       const user = await db.get(AUTH_TABLE_NAME, activeId);
-      return user ? LocalUser.fromRaw(user) : null;
+      return user ?? null;
     } else return null;
   },
 };
@@ -148,10 +158,10 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
       Err.throw(new NotFoundError(update.id, "User"));
     }
 
-    const updatedUser = LocalUser.fromRaw({
+    const updatedUser = {
       ...user,
       ...update,
-    });
+    };
 
     await db.put(AUTH_TABLE_NAME, updatedUser);
 
@@ -208,7 +218,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
   getRegistrationRequirements: function (signUpCred) {
     assertRemoteAuth(_remoteAuth, "Cannot migrate without a provided remote auth provider");
-    assertTasksProvider(_tasks, "Cannot migrate without a provided remote tasks provider");
+    assertTasks(_tasks, "Cannot migrate without a provided remote tasks provider");
     return _remoteAuth.getRegistrationRequirements(signUpCred);
   },
 
@@ -238,21 +248,41 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     assertDB(db);
     assertRemoteAuth(_remoteAuth);
 
-    _authSyncQueue!.add(
-      "login", {
-      creds
-    },
-      'handleLoginResponse', {
-      creds
-    });
+    // Check if current user is anonymous and has local data
+    const currentUser = await local.getActiveUser();
+    if (currentUser && currentUser.display_name === 'anonymous') {
+      const hasLocalData = await _hasLocalData(currentUser.id);
 
-    // TODO I don't know how to handle login security locally...
-    switch (creds.type) {
-      default: return err(new ArgumentError(creds, `${creds.type} sign in not implemented for local auth`));
+      if (hasLocalData) {
+        // Anonymous user has local data - need migration decision
+        // Return special result indicating migration is needed
+        return err(new InputRequiredError(
+          "Anonymous user has local data. Migration decision required before login.",
+          { requiresMigration: true, anonymousUserId: currentUser.id }
+        ));
+      } else {
+        // Anonymous user has no local data - can proceed with login
+        // First remove the anonymous user
+        await db.delete(AUTH_TABLE_NAME, currentUser.id);
+        await db.put(APP_TABLE_NAME, undefined, ACTIVEUSER_COLUMN_NAME);
+      }
     }
-  },
-  handleLoginResponse: (response) => {
-    Err.throw(new NotImplementedError("BrowserAuthProvider.handleLoginResponse"))
+
+    // Proceed with remote login
+    const loginResult = await _remoteAuth.login({ creds });
+    if (loginResult.isErr()) {
+      return err(loginResult.error);
+    }
+
+    const remoteUser = loginResult.value;
+
+    // Create local user with remote user data
+    await db.put(AUTH_TABLE_NAME, remoteUser);
+
+    // Switch to the logged in user
+    await local.switchUser(remoteUser.id);
+
+    return ok(remoteUser);
   },
 
   logout: async function () {
@@ -266,6 +296,23 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     return ok();
   },
   ...local
+}
+
+// Helper function to check if a user has local data
+async function _hasLocalData(userId: string): Promise<boolean> {
+  assertTasks(_tasks);
+
+  try {
+    const result = await _tasks.getAllUserTasks({ userId });
+    if (result.isOk()) {
+      const tasks = extractBatchAndLogErrors(result);
+      return tasks.length > 0;
+    }
+    return false;
+  } catch {
+    // If we can't get tasks, assume no local data
+    return false;
+  }
 }
 
 // #region UTILITIES
@@ -285,7 +332,7 @@ function assertDB(db: LocalDB | null, errorMessage?: string): asserts db is Loca
 function assertRemoteAuth(remoteAuth: IAuth | null, errorMessage?: string): asserts remoteAuth is IAuth {
   if (!remoteAuth) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote auth without a provider."));
 }
-function assertTasksProvider(remoteTasks: ITasks | null, errorMessage?: string): asserts remoteTasks is ITasks {
+function assertTasks(remoteTasks: ITasks | null, errorMessage?: string): asserts remoteTasks is ITasks {
   if (!remoteTasks) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote tasks without a provider."));
 }
 // #endregion
@@ -330,11 +377,9 @@ const BrowserAuthProvider: ILocalAuthProvider = {
         | "getUser">, IAuthResponseHandler>({
           deleteUser: remoteAuth.deleteUser,
           handleDeleteUserResponse: auth.handleDeleteUserResponse,
-          login: remoteAuth.login,
-          handleLoginResponse: auth.handleLoginResponse,
+          login: auth.login,
           logout: remoteAuth.logout,
           register: remoteAuth.register,
-          // handleRegisterResponse: auth.handleRegisterResponse,
           updateUser: remoteAuth.updateUser,
           handleUpdateUserResponse: auth.handleUpdateUserResponse,
         });
