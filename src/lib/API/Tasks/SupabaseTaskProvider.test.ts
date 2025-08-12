@@ -14,11 +14,9 @@ let tasks: ITasks;
 
 const user1: User = {
   id: "User1",
-  last_synced: new Date(0),
 }
 const user2: User = {
   id: "User2",
-  last_synced: new Date(0),
 }
 
 function taskDetail(userId?: string, id?: string): CreateTaskParams {

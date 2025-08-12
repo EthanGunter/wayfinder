@@ -32,8 +32,6 @@
 	});
 
 	async function fetchCurrentTask(task: string | Task) {
-		// const api = await api;
-
 		if (typeof task === 'string') {
 			// TODO: Fetch currentTask, children, and parents based on id
 			const result = await tasks.getTask({ id: task });
@@ -70,6 +68,7 @@
 				err.logError();
 			}
 		);
+		// TODO change id url param
 	}
 
 	async function fetchRootTasks() {

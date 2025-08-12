@@ -20,7 +20,7 @@
 	let accountIssues = $state<Map<AccountIssueTarget, Set<string>>>(new Map());
 
 	$effect(() => {
-		if (user && user.last_synced) goto('/account');
+		if (user && user.hasFeature('task-sync')) goto('/account');
 		// TODO Should probably provide a banner or alternative UI later
 	});
 	$effect(() => {
@@ -48,7 +48,7 @@
 	}
 
 	async function handleMigration() {
-		if (!user || user.last_synced) {
+		if (!user || user.hasFeature('task-sync')) {
 			throw new Error('Invalid user for migration');
 		}
 		const uiIssues = new Map();
@@ -74,6 +74,12 @@
 		);
 		if (migReqResult.isErr() || migReqResult.value.length > 0) return;
 
+		const registerRes = await auth.register({ creds: signUpCred, userData: user });
+		if (registerRes.isErr()) {
+				Err.throw(registerRes.error);
+		}
+		const registeredUser = registerRes.value;
+
 		const migRes = await auth.migrateRegisteredUser({ registeredUser: user, signUpCred });
 		if (migRes.isErr()) {
 			if (migRes.error.type === ErrorType.NotImplementedError) {
@@ -91,7 +97,7 @@
 
 <div id="upgrade-page" class="page">
 	<AppHeader {user} authAPI={auth} />
-	{#if user && !user.last_synced}
+	{#if user && !user.hasFeature('task-sync')}
 		<div class="content">
 			<div class="input-fields">
 				{#if accountIssues.size > 0}

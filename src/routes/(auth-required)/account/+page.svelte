@@ -1,11 +1,11 @@
 <script lang="ts">
 	import UserAvatar from '../../../lib/components/UserAvatar.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import type { LocalUser } from '$lib/API/Auth/types';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 	import { onMount } from 'svelte';
+	import type { LocalUser } from '$lib/API/Auth/User';
 
 	// Svelte 5 state
 	const { data } = $props();
@@ -76,7 +76,7 @@
 				}}>Log Diff</button
 			>
 		{/if}
-		{#if !user.last_synced}
+		{#if !user.hasFeature('task-sync')}
 			<div class="upgrade-section">
 				<h2>Upgrade to Cloud Sync</h2>
 				<p>Sync your data across devices and enable premium features</p>

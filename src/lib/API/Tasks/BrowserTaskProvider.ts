@@ -20,7 +20,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   createTask: async function ({ createDetail: task }) {
-    const [success, errors] = extractBatch(await this.createTasks({ createDetails: [task] }));
+    const [success, errors] = extractBatch(await taskCRUD.createTasks({ createDetails: [task] }));
     if (errors.length > 0) {
       return err(errors[0]);
     } else {
@@ -46,7 +46,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   getTask: async function ({ id }) {
-    const [success, errors] = extractBatch(await this.getTasks({ ids: [id] }));
+    const [success, errors] = extractBatch(await taskCRUD.getTasks({ ids: [id] }));
     if (errors.length > 0) {
       return err(errors[0]);
     } else {
@@ -88,7 +88,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   updateTask: async function (update) {
-    const [success, errors] = extractBatch(await this.updateTasks({ updates: [update] }));
+    const [success, errors] = extractBatch(await taskCRUD.updateTasks({ updates: [update] }));
     if (errors.length > 0) {
       return err(errors[0]);
     } else {
@@ -111,7 +111,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @error {@link IOError} if IndexedDB.delete() fails
    */
   deleteTask: async function (deleteArg) {
-    return await this.deleteTasks({ deleteArgs: [deleteArg] });
+    return await taskCRUD.deleteTasks({ deleteArgs: [deleteArg] });
   },
 
   deleteTasks: ({ deleteArgs }) => _deleteTasksLocal(deleteArgs),

@@ -1,15 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { LocalUser } from "./Auth/types";
 import type { Task, TaskData } from "./Tasks";
 import { AUTH_TABLE_NAME, TASK_TABLE_NAME } from "./SupabaseClient";
+import type { LocalUser } from "./Auth/User";
 
 interface AuthDB extends DBSchema {
     users: {
         key: string;
-        value: LocalUser,
-        indexes: {
-            'by-last-active': string;
-        };
+        value: LocalUser
     };
 }
 interface TaskDB extends DBSchema {
@@ -43,7 +40,6 @@ export const dbPromise = openDB<AppDB & AuthDB & TaskDB>('wayfinder', 1, {
     upgrade(db, oldVer) {
         if (!db.objectStoreNames.contains(AUTH_TABLE_NAME)) {
             const store = db.createObjectStore(AUTH_TABLE_NAME, { keyPath: 'id' });
-            store.createIndex('by-last-active', 'last_active');
         }
         if (!db.objectStoreNames.contains(TASK_TABLE_NAME)) {
             const store = db.createObjectStore(TASK_TABLE_NAME, { keyPath: 'id' });

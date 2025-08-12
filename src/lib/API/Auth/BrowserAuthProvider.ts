@@ -1,11 +1,11 @@
 import { v4 } from 'uuid';
-import type { IAuth, IAuthLocalFunctions, LocalUser, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue, ILocalAuth } from './types';
-import type { ILocalTaskProvider, ITasksLocal, ITasks, TaskSyncQueue } from '../Tasks';
+import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue, ILocalAuth, UserData } from './types';
+import { User, LocalUser } from './User';
+import type { ILocalTaskProvider, ILocalTasks, ITasks, TaskSyncQueue } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, ErrorType, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
 import { SyncQueue } from '../SyncQueue';
-import { extractBatch, extractBatchAndLogErrors, type IProvider } from '../types';
 import { AUTH_TABLE_NAME } from '../SupabaseClient';
 
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
@@ -19,8 +19,8 @@ const local: IAuthLocalFunctions = {
   },
 
   register: async function ({ creds, userData }) {
-    if (userData.last_synced) {
-      return err(new InvalidStateError("Attempted to register a user that is already synced with a server", userData))
+    if (userData.display_name === 'anonymous') {
+      return err(new InvalidStateError("Attempted to register a user that should already be synced with a server", userData))
     }
 
     const reqsResult = auth.getRegistrationRequirements(creds);
@@ -31,8 +31,8 @@ const local: IAuthLocalFunctions = {
     }
 
     assertDB(db);
-    assertRemoteAuth(_remoteAuth, `Cannot migrate without remote auth provider`);
-    assertTasksProvider(_tasks, `Attempted account data migration without remote task provider. Aborting`);
+    assertRemoteAuth(_remoteAuth, `Cannot register without remote auth provider`);
+    assertTasksProvider(_tasks, `Attempted account registration without task provider. Aborting`);
 
     const registerResult = await _remoteAuth.register({ creds, userData });
 
@@ -41,24 +41,16 @@ const local: IAuthLocalFunctions = {
     }
     const registeredUser = registerResult.value;
 
-    // Update the local user with registered user data
-    await db.delete(AUTH_TABLE_NAME, userData.id);
-    await db.put(AUTH_TABLE_NAME, { ...registeredUser, last_synced: new Date(), last_active: new Date() });
+    // Create local user with registered user data
+    const localUser: LocalUser = LocalUser.fromUser(registeredUser);
+    await db.put(AUTH_TABLE_NAME, localUser);
 
     // Update all task ids with new registered user id
-    // TODO:Design This will probably queue an update with the server...
     const changeResult = await _tasks.changeOwnership({ oldUserID: userData.id, newUserID: registeredUser.id });
     if (changeResult.isErr()) {
-      // TODO There's no handler for failed task migration after registration succeeds.
-      // the tasks API will rollback any failures, but the registration process won't know...
+      // Log the error but don't fail the registration
+      Err.throw(changeResult.error, 'Failed to change task ownership during registration:');
     }
-    const [userTasks, taskErrors] = extractBatch(changeResult);
-
-    // TODO:Design So this may be redundant or dangerous...
-    // taskSyncQueue.add(
-    //   'createTasks', { createDetails: userTasks },
-    //   'handleCreateTasksResponse', { createdIds: userTasks.map(t => t.id) }
-    // );
 
     // Switch to the new representation of the user
     await local.switchUser(registeredUser.id);
@@ -88,7 +80,6 @@ const local: IAuthLocalFunctions = {
     const user = await db.get(AUTH_TABLE_NAME, newUserId);
     if (user) {
       await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
-      user.last_active = new Date();
       await db.put(AUTH_TABLE_NAME, user);
       return ok(user);
     } else {
@@ -101,18 +92,24 @@ const local: IAuthLocalFunctions = {
     const users = await db.getAll(AUTH_TABLE_NAME);
     if (users.length === 0) {
       // Only create the anonymous user the first time
-      const newAnon: LocalUser = {
+      const userData: UserData = {
         id: v4(),
-        display_name: undefined, // Anonymous users have no display name
-        last_active: new Date(),
-        auth_provider: 'local',
+        display_name: 'anonymous',
+        created_at: new Date().toISOString(),
+        status: 'active',
+        features: User.getDefaultFeatures(),
       };
 
-      await db.put(AUTH_TABLE_NAME, newAnon);
-      return ok(newAnon);
+      const newAnon = User.fromRaw(userData);
+      const localUser: LocalUser = LocalUser.fromUser(newAnon);
+
+      await db.put(AUTH_TABLE_NAME, localUser);
+      return ok(localUser);
     } else if (users.length === 1) {
-      const anon = users[0];
-      return ok(anon);
+      const userData = users[0];
+      const user = LocalUser.fromRaw(userData) as User;
+      const localUser: LocalUser = LocalUser.fromUser(user);
+      return ok(localUser);
     } else {
       return err(new InvalidStateError("There are too many users to select a default"));
     }
@@ -123,44 +120,8 @@ const local: IAuthLocalFunctions = {
     const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     if (activeId) {
       const user = await db.get(AUTH_TABLE_NAME, activeId);
-      return user ?? null;
+      return user ? LocalUser.fromRaw(user) : null;
     } else return null;
-  },
-
-  migrateRegisteredUser: async function ({ registeredUser, signUpCred }) {
-    // This method is similar to register but for already registered users
-    if (registeredUser.last_synced) {
-      return err(new InvalidStateError("Attempted to migrate a user that is already synced with a server", registeredUser))
-    }
-
-    const reqsResult = auth.getRegistrationRequirements(signUpCred);
-    if (reqsResult.isErr()) {
-      return err(reqsResult.error);
-    } else if (reqsResult.value.length > 0) {
-      return err(new ArgumentError(signUpCred, `Migration credentials had errors. Make sure to call getRegistrationRequirements() before migrateRegisteredUser()`));
-    }
-
-    assertDB(db);
-    assertRemoteAuth(_remoteAuth, `Cannot migrate without remote auth provider`);
-    assertTasksProvider(_tasks, `Attempted account data migration without remote task provider. Aborting`);
-
-    // For migration, we assume the user already exists remotely, so we just need to link them
-    const remoteUser = await _remoteAuth.getUser({ id: registeredUser.id });
-    if (remoteUser.isErr()) {
-      return err(remoteUser.error);
-    }
-
-    // Update the local user with synced status
-    await db.put(AUTH_TABLE_NAME, { ...registeredUser, last_synced: new Date(), last_active: new Date() });
-
-    // Update all task ids with new registered user id
-    const changeResult = await _tasks.changeOwnership({ oldUserID: registeredUser.id, newUserID: remoteUser.value.id });
-    if (changeResult.isErr()) {
-      // Log the error but don't fail the migration
-      console.warn('Failed to change task ownership during migration:', changeResult.error);
-    }
-
-    return ok(remoteUser.value);
   },
 };
 
@@ -187,11 +148,10 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
       Err.throw(new NotFoundError(update.id, "User"));
     }
 
-    const updatedUser = {
+    const updatedUser = LocalUser.fromRaw({
       ...user,
       ...update,
-      // last_active: new Date()
-    };
+    });
 
     await db.put(AUTH_TABLE_NAME, updatedUser);
 
@@ -339,7 +299,7 @@ let _taskSyncQueue: TaskSyncQueue | null = null;
 const BrowserAuthProvider: ILocalAuthProvider = {
   get: async function (
     remoteAuth?: IAuth,
-    tasks?: ITasksLocal,
+    tasks?: ILocalTasks,
   ) {
     db = await dbPromise;
 
@@ -349,9 +309,6 @@ const BrowserAuthProvider: ILocalAuthProvider = {
       const anonRes = await local.getDefaultUser();
       if (anonRes.isOk()) {
         await local.switchUser(anonRes.value.id);
-      } else {
-        // Multiple users and no-one's logged in. 
-        // UI flow should just route to the login page.
       }
     }
 
@@ -381,7 +338,6 @@ const BrowserAuthProvider: ILocalAuthProvider = {
           updateUser: remoteAuth.updateUser,
           handleUpdateUserResponse: auth.handleUpdateUserResponse,
         });
-
     }
 
     return { ...auth, ...local, getSyncQueue: () => _authSyncQueue };

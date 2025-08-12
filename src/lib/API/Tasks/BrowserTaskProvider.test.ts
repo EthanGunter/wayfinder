@@ -1,14 +1,14 @@
 import 'fake-indexeddb/auto'
 import { describe, it, beforeEach, beforeAll, assert, expect, vi, type MockInstance } from 'vitest';
-import type { CreateTaskParams, ITasks, ITasksLocal, TaskSyncQueue } from './types';
+import type { CreateTaskParams, ITasks, ILocalTasks, TaskSyncQueue } from './types';
 import { APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { TASK_TABLE_NAME, AUTH_TABLE_NAME } from '../SupabaseClient';
 import BrowserTaskProvider from './BrowserTaskProvider';
 import { mock, type MockProxy } from 'vitest-mock-extended';
-import type { LocalUser } from '../Auth/types';
 import { extractBatch, okBatch } from '../types';
 import { Err, ErrorType, NotImplementedError } from '$lib/Errors';
 import { err, ok } from 'neverthrow';
+import { LocalUser } from '../Auth/User';
 
 
 //#region Setup
@@ -16,16 +16,24 @@ import { err, ok } from 'neverthrow';
 let db: LocalDB;
 let mockRemoteTasks: MockProxy<ITasks>;
 let syncAddSpy: MockInstance;
-let tasks: ITasksLocal;
+let tasks: ILocalTasks;
 
-const user1: LocalUser = {
+const user1 = LocalUser.fromRaw({
   id: "User1",
-  last_active: new Date(),
-}
-const user2: LocalUser = {
+  display_name: "User1",
+  created_at: "",
+  features: [],
+  status: "active",
+  avatar_url: null
+});
+const user2 = LocalUser.fromRaw({
   id: "User2",
-  last_active: new Date(),
-}
+  display_name: "User2",
+  created_at: "",
+  features: [],
+  status: "active",
+  avatar_url: null
+});
 
 function taskDetail(userId?: string, id?: string): CreateTaskParams {
   return {

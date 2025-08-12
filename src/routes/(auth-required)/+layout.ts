@@ -1,23 +1,25 @@
 import BrowserAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
 import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuthProvider';
-import type { ILocalAuth, LocalUser } from '$lib/API/Auth/types';
-import type { ITasks } from '$lib/API/Tasks';
+import { LocalUser } from '$lib/API/Auth/User';
+import type { ILocalAuth } from '$lib/API/Auth/types';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
-import { Err } from '$lib/Errors';
-import { devStore } from '$lib/stores/devStore.svelte';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutLoad } from './$types';
 import { page } from '$app/state';
 
 export const load: LayoutLoad = async ({ parent, url }) => {
-    // Initialize local auth provider for initial checks
-    const tempAuth = await BrowserAuthProvider.get();
+    // Always initialize remote providers - they're always available
+    const remoteAuth = await SupabaseAuthProvider.get();
+    const remoteTaskProvider = await SupabaseTaskProvider.get();
+
+    const tasks = await BrowserTaskProvider.get(remoteTaskProvider);
+    const auth = await BrowserAuthProvider.get(remoteAuth, tasks);
 
     // Check local account data first
-    let activeUser = await tempAuth.getActiveUser();
+    let activeUser = await auth.getActiveUser();
     if (!activeUser) {
-        const anonRes = await tempAuth.getDefaultUser();
+        const anonRes = await auth.getDefaultUser();
         if (anonRes.isOk()) {
             activeUser = anonRes.value;
         } else {
@@ -26,39 +28,32 @@ export const load: LayoutLoad = async ({ parent, url }) => {
     }
 
     let user: LocalUser;
-    let auth: ILocalAuth;
-    let tasks: ITasks;
 
-    if (activeUser.last_synced) {
-        // User is synced with remote
-        const remoteAuth = await SupabaseAuthProvider.get();
-        const remoteRes = await remoteAuth.getUser({ id: activeUser.id })
-        if (remoteRes.isErr()) {
-            Err.throw(remoteRes.error);
-        }
-        const remoteUser = remoteRes.value;
-
-        user = {
-            ...activeUser,
-            ...remoteUser,
-        };
-
-        const remoteTask = await SupabaseTaskProvider.get();
-        const taskAPI = await BrowserTaskProvider.get(remoteTask);
-        tasks = taskAPI;
-        auth = await BrowserAuthProvider.get(remoteAuth, taskAPI);
-        console.log("Using Browser-wrapped supabase task API");
-    } else {
-        // Use local auth
+    if (activeUser.isAnonymous()) {
+        // Anonymous user - local only
         user = activeUser;
-        tasks = await BrowserTaskProvider.get();
-        auth = await BrowserAuthProvider.get();
-        console.log("Using Browser-only task API");
+    } else {
+        // Non-anonymous user always has remote account
+        // TODO need to establish a way to ensure the local and remote are *always* in sync
+        const remoteRes = await remoteAuth.getUser({ id: activeUser.id });
+        if (remoteRes.isErr()) {
+            // Remote user not found - fall back to local
+            user = activeUser;
+        } else {
+            // Remote user exists - merge data
+            // TODO need to establish a way to ensure the local and remote are *always* in sync
+            const remoteUser = remoteRes.value;
+            
+            // Create a new LocalUser instance with merged data
+            user = LocalUser.fromRawWithLocal({
+                ...activeUser,
+                ...remoteUser,
+                created_at: activeUser.created_at,
+            });
+        }
     }
 
-    tasks = await devStore.getTaskProviderOverride(tasks);
-
-    // TODO: If the user logs in, make sure to sync data with the server
+    // tasks = await devStore.getTaskProviderOverride(tasks);
 
     return { auth, user, tasks };
 };

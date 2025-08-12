@@ -1,23 +1,12 @@
-import type { ILocalTaskProvider, ITasksLocal, ITasks as ITasks, TaskSyncQueue } from "../Tasks";
+import type { ILocalTaskProvider, ILocalTasks, ITasks as ITasks, TaskSyncQueue } from "../Tasks";
 import type { ArgumentError, InvalidStateError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import type { IProvider, Result } from "../types";
 import type { SyncQueue } from "../SyncQueue";
+import type { User, LocalUser } from "./User";
+import type { Tables } from "../supabase";
 
-export interface UserData {
-    display_name?: string;
-    avatar_url?: string | null;
-    last_synced?: Date;
-}
-
-export type User = UserData & { id: string; }
-
-export type LocalUser = User & {
-    last_active: Date;
-    auth_provider?: 'local' | 'email';
-    avatar?: Blob;
-    /** True if the user needs to be manually logged in again */
-    // needsCredentials: boolean; // TODO implement for local security
-}
+// Raw user data from database
+export type UserData = Tables<'users'>;
 
 export type SignInCredentials =
     | { type: 'email_password'; email: string; password: string }
@@ -40,7 +29,7 @@ export enum AccountIssueTarget {
 
 export interface ILocalAuthProvider {
     get(): Promise<ILocalAuth>;
-    get(remoteAuth: IAuth, localTaskProvider: ITasksLocal): Promise<ILocalAuth>;
+    get(remoteAuth: IAuth, localTaskProvider: ILocalTasks): Promise<ILocalAuth>;
 }
 
 export type ILocalAuth = IAuthResponseHandler & Omit<IAuth, "register"> & IAuthLocalFunctions & {
@@ -56,11 +45,11 @@ export interface IAuth {
     /** Defines the requirements and availability for different Authentication methods */
     getRegistrationRequirements(signUpCred: SignInCredentials): Result<MigrationRequirements[], NotImplementedError>,
     /** Responsible for creating a new user account with the given credentials */
-    register(params: { creds: SignInCredentials, userData: UserData }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+    register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
     getUser(params: { id: string }): Promise<Result<User, NotFoundError>>,
     updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
-    deleteUser(params: { userId: string }): Promise<Result<void>>,
-    login(params: { creds: SignInCredentials }): Promise<Result<User, ArgumentError>>,
+    deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
+    login(params: { creds: SignInCredentials }): Promise<Result<User, NotFoundError | ArgumentError | NotImplementedError>>,
     logout(): Promise<Result<void>>,
 }
 
@@ -96,9 +85,7 @@ export interface IAuthLocalFunctions {
     removeUser(userId: string): Promise<void>
     /** Sets the active user for this device */
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
-    /** Registers a remote user account, then migrates the local user's data to the remote provider */
+    /** Registers a remote user account and creates local user simultaneously */
     register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
-    /** Migrates a registered user from local to remote */
-    migrateRegisteredUser(params: { registeredUser: LocalUser, signUpCred: SignInCredentials }): Promise<Result<User, NotImplementedError | ArgumentError>>,
 }
 

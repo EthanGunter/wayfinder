@@ -9,11 +9,11 @@ import { SyncQueue } from "../SyncQueue";
 
 
 export interface ILocalTaskProvider {
-  get(wrappedTasks?: ITasks): Promise<ITasksLocal>;
+  get(wrappedTasks?: ITasks): Promise<ILocalTasks>;
 }
 export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ITaskReverter = ITaskCoreResponseHandler
-export type ITasksLocal = ITasks & ITaskExporter & { getSyncQueue: () => TaskSyncQueue | null };
+export type ILocalTasks = ITasks & ITaskExporter & { getSyncQueue: () => TaskSyncQueue | null };
 export type TaskSyncQueue = SyncQueue<Omit<ITasks,
   | "getAllUserTasks"
   | "getChildrenOf"

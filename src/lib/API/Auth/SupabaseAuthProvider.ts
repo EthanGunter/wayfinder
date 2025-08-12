@@ -7,8 +7,10 @@ import {
     type SignOutOptions,
 } from './types';
 import { type IProvider } from '../types';
-import type { AuthError, UserAttributes } from '@supabase/supabase-js';
-import { NotFoundError, Err, NotImplementedError, NotHandledError, ArgumentError } from '$lib/Errors';
+import type { AuthError, UserAttributes } from '@supabase/auth-js';
+import { NotFoundError, Err, NotImplementedError, NotHandledError, ArgumentError, ErrorType, InvalidStateError } from '$lib/Errors';
+import { User } from './User';
+import type { Tables } from '../supabase';
 
 const core: IAuth = {
     getRegistrationRequirements: function (cred) {
@@ -35,13 +37,12 @@ const core: IAuth = {
     },
 
     register: async function ({ creds, userData: userData }) {
+        // First, create the user in auth.users (this handles email/password)
         const authRes = await supabase.auth.signUp({
             email: creds.email,
             password: creds.password,
-            options: {
-                data: userData,
-            }
-        })
+        });
+
         if (authRes.error) {
             switch (authRes.error.code) {
                 case 'invalid_credentials':
@@ -51,63 +52,101 @@ const core: IAuth = {
             }
         }
 
-        if (authRes.data.user) {
-            return ok(authRes.data.user);
-        } else Err.throw(new NotHandledError("supabase.auth.signUp returned a null user"));
-    },
+        if (!authRes.data.user) {
+            Err.throw(new NotHandledError("supabase.auth.signUp returned a null user"));
+        }
 
-    getUser: function ({ id }) {
-        // TODO How do I get the JWT from supabase?
-        // supabase.auth.getUser()
-        Err.throw(new NotImplementedError("SupabaseAuthProvider.getUser"));
-    },
-
-    // TODO we may need this back...
-    // getActiveUser: async function () {
-    //     const userRes = await supabase.auth.getUser();
-    //     if (userRes.error) {
-    //         Err.throw(userRes.error); // TODO DEV ONLY
-    //     } else {
-    //         const user = userRes.data.user;
-    //         return ok({
-    //             id: user.id,
-    //             display_name: user.user_metadata.displayName,
-    //             avatar_url: user.user_metadata.avatarUrl,
-    //         });
-    //     }
-    // },
-
-    updateUser: async function ({ update }) {
-        const updatedUser: UserAttributes = {
-            // email: update.email,
-            // password: update.password, // TODO This feels like it should be its own, more secure function
-            data: {
-                last_synced: update.last_synced,
-                last_active: new Date(),
-                display_name: update.display_name,
-                avatar_url: update.avatar_url,
-            }
+        // Then, create the user record in our public.users table
+        const userDataForDB: Tables<'users'> = {
+            id: authRes.data.user.id,
+            display_name: userData.display_name,
+            avatar_url: userData.avatar_url,
+            created_at: authRes.data.user.created_at,
+            status: 'active',
+            features: userData.features,
         };
 
-        const userResponse = await supabase.auth.updateUser(updatedUser);
-        if (userResponse.error?.code === 'user_not_found' || !userResponse.data.user) {
-            return err(new NotFoundError(update.display_name ?? update.id, "User"));
-        } else if (userResponse.error)
-            return Err.throw(new NotHandledError(userResponse.error));
+        const { error: insertError } = await supabase
+            .from('users')
+            .insert(userDataForDB);
 
-        return ok(userResponse.data.user);
+        if (insertError) {
+            // If we can't create the user record, we should clean up the auth user
+            // TODO: Implement cleanup of auth user if public.users insert fails
+            Err.throw(new NotHandledError(insertError));
+        }
 
-        // // If updating current user, notify listeners
-        // if (update.id === currentUserId) {
-        // notifyListeners(toLocalUserProxy(updatedUser));
-        // }
+        return ok(User.fromRaw(userDataForDB));
     },
 
+    getUser: async function ({ id }) {
+        const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (userError || !userData) {
+            return err(new NotFoundError(id, "User"));
+        }
+
+        // Check if user is deleted
+        if (userData.status === 'deleted') {
+            return err(new NotFoundError(id, "User account has been deleted"));
+        }
+
+        return ok(User.fromRaw(userData));
+    },
+
+    updateUser: async function ({ update }) {
+        // First, get the current user to check their status
+        const { data: currentUser, error: currentUserError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', update.id)
+            .single();
+
+        if (currentUserError || !currentUser) {
+            return err(new NotFoundError(update.id, "User"));
+        }
+
+        // Check if user is deleted
+        if (currentUser.status === 'deleted') {
+            return err(new NotFoundError(update.id, "Cannot update deleted user account"));
+        }
+
+        // Update the user in our public.users table
+        const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update({
+                display_name: update.display_name,
+                avatar_url: update.avatar_url,
+                // features: update.features, // Should not be allowed to update their own features, right?
+                status: update.status,
+            })
+            .eq('id', update.id)
+            .select('*')
+            .single();
+
+        if (updateError || !updatedUser) {
+            return err(new NotFoundError(update.id, "User"));
+        }
+
+        return ok(User.fromRaw(updatedUser));
+    },
+
+    // TODO Need to update all access to check for deleted users
     deleteUser: async function ({ userId }) {
-        // TODO deleting users requires admin access...
-        // Common suggestion is to have a public.users/profiles table with a foreign-key constraint to auth.users...
-        // Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
-        Err.throw(new NotImplementedError("SupabaseAuth.deleteUser"));
+        // First, mark for deletion in our public.users table
+        const updateResult = await this.updateUser({ update: { id: userId, status: "deleted" } });
+
+        if (updateResult.isErr()) {
+            return err(updateResult.error);
+        }
+
+        // The official deletion will be managed by admin on the backend
+
+        return ok();
     },
 
     login: async function ({ creds }) {
@@ -127,7 +166,26 @@ const core: IAuth = {
                     }
                 } else {
                     const { session, user, weakPassword } = res.data;
-                    return ok(user);
+
+                    // Get user data from our public.users table
+                    const { data: userData, error: userError } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', user.id)
+                        .single();
+                    
+                    if (userError || !userData) {
+                        // User exists in auth but not in our users table - this shouldn't happen
+                        // but we'll handle it gracefully
+                        return err(new NotFoundError(user.id, "User"));
+                    }
+
+                    // Check if user is deleted
+                    if (userData.status === 'deleted') {
+                        return err(new ArgumentError(user.id, "User account has been deleted"));
+                    }
+                    
+                    return ok(User.fromRaw(userData));
                 }
             }
             default: Err.throw(new NotImplementedError(`SupabaseAuth.${creds.type} sign-in`));

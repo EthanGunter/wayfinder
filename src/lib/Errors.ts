@@ -27,10 +27,10 @@ export class Err {
             console.error("HANDLER NOT IMPLEMENTED for: ", error.type + ": " + error.msg);
         throw error.stack;
     }
-    static throw(error: Err | any): never {
+    static throw(error: Err | any, message?: string): never {
         // TODO link to bug report system. Unhandled errors shouldn't happen
         if (!(error instanceof Err)) {
-            error = new Err(1, "Unknown", "", JSON.stringify(error, undefined, 2));
+            error = new Err(1, "Unknown", message ?? "", JSON.stringify(error, undefined, 2));
         }
         error.inheritanceDepth++;
         error.withTrace();
