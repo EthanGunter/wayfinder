@@ -4,7 +4,9 @@
 	import { invalidateAll } from '$app/navigation';
 	import { isAnonymous } from '$lib/API/Auth/User';
 	import type { SignInCredentials } from '$lib/API/Auth/types';
-	import { ErrorType, InputRequiredError } from '$lib/Errors';
+	import { ArgumentError, ErrorType, InputRequiredError } from '$lib/Errors';
+	import { SupabaseAuthClient } from '@supabase/supabase-js/dist/module/lib/SupabaseAuthClient.js';
+	import { SupabaseAuthError } from '$lib/API/Auth/SupabaseAuthProvider.js';
 
 	let redir = page.url.searchParams.get('redirectTo') || '/home';
 	let email = $state('');
@@ -59,6 +61,12 @@
 				// Registration successful, refresh and redirect
 				await invalidateAll();
 				goto(redir);
+			} else if (result.error instanceof SupabaseAuthError) {
+				if (result.error.code === 'user_already_exists') {
+					errorMessage = 'User already exists'; // TODO should we just login
+				} else {
+					errorMessage = result.error.msg || 'Registration failed';
+				}
 			} else {
 				errorMessage = result.error.msg || 'Registration failed';
 			}

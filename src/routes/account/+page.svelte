@@ -1,10 +1,10 @@
 <script lang="ts">
-	import UserAvatar from '../../../lib/components/UserAvatar.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 	import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 
 	// Svelte 5 state
 	const { data } = $props();
@@ -35,6 +35,7 @@
 					...changedFields
 				}
 			});
+			await auth.updateUser({ update: { ...changedFields, id: user.id } });
 			await invalidateAll(); // TODO This may be unnecessary if onAuthChanged gets implemented
 		}
 	}

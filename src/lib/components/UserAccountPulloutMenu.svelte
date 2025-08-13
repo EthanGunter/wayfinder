@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
+	import { page } from '$app/state';
+	import { isAnonymous, userHasFeature, type LocalUser } from '$lib/API/Auth/User';
 	import type { IAuthAPI } from '$lib/API/Auth/types';
 	import UserAvatar from './UserAvatar.svelte';
 	import Pullout from './overlays/Pullout.svelte';
@@ -18,17 +19,19 @@
 	</button>
 	<Pullout bind:open={menuOpen} placement="right">
 		<div id="account-menu-pullout">
-			<button onclick={() => goto('/account')}> Customize User </button>
-			{#if true}
-				<!-- TODO if there's no other local account  -->
+			<h1>Account</h1>
+			<h4>{user.display_name}</h4>
+			{#if isAnonymous(user)}
 				<button
-					onclick={() => {
-						throw new Error('NotImplemented');
-					}}
+					onclick={() => goto(`/login?register&redirectTo=${page.url.pathname + page.url.search}`)}
 				>
-					Add User
+					Create Account
 				</button>
 			{:else}
+				<button onclick={() => goto('/account')}> User Settings </button>
+			{/if}
+			{#if false}
+				<!-- TODO if there are multiple local accounts -->
 				<button
 					onclick={() => {
 						throw new Error('NotImplemented');
@@ -37,7 +40,7 @@
 					Switch User
 				</button>
 			{/if}
-			{#if user.display_name}
+			{#if !isAnonymous(user)}
 				<!-- If not anonymous account -->
 				<button
 					onclick={() => {
@@ -45,15 +48,6 @@
 					}}
 				>
 					Sign out
-				</button>
-			{/if}
-			{#if !userHasFeature(user, 'task-sync')}
-				<button
-					onclick={() => {
-						goto('/account/upgrade');
-					}}
-				>
-					Sync
 				</button>
 			{/if}
 		</div>
@@ -81,6 +75,7 @@
 		}
 	}
 	#account-menu-pullout {
+		min-width: 15rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;

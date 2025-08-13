@@ -127,8 +127,8 @@ export class InvalidStateError extends Err {
     }
 }
 export class ArgumentError extends Err {
-    constructor(argument: any, reason: string) {
-        super(1, ErrorType.ArgumentError, reason, argument);
+    constructor(argument: any, reason: string, context?: any) {
+        super(1, ErrorType.ArgumentError, reason, { argument, context });
     }
 }
 export class InputRequiredError extends Err {
