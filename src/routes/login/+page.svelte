@@ -5,7 +5,6 @@
 	import { isAnonymous } from '$lib/API/Auth/User';
 	import type { SignInCredentials } from '$lib/API/Auth/types';
 	import { ArgumentError, ErrorType, InputRequiredError } from '$lib/Errors';
-	import { SupabaseAuthClient } from '@supabase/supabase-js/dist/module/lib/SupabaseAuthClient.js';
 	import { SupabaseAuthError } from '$lib/API/Auth/SupabaseAuthProvider.js';
 
 	let redir = page.url.searchParams.get('redirectTo') || '/home';

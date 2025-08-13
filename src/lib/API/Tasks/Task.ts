@@ -103,7 +103,7 @@ export class Task implements TaskData {
     }
 
     static populateDTO(dto: CreateTaskParams): PopulatedTaskDTO {
-        return {
+        const populated = {
             id: dto.id,
             user_id: dto.user_id,
             priority: dto.priority ?? 0,
@@ -117,6 +117,10 @@ export class Task implements TaskData {
             parents: dto.parents ?? [],
             children: dto.children ?? [],
         }
+        if (!populated.id)
+            delete populated.id;
+        
+        return populated;
     }
 
     // Helper: Convert TaskData to markdown string

@@ -44,9 +44,13 @@ const core: IAuth = {
         });
 
         if (authRes.error) {
+            console.log(authRes.error);
+
             switch (authRes.error.code) {
                 case 'invalid_credentials':
-                    return err(new ArgumentError(creds, authRes.error.message));
+                case 'user_already_exists':
+                    return err(new SupabaseAuthError(authRes.error));
+
                 default:
                     Err.UNHANDLED(authRes.error);
             }
@@ -212,3 +216,13 @@ const SupabaseAuthProvider: IProvider<IAuth> = {
     get: async () => core,
 }
 export default SupabaseAuthProvider;
+
+
+export class SupabaseAuthError extends Err {
+    code: AuthError['code'];
+
+    constructor(error: AuthError, context?: any) {
+        super(1, ErrorType.ArgumentError, error.message, { error, context });
+        this.code = error.code;
+    }
+}
