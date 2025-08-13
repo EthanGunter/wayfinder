@@ -7,12 +7,14 @@
 	import { ErrorType, InputRequiredError } from '$lib/Errors';
 
 	let redir = page.url.searchParams.get('redirectTo') || '/home';
-	let email = '';
-	let password = '';
-	let displayName = '';
-	let isRegistering = false;
-	let errorMessage = '';
-	let isLoading = false;
+	let email = $state('');
+	let password = $state('');
+	let displayName = $state('');
+	console.log(page.url.searchParams.has('register'));
+
+	let isRegistering = $state(page.url.searchParams.has('register') || false);
+	let errorMessage = $state('');
+	let isLoading = $state(false);
 
 	// Get auth from parent layout
 	const { data } = $props();
@@ -24,7 +26,7 @@
 
 	async function handleRegister() {
 		if (!auth) return;
-		
+
 		isLoading = true;
 		errorMessage = '';
 
@@ -52,13 +54,13 @@
 			}
 
 			const result = await auth.register({ creds, userData });
-			
+
 			if (result.isOk()) {
 				// Registration successful, refresh and redirect
 				await invalidateAll();
 				goto(redir);
 			} else {
-				errorMessage = result.error.message || 'Registration failed';
+				errorMessage = result.error.msg || 'Registration failed';
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';
@@ -70,7 +72,7 @@
 
 	async function handleLogin() {
 		if (!auth) return;
-		
+
 		isLoading = true;
 		errorMessage = '';
 
@@ -83,11 +85,12 @@
 				await invalidateAll();
 				goto(redir);
 			} else {
-				if (result.error instanceof InputRequiredError && result.error.data?.requiresMigration) {
+				if (result.error instanceof InputRequiredError && result.error.context?.requiresMigration) {
 					// Special case: anonymous user has local data, need migration decision
-					errorMessage = 'You have local data that needs to be migrated. Please use the migration options in the app.';
+					errorMessage =
+						'You have local data that needs to be migrated. Please use the migration options in the app.';
 				} else {
-					errorMessage = result.error.message || 'Login failed';
+					errorMessage = result.error.msg || 'Login failed';
 				}
 			}
 		} catch (error) {
@@ -107,28 +110,30 @@
 <div class="login-page">
 	<div class="login-container">
 		<h1>{isRegistering ? 'Create Account' : 'Sign In'}</h1>
-		
+
 		{#if errorMessage}
 			<div class="error-message">
 				{errorMessage}
 			</div>
 		{/if}
 
-		<form onsubmit={(e) => {
-			e.preventDefault();
-			if (isRegistering) {
-				handleRegister();
-			} else {
-				handleLogin();
-			}
-		}}>
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				if (isRegistering) {
+					handleRegister();
+				} else {
+					handleLogin();
+				}
+			}}
+		>
 			{#if isRegistering}
 				<div class="form-group">
 					<label for="displayName">Display Name</label>
-					<input 
-						id="displayName" 
-						type="text" 
-						bind:value={displayName} 
+					<input
+						id="displayName"
+						type="text"
+						bind:value={displayName}
 						placeholder="Enter your name"
 						required
 					/>
@@ -137,32 +142,22 @@
 
 			<div class="form-group">
 				<label for="email">Email</label>
-				<input 
-					id="email" 
-					type="email" 
-					bind:value={email} 
-					placeholder="Enter your email"
-					required
-				/>
+				<input id="email" type="email" bind:value={email} placeholder="Enter your email" required />
 			</div>
 
 			<div class="form-group">
 				<label for="password">Password</label>
-				<input 
-					id="password" 
-					type="password" 
-					bind:value={password} 
+				<input
+					id="password"
+					type="password"
+					bind:value={password}
 					placeholder="Enter your password"
 					required
 				/>
 			</div>
 
-			<button 
-				type="submit" 
-				class="btn-primary" 
-				disabled={isLoading}
-			>
-				{isLoading ? 'Please wait...' : (isRegistering ? 'Create Account' : 'Sign In')}
+			<button type="submit" class="btn-primary" disabled={isLoading}>
+				{isLoading ? 'Please wait...' : isRegistering ? 'Create Account' : 'Sign In'}
 			</button>
 		</form>
 
@@ -173,7 +168,7 @@
 		</div>
 
 		<div class="back-to-app">
-			<button type="button" class="btn-secondary" onclick={() => goto('/home')}>
+			<button type="button" class="btn-secondary" onclick={() => goto(redir ?? '/home')}>
 				Back to App
 			</button>
 		</div>

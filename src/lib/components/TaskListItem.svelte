@@ -16,6 +16,7 @@
 		onDrop?: (e: CustomEvent) => void;
 		onDelete?: (task: Task) => void;
 	} = $props();
+	
 	let listItemEl = $state<HTMLLIElement>();
 	let inputEl = $state<HTMLInputElement>();
 
@@ -107,7 +108,7 @@
 	<ContextMenu target={listItemEl} bind:open={showContextMenu}>
 		<button onclick={rename}> ✏️ Rename </button>
 		<!-- <button onclick={openMoveDialogue}> ↗️ Move </button> -->
-		<button onclick={handleTitleClick}> 🔗 Open </button>
+		<!-- <button onclick={handleTitleClick}> 🔗 Open </button> -->
 		<button class="alert" onclick={openDeleteDialogue}> 🗑️ Delete </button>
 
 		<!-- Delete Confirmation Dialog -->

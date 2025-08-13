@@ -7,7 +7,9 @@
 	import { onMount } from 'svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
+	import { isAnonymous } from '$lib/API/Auth/User.js';
 
+	// TODO: Add auth redirect logic here if this route requires authentication
 	// TODO if the user is not synced, offer a "login" & "get started locally" option
 
 	const { data } = $props();
@@ -101,6 +103,18 @@
 		// alert('Start project (stub)');
 	}
 
+	async function handleDeleteTask(task: Task, source: 'today' | 'suggested') {
+		// TODO: Add recursive delete UI
+		const deleteRes = await tasks.deleteTask({ taskOrId: task, recursive: false });
+		if (deleteRes.isOk()) {
+			if (source === 'today') {
+				todaysList = todaysList.filter((t) => t.id !== task.id);
+			} else {
+				suggestedTasks = suggestedTasks.filter((t) => t.id !== task.id);
+			}
+		}
+	}
+
 	// Filter completed tasks and duplicates
 	let filteredDaysTasks = $derived(
 		todaysList.filter((t) => !t.completed).sort((a, b) => (a.title < b.title ? -1 : 1))
@@ -116,36 +130,42 @@
 <div class="page page-todays-tasks">
 	<AppHeader user={data.user} authAPI={auth} />
 	<div class="content">
-		Logged in as {data.user.display_name ?? 'Anonymous'}
-		<div
-			id="todays-tasks-list"
-			use:droppable={{
-				accepts: ['task'],
-				onDrop: handleTodaysTaskDrop
-			}}
-		>
-			<h1>Today's Tasks</h1>
-			{#if filteredDaysTasks.length === 0}
-				<h4>Empty todolist!</h4>
-			{/if}
-			{#if filteredSuggestedTasks.length > 0}
-				<h4>Drag some suggestions in!</h4>
-			{/if}
-			{#if suggestedTasks.length === 0 && todaysList.length === 0}
-				<div>
-					<br />
-					<button id="add-task-button" onclick={startProject}>Start a Project</button>
-				</div>
-			{/if}
+		{#if isAnonymous(user) && !hasAnyTasks}
+			<div class="auth-options">
+				<h3>Welcome to Wayfinder!</h3>
+				<button id="add-task-button" onclick={startProject}>Start a Project</button>
+			</div>
+			<p class="auth-note">Or sign in to sync your data.</p>
+			<button class="btn-secondary" onclick={() => goto('/login')}> Sign In </button>
+			<button class="btn-primary" onclick={() => goto('/login?register')}> Create Account </button>
+		{:else}
+			<div
+				id="todays-tasks-list"
+				use:droppable={{
+					accepts: ['task'],
+					onDrop: handleTodaysTaskDrop
+				}}
+			>
+				<h1>Today's Tasks</h1>
+				{#if filteredDaysTasks.length === 0}
+					<h4>Empty todolist!</h4>
+				{/if}
+				{#if filteredSuggestedTasks.length > 0}
+					<h4>Drag some suggestions in!</h4>
+				{/if}
+				{#if suggestedTasks.length === 0 && todaysList.length === 0}
+					<div>
+						<br />
+						<button id="add-task-button" onclick={startProject}>Start a Project</button>
+					</div>
+				{/if}
 
-			<ItemList items={filteredDaysTasks}>
-				{#snippet listItem(task, index)}
-					<TaskListItem {task} />
-				{/snippet}
-			</ItemList>
-		</div>
-
-		{#if todaysList.length < 999}
+				<ItemList items={filteredDaysTasks}>
+					{#snippet listItem(task, index)}
+						<TaskListItem {task} onDelete={(task) => handleDeleteTask(task, 'today')} />
+					{/snippet}
+				</ItemList>
+			</div>
 			<div
 				id="suggested-tasks-list"
 				use:droppable={{
@@ -156,30 +176,9 @@
 				<h2>Suggested Tasks</h2>
 				<ItemList items={filteredSuggestedTasks}>
 					{#snippet listItem(task, index)}
-						<TaskListItem {task} />
+						<TaskListItem {task} onDelete={(task) => handleDeleteTask(task, 'suggested')} />
 					{/snippet}
 				</ItemList>
-			</div>
-		{/if}
-
-		<!-- Non-invasive auth options when no tasks exist -->
-		{#if !hasAnyTasks && user.display_name === 'anonymous'}
-			<div class="auth-options">
-				<div class="auth-message">
-					<h3>Welcome to Wayfinder!</h3>
-					<p>You're currently using the app as a guest. Your tasks will be saved locally on this device.</p>
-				</div>
-				<div class="auth-buttons">
-					<button class="btn-secondary" onclick={() => goto('/login')}>
-						Sign In
-					</button>
-					<button class="btn-primary" onclick={() => goto('/login')}>
-						Create Account
-					</button>
-				</div>
-				<div class="auth-note">
-					<p>You can continue using the app as a guest and sign up later to sync your data.</p>
-				</div>
 			</div>
 		{/if}
 	</div>
@@ -211,6 +210,10 @@
 	}
 
 	.auth-options {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+
 		margin-top: 3rem;
 		padding: 2rem;
 		background: var(--background-modifier-hover, #f8f9fa);
@@ -225,21 +228,8 @@
 		font-size: 1.5rem;
 	}
 
-	.auth-message p {
-		margin: 0 0 1.5rem 0;
-		color: var(--color-text-secondary, #666);
-		font-size: 1rem;
-		line-height: 1.5;
-	}
-
-	.auth-buttons {
-		display: flex;
-		gap: 1rem;
-		justify-content: center;
-		margin-bottom: 1.5rem;
-	}
-
-	.btn-primary, .btn-secondary {
+	.btn-primary,
+	.btn-secondary {
 		padding: 0.75rem 1.5rem;
 		border: none;
 		border-radius: 6px;
@@ -248,7 +238,7 @@
 		cursor: pointer;
 		transition: all 0.2s ease;
 		text-decoration: none;
-		display: inline-block;
+		/* display: inline-block; */
 	}
 
 	.btn-primary {
@@ -273,7 +263,7 @@
 		border-color: var(--color-border-hover, #999);
 	}
 
-	.auth-note p {
+	.auth-note {
 		margin: 0;
 		color: var(--color-text-tertiary, #888);
 		font-size: 0.9rem;
