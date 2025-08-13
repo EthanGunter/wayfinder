@@ -3,7 +3,7 @@
 	import { type Snippet } from 'svelte';
 	interface Props {
 		task: Task;
-		onTaskChange?: (update: Partial<Task>) => void;
+		onTaskChange?: (original: Task, update: Partial<Task>) => void;
 		children: Snippet;
 	}
 	let { task = $bindable(), onTaskChange, children }: Props = $props();
@@ -14,12 +14,12 @@
 		if (target.name === 'description') {
 			task.content = target.value;
 		}
-		onTaskChange?.({ [target.name]: target.value });
+		onTaskChange?.(task, { [target.name]: target.value });
 	}
 
 	function handleCheckbox(event: Event) {
 		const target = event.target as HTMLInputElement;
-		onTaskChange?.({ status: target.checked ? TaskStatus.complete : TaskStatus.incomplete });
+		onTaskChange?.(task, { status: target.checked ? TaskStatus.complete : TaskStatus.incomplete });
 	}
 </script>
 
@@ -39,7 +39,7 @@
 			name="description"
 			id="task-editor-notes"
 			placeholder="Notes"
-			value={task.content ?? null}
+			bind:value={task.content}
 			oninput={handleInput}
 		></textarea>
 	</div>

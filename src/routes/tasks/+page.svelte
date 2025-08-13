@@ -115,12 +115,8 @@
 		}
 	}
 
-	async function onTaskChange(update: Partial<Task>) {
-		// api.then((api) => {
-		if (currentTask) {
-			debouncedUpdate({ taskOrId: currentTask, changes: update });
-		}
-		// });
+	async function onTaskChange(original: Task, update: Partial<Task>) {
+		debouncedUpdate({ taskOrId: original, changes: update });
 	}
 
 	function onListOrderChanged(items: Task[]) {
@@ -135,10 +131,10 @@
 
 	async function handleTaskDelete(task: Task) {
 		// Remove the task from the visual list
-		children = children.filter((x) => x.id !== task.id);
-		// const api = await api;
-		if ((await tasks.deleteTask({ taskOrId: task.id })).isErr()) {
-			// Something went wrong, add the item back to the list
+		const deleteResult = await tasks.deleteTask({ taskOrId: task.id });
+
+		if (deleteResult.isOk()) {
+			children = children.filter((x) => x.id !== task.id);
 		}
 	}
 </script>
@@ -166,7 +162,7 @@
 			<TaskEditor bind:task={currentTask} {onTaskChange}>
 				<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 					{#snippet listItem(task, index)}
-						<TaskListItem {task} onDelete={handleTaskDelete} />
+						<TaskListItem {task} onDelete={handleTaskDelete} {onTaskChange} />
 					{/snippet}
 				</ItemList>
 			</TaskEditor>

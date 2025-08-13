@@ -9,14 +9,16 @@
 		task,
 		onDragStart,
 		onDrop,
-		onDelete /* children */
+		onDelete /* children */,
+		onTaskChange
 	}: {
 		task: Task;
 		onDragStart?: (e: CustomEvent) => void;
 		onDrop?: (e: CustomEvent) => void;
 		onDelete?: (task: Task) => void;
+		onTaskChange?: (original: Task, changes: Partial<Task>) => void;
 	} = $props();
-	
+
 	let listItemEl = $state<HTMLLIElement>();
 	let inputEl = $state<HTMLInputElement>();
 
@@ -45,7 +47,7 @@
 			clearTimeout(dblClickTimeout);
 			dblClickTimeout = null;
 			rename();
-		}
+		} // TODO add touch-hold to rename
 	}
 	function openDeleteDialogue() {
 		showDeleteDialog = true;
@@ -66,6 +68,9 @@
 	}
 	function handleBlur() {
 		editName = false;
+		if (title != task.title) {
+			onTaskChange?.(task, { title });
+		}
 	}
 </script>
 
