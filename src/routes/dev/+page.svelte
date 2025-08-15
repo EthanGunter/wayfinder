@@ -12,10 +12,9 @@
 		type DragStartEvent,
 		type DropEvent
 	} from '$lib/actions/dnd';
-	import DndExamples from './DndExamples.svelte';
+	import { Button } from '@/components/ui/button';
 
 	let showOverlays = $state(false);
-	let showDnd = $state(false);
 
 	let showModal = $state(false);
 	let showOverlay = $state(false);
@@ -24,26 +23,23 @@
 
 <div class="examples">
 	<div>
-		<button onclick={() => (showOverlays = !showOverlays)}>
+		<Button onclick={() => (showOverlays = !showOverlays)}>
 			{showOverlays ? '✔️' : '❌'}Overlays
-		</button>
-		<button onclick={() => (showDnd = !showDnd)}>
-			{showDnd ? '✔️' : '❌'}Drag and Drop
-		</button>
+		</Button>
 	</div>
 	{#if showOverlays}
-		<button
+		<Button
 			onclick={() => {
 				showOverlay = true;
 			}}
 		>
 			open overlay
-		</button>
+		</Button>
 		<OverlayElement dismissable={true} bind:open={showOverlay}>
 			This is the simplest form of overlay!
 		</OverlayElement>
 		<Modal title="Test Modal" bind:open={showModal}>Yep, this is a modal.</Modal>
-		<button onclick={() => (openPullout = true)}>Open pullout</button>
+		<Button onclick={() => (openPullout = true)}>Open pullout</Button>
 		<Pullout bind:open={openPullout} placement="left">
 			<h1>Hello! I'm a pullout</h1>
 		</Pullout>
@@ -52,23 +48,23 @@
 
 		<section>
 			<h3>1. Basic Tooltip</h3>
-			<button id="basic-btn" onclick={() => (showModal = true)}>Hover me</button>
+			<Button id="basic-btn" onclick={() => (showModal = true)}>Hover me</Button>
 			<Tooltip forElement="#basic-btn" position="mouse">This is a helpful tooltip!</Tooltip>
 		</section>
 
 		<section>
 			<h3>2. Different Positions</h3>
 			<div class="position-grid">
-				<button id="top">Top</button>
+				<Button id="top">Top</Button>
 				<Tooltip forElement="#top" position="top" followMouse>Top tooltip</Tooltip>
 
-				<button id="right">Right</button>
+				<Button id="right">Right</Button>
 				<Tooltip forElement="#right" position="right" followMouse>Right tooltip</Tooltip>
 
-				<button id="bottom">Bottom</button>
+				<Button id="bottom">Bottom</Button>
 				<Tooltip forElement="#bottom" position="bottom" followMouse>Bottom tooltip</Tooltip>
 
-				<button id="left">Left</button>
+				<Button id="left">Left</Button>
 				<Tooltip forElement="#left" position="left" followMouse>Left tooltip</Tooltip>
 			</div>
 		</section>
@@ -100,7 +96,7 @@
 
 		<section>
 			<h3>5. Delayed Tooltip</h3>
-			<button id="wait">Hover and wait</button>
+			<Button id="wait">Hover and wait</Button>
 			<Tooltip forElement="#wait" position="top" delay={500}
 				>This tooltip appears after a delay</Tooltip
 			>
@@ -109,10 +105,10 @@
 		<section>
 			<h3>6. Advanced Tooltip with Named Slots</h3>
 			<div class="advanced-examples">
-				<button class="fancy-button">
+				<Button class="fancy-button">
 					<span class="icon">✨</span>
 					<span>Fancy Button</span>
-				</button>
+				</Button>
 
 				<Tooltip forElement=".fancy-button" position="top">
 					<div class="rich-tooltip">
@@ -170,10 +166,6 @@
 				</Tooltip>
 			</div>
 		</section>
-	{/if}
-
-	{#if showDnd}
-		<DndExamples />
 	{/if}
 </div>
 

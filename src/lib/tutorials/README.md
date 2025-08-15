@@ -90,7 +90,7 @@ A flexible, component-based tutorial system for Svelte applications.
   });
 </script>
 
-<button class="my-button">Click me</button>
+<Button class="my-button">Click me</Button>
 ```
 
 ## Pre-built Elements

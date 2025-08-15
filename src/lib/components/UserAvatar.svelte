@@ -1,9 +1,5 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
-	import type { LocalUser } from '$lib/API/Auth/types';
-	import AppFooter from '$lib/components/AppFooter.svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
-	import debounce from '$lib/debounce';
+	import type { LocalUser } from '@/API/Auth/User';
 
 	interface Props {
 		user: LocalUser;

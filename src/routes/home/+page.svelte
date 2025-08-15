@@ -8,6 +8,7 @@
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { isAnonymous } from '$lib/API/Auth/User.js';
+	import { Button } from '@/components/ui/button';
 
 	// TODO: Add auth redirect logic here if this route requires authentication
 	// TODO if the user is not synced, offer a "login" & "get started locally" option
@@ -133,11 +134,11 @@
 		{#if isAnonymous(user) && !hasAnyTasks}
 			<div class="auth-options">
 				<h3>Welcome to Wayfinder!</h3>
-				<button id="add-task-button" onclick={startProject}>Start a Project</button>
+				<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
 			</div>
 			<p class="auth-note">Or sign in to sync your data.</p>
-			<button class="btn-secondary" onclick={() => goto('/login')}> Sign In </button>
-			<button class="btn-primary" onclick={() => goto('/login?register')}> Create Account </button>
+			<Button class="btn-secondary" onclick={() => goto('/login')}> Sign In </Button>
+			<Button class="btn-primary" onclick={() => goto('/login?register')}> Create Account </Button>
 		{:else}
 			<div
 				id="todays-tasks-list"
@@ -156,7 +157,7 @@
 				{#if suggestedTasks.length === 0 && todaysList.length === 0}
 					<div>
 						<br />
-						<button id="add-task-button" onclick={startProject}>Start a Project</button>
+						<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
 					</div>
 				{/if}
 

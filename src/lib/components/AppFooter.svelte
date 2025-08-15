@@ -3,6 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
+	import { Button } from './ui/button';
 
 	interface Props {
 		children?: Snippet;
@@ -24,14 +25,14 @@
 	{#if children}
 		{@render children()}
 	{:else}
-		<button onclick={() => navTo('/home')} aria-label="Go to home">
+		<Button onclick={() => navTo('/home')} aria-label="Go to home">
 			<!-- TODO: Replace with real icon - using ChecklistIcon equivalent -->
 			<span>✓</span>
-		</button>
-		<button onclick={() => navTo('/tasks')} aria-label="Go to tasks">
+		</Button>
+		<Button onclick={() => navTo('/tasks')} aria-label="Go to tasks">
 			<!-- TODO: Replace with real icon - using AccountTreeIcon equivalent -->
 			<span>🌳</span>
-		</button>
+		</Button>
 	{/if}
 </div>
 

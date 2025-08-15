@@ -1,10 +1,8 @@
-<!-- SvelteKit root layout for PWA -->
-
 <script lang="ts">
-	// Import global styles
+	import '../app.css';
 	import '$lib/_global-styles.scss';
 	import '$lib/resets.scss';
-
+	
 	const { children } = $props();
 
 	//TODO Implement handlers for Browser/Android back buttons,

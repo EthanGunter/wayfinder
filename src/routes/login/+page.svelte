@@ -5,6 +5,7 @@
 	import { isAnonymous } from '$lib/API/Auth/User';
 	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { ArgumentError, ErrorType, InputRequiredError } from '$lib/Errors';
+	import { Button } from '@/components/ui/button';
 	// import { SupabaseAuthError } from '$lib/API/Auth/SupabaseAuthProvider.js';
 
 	let redir = page.url.searchParams.get('redirect') || '/home';
@@ -169,15 +170,15 @@
 					/>
 				</div>
 
-				<button type="submit" class="btn-primary" disabled={isLoading}>
+				<Button type="submit" class="btn-primary" disabled={isLoading}>
 					{isLoading ? 'Please wait...' : isRegistering ? 'Create Account' : 'Login'}
-				</button>
+				</Button>
 			</form>
 
 			<div class="toggle-mode">
-				<button type="button" class="btn-link" onclick={toggleMode}>
+				<Button type="button" class="btn-link" onclick={toggleMode}>
 					{isRegistering ? 'Already have an account? Login' : "Don't have an account? Create one"}
-				</button>
+				</Button>
 			</div>
 		{:else}
 			<h1>Offline</h1>
@@ -195,9 +196,9 @@
 		{/if}
 
 		<div class="back-to-app">
-			<button type="button" class="btn-secondary" onclick={() => goto(redir ?? '/home')}>
+			<Button type="button" class="btn-secondary" onclick={() => goto(redir ?? '/home')}>
 				Back to App
-			</button>
+			</Button>
 		</div>
 	</div>
 </div>

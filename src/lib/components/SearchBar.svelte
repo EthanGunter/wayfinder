@@ -1,5 +1,6 @@
 <script lang="ts" generics="T">
 	import type { Snippet } from 'svelte';
+	import { Button } from './ui/button';
 
 	interface Props {
 		onItemSelected?: (item: T | string) => void;
@@ -100,13 +101,13 @@
 		<ul class="search-results" class:inverted>
 			{#each displayResults as result}
 				<li class="search-result">
-					<button onclick={() => selectItem(result)} tabindex="0">
+					<Button onclick={() => selectItem(result)} tabindex={0}>
 						{#if children}
 							{@render children(result)}
 						{:else}
 							{result?.toString() ?? ''}
 						{/if}
-					</button>
+					</Button>
 				</li>
 			{/each}
 		</ul>

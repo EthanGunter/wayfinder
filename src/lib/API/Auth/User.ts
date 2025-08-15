@@ -31,7 +31,7 @@ export function userHasFeature(user: User, feature: UserFeatures): boolean {
  * Check if the user is anonymous (has a special anonymous ID)
  */
 export function isAnonymous(user: User): boolean {
-  return user.display_name === 'anonymous';
+  return user.id === 'anonymous';
 }
 
 /**

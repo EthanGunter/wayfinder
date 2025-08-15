@@ -1,6 +1,6 @@
 import { v4 } from 'uuid';
 import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue, ILocalAuth, UserData } from './types';
-import { getDefaultUserFeatures } from './User';
+import { getDefaultUserFeatures, isAnonymous } from './User';
 import type { ILocalTaskProvider, ILocalTasks, ITasks, TaskSyncQueue } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
@@ -20,8 +20,8 @@ const local: IAuthLocalFunctions = {
   },
 
   register: async function ({ creds, userData }) {
-    if (userData.display_name === 'anonymous') {
-      return err(new InvalidStateError("Cannot register an account with 'anonymous' display name", userData))
+    if (isAnonymous(userData)) {
+      return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
     }
 
     const reqsResult = auth.getRegistrationRequirements(creds);
@@ -38,7 +38,7 @@ const local: IAuthLocalFunctions = {
     // Check if there's an anonymous user with local data that needs migration
     const currentUser = await local.getActiveUser();
     const hasAnonymousWithData = currentUser &&
-      currentUser.display_name === 'anonymous' &&
+      isAnonymous(currentUser) &&
       await _hasLocalData(currentUser.id);
 
     // Create the new account on the server
@@ -107,8 +107,8 @@ const local: IAuthLocalFunctions = {
     if (users.length === 0) {
       // Only create the anonymous user the first time
       const userData: UserData = {
-        id: v4(),
-        display_name: 'anonymous',
+        id: 'anonymous',
+        display_name: 'Anonymous',
         created_at: new Date().toISOString(),
         status: 'active',
         features: getDefaultUserFeatures(),
@@ -258,7 +258,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
     // Check if current user is anonymous and has local data
     const currentUser = await local.getActiveUser();
-    if (currentUser && currentUser.display_name === 'anonymous') {
+    if (currentUser && isAnonymous(currentUser)) {
       const hasLocalData = await _hasLocalData(currentUser.id);
 
       if (hasLocalData) {

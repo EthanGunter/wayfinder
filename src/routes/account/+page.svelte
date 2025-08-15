@@ -6,6 +6,7 @@
 	import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { page } from '$app/state';
+	import { Button } from '@/components/ui/button';
 
 	// Svelte 5 state
 	const { data } = $props();
@@ -58,7 +59,7 @@
 <div id="account-page" class="page">
 	<AppHeader {user} authAPI={auth}>
 		{#snippet left()}
-			<button onclick={goBAck}>Back</button>
+			<Button onclick={goBAck}>Back</Button>
 		{/snippet}
 	</AppHeader>
 	<div class="content">
@@ -82,7 +83,7 @@
 				/>
 			</span>
 			<!-- TODO Local Passkey <section id="sec-passkey">
-				<button>Passkey</button>
+				<Button>Passkey</Button>
 				<input
 				id="input_passkey"
 				type="password"
@@ -99,7 +100,7 @@
 						</section> -->
 		</div>
 		{#if !equals(user, data.user)}
-			<button onclick={saveUserChanges}>Save Changes</button>
+			<Button onclick={saveUserChanges}>Save Changes</Button>
 		{/if}
 		{#if !userHasFeature(user, 'task-sync')}
 			<div class="upgrade-section">
@@ -111,7 +112,7 @@
 					<li>✓ Real-time synchronization</li>
 					<li>✓ Priority support</li>
 				</ul>
-				<button
+				<Button
 					class="btn-upgrade"
 					onclick={async () => {
 						await saveUserChanges();
@@ -119,10 +120,10 @@
 					}}
 				>
 					Upgrade to Cloud Sync
-				</button>
+				</Button>
 			</div>
 		{/if}
-		<!-- TODO Add no-account login page <button class="alert" onclick={auth.signOut}>Sign out</button> -->
+		<!-- TODO Add no-account login page <Button class="alert" onclick={auth.signOut}>Sign out</Button> -->
 	</div>
 	<AppFooter />
 </div>

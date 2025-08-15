@@ -1,5 +1,6 @@
 <script lang="ts">
 	import TooltipTimed from '$lib/components/overlays/TooltipTimed.svelte';
+	import { Button } from '@/components/ui/button';
 
 	export interface Props {
 		forElement: string | HTMLElement;
@@ -33,13 +34,13 @@
 	{#if showControls}
 		<div class="tutorial-controls">
 			{#if onPrevious}
-				<button onclick={onPrevious} class="tutorial-btn secondary">Previous</button>
+				<Button onclick={onPrevious} class="tutorial-btn secondary">Previous</Button>
 			{/if}
 			{#if onNext}
-				<button onclick={onNext} class="tutorial-btn primary">Next</button>
+				<Button onclick={onNext} class="tutorial-btn primary">Next</Button>
 			{/if}
 			{#if onSkip}
-				<button onclick={onSkip} class="tutorial-btn skip">Skip Tutorial</button>
+				<Button onclick={onSkip} class="tutorial-btn skip">Skip Tutorial</Button>
 			{/if}
 		</div>
 	{/if}

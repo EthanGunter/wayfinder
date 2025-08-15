@@ -4,6 +4,7 @@
 	import type { Task } from '$lib/API/Tasks/Task';
 	import ContextMenu from './ContextMenu.svelte';
 	import Modal from './overlays/Modal.svelte';
+	import { Button } from './ui/button';
 
 	const {
 		task,
@@ -108,13 +109,13 @@
 			{title}
 		</span>
 	{/if}
-	<button onclick={() => (showContextMenu = true)}> ⫶ </button>
+	<Button onclick={() => (showContextMenu = true)}>⫶</Button>
 
 	<ContextMenu target={listItemEl} bind:open={showContextMenu}>
-		<button onclick={rename}> ✏️ Rename </button>
-		<!-- <button onclick={openMoveDialogue}> ↗️ Move </button> -->
-		<!-- <button onclick={handleTitleClick}> 🔗 Open </button> -->
-		<button class="alert" onclick={openDeleteDialogue}> 🗑️ Delete </button>
+		<Button onclick={rename}>✏️ Rename</Button>
+		<!-- <Button onclick={openMoveDialogue}> ↗️ Move </Button> -->
+		<!-- <Button onclick={handleTitleClick}> 🔗 Open </Button> -->
+		<Button class="alert" onclick={openDeleteDialogue}>🗑️ Delete</Button>
 
 		<!-- Delete Confirmation Dialog -->
 	</ContextMenu>
@@ -126,8 +127,8 @@
 				<p>This will also delete <em>all</em> descendants.</p>
 			{/if} -->
 			<div class="dialog-buttons">
-				<button class="alert" onclick={() => resolveDelete(true)}> Yes </button>
-				<button onclick={() => resolveDelete(false)}> Cancel </button>
+				<Button class="alert" onclick={() => resolveDelete(true)}>Yes</Button>
+				<Button onclick={() => resolveDelete(false)}>Cancel</Button>
 			</div>
 		</div>
 	</Modal>

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Button } from '@/components/ui/button';
+
 	export interface Props {
 		title?: string;
 		content: string;
@@ -9,12 +11,12 @@
 		size?: 'small' | 'medium' | 'large';
 	}
 
-	const { 
-		title, 
-		content, 
-		onNext, 
-		onPrevious, 
-		onSkip, 
+	const {
+		title,
+		content,
+		onNext,
+		onPrevious,
+		onSkip,
 		showControls = true,
 		size = 'medium'
 	}: Props = $props();
@@ -32,13 +34,13 @@
 		{#if showControls}
 			<div class="tutorial-controls">
 				{#if onPrevious}
-					<button onclick={onPrevious} class="tutorial-btn secondary">Previous</button>
+					<Button onclick={onPrevious} class="tutorial-btn secondary">Previous</Button>
 				{/if}
 				{#if onNext}
-					<button onclick={onNext} class="tutorial-btn primary">Next</button>
+					<Button onclick={onNext} class="tutorial-btn primary">Next</Button>
 				{/if}
 				{#if onSkip}
-					<button onclick={onSkip} class="tutorial-btn skip">Skip Tutorial</button>
+					<Button onclick={onSkip} class="tutorial-btn skip">Skip Tutorial</Button>
 				{/if}
 			</div>
 		{/if}

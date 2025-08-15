@@ -9,6 +9,7 @@
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
 	import { ErrorType } from '$lib/Errors.js';
+	import Button from '@/components/ui/button/button.svelte';
 
 	const { data } = $props();
 	const auth = data.auth;
@@ -166,14 +167,14 @@
 					{/snippet}
 				</ItemList>
 			</TaskEditor>
-			<button id="add-task-button" onclick={addTask}>Add Task</button>
+			<Button id="add-task-button" onclick={addTask}>Add Task</Button>
 		{:else}
 			<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 				{#snippet listItem(task, index)}
 					<TaskListItem {task} onDelete={handleTaskDelete} />
 				{/snippet}
 			</ItemList>
-			<button id="add-task-button" onclick={addTask}>New Project</button>
+			<Button id="add-task-button" onclick={addTask}>New Project</Button>
 		{/if}
 	</div>
 	<AppFooter />

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Modal from '$lib/components/overlays/Modal.svelte';
+	import { Button } from './ui/button';
 	interface Props {
 		onSubmit?: () => void;
 		children: Snippet;
@@ -33,9 +34,9 @@
 	}
 </script>
 
-<button class="bug-report-menu" onclick={() => (showModal = true)} aria-label="Report a bug">
+<Button class="bug-report-menu" onclick={() => (showModal = true)} aria-label="Report a bug">
 	{@render children()}
-</button>
+</Button>
 
 <Modal
 	bind:open={showModal}

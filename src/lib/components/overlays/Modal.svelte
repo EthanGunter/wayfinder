@@ -4,6 +4,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import OverlayElement from './OverlayElement.svelte';
+	import { Button } from '../ui/button';
 
 	interface Props {
 		open: boolean;
@@ -36,7 +37,7 @@
 	{#if title}
 		<header class="modal-header">
 			<h2 class="modal-title">{title}</h2>
-			<button class="modal-close" onclick={handleCancel} aria-label="Close modal"> × </button>
+			<Button class="modal-close" onclick={handleCancel} aria-label="Close modal"> × </Button>
 		</header>
 	{/if}
 
@@ -47,9 +48,9 @@
 	{#if buttons.length > 0}
 		<footer class="modal-footer">
 			{#each buttons as button}
-				<button class={`btn btn-${button.class}`} onclick={button.action}>
+				<Button class={`btn btn-${button.class}`} onclick={button.action}>
 					{button.label}
-				</button>
+				</Button>
 			{/each}
 		</footer>
 	{/if}

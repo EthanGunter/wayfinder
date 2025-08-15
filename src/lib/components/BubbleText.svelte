@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Tooltip from './overlays/TooltipHover.svelte';
+	import { Button } from './ui/button';
 	interface Props {
 		id: string;
 		children: any;
@@ -24,10 +25,10 @@
 			{@render children?.()}
 		</span>
 		{#if onDelete}
-			<button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
+			<Button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
 				<!-- Using × symbol as clear icon -->
 				×
-			</button>
+			</Button>
 		{/if}
 	</div>
 	<Tooltip forElement={bubble} position="top">
@@ -42,10 +43,10 @@
 			{@render children?.()}
 		</span>
 		{#if onDelete}
-			<button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
+			<Button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
 				<!-- Using × symbol as clear icon -->
 				×
-			</button>
+			</Button>
 		{/if}
 	</div>
 {/if}

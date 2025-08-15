@@ -5,55 +5,58 @@
 	import type { IAuthAPI } from '$lib/API/Auth/types';
 	import UserAvatar from './UserAvatar.svelte';
 	import Pullout from './overlays/Pullout.svelte';
+	import { Button } from './ui/button';
+	import * as Sheet from './ui/sheet';
 	interface Props {
 		user: LocalUser;
 		authAPI: IAuthAPI;
 	}
 	const { user, authAPI }: Props = $props();
-	let menuOpen = $state(false);
 </script>
 
 {#if user}
-	<button id="account-menu-btn" onclick={() => (menuOpen = true)}>
-		<UserAvatar {user} />
-	</button>
-	<Pullout bind:open={menuOpen} placement="right">
-		<div id="account-menu-pullout">
+	<Sheet.Root>
+		<Sheet.Trigger>
+			<div id="account-menu-btn">
+				<UserAvatar {user} />
+			</div>
+		</Sheet.Trigger>
+		<Sheet.Content>
 			<h1>Account</h1>
 			<h4>{user.display_name}</h4>
 			{#if isAnonymous(user)}
-				<button
+				<Button
 					onclick={() => goto(`/login?register&redirect=${page.url.pathname + page.url.search}`)}
 				>
 					Account Settings
-				</button>
+				</Button>
 			{:else}
-				<button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
+				<Button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
 					User Settings
-				</button>
+				</Button>
 			{/if}
 			{#if false}
 				<!-- TODO if there are multiple local accounts -->
-				<button
+				<Button
 					onclick={() => {
 						throw new Error('NotImplemented');
 					}}
 				>
 					Switch User
-				</button>
+				</Button>
 			{/if}
 			{#if !isAnonymous(user)}
 				<!-- If not anonymous account -->
-				<button
+				<Button
 					onclick={() => {
 						authAPI.logout();
 					}}
 				>
 					Sign out
-				</button>
+				</Button>
 			{/if}
-		</div>
-	</Pullout>
+		</Sheet.Content>
+	</Sheet.Root>
 {/if}
 
 <style lang="scss">
