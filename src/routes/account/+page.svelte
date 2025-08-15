@@ -56,30 +56,33 @@
 	}
 </script>
 
-<div id="account-page" class="page">
+<div id="account-page" class="relative w-full h-full bg-gray-200 grid grid-rows-[auto_1fr_auto] grid-areas-[header_content_footer]">
 	<AppHeader {user} authAPI={auth}>
 		{#snippet left()}
 			<Button onclick={goBAck}>Back</Button>
 		{/snippet}
 	</AppHeader>
-	<div class="content">
+	<div class="grid-area-content flex flex-col w-full min-w-80 max-w-[35rem] mx-auto p-4 items-center overflow-y-scroll gap-4">
 		<!-- TODO Extract avatar to reusable component -->
-		<div class="input-fields">
-			<div class="avatar-field">
-				<UserAvatar {user} />
-				<span>
-					<label for="input_avatar_url">Avatar URL</label>
-					<input id="input_avatar_url" type="text" bind:value={user.avatar_url} />
+		<div class="grid gap-4 min-w-[70%]">
+			<div class="flex flex-col items-center">
+				<div class="m-4 max-w-40">
+					<UserAvatar {user} />
+				</div>
+				<span class="flex flex-col">
+					<label for="input_avatar_url" class="mb-2 text-gray-800 font-medium">Avatar URL</label>
+					<input id="input_avatar_url" type="text" bind:value={user.avatar_url} class="p-2 border border-gray-300 rounded" />
 				</span>
 			</div>
-			<span>
-				<label for="input_display_name">Name</label>
+			<span class="flex flex-col">
+				<label for="input_display_name" class="mb-2 text-gray-800 font-medium">Name</label>
 				<input
 					id="input_display_name"
 					type="text"
 					bind:value={user.display_name}
 					oninput={handleNameInput}
 					placeholder="Really cool username"
+					class="p-2 border border-gray-300 rounded"
 				/>
 			</span>
 			<!-- TODO Local Passkey <section id="sec-passkey">
@@ -103,17 +106,17 @@
 			<Button onclick={saveUserChanges}>Save Changes</Button>
 		{/if}
 		{#if !userHasFeature(user, 'task-sync')}
-			<div class="upgrade-section">
-				<h2>Upgrade to Cloud Sync</h2>
-				<p>Sync your data across devices and enable premium features</p>
-				<ul class="benefits">
-					<li>✓ Access your data from any device</li>
-					<li>✓ Automatic backups</li>
-					<li>✓ Real-time synchronization</li>
-					<li>✓ Priority support</li>
+			<div class="bg-gray-50 rounded-lg p-8 text-center">
+				<h2 class="m-0 mb-2 text-gray-800">Upgrade to Cloud Sync</h2>
+				<p class="text-gray-600 mb-6">Sync your data across devices and enable premium features</p>
+				<ul class="list-none p-0 m-0 text-left max-w-xs mx-auto mb-8">
+					<li class="py-2 text-gray-800">✓ Access your data from any device</li>
+					<li class="py-2 text-gray-800">✓ Automatic backups</li>
+					<li class="py-2 text-gray-800">✓ Real-time synchronization</li>
+					<li class="py-2 text-gray-800">✓ Priority support</li>
 				</ul>
 				<Button
-					class="btn-upgrade"
+					class="bg-gradient-to-br from-blue-400 to-purple-600 text-white text-lg p-4 px-8 hover:-translate-y-1 hover:shadow-[0_4px_12px_rgba(102,126,234,0.4)] transition-all duration-200"
 					onclick={async () => {
 						await saveUserChanges();
 						goto('/account/upgrade');
@@ -127,104 +130,3 @@
 	</div>
 	<AppFooter />
 </div>
-
-<style>
-	.input-fields {
-		display: grid;
-		gap: 1rem;
-		min-width: 70%;
-
-		span {
-			display: flex;
-			flex-direction: column;
-		}
-
-		.avatar-field {
-			:global(.user-avatar) {
-				margin: 1rem auto;
-				max-width: 10rem;
-			}
-		}
-	}
-
-	.loading {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		min-height: 400px;
-		gap: 1rem;
-	}
-
-	.spinner {
-		width: 40px;
-		height: 40px;
-		border: 3px solid #f3f3f3;
-		border-top: 3px solid #3498db;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		0% {
-			transform: rotate(0deg);
-		}
-		100% {
-			transform: rotate(360deg);
-		}
-	}
-
-	.btn-upgrade {
-		padding: 0.75rem 1.5rem;
-		border: none;
-		border-radius: 6px;
-		font-size: 1rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.btn-upgrade {
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-		font-size: 1.125rem;
-		padding: 1rem 2rem;
-	}
-
-	.btn-upgrade:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-	}
-
-	.upgrade-section {
-		background: #f8f9fa;
-		border-radius: 8px;
-		padding: 2rem;
-		text-align: center;
-	}
-
-	.upgrade-section h2 {
-		margin: 0 0 0.5rem 0;
-		color: #333;
-	}
-
-	.upgrade-section p {
-		color: #666;
-		margin-bottom: 1.5rem;
-	}
-
-	.benefits {
-		list-style: none;
-		padding: 0;
-		margin: 0 0 2rem 0;
-		text-align: left;
-		max-width: 300px;
-		margin-left: auto;
-		margin-right: auto;
-	}
-
-	.benefits li {
-		padding: 0.5rem 0;
-		color: #333;
-	}
-</style>

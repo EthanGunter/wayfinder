@@ -2,9 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
 	import type { Task } from '$lib/API/Tasks/Task';
-	import ContextMenu from './ContextMenu.svelte';
-	import Modal from './overlays/Modal.svelte';
+	import * as Sheet from './ui/sheet';
 	import { Button } from './ui/button';
+	import * as Dialog from './ui/dialog';
 
 	const {
 		task,
@@ -75,9 +75,9 @@
 	}
 </script>
 
-<li bind:this={listItemEl} class="list-item" use:dragGroup>
+<li bind:this={listItemEl} class="flex justify-between items-center gap-1 border border-gray-400 rounded-2xl min-h-min min-w-64 bg-white overflow-hidden text-ellipsis" use:dragGroup>
 	<span
-		class="drag-handle"
+		class="px-4 text-xl font-thin opacity-50"
 		use:draggable={{
 			type: 'task',
 			data: task,
@@ -91,7 +91,7 @@
 	{#if editName}
 		<input
 			bind:this={inputEl}
-			class="title"
+			class="whitespace-nowrap text-ellipsis overflow-hidden bg-transparent align-content-center text-start w-full h-full cursor-text p-1"
 			type="text"
 			bind:value={title}
 			onblur={handleBlur}
@@ -99,9 +99,9 @@
 		/>
 	{:else}
 		<span
-			class="title"
+			class="whitespace-nowrap text-ellipsis overflow-hidden bg-transparent align-content-center text-start w-full h-full cursor-text p-1"
 			role="button"
-			tabindex="0"
+			tabindex={0}
 			onclick={handleTitleClick}
 			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleTitleClick()}
 			aria-label="Edit task title"
@@ -111,98 +111,36 @@
 	{/if}
 	<Button onclick={() => (showContextMenu = true)}>⫶</Button>
 
-	<ContextMenu target={listItemEl} bind:open={showContextMenu}>
-		<Button onclick={rename}>✏️ Rename</Button>
-		<!-- <Button onclick={openMoveDialogue}> ↗️ Move </Button> -->
-		<!-- <Button onclick={handleTitleClick}> 🔗 Open </Button> -->
-		<Button class="alert" onclick={openDeleteDialogue}>🗑️ Delete</Button>
-
-		<!-- Delete Confirmation Dialog -->
-	</ContextMenu>
-	<Modal bind:open={showDeleteDialog}>
-		<div class="delete-dialog dialog">
-			<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
-			<!-- {#if task.children.length > 0}
-			 // TODO This is currently not true
-				<p>This will also delete <em>all</em> descendants.</p>
-			{/if} -->
-			<div class="dialog-buttons">
+	<Sheet.Root bind:open={showContextMenu}>
+		<Sheet.Content side="bottom" class="p-6 animate-slide-up">
+			<Sheet.Header>
+				<Sheet.Title>Task Actions</Sheet.Title>
+			</Sheet.Header>
+			<div class="flex flex-col gap-3">
+				<Button onclick={rename} class="w-full justify-start">✏️ Rename</Button>
+				<!-- <Button onclick={openMoveDialogue}> ↗️ Move </Button> -->
+				<!-- <Button onclick={handleTitleClick}> 🔗 Open </Button> -->
+				<Button class="alert w-full justify-start" onclick={openDeleteDialogue}>🗑️ Delete</Button>
+			</div>
+		</Sheet.Content>
+	</Sheet.Root>
+	<Dialog.Root bind:open={showDeleteDialog}>
+		<Dialog.Content>
+			<Dialog.Header>
+				<Dialog.Title>Delete Task</Dialog.Title>
+			</Dialog.Header>
+			<div class="p-4">
+				<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
+				<!-- {#if task.children.length > 0}
+				 // TODO This is currently not true
+					<p>This will also delete <em>all</em> descendants.</p>
+				{/if} -->
+			</div>
+			<Dialog.Footer>
 				<Button class="alert" onclick={() => resolveDelete(true)}>Yes</Button>
 				<Button onclick={() => resolveDelete(false)}>Cancel</Button>
-			</div>
-		</div>
-	</Modal>
+			</Dialog.Footer>
+		</Dialog.Content>
+	</Dialog.Root>
 	<!-- <TaskItemContextMenu {task} /> -->
 </li>
-
-<style lang="scss">
-	.list-item {
-		// 	// Layout
-		// 	position: relative;
-		display: flex;
-		justify-content: space-between;
-
-		// 	// Style
-		// 	list-style: none;
-		align-items: center;
-		gap: 0.2rem;
-		border: 1px solid var(--c-border);
-		border-radius: 1rem;
-		min-height: min-content;
-		min-width: 16rem;
-		background: var(--c-bg);
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.title {
-		white-space: nowrap;
-		text-overflow: ellipsis;
-		overflow: hidden;
-		background: none;
-		align-content: center;
-		text-align: start;
-		width: 100%;
-		height: 100%;
-		cursor: text;
-		padding: 0.2rem;
-	}
-	.drag-handle {
-		padding: 0 1rem;
-		font-size: x-large;
-		font-weight: 100;
-		opacity: 50%;
-	}
-	:global(.context-menu button:not(:hover)) {
-		border: 1px solid var(--c-bg_-2);
-	}
-	// // Completion % gradient bar
-	// .list-item::before,
-	// .list-item::after {
-	// 	content: '';
-	// 	width: 94%;
-	// 	left: 2%;
-	// 	position: absolute;
-	// 	bottom: 0;
-	// 	height: 0.1em;
-	// 	pointer-events: none;
-	// 	border-radius: 0 0 100% 100%;
-	// }
-	// .list-item::before {
-	// 	background-color: var(--c-bg_-2);
-	// }
-	// .list-item::after {
-	// 	display: var(--completion, none);
-	// 	mask-image: linear-gradient(90deg, #000 var(--completion), transparent 0);
-	// 	background: linear-gradient(
-	// 		90deg,
-	// 		var(--c-border) 0%,
-	// 		/* rgb(198, 198, 198) 40%, */ var(--c-success) 100%
-	// 	);
-	// 	// border-radius: 0 0 0.5rem 0.5rem;
-	// }
-
-	// .list-item[data-completed]::after {
-	// 	background: var(--c-success);
-	// }
-</style>

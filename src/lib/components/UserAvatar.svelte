@@ -7,42 +7,12 @@
 	const { user }: Props = $props();
 </script>
 
-<div class="user-avatar">
+<div class="relative rounded-full overflow-hidden bg-gray-100 aspect-square">
 	{#if user.avatar_url}
-		<img src={user.avatar_url} alt="User avatar" />
+		<img src={user.avatar_url} alt="User avatar" class="w-full h-full object-cover" />
 	{:else}
-		<div class="user-avatar-placeholder">
+		<div class="w-full h-full object-cover flex items-center justify-center text-[200%] font-bold bg-gradient-to-br from-blue-400 to-purple-600 text-white">
 			{user.display_name?.charAt(0)?.toUpperCase() || '?'}
 		</div>
 	{/if}
 </div>
-
-<style>
-	.user-avatar {
-		position: relative;
-		border-radius: 50%;
-		overflow: hidden;
-		background: #f0f0f0;
-		aspect-ratio: 1;
-	}
-
-	.user-avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.user-avatar-placeholder {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 200%;
-		font-weight: bold;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-	}
-</style>

@@ -21,39 +21,17 @@
 	}
 </script>
 
-<div class={'app-footer'}>
+<div class="flex items-center justify-between shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] bg-white">
 	{#if children}
 		{@render children()}
 	{:else}
-		<Button onclick={() => navTo('/home')} aria-label="Go to home">
+		<Button onclick={() => navTo('/home')} aria-label="Go to home" class="flex-1 bg-transparent text-gray-600">
 			<!-- TODO: Replace with real icon - using ChecklistIcon equivalent -->
 			<span>✓</span>
 		</Button>
-		<Button onclick={() => navTo('/tasks')} aria-label="Go to tasks">
+		<Button onclick={() => navTo('/tasks')} aria-label="Go to tasks" class="flex-1 bg-transparent text-gray-600 border-l border-gray-600">
 			<!-- TODO: Replace with real icon - using AccountTreeIcon equivalent -->
 			<span>🌳</span>
 		</Button>
 	{/if}
 </div>
-
-<style lang="scss">
-	.app-footer {
-		// Layout
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-
-		// Style
-		box-shadow: 0px 0px 20px 0px var(--c-shadow);
-		background-color: var(--c-bg_1);
-
-		> :global(*) {
-			flex: 1 1 auto;
-			background: none;
-			color: var(--c-text_2);
-		}
-		> :global(* + *) {
-			border-left: solid 1px var(--c-text_2);
-		}
-	}
-</style>

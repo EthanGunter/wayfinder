@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { isAnonymous, userHasFeature, type LocalUser } from '$lib/API/Auth/User';
+	import { isAnonymous, type LocalUser } from '$lib/API/Auth/User';
 	import type { IAuthAPI } from '$lib/API/Auth/types';
 	import UserAvatar from './UserAvatar.svelte';
-	import Pullout from './overlays/Pullout.svelte';
 	import { Button } from './ui/button';
 	import * as Sheet from './ui/sheet';
 	interface Props {
@@ -17,7 +16,7 @@
 {#if user}
 	<Sheet.Root>
 		<Sheet.Trigger>
-			<div id="account-menu-btn">
+			<div id="account-menu-btn" class="flex rounded-full overflow-hidden w-12 h-12 p-0">
 				<UserAvatar {user} />
 			</div>
 		</Sheet.Trigger>
@@ -58,31 +57,3 @@
 		</Sheet.Content>
 	</Sheet.Root>
 {/if}
-
-<style lang="scss">
-	.user-avatar {
-		width: 1rem;
-		height: 1rem;
-	}
-	#account-menu-btn {
-		display: flex;
-		border-radius: 50%;
-		overflow: hidden;
-		width: 3rem;
-		height: 3rem;
-		padding: unset;
-
-		& > * {
-			width: 100%;
-			height: 100%;
-			object-fit: cover;
-			display: block;
-		}
-	}
-	#account-menu-pullout {
-		min-width: 15rem;
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-</style>

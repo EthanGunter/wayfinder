@@ -81,7 +81,7 @@
 	let displayResults = $derived<(T | string)[]>(query.length > 0 ? searchResults : defaultOptions);
 </script>
 
-<div class="search-bar">
+<div class="flex-1 relative">
 	{#if !inverted}
 		<input
 			type="text"
@@ -92,16 +92,17 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
+			class="w-full z-[101]"
 		/>
 	{/if}
 
 	{#if isLoading}
-		<div class="search-loading">Searching...</div>
+		<div class="absolute top-full left-0 right-0 p-2 text-sm z-[1000] bg-gray-100 rounded-lg shadow-[3px_3px_10px_0_rgba(25,24,24,0.32)]">Searching...</div>
 	{:else if showResults && displayResults.length > 0}
-		<ul class="search-results" class:inverted>
+		<ul class="absolute top-full left-0 right-0 z-[1000] max-h-[200px] overflow-y-auto m-0 p-0 list-none gap-1 flex flex-col" class:bottom-full={inverted}>
 			{#each displayResults as result}
-				<li class="search-result">
-					<Button onclick={() => selectItem(result)} tabindex={0}>
+				<li class="bg-gray-100 rounded-lg shadow-[3px_3px_10px_0_rgba(25,24,24,0.32)]">
+					<Button onclick={() => selectItem(result)} tabindex={0} class="w-full p-2 border-none bg-transparent cursor-pointer text-left rounded-lg hover:bg-white focus:outline-2 focus:outline-blue-500 focus:outline-offset-2">
 						{#if children}
 							{@render children(result)}
 						{:else}
@@ -123,77 +124,7 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
+			class="w-full z-[101]"
 		/>
 	{/if}
 </div>
-
-<style lang="scss">
-	.search-bar {
-		flex: 1 1 auto;
-		position: relative;
-
-		input {
-			width: 100%;
-			z-index: 101;
-		}
-	}
-
-	.search-results {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		z-index: 1000;
-		max-height: 200px;
-		overflow-y: auto;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		gap: 0.25rem;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.search-results.inverted {
-		top: auto;
-		bottom: 100%;
-	}
-
-	.search-result {
-		background-color: var(--c-bg_-1);
-		border-radius: 0.5rem;
-		box-shadow: 3px 3px 10px 0 var(--c-shadow);
-
-		button {
-			width: 100%;
-			padding: 0.5rem;
-			border: none;
-			background: none;
-			cursor: pointer;
-			text-align: left;
-			border-radius: 0.5rem;
-
-			&:hover {
-				background-color: var(--c-bg);
-			}
-
-			&:focus {
-				outline: 2px solid var(--c-primary);
-				outline-offset: 2px;
-			}
-		}
-	}
-
-	.search-loading {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		padding: 0.5rem 0.75rem;
-		font-size: 0.9rem;
-		z-index: 1000;
-		background-color: var(--c-bg_-1);
-		border-radius: 0.5rem;
-		box-shadow: 3px 3px 10px 0 var(--c-shadow);
-	}
-</style>

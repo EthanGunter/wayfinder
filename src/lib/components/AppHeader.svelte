@@ -35,11 +35,11 @@
 	}
 </script>
 
-<div class={'app-header'}>
+<div class="flex items-center justify-between gap-4 p-4 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] text-gray-600 bg-white">
 	{#if left}
 		{@render left()}
 	{:else}
-		<AppPulloutMenu {user} />
+		<AppPulloutMenu />
 	{/if}
 	<!-- <SearchBar
 		handleQuery={search}
@@ -49,12 +49,12 @@
 	>
 		{#snippet children(task)}
 			{#if typeof task === 'string'}
-				<div class="task-search-result">
-					<span class="task-title">{task}</span>
+				<div class="flex items-center gap-2 w-full">
+					<span class="flex-1 text-left font-medium whitespace-nowrap text-ellipsis overflow-hidden">{task}</span>
 				</div>
 			{:else}
-				<div class="task-search-result">
-					<span class="task-title">{task.title}</span>
+				<div class="flex items-center gap-2 w-full">
+					<span class="flex-1 text-left font-medium whitespace-nowrap text-ellipsis overflow-hidden">{task.title}</span>
 					<span>{task.completed ? '👍' : '👎'}</span>
 				</div>
 			{/if}
@@ -66,46 +66,3 @@
 		<UserAccountMenu {user} {authAPI} />
 	{/if}
 </div>
-
-<style lang="scss">
-	.app-header {
-		// Layout
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-
-		// Style
-		gap: var(--gap-small);
-		padding: 1rem;
-		box-shadow: 0px 0px 20px 0px var(--c-shadow);
-		color: var(--c-text_2);
-		background-color: var(--c-bg_1);
-	}
-
-	:global(#app-header-menu) {
-		height: 100vh;
-		max-height: 100vh;
-	}
-
-	.task-search-result {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-
-		.task-title {
-			flex: 1;
-			text-align: left;
-			font-weight: 500;
-			white-space: nowrap;
-			text-overflow: ellipsis;
-			overflow: hidden;
-		}
-
-		// .task-deps {
-		// 	color: var(--c-primary);
-		// 	font-size: 0.8rem;
-		// 	white-space: nowrap;
-		// }
-	}
-</style>

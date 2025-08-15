@@ -140,20 +140,20 @@
 	}
 </script>
 
-<div class="task-browser page">
-	<AppHeader user={data.user} authAPI={auth} />
-	<div class="content">
+<div class="relative w-full h-full bg-gray-200 grid grid-rows-[auto_1fr_auto] grid-areas-[header_content_footer]">
+	<AppHeader user={data.user} authAPI={auth} class="grid-area-header h-16 z-10" />
+	<div class="grid-area-content flex flex-col w-full min-w-80 max-w-[35rem] mx-auto p-4 items-center overflow-y-scroll gap-4">
 		<!-- TODO: <TasksTutorial /> -->
 		{#if currentTask}
-			<div class="navigation">
-				<a class="breadcrumb-link" href="/tasks">
+			<div class="flex gap-2 items-center mb-4 text-black/50 text-sm">
+				<a class="text-gray-600 border border-black/20 rounded px-2 py-1 hover:bg-black/5 no-underline" href="/tasks">
 					<!-- Go to root -->
 					Projects
 				</a>
 				{#if parents.length > 0}
 					{#each parents as parent, index}
 						>
-						<a class="breadcrumb-link" href={`/tasks?id=${parent.id}`}>
+						<a class="text-gray-600 border border-black/20 rounded px-2 py-1 hover:bg-black/5 no-underline" href={`/tasks?id=${parent.id}`}>
 							<!-- TODO: Replace with real icon -->
 							{parent.title ?? 'Projects'}
 						</a>
@@ -167,7 +167,7 @@
 					{/snippet}
 				</ItemList>
 			</TaskEditor>
-			<Button id="add-task-button" onclick={addTask}>Add Task</Button>
+			<Button id="add-task-button" onclick={addTask} class="mt-auto">Add Task</Button>
 		{:else}
 			<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 				{#snippet listItem(task, index)}
@@ -177,31 +177,5 @@
 			<Button id="add-task-button" onclick={addTask}>New Project</Button>
 		{/if}
 	</div>
-	<AppFooter />
+	<AppFooter class="h-16 grid-area-footer z-10" />
 </div>
-
-<style>
-	.navigation {
-		display: flex;
-		gap: 0.5em;
-		align-items: center;
-		margin-bottom: 1em;
-
-		color: #0005;
-		font-size: small;
-
-		a {
-			text-decoration: none;
-			color: var(--c-text_2);
-			border: 1px solid #0003;
-			border-radius: 0.25rem;
-			padding: 0.2rem 0.5rem;
-			&:hover {
-				background-color: #0001;
-			}
-		}
-	}
-	#add-task-button {
-		margin-top: auto;
-	}
-</style>

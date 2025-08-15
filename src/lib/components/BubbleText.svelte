@@ -1,6 +1,6 @@
 <script lang="ts">
-	import Tooltip from './overlays/TooltipHover.svelte';
 	import { Button } from './ui/button';
+	import * as Tooltip from './ui/tooltip';
 	interface Props {
 		id: string;
 		children: any;
@@ -17,88 +17,40 @@
 </script>
 
 {#if error}
-	<div bind:this={bubble} class="text-bubble error">
-		{#if image}
-			<img src={image} alt="" />
-		{/if}
-		<span class="text">
-			{@render children?.()}
-		</span>
-		{#if onDelete}
-			<Button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
-				<!-- Using × symbol as clear icon -->
-				×
-			</Button>
-		{/if}
-	</div>
-	<Tooltip forElement={bubble} position="top">
-		{error.msg}
-	</Tooltip>
+	<Tooltip.Root>
+		<Tooltip.Trigger>
+			<div bind:this={bubble} class="flex flex-row items-center gap-2 p-1 pr-2 h-min rounded-full border border-gray-400 bg-red-200 hover:bg-red-300">
+				{#if image}
+					<img src={image} alt="" class="w-6 rounded-full" />
+				{/if}
+				<span class="text">
+					{@render children?.()}
+				</span>
+				{#if onDelete}
+					<Button class="cursor-pointer w-5 h-5 border-none bg-transparent flex items-center justify-center rounded-full text-xl leading-none" onclick={handleDelete} aria-label="Remove {id}">
+						<!-- Using × symbol as clear icon -->
+						×
+					</Button>
+				{/if}
+			</div>
+		</Tooltip.Trigger>
+		<Tooltip.Content side="top" class="bg-red-50 text-red-800 border border-red-200">
+			{error.msg}
+		</Tooltip.Content>
+	</Tooltip.Root>
 {:else}
-	<div class="text-bubble">
+	<div class="flex flex-row items-center gap-2 p-1 pr-2 h-min rounded-full border border-gray-400 hover:bg-white/10">
 		{#if image}
-			<img src={image} alt="" />
+			<img src={image} alt="" class="w-6 rounded-full" />
 		{/if}
 		<span class="text">
 			{@render children?.()}
 		</span>
 		{#if onDelete}
-			<Button class="remove-icon" onclick={handleDelete} aria-label="Remove {id}">
+			<Button class="cursor-pointer w-5 h-5 border-none bg-transparent flex items-center justify-center rounded-full text-xl leading-none" onclick={handleDelete} aria-label="Remove {id}">
 				<!-- Using × symbol as clear icon -->
 				×
 			</Button>
 		{/if}
 	</div>
 {/if}
-
-<style lang="scss">
-	.text-bubble {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 0.4rem;
-		padding: 0.3rem;
-		padding-right: 0.4rem;
-		height: min-content;
-
-		border-radius: 50rem;
-		border: 1px solid var(--c-border);
-
-		&:hover {
-			background-color: rgba(255, 255, 255, 0.1);
-			// border: 1px solid rgba(0, 0, 0, 0.3);
-		}
-
-		img {
-			width: 1.5rem;
-			border-radius: 50%;
-		}
-
-		.remove-icon {
-			cursor: pointer;
-			width: 1.2rem;
-			height: 1.2rem;
-			border: none;
-			background: none;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			border-radius: 50%;
-			font-size: 1.2rem;
-			line-height: 1;
-
-			> * {
-				width: 100%;
-				height: 100%;
-			}
-		}
-	}
-
-	.error {
-		background-color: rgb(255, 0, 0, 0.2);
-
-		&:hover {
-			background-color: rgb(255, 0, 0, 0.2);
-		}
-	}
-</style>

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import TooltipTimed from '$lib/components/overlays/TooltipTimed.svelte';
 	import { Button } from '@/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 
 	export interface Props {
 		forElement: string | HTMLElement;
-		position?: 'top' | 'bottom' | 'left' | 'right' | 'mouse';
+		position?: 'top' | 'bottom' | 'left' | 'right';
 		title?: string;
 		content: string;
 		showControls?: boolean;
@@ -25,124 +25,47 @@
 	}: Props = $props();
 </script>
 
-<TooltipTimed {forElement} {position} open>
-	{#if title}
-		<h3 class="tutorial-title">{title}</h3>
-	{/if}
-	<p class="tutorial-content">{content}</p>
+<Tooltip.Root>
+	<Tooltip.Trigger>
+		<div class="w-full h-full">
+			{#if title}
+				<h3 class="m-0 mb-2 text-lg font-semibold text-gray-800">{title}</h3>
+			{/if}
+			<p class="m-0 mb-4 text-gray-800 leading-relaxed">{content}</p>
 
-	{#if showControls}
-		<div class="tutorial-controls">
-			{#if onPrevious}
-				<Button onclick={onPrevious} class="tutorial-btn secondary">Previous</Button>
-			{/if}
-			{#if onNext}
-				<Button onclick={onNext} class="tutorial-btn primary">Next</Button>
-			{/if}
-			{#if onSkip}
-				<Button onclick={onSkip} class="tutorial-btn skip">Skip Tutorial</Button>
+			{#if showControls}
+				<div class="flex gap-2 justify-end flex-wrap">
+					{#if onPrevious}
+						<Button onclick={onPrevious} class="p-2 px-4 border border-gray-300 rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-gray-50 text-gray-800 hover:opacity-90 hover:-translate-y-1">Previous</Button>
+					{/if}
+					{#if onNext}
+						<Button onclick={onNext} class="p-2 px-4 border border-blue-500 rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-blue-500 text-white hover:opacity-90 hover:-translate-y-1">Next</Button>
+					{/if}
+					{#if onSkip}
+						<Button onclick={onSkip} class="p-2 px-4 border-none rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-transparent text-gray-500 hover:opacity-90 hover:-translate-y-1">Skip Tutorial</Button>
+					{/if}
+				</div>
 			{/if}
 		</div>
-	{/if}
-</TooltipTimed>
+	</Tooltip.Trigger>
+	<Tooltip.Content side={position} class="bg-white text-gray-800 border border-gray-300 shadow-lg p-4 max-w-sm">
+		{#if title}
+			<h3 class="m-0 mb-2 text-lg font-semibold text-gray-800">{title}</h3>
+		{/if}
+		<p class="m-0 mb-4 text-gray-800 leading-relaxed">{content}</p>
 
-<style>
-	:global(.tooltip) {
-		position: absolute;
-		background: var(--background-primary, white);
-		border: 1px solid var(--border-color, #ccc);
-		border-radius: 8px;
-		padding: 1rem;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		max-width: 300px;
-		min-width: 200px;
-		z-index: 10001;
-	}
-
-	.tutorial-title {
-		margin: 0 0 0.5rem 0;
-		font-size: 1.1rem;
-		font-weight: 600;
-		color: var(--text-normal, #000);
-	}
-
-	.tutorial-content {
-		margin: 0 0 1rem 0;
-		color: var(--text-normal, #000);
-		line-height: 1.4;
-	}
-
-	.tutorial-controls {
-		display: flex;
-		gap: 0.5rem;
-		justify-content: flex-end;
-		flex-wrap: wrap;
-	}
-
-	.tutorial-btn {
-		padding: 0.5rem 1rem;
-		border: 1px solid var(--border-color, #ccc);
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.9rem;
-		transition: all 0.2s ease;
-	}
-
-	.tutorial-btn.primary {
-		background: var(--color-accent, #007acc);
-		color: white;
-		border-color: var(--color-accent, #007acc);
-	}
-
-	.tutorial-btn.secondary {
-		background: var(--background-secondary, #f6f8fa);
-		color: var(--text-normal, #000);
-	}
-
-	.tutorial-btn.skip {
-		background: transparent;
-		color: var(--text-muted, #666);
-		border: none;
-		font-size: 0.8rem;
-	}
-
-	.tutorial-btn:hover {
-		opacity: 0.9;
-		transform: translateY(-1px);
-	}
-
-	/* Arrow styles */
-	.tutorial-tooltip::after {
-		content: '';
-		position: absolute;
-		border: 8px solid transparent;
-	}
-
-	.tutorial-tooltip.arrow-top::after {
-		border-bottom-color: var(--background-primary, white);
-		top: -16px;
-		left: 50%;
-		transform: translateX(-50%);
-	}
-
-	.tutorial-tooltip.arrow-bottom::after {
-		border-top-color: var(--background-primary, white);
-		bottom: -16px;
-		left: 50%;
-		transform: translateX(-50%);
-	}
-
-	.tutorial-tooltip.arrow-left::after {
-		border-right-color: var(--background-primary, white);
-		left: -16px;
-		top: 50%;
-		transform: translateY(-50%);
-	}
-
-	.tutorial-tooltip.arrow-right::after {
-		border-left-color: var(--background-primary, white);
-		right: -16px;
-		top: 50%;
-		transform: translateY(-50%);
-	}
-</style>
+		{#if showControls}
+			<div class="flex gap-2 justify-end flex-wrap">
+				{#if onPrevious}
+					<Button onclick={onPrevious} class="p-2 px-4 border border-gray-300 rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-gray-50 text-gray-800 hover:opacity-90 hover:-translate-y-1">Previous</Button>
+				{/if}
+				{#if onNext}
+					<Button onclick={onNext} class="p-2 px-4 border border-blue-500 rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-blue-500 text-white hover:opacity-90 hover:-translate-y-1">Next</Button>
+				{/if}
+				{#if onSkip}
+					<Button onclick={onSkip} class="p-2 px-4 border-none rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-transparent text-gray-500 hover:opacity-90 hover:-translate-y-1">Skip Tutorial</Button>
+				{/if}
+			</div>
+		{/if}
+	</Tooltip.Content>
+</Tooltip.Root>

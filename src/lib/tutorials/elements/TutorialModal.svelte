@@ -20,120 +20,35 @@
 		showControls = true,
 		size = 'medium'
 	}: Props = $props();
+
+	const sizeClasses = {
+		small: 'max-w-md w-[90%]',
+		medium: 'max-w-2xl w-[90%]',
+		large: 'max-w-4xl w-[95%]'
+	};
 </script>
 
-<div class="tutorial-modal-backdrop">
-	<div class="tutorial-modal {size}">
+<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[10001]">
+	<div class="bg-white rounded-lg p-8 shadow-[0_8px_24px_rgba(0,0,0,0.2)] max-h-[80vh] overflow-y-auto {sizeClasses[size]}">
 		{#if title}
-			<h2 class="tutorial-title">{title}</h2>
+			<h2 class="m-0 mb-4 text-2xl font-semibold text-gray-800">{title}</h2>
 		{/if}
-		<div class="tutorial-content">
+		<div class="mb-8 text-gray-800 leading-relaxed">
 			{content}
 		</div>
 
 		{#if showControls}
-			<div class="tutorial-controls">
+			<div class="flex gap-2 justify-end flex-wrap">
 				{#if onPrevious}
-					<Button onclick={onPrevious} class="tutorial-btn secondary">Previous</Button>
+					<Button onclick={onPrevious} class="p-3 px-6 border border-gray-300 rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-gray-50 text-gray-800 hover:opacity-90 hover:-translate-y-1">Previous</Button>
 				{/if}
 				{#if onNext}
-					<Button onclick={onNext} class="tutorial-btn primary">Next</Button>
+					<Button onclick={onNext} class="p-3 px-6 border border-blue-500 rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-blue-500 text-white hover:opacity-90 hover:-translate-y-1">Next</Button>
 				{/if}
 				{#if onSkip}
-					<Button onclick={onSkip} class="tutorial-btn skip">Skip Tutorial</Button>
+					<Button onclick={onSkip} class="p-3 px-6 border-none rounded cursor-pointer text-sm transition-all duration-200 ease-in-out bg-transparent text-gray-500 hover:opacity-90 hover:-translate-y-1">Skip Tutorial</Button>
 				{/if}
 			</div>
 		{/if}
 	</div>
 </div>
-
-<style>
-	.tutorial-modal-backdrop {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 10001;
-	}
-
-	.tutorial-modal {
-		background: var(--background-primary, white);
-		border-radius: 8px;
-		padding: 2rem;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-		max-height: 80vh;
-		overflow-y: auto;
-	}
-
-	.tutorial-modal.small {
-		max-width: 400px;
-		width: 90%;
-	}
-
-	.tutorial-modal.medium {
-		max-width: 600px;
-		width: 90%;
-	}
-
-	.tutorial-modal.large {
-		max-width: 800px;
-		width: 95%;
-	}
-
-	.tutorial-title {
-		margin: 0 0 1rem 0;
-		font-size: 1.5rem;
-		font-weight: 600;
-		color: var(--text-normal, #000);
-	}
-
-	.tutorial-content {
-		margin-bottom: 2rem;
-		color: var(--text-normal, #000);
-		line-height: 1.6;
-	}
-
-	.tutorial-controls {
-		display: flex;
-		gap: 0.5rem;
-		justify-content: flex-end;
-		flex-wrap: wrap;
-	}
-
-	.tutorial-btn {
-		padding: 0.75rem 1.5rem;
-		border: 1px solid var(--border-color, #ccc);
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.9rem;
-		transition: all 0.2s ease;
-	}
-
-	.tutorial-btn.primary {
-		background: var(--color-accent, #007acc);
-		color: white;
-		border-color: var(--color-accent, #007acc);
-	}
-
-	.tutorial-btn.secondary {
-		background: var(--background-secondary, #f6f8fa);
-		color: var(--text-normal, #000);
-	}
-
-	.tutorial-btn.skip {
-		background: transparent;
-		color: var(--text-muted, #666);
-		border: none;
-		font-size: 0.8rem;
-	}
-
-	.tutorial-btn:hover {
-		opacity: 0.9;
-		transform: translateY(-1px);
-	}
-</style>

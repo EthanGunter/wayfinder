@@ -114,13 +114,13 @@
 	}
 </script>
 
-<div class="login-page">
-	<div class="login-container">
+<div class="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+	<div class="bg-white p-8 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] w-full max-w-md">
 		{#if navigator.onLine}
-			<h1>{isRegistering ? 'Create Account' : 'Login'}</h1>
+			<h1 class="text-center mb-8 text-gray-800">{isRegistering ? 'Create Account' : 'Login'}</h1>
 
 			{#if errorMessage}
-				<div class="error-message">
+				<div class="bg-red-50 text-red-700 p-3 rounded mb-4 border border-red-200">
 					{errorMessage}
 				</div>
 			{/if}
@@ -136,189 +136,72 @@
 				}}
 			>
 				{#if isRegistering}
-					<div class="form-group">
-						<label for="displayName">Display Name</label>
+					<div class="mb-4">
+						<label for="displayName" class="block mb-2 text-gray-800 font-medium">Display Name</label>
 						<input
 							id="displayName"
 							type="text"
 							bind:value={displayName}
 							placeholder="Enter your name"
 							required
+							class="w-full p-3 border border-gray-300 rounded text-base box-border focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)]"
 						/>
 					</div>
 				{/if}
 
-				<div class="form-group">
-					<label for="email">Email</label>
+				<div class="mb-4">
+					<label for="email" class="block mb-2 text-gray-800 font-medium">Email</label>
 					<input
 						id="email"
 						type="email"
 						bind:value={email}
 						placeholder="Enter your email"
 						required
+						class="w-full p-3 border border-gray-300 rounded text-base box-border focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)]"
 					/>
 				</div>
 
-				<div class="form-group">
-					<label for="password">Password</label>
+				<div class="mb-4">
+					<label for="password" class="block mb-2 text-gray-800 font-medium">Password</label>
 					<input
 						id="password"
 						type="password"
 						bind:value={password}
 						placeholder="Enter your password"
 						required
+						class="w-full p-3 border border-gray-300 rounded text-base box-border focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)]"
 					/>
 				</div>
 
-				<Button type="submit" class="btn-primary" disabled={isLoading}>
+				<Button type="submit" class="w-full p-3 bg-blue-500 text-white border-none rounded text-base font-medium cursor-pointer mb-4 hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed" disabled={isLoading}>
 					{isLoading ? 'Please wait...' : isRegistering ? 'Create Account' : 'Login'}
 				</Button>
 			</form>
 
-			<div class="toggle-mode">
-				<Button type="button" class="btn-link" onclick={toggleMode}>
+			<div class="text-center mb-4">
+				<Button type="button" class="bg-none border-none text-blue-500 cursor-pointer underline text-sm hover:text-blue-600" onclick={toggleMode}>
 					{isRegistering ? 'Already have an account? Login' : "Don't have an account? Create one"}
 				</Button>
 			</div>
 		{:else}
-			<h1>Offline</h1>
+			<h1 class="text-center mb-8 text-gray-800">Offline</h1>
 
 			{#if errorMessage}
-				<div class="error-message">
+				<div class="bg-red-50 text-red-700 p-3 rounded mb-4 border border-red-200">
 					{errorMessage}
 				</div>
 			{/if}
-			<div class="error-message">
+			<div class="bg-red-50 text-red-700 p-3 rounded mb-4 border border-red-200">
 				<p>Unable to manage account without an internet connection</p>
 			</div>
 
 			<br />
 		{/if}
 
-		<div class="back-to-app">
-			<Button type="button" class="btn-secondary" onclick={() => goto(redir ?? '/home')}>
+		<div class="text-center">
+			<Button type="button" class="w-full p-3 bg-transparent text-gray-800 border border-gray-300 rounded text-base cursor-pointer hover:bg-gray-50" onclick={() => goto(redir ?? '/home')}>
 				Back to App
 			</Button>
 		</div>
 	</div>
 </div>
-
-<style>
-	.login-page {
-		min-height: 100vh;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--background-modifier-hover, #f8f9fa);
-		padding: 1rem;
-	}
-
-	.login-container {
-		background: white;
-		padding: 2rem;
-		border-radius: 8px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-		width: 100%;
-		max-width: 400px;
-	}
-
-	h1 {
-		text-align: center;
-		margin-bottom: 2rem;
-		color: var(--color-text, #333);
-	}
-
-	.error-message {
-		background: #fee;
-		color: #c33;
-		padding: 0.75rem;
-		border-radius: 4px;
-		margin-bottom: 1rem;
-		border: 1px solid #fcc;
-	}
-
-	.form-group {
-		margin-bottom: 1rem;
-	}
-
-	label {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: var(--color-text, #333);
-		font-weight: 500;
-	}
-
-	input {
-		width: 100%;
-		padding: 0.75rem;
-		border: 1px solid var(--color-border, #ddd);
-		border-radius: 4px;
-		font-size: 1rem;
-		box-sizing: border-box;
-	}
-
-	input:focus {
-		outline: none;
-		border-color: var(--color-accent, #007acc);
-		box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
-	}
-
-	.btn-primary {
-		width: 100%;
-		padding: 0.75rem;
-		background: var(--color-accent, #007acc);
-		color: white;
-		border: none;
-		border-radius: 4px;
-		font-size: 1rem;
-		font-weight: 500;
-		cursor: pointer;
-		margin-bottom: 1rem;
-	}
-
-	.btn-primary:hover:not(:disabled) {
-		background: var(--color-accent-hover, #005a9e);
-	}
-
-	.btn-primary:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.btn-secondary {
-		width: 100%;
-		padding: 0.75rem;
-		background: transparent;
-		color: var(--color-text, #333);
-		border: 1px solid var(--color-border, #ddd);
-		border-radius: 4px;
-		font-size: 1rem;
-		cursor: pointer;
-	}
-
-	.btn-secondary:hover {
-		background: var(--background-modifier-hover, #f0f0f0);
-	}
-
-	.btn-link {
-		background: none;
-		border: none;
-		color: var(--color-accent, #007acc);
-		cursor: pointer;
-		text-decoration: underline;
-		font-size: 0.9rem;
-	}
-
-	.btn-link:hover {
-		color: var(--color-accent-hover, #005a9e);
-	}
-
-	.toggle-mode {
-		text-align: center;
-		margin-bottom: 1rem;
-	}
-
-	.back-to-app {
-		text-align: center;
-	}
-</style>

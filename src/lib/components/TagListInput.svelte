@@ -110,7 +110,7 @@
 	}
 </script>
 
-<form class="tag-list-input-field {className}" onsubmit={handleSubmit}>
+<form class="flex flex-row flex-wrap gap-2 items-center text-gray-500 border border-gray-300 rounded-lg bg-gray-100 {className}" onsubmit={handleSubmit}>
 	{#each clonedItems as item (item)}
 		<label for={id}>
 			<BubbleText
@@ -132,50 +132,6 @@
 		onblur={handleBlur}
 		placeholder={clonedItems.length === 0 ? placeholder : ''}
 		aria-label={placeholder}
+		class="flex-grow min-h-6 border-none outline-none bg-transparent text-sm p-1"
 	/>
 </form>
-
-<style lang="scss">
-	.tag-list-input-field {
-		//Layout
-		display: flex;
-		flex-direction: row;
-		flex-wrap: wrap;
-		gap: var(--gap-min);
-		// padding: var(--gap-min) var(--gap-min) var(--gap-min) 0;
-		align-items: center;
-
-		//Color/Style
-		color: var(--disabled);
-		border: var(--field-border);
-		border-radius: var(--field-border-radius);
-		background: var(--field-bg);
-
-		:global(.text-bubble) {
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			color: var(--c-text_1);
-			border: 1px solid var(--c-text_2);
-		}
-
-		:global(.text-bubble::before) {
-			content: "#";
-			margin-left: 0.3em;
-		}
-
-		input {
-			flex-grow: 1;
-			min-height: var(--size-min);
-			border: none;
-			outline: none;
-			background: transparent;
-			font-size: 0.9rem;
-			padding: 0.25rem;
-		}
-	}
-
-	label {
-		display: contents;
-	}
-</style>

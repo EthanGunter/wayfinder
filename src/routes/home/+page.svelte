@@ -128,17 +128,17 @@
 	let hasAnyTasks = $derived(todaysList.length > 0 || suggestedTasks.length > 0);
 </script>
 
-<div class="page page-todays-tasks">
-	<AppHeader user={data.user} authAPI={auth} />
-	<div class="content">
+<div class="relative w-full h-full bg-gray-200 grid grid-rows-[auto_1fr_auto] grid-areas-[header_content_footer]">
+	<AppHeader user={data.user} authAPI={auth} class="grid-area-header h-16 z-10" />
+	<div class="grid-area-content flex flex-col w-full min-w-80 max-w-[35rem] mx-auto p-4 items-center overflow-y-scroll gap-4">
 		{#if isAnonymous(user) && !hasAnyTasks}
-			<div class="auth-options">
-				<h3>Welcome to Wayfinder!</h3>
+			<div class="flex flex-col gap-4 mt-12 p-8 bg-gray-50 rounded-lg text-center border border-gray-300">
+				<h3 class="m-0 mb-2 text-gray-800 text-2xl">Welcome to Wayfinder!</h3>
 				<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
 			</div>
-			<p class="auth-note">Or sign in to sync your data.</p>
-			<Button class="btn-secondary" onclick={() => goto('/login')}> Sign In </Button>
-			<Button class="btn-primary" onclick={() => goto('/login?register')}> Create Account </Button>
+			<p class="m-0 text-gray-500 text-sm italic">Or sign in to sync your data.</p>
+			<Button class="bg-transparent text-gray-800 border border-gray-400 hover:bg-gray-100 hover:border-gray-600 transition-all duration-200 ease-in-out" onclick={() => goto('/login')}> Sign In </Button>
+			<Button class="bg-blue-500 text-white border-blue-500 hover:bg-blue-600 hover:border-blue-600 transition-all duration-200 ease-in-out hover:-translate-y-1 hover:shadow-[0_4px_12px_rgba(0,122,204,0.3)]" onclick={() => goto('/login?register')}> Create Account </Button>
 		{:else}
 			<div
 				id="todays-tasks-list"
@@ -183,91 +183,5 @@
 			</div>
 		{/if}
 	</div>
-	<AppFooter />
+	<AppFooter class="h-16 grid-area-footer z-10" />
 </div>
-
-<style>
-	.drop-zone {
-		margin-bottom: 2em;
-		min-height: 3em;
-		padding: 1em;
-		border: 2px dashed red;
-		&.valid-drop {
-			border-color: var(--color-accent, #007acc);
-			background-color: var(--background-modifier-hover, #f5f5f5);
-		}
-		&.invalid-drop {
-			border-color: var(--color-accent, #007acc);
-			background-color: var(--background-modifier-hover, #f5f5f5);
-		}
-	}
-	#add-task-button {
-		padding: 0.7em 1.5em;
-		background: var(--color-accent, #007acc);
-		color: white;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-	}
-
-	.auth-options {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-
-		margin-top: 3rem;
-		padding: 2rem;
-		background: var(--background-modifier-hover, #f8f9fa);
-		border-radius: 8px;
-		text-align: center;
-		border: 1px solid var(--color-border, #e1e5e9);
-	}
-
-	.auth-message h3 {
-		margin: 0 0 0.5rem 0;
-		color: var(--color-text, #333);
-		font-size: 1.5rem;
-	}
-
-	.btn-primary,
-	.btn-secondary {
-		padding: 0.75rem 1.5rem;
-		border: none;
-		border-radius: 6px;
-		font-size: 1rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		text-decoration: none;
-		/* display: inline-block; */
-	}
-
-	.btn-primary {
-		background: var(--color-accent, #007acc);
-		color: white;
-	}
-
-	.btn-primary:hover {
-		background: var(--color-accent-hover, #005a9e);
-		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
-	}
-
-	.btn-secondary {
-		background: transparent;
-		color: var(--color-text, #333);
-		border: 1px solid var(--color-border, #ccc);
-	}
-
-	.btn-secondary:hover {
-		background: var(--background-modifier-hover, #f0f0f0);
-		border-color: var(--color-border-hover, #999);
-	}
-
-	.auth-note {
-		margin: 0;
-		color: var(--color-text-tertiary, #888);
-		font-size: 0.9rem;
-		font-style: italic;
-	}
-</style>
