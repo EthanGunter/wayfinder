@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeAll, describe, expect, afterEach, beforeEach, it, test } from "vitest"
 import BrowserAuthProvider from './BrowserAuthProvider';
-import type { AuthSyncQueue, IAuth, IAuthLocalFunctions, ILocalAuth, SignInCredentials, UserData } from "./types";
+import type { AuthSyncQueue, IAuth, IAuthLocalFunctions, ILocalAuth, LoginCredentials, UserData } from "./types";
 import { mock, type MockProxy } from 'vitest-mock-extended'
 import { type TaskSyncQueue, type ITasks, type ILocalTasks, type ILocalTaskProvider, Task } from "../Tasks";
 import { v4 } from "uuid";
@@ -31,7 +31,7 @@ let mockTasksSyncQueue: MockProxy<TaskSyncQueue>;
 
 let localUser1: LocalUser;
 let localUser1Data: UserData;
-let userCreds: SignInCredentials;
+let userCreds: LoginCredentials;
 let remoteUser: User;
 
 // TODO This doesn't test the cases where there's missing API providers
@@ -77,10 +77,10 @@ describe("IAuth", () => {
     // --- Registration ---
     describe("getRegistrationRequirements()", () => {
         describe("returns correct requirements for a given credential type", () => {
-            const email_password: SignInCredentials = { type: "email_password", email: "", password: "" } as SignInCredentials;
+            const email_password: LoginCredentials = { type: "email_password", email: "", password: "" } as LoginCredentials;
             test(`${email_password.type} returns ${Object.getOwnPropertyNames(email_password).join(", ")}`, async () => {
                 // Arrange
-                const creds: SignInCredentials = { type: "email_password", email: "", password: "" };
+                const creds: LoginCredentials = { type: "email_password", email: "", password: "" };
                 const expectedReqs = [
                     { target: 0, message: "Email required" },
                     { target: 1, message: "Password required" }

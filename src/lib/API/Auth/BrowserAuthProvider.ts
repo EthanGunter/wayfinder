@@ -248,6 +248,14 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     assertDB(db);
     assertRemoteAuth(_remoteAuth);
 
+
+
+    // Proceed with remote login
+    const loginResult = await _remoteAuth.login({ creds });
+    if (loginResult.isErr()) {
+      return err(loginResult.error);
+    }
+
     // Check if current user is anonymous and has local data
     const currentUser = await local.getActiveUser();
     if (currentUser && currentUser.display_name === 'anonymous') {
@@ -266,12 +274,6 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
         await db.delete(AUTH_TABLE_NAME, currentUser.id);
         await db.put(APP_TABLE_NAME, undefined, ACTIVEUSER_COLUMN_NAME);
       }
-    }
-
-    // Proceed with remote login
-    const loginResult = await _remoteAuth.login({ creds });
-    if (loginResult.isErr()) {
-      return err(loginResult.error);
     }
 
     const remoteUser = loginResult.value;

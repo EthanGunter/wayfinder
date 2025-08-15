@@ -8,7 +8,7 @@ import type { Tables } from "../supabase";
 // Raw user data from database
 export type UserData = Tables<'users'>;
 
-export type SignInCredentials =
+export type LoginCredentials =
     | { type: 'email_password'; email: string; password: string }
 
 export type SignOutOptions = {
@@ -43,13 +43,13 @@ export type AuthSyncQueue = SyncQueue<Omit<IAuth,
 // NOTE All SyncQueued functions must use the params signature
 export interface IAuth {
     /** Defines the requirements and availability for different Authentication methods */
-    getRegistrationRequirements(signUpCred: SignInCredentials): Result<MigrationRequirements[], NotImplementedError>,
+    getRegistrationRequirements(signUpCred: LoginCredentials): Result<MigrationRequirements[], NotImplementedError>,
     /** Responsible for creating a new user account with the given credentials */
-    register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+    register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
     getUser(params: { id: string }): Promise<Result<User, NotFoundError>>,
     updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
     deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
-    login(params: { creds: SignInCredentials }): Promise<Result<User, NotFoundError | ArgumentError | NotImplementedError>>,
+    login(params: { creds: LoginCredentials }): Promise<Result<User, NotFoundError | ArgumentError | NotImplementedError>>,
     logout(): Promise<Result<void>>,
 }
 
@@ -84,6 +84,6 @@ export interface IAuthLocalFunctions {
     /** Sets the active user for this device */
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
     /** Registers a remote user account and creates local user simultaneously */
-    register(params: { creds: SignInCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+    register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
 }
 

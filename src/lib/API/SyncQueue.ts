@@ -36,7 +36,7 @@ export class SyncQueue<RemoteT, CallbackT> {
         revertArgs: FailureOfHandler<CallbackT[CallbackK]>,
     ) {
         this.queue.push({ fnName, args, handlerFnName: handlerFnName, revertArgs });
-        this.process();
+        // this.process();
     }
 
     async process() {

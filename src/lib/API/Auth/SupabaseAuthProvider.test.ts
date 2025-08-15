@@ -1,6 +1,6 @@
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 import SupabaseAuthProvider from "./SupabaseAuthProvider";
-import type { IAuth, SignInCredentials, UserData } from "./types";
+import type { IAuth, LoginCredentials, UserData } from "./types";
 import { ErrorType } from "$lib/Errors";
 import type { User } from "./User";
 import { createTestUser } from "./testHelpers";
@@ -72,7 +72,7 @@ vi.mock("$lib/API/SupabaseClient", () => {
 
 describe("IAuth", () => {
     let auth: IAuth;
-    let userCreds: SignInCredentials;
+    let userCreds: LoginCredentials;
     let userData: UserData;
     let remoteUser: User;
 
@@ -95,7 +95,7 @@ describe("IAuth", () => {
     // --- Registration ---
     describe("getRegistrationRequirements()", () => {
         it("returns correct requirements for a given credential type", () => {
-            const creds: SignInCredentials = { type: "email_password", email: "", password: "" };
+            const creds: LoginCredentials = { type: "email_password", email: "", password: "" };
             const result = auth.getRegistrationRequirements(creds);
             expect(result.isOk()).toBe(true);
             assert(result.isOk());

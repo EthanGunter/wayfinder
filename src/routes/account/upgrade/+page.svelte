@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { type SignInCredentials, AccountIssueTarget } from '$lib/API/Auth/types.js';
+	import { type LoginCredentials, AccountIssueTarget } from '$lib/API/Auth/types.js';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TooltipHover from '$lib/components/overlays/TooltipHover.svelte';
@@ -12,7 +12,7 @@
 	const { data } = $props();
 	const auth = data.auth;
 	const user = $state(data.user);
-	let signUpCred = $state<SignInCredentials>({
+	let signUpCred = $state<LoginCredentials>({
 		type: 'email_password',
 		email: '',
 		password: ''

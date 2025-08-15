@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { isAnonymous } from '$lib/API/Auth/User';
-	import type { SignInCredentials } from '$lib/API/Auth/types';
+	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { ArgumentError, ErrorType, InputRequiredError } from '$lib/Errors';
 	import { SupabaseAuthError } from '$lib/API/Auth/SupabaseAuthProvider.js';
 
@@ -11,7 +11,6 @@
 	let email = $state('');
 	let password = $state('');
 	let displayName = $state('');
-	console.log(page.url.searchParams.has('register'));
 
 	let isRegistering = $state(page.url.searchParams.has('register') || false);
 	let errorMessage = $state('');
@@ -42,7 +41,7 @@
 				features: [] as string[]
 			};
 
-			const creds: SignInCredentials = { type: 'email_password', email, password };
+			const creds: LoginCredentials = { type: 'email_password', email, password };
 
 			// Check registration requirements first
 			const reqsResult = auth.getRegistrationRequirements(creds);
@@ -84,7 +83,7 @@
 		errorMessage = '';
 
 		try {
-			const creds: SignInCredentials = { type: 'email_password', email, password };
+			const creds: LoginCredentials = { type: 'email_password', email, password };
 			const result = await auth.login({ creds });
 
 			if (result.isOk()) {
@@ -116,63 +115,84 @@
 
 <div class="login-page">
 	<div class="login-container">
-		<h1>{isRegistering ? 'Create Account' : 'Sign In'}</h1>
+		{#if navigator.onLine}
+			<h1>{isRegistering ? 'Create Account' : 'Login'}</h1>
 
-		{#if errorMessage}
-			<div class="error-message">
-				{errorMessage}
-			</div>
-		{/if}
-
-		<form
-			onsubmit={(e) => {
-				e.preventDefault();
-				if (isRegistering) {
-					handleRegister();
-				} else {
-					handleLogin();
-				}
-			}}
-		>
-			{#if isRegistering}
-				<div class="form-group">
-					<label for="displayName">Display Name</label>
-					<input
-						id="displayName"
-						type="text"
-						bind:value={displayName}
-						placeholder="Enter your name"
-						required
-					/>
+			{#if errorMessage}
+				<div class="error-message">
+					{errorMessage}
 				</div>
 			{/if}
 
-			<div class="form-group">
-				<label for="email">Email</label>
-				<input id="email" type="email" bind:value={email} placeholder="Enter your email" required />
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					if (isRegistering) {
+						handleRegister();
+					} else {
+						handleLogin();
+					}
+				}}
+			>
+				{#if isRegistering}
+					<div class="form-group">
+						<label for="displayName">Display Name</label>
+						<input
+							id="displayName"
+							type="text"
+							bind:value={displayName}
+							placeholder="Enter your name"
+							required
+						/>
+					</div>
+				{/if}
+
+				<div class="form-group">
+					<label for="email">Email</label>
+					<input
+						id="email"
+						type="email"
+						bind:value={email}
+						placeholder="Enter your email"
+						required
+					/>
+				</div>
+
+				<div class="form-group">
+					<label for="password">Password</label>
+					<input
+						id="password"
+						type="password"
+						bind:value={password}
+						placeholder="Enter your password"
+						required
+					/>
+				</div>
+
+				<button type="submit" class="btn-primary" disabled={isLoading}>
+					{isLoading ? 'Please wait...' : isRegistering ? 'Create Account' : 'Login'}
+				</button>
+			</form>
+
+			<div class="toggle-mode">
+				<button type="button" class="btn-link" onclick={toggleMode}>
+					{isRegistering ? 'Already have an account? Login' : "Don't have an account? Create one"}
+				</button>
+			</div>
+		{:else}
+			<h1>Offline</h1>
+
+			{#if errorMessage}
+				<div class="error-message">
+					{errorMessage}
+				</div>
+			{/if}
+			<div class="error-message">
+				<p>Unable to manage account without an internet connection</p>
 			</div>
 
-			<div class="form-group">
-				<label for="password">Password</label>
-				<input
-					id="password"
-					type="password"
-					bind:value={password}
-					placeholder="Enter your password"
-					required
-				/>
-			</div>
-
-			<button type="submit" class="btn-primary" disabled={isLoading}>
-				{isLoading ? 'Please wait...' : isRegistering ? 'Create Account' : 'Sign In'}
-			</button>
-		</form>
-
-		<div class="toggle-mode">
-			<button type="button" class="btn-link" onclick={toggleMode}>
-				{isRegistering ? 'Already have an account? Sign in' : "Don't have an account? Create one"}
-			</button>
-		</div>
+			<br />
+		{/if}
 
 		<div class="back-to-app">
 			<button type="button" class="btn-secondary" onclick={() => goto(redir ?? '/home')}>
