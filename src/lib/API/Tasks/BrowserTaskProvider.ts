@@ -6,11 +6,10 @@ import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
-import { dbPromise, type LocalDB } from '../localDB';
+import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
 import { error } from '@sveltejs/kit';
-import { TASK_TABLE_NAME } from '../SupabaseClient';
 
 
 //#region Task CRUD
@@ -233,9 +232,9 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
     await _updateTasksLocal(relUpdates, false);
   }
 
-  if (updateServer) {
+  if (updateServer && _taskSyncQueue) {
     // Queue Sync command
-    _taskSyncQueue!.add(
+    _taskSyncQueue.add(
       'deleteTasks',
       { deleteArgs },
       'handleDeleteTasksResponse',
@@ -253,11 +252,11 @@ async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updat
   const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
 
   for (const task of convertedTasks) {
-    await _db!.put('tasks', task);
+    await _db.put('tasks', task);
   }
 
-  if (updateServer) {
-    _taskSyncQueue!.add(
+  if (updateServer && _taskSyncQueue) {
+    _taskSyncQueue.add(
       'changeOwnership',
       { oldUserID, newUserID },
       'handleChangeOwnershipResponse',

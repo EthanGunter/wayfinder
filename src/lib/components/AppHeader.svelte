@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { IAuthAPI, LocalUser } from '$lib/API/Auth/types';
+	import type { IAuthAPI } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
+	import type { Snippet } from 'svelte';
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
+	import type { LocalUser } from '$lib/API/Auth/User';
 
 	interface Props {
 		user: LocalUser;
 		authAPI: IAuthAPI;
+		left?: Snippet;
+		right?: Snippet;
 	}
-	const { user, authAPI }: Props = $props();
+	const { user, authAPI, left, right }: Props = $props();
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -32,7 +36,11 @@
 </script>
 
 <div class={'app-header'}>
-	<AppPulloutMenu {user} />
+	{#if left}
+		{@render left()}
+	{:else}
+		<AppPulloutMenu {user} />
+	{/if}
 	<!-- <SearchBar
 		handleQuery={search}
 		onItemSelected={gotoTask}
@@ -52,7 +60,11 @@
 			{/if}
 		{/snippet}
 	</SearchBar> -->
-	<UserAccountMenu {user} {authAPI} />
+	{#if right}
+		{@render right()}
+	{:else}
+		<UserAccountMenu {user} {authAPI} />
+	{/if}
 </div>
 
 <style lang="scss">

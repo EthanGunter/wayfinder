@@ -23,12 +23,14 @@
 			<h4>{user.display_name}</h4>
 			{#if isAnonymous(user)}
 				<button
-					onclick={() => goto(`/login?register&redirectTo=${page.url.pathname + page.url.search}`)}
+					onclick={() => goto(`/login?register&redirect=${page.url.pathname + page.url.search}`)}
 				>
-					Create Account
+					Account Settings
 				</button>
 			{:else}
-				<button onclick={() => goto('/account')}> User Settings </button>
+				<button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
+					User Settings
+				</button>
 			{/if}
 			{#if false}
 				<!-- TODO if there are multiple local accounts -->

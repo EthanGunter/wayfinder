@@ -2,12 +2,12 @@ import { v4 } from 'uuid';
 import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue, ILocalAuth, UserData } from './types';
 import { getDefaultUserFeatures } from './User';
 import type { ILocalTaskProvider, ILocalTasks, ITasks, TaskSyncQueue } from '../Tasks';
-import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
+import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
 import { SyncQueue } from '../SyncQueue';
-import { AUTH_TABLE_NAME } from '../SupabaseClient';
 import { extractBatchAndLogErrors } from '../types';
+import { invalidateAll } from '$app/navigation';
 
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
 
@@ -289,12 +289,12 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
   logout: async function () {
     assertDB(db);
-    assertRemoteAuth(_remoteAuth);
+    // assertRemoteAuth(_remoteAuth);
 
-    await db.put(APP_TABLE_NAME, undefined, ACTIVEUSER_COLUMN_NAME);
+    await db.put(APP_TABLE_NAME, "", ACTIVEUSER_COLUMN_NAME);
 
-    _remoteAuth.logout();
-    // invalidateAll(); // TODO I think notification is a better approach than invalidateAll()
+    // _remoteAuth.logout();
+    invalidateAll(); // TODO I think notification is a better approach than invalidateAll()
     return ok();
   },
   ...local

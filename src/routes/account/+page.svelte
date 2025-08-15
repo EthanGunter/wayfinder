@@ -5,6 +5,7 @@
 	import debounce from '$lib/debounce';
 	import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import { page } from '$app/state';
 
 	// Svelte 5 state
 	const { data } = $props();
@@ -44,10 +45,22 @@
 		event.preventDefault();
 		// if (event.currentTarget.value === '') user.display_name = data.user.display_name;
 	}
+	function goBAck() {
+		const redirect = page.url.searchParams.get('redirect');
+		if (redirect) {
+			goto(redirect);
+		} else {
+			goto('/');
+		}
+	}
 </script>
 
 <div id="account-page" class="page">
-	<AppHeader {user} authAPI={auth} />
+	<AppHeader {user} authAPI={auth}>
+		{#snippet left()}
+			<button onclick={goBAck}>Back</button>
+		{/snippet}
+	</AppHeader>
 	<div class="content">
 		<!-- TODO Extract avatar to reusable component -->
 		<div class="input-fields">
