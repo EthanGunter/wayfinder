@@ -2,15 +2,23 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { isAnonymous, type LocalUser } from '$lib/API/Auth/User';
-	import type { IAuthAPI } from '$lib/API/Auth/types';
+	import type { IAuthAPI, ILocalAuth } from '$lib/API/Auth/types';
 	import UserAvatar from './UserAvatar.svelte';
 	import { Button } from './ui/button';
 	import * as Sheet from './ui/sheet';
 	interface Props {
 		user: LocalUser;
-		authAPI: IAuthAPI;
+		authAPI: ILocalAuth;
 	}
 	const { user, authAPI }: Props = $props();
+
+	let multipleUsers = $state(false);
+
+	$effect(() => {
+		authAPI.listUsers().then((users) => {
+			multipleUsers = users.length > 1;
+		});
+	});
 </script>
 
 {#if user}
@@ -23,18 +31,18 @@
 		<Sheet.Content>
 			<h1>Account</h1>
 			<h4>{user.display_name}</h4>
-			<!-- {#if isAnonymous(user)}
+			{#if isAnonymous(user)}
 				<Button
 					onclick={() => goto(`/login?register&redirect=${page.url.pathname + page.url.search}`)}
 				>
-					Create Account
+					Customize Account
 				</Button>
-			{:else} -->
-			<Button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
-				User Settings
-			</Button>
-			<!-- {/if} -->
-			{#if false}
+			{:else}
+				<Button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
+					User Settings
+				</Button>
+			{/if}
+			{#if multipleUsers}
 				<!-- TODO if there are multiple local accounts -->
 				<Button
 					onclick={() => {

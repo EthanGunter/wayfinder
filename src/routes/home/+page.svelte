@@ -129,7 +129,7 @@
 </script>
 
 <div class="relative w-full h-full bg-gray-200 grid grid-rows-[auto_1fr_auto] grid-areas-[header_content_footer]">
-	<AppHeader user={data.user} authAPI={auth} class="grid-area-header h-16 z-10" />
+	<AppHeader user={data.user} authAPI={auth} className="grid-area-header h-16 z-10" />
 	<div class="grid-area-content flex flex-col w-full min-w-80 max-w-[35rem] mx-auto p-4 items-center overflow-y-scroll gap-4">
 		{#if isAnonymous(user) && !hasAnyTasks}
 			<div class="flex flex-col gap-4 mt-12 p-8 bg-gray-50 rounded-lg text-center border border-gray-300">
@@ -183,5 +183,5 @@
 			</div>
 		{/if}
 	</div>
-	<AppFooter class="h-16 grid-area-footer z-10" />
+	<AppFooter className="h-16 grid-area-footer z-10" />
 </div>

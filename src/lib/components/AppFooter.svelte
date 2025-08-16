@@ -8,8 +8,9 @@
 
 	interface Props {
 		children?: Snippet;
+		className?: string;
 	}
-	const { children }: Props = $props();
+	const { children, className }: Props = $props();
 
 	function navTo(path: string) {
 		// SvelteKit SPA navigation
@@ -23,7 +24,7 @@
 </script>
 
 <div
-	class="flex items-center justify-between bg-white gap-1 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
+	class="{className} flex items-center justify-between gap-1 bg-white shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
 >
 	{#if children}
 		{@render children()}
@@ -31,7 +32,7 @@
 		<Button
 			onclick={() => navTo('/home')}
 			aria-label="Go to home"
-			class="flex-1 bg-transparent text-gray-600 rounded-none" 
+			class="flex-1 rounded-none bg-transparent text-gray-600"
 		>
 			<!-- TODO: Replace with real icon - using ChecklistIcon equivalent -->
 			<span>✓</span>
@@ -40,7 +41,7 @@
 		<Button
 			onclick={() => navTo('/tasks')}
 			aria-label="Go to tasks"
-			class="flex-1 bg-transparent text-gray-600 rounded-none"
+			class="flex-1 rounded-none bg-transparent text-gray-600"
 		>
 			<!-- TODO: Replace with real icon - using AccountTreeIcon equivalent -->
 			<span>🌳</span>

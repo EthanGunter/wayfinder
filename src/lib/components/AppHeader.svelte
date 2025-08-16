@@ -18,8 +18,9 @@
 		authAPI: IAuthAPI;
 		left?: Snippet;
 		right?: Snippet;
+		className?: string;
 	}
-	const { user, authAPI, left, right }: Props = $props();
+	const { user, authAPI, left, right, className }: Props = $props();
 	let bugDiagOpen = $state(false);
 
 	async function search(query: string): Promise<Task[]> {
@@ -43,7 +44,7 @@
 </script>
 
 <div
-	class="flex items-center justify-between gap-4 bg-white p-4 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
+	class="{className} flex items-center justify-between gap-4 bg-white p-4 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
 >
 	{#if left}
 		{@render left()}
@@ -51,7 +52,7 @@
 		<Dialog.Root bind:open={bugDiagOpen}>
 			<Dialog.Trigger>
 				<Button>
-					<Icon icon="lucide:bug"/>
+					<Icon icon="lucide:bug" />
 				</Button>
 			</Dialog.Trigger>
 			<Dialog.Content>
