@@ -6,6 +6,12 @@
 	import AppPulloutMenu from './AppPulloutMenu.svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
 	import type { LocalUser } from '$lib/API/Auth/User';
+	import * as Sheet from './ui/sheet';
+	import { Button } from './ui/button';
+	import * as Dialog from './ui/dialog';
+	import BugReport from './BugReport.svelte';
+	import SearchBar from './SearchBar.svelte';
+	import Icon from '@iconify/svelte';
 
 	interface Props {
 		user: LocalUser;
@@ -14,6 +20,7 @@
 		right?: Snippet;
 	}
 	const { user, authAPI, left, right }: Props = $props();
+	let bugDiagOpen = $state(false);
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -35,13 +42,28 @@
 	}
 </script>
 
-<div class="flex items-center justify-between gap-4 p-4 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] text-gray-600 bg-white">
+<div
+	class="flex items-center justify-between gap-4 bg-white p-4 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
+>
 	{#if left}
 		{@render left()}
 	{:else}
-		<AppPulloutMenu />
+		<Dialog.Root bind:open={bugDiagOpen}>
+			<Dialog.Trigger>
+				<Button>
+					<Icon icon="lucide:bug"/>
+				</Button>
+			</Dialog.Trigger>
+			<Dialog.Content>
+				<BugReport
+					onSubmit={() => {
+						bugDiagOpen = false;
+					}}
+				/>
+			</Dialog.Content>
+		</Dialog.Root>
 	{/if}
-	<!-- <SearchBar
+	<SearchBar
 		handleQuery={search}
 		onItemSelected={gotoTask}
 		placeholder="Search tasks..."
@@ -49,17 +71,21 @@
 	>
 		{#snippet children(task)}
 			{#if typeof task === 'string'}
-				<div class="flex items-center gap-2 w-full">
-					<span class="flex-1 text-left font-medium whitespace-nowrap text-ellipsis overflow-hidden">{task}</span>
+				<div class="flex w-full items-center gap-2">
+					<span class="flex-1 overflow-hidden text-left font-medium text-ellipsis whitespace-nowrap"
+						>{task}</span
+					>
 				</div>
 			{:else}
-				<div class="flex items-center gap-2 w-full">
-					<span class="flex-1 text-left font-medium whitespace-nowrap text-ellipsis overflow-hidden">{task.title}</span>
+				<div class="flex w-full items-center gap-2">
+					<span class="flex-1 overflow-hidden text-left font-medium text-ellipsis whitespace-nowrap"
+						>{task.title}</span
+					>
 					<span>{task.completed ? '👍' : '👎'}</span>
 				</div>
 			{/if}
 		{/snippet}
-	</SearchBar> -->
+	</SearchBar>
 	{#if right}
 		{@render right()}
 	{:else}

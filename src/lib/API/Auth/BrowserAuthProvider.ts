@@ -1,6 +1,6 @@
 import { v4 } from 'uuid';
-import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue, ILocalAuth, UserData } from './types';
-import { getDefaultUserFeatures, isAnonymous } from './User';
+import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue } from './types';
+import { getDefaultUserFeatures, isAnonymous, type User } from './User';
 import type { ILocalTaskProvider, ILocalTasks, ITasks, TaskSyncQueue } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
@@ -106,7 +106,7 @@ const local: IAuthLocalFunctions = {
     const users = await db.getAll(AUTH_TABLE_NAME);
     if (users.length === 0) {
       // Only create the anonymous user the first time
-      const userData: UserData = {
+      const userData: User = {
         id: 'anonymous',
         display_name: 'Anonymous',
         created_at: new Date().toISOString(),

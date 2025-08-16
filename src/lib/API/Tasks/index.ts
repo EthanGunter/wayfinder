@@ -1,7 +1,6 @@
-// Supabase's RLS handles this: TODO Task API's need to take auth into consideration
 import { Err } from '$lib/Errors';
 import { extractBatchAndLogErrors } from '../types';
-import { Task, type TaskData } from './Task';
+import { type TaskData } from './Task';
 import type { ITasks, UpdateTaskParams } from './types';
 
 export * from './types';

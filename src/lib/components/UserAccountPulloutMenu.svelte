@@ -16,24 +16,24 @@
 {#if user}
 	<Sheet.Root>
 		<Sheet.Trigger>
-			<div id="account-menu-btn" class="flex rounded-full overflow-hidden w-12 h-12 p-0">
+			<div id="account-menu-btn" class="flex h-12 w-12 overflow-hidden rounded-full p-0">
 				<UserAvatar {user} />
 			</div>
 		</Sheet.Trigger>
 		<Sheet.Content>
 			<h1>Account</h1>
 			<h4>{user.display_name}</h4>
-			{#if isAnonymous(user)}
+			<!-- {#if isAnonymous(user)}
 				<Button
 					onclick={() => goto(`/login?register&redirect=${page.url.pathname + page.url.search}`)}
 				>
-					Account Settings
+					Create Account
 				</Button>
-			{:else}
-				<Button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
-					User Settings
-				</Button>
-			{/if}
+			{:else} -->
+			<Button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
+				User Settings
+			</Button>
+			<!-- {/if} -->
 			{#if false}
 				<!-- TODO if there are multiple local accounts -->
 				<Button

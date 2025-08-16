@@ -5,8 +5,8 @@ import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 // Define available task providers
 export const TASK_PROVIDER_OVERRIDES = {
 	browser: 'Browser (Local)',
-	supabase: 'Supabase (Cloud)',
-	native: 'Native (SQLite)',
+	// supabase: 'Supabase (Cloud)',
+	// native: 'Native (SQLite)',
 	none: 'Auto (Based on Auth)'
 } as const;
 
@@ -87,10 +87,11 @@ class DevStore {
 			console.log(`Overriding default task provider with ${this.taskProviderOverride}`);
 
 			switch (this.taskProviderOverride) {
-				case 'supabase':
-					throw new Error("Supabase task provider not implemented (postponed)");
-					// return await SupabaseTaskProvider.get();
-				case 'native': throw new Error("Native task provider not implemented");
+				// case 'supabase':
+				// throw new Error("Supabase task provider not implemented (postponed)");
+				// return await SupabaseTaskProvider.get();
+				// case 'native': throw new Error("Native task provider not implemented");
+				default: return defaultProvider;
 			}
 		}
 		return defaultProvider;

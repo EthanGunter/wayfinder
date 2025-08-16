@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import type { Snippet } from 'svelte';
 	import { Button } from './ui/button';
+	import { Separator } from './ui/separator';
 
 	interface Props {
 		children?: Snippet;
@@ -21,15 +22,26 @@
 	}
 </script>
 
-<div class="flex items-center justify-between shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] bg-white">
+<div
+	class="flex items-center justify-between bg-white gap-1 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
+>
 	{#if children}
 		{@render children()}
 	{:else}
-		<Button onclick={() => navTo('/home')} aria-label="Go to home" class="flex-1 bg-transparent text-gray-600">
+		<Button
+			onclick={() => navTo('/home')}
+			aria-label="Go to home"
+			class="flex-1 bg-transparent text-gray-600 rounded-none" 
+		>
 			<!-- TODO: Replace with real icon - using ChecklistIcon equivalent -->
 			<span>✓</span>
 		</Button>
-		<Button onclick={() => navTo('/tasks')} aria-label="Go to tasks" class="flex-1 bg-transparent text-gray-600 border-l border-gray-600">
+		<Separator orientation="vertical" />
+		<Button
+			onclick={() => navTo('/tasks')}
+			aria-label="Go to tasks"
+			class="flex-1 bg-transparent text-gray-600 rounded-none"
+		>
 			<!-- TODO: Replace with real icon - using AccountTreeIcon equivalent -->
 			<span>🌳</span>
 		</Button>

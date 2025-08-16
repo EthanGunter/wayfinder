@@ -1,6 +1,4 @@
-import type { Database, Tables } from '../supabase';
-
-export type UserStatus = Database['public']['Enums']['user_status'];
+export type UserStatus = "active" | "deleted";
 export type UserFeatures =
   | 'task-sync';
 

@@ -81,7 +81,7 @@
 	let displayResults = $derived<(T | string)[]>(query.length > 0 ? searchResults : defaultOptions);
 </script>
 
-<div class="flex-1 relative">
+<div class="flex-1 relative border-gray-300 border-1 rounded">
 	{#if !inverted}
 		<input
 			type="text"
@@ -92,7 +92,7 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
-			class="w-full z-[101]"
+			class="w-full z-[101] h-9 p-2"
 		/>
 	{/if}
 
@@ -124,7 +124,7 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
-			class="w-full z-[101]"
+			class="w-full z-[101] h-9"
 		/>
 	{/if}
 </div>

@@ -3,10 +3,6 @@ import type { ArgumentError, InvalidStateError, NotFoundError, NotImplementedErr
 import type { IProvider, Result } from "../types";
 import type { SyncQueue } from "../SyncQueue";
 import type { User, LocalUser } from "./User";
-import type { Tables } from "../supabase";
-
-// Raw user data from database
-export type UserData = Tables<'users'>;
 
 export type LoginCredentials =
     | { type: 'email_password'; email: string; password: string }

@@ -75,7 +75,11 @@
 	}
 </script>
 
-<li bind:this={listItemEl} class="flex justify-between items-center gap-1 border border-gray-400 rounded-2xl min-h-min min-w-64 bg-white overflow-hidden text-ellipsis" use:dragGroup>
+<li
+	bind:this={listItemEl}
+	class="flex min-h-min min-w-64 items-center justify-between gap-1 overflow-hidden rounded-xl border border-gray-400 bg-white text-ellipsis"
+	use:dragGroup
+>
 	<span
 		class="px-4 text-xl font-thin opacity-50"
 		use:draggable={{
@@ -91,7 +95,7 @@
 	{#if editName}
 		<input
 			bind:this={inputEl}
-			class="whitespace-nowrap text-ellipsis overflow-hidden bg-transparent align-content-center text-start w-full h-full cursor-text p-1"
+			class="align-content-center h-full w-full cursor-text overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap"
 			type="text"
 			bind:value={title}
 			onblur={handleBlur}
@@ -99,7 +103,7 @@
 		/>
 	{:else}
 		<span
-			class="whitespace-nowrap text-ellipsis overflow-hidden bg-transparent align-content-center text-start w-full h-full cursor-text p-1"
+			class="align-content-center h-full w-full cursor-text overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap"
 			role="button"
 			tabindex={0}
 			onclick={handleTitleClick}
@@ -109,10 +113,10 @@
 			{title}
 		</span>
 	{/if}
-	<Button onclick={() => (showContextMenu = true)}>⫶</Button>
+	<Button class="rounded-none bg-gray-800" onclick={() => (showContextMenu = true)}>⫶</Button>
 
 	<Sheet.Root bind:open={showContextMenu}>
-		<Sheet.Content side="bottom" class="p-6 animate-slide-up">
+		<Sheet.Content side="bottom" class="animate-slide-up p-6">
 			<Sheet.Header>
 				<Sheet.Title>Task Actions</Sheet.Title>
 			</Sheet.Header>
@@ -120,7 +124,7 @@
 				<Button onclick={rename} class="w-full justify-start">✏️ Rename</Button>
 				<!-- <Button onclick={openMoveDialogue}> ↗️ Move </Button> -->
 				<!-- <Button onclick={handleTitleClick}> 🔗 Open </Button> -->
-				<Button class="alert w-full justify-start" onclick={openDeleteDialogue}>🗑️ Delete</Button>
+				<Button variant="destructive" onclick={openDeleteDialogue}>🗑️ Delete</Button>
 			</div>
 		</Sheet.Content>
 	</Sheet.Root>
@@ -137,7 +141,7 @@
 				{/if} -->
 			</div>
 			<Dialog.Footer>
-				<Button class="alert" onclick={() => resolveDelete(true)}>Yes</Button>
+				<Button variant="destructive" onclick={() => resolveDelete(true)}>Yes</Button>
 				<Button onclick={() => resolveDelete(false)}>Cancel</Button>
 			</Dialog.Footer>
 		</Dialog.Content>

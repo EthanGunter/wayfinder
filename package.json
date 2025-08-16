@@ -25,6 +25,7 @@
 		"@capacitor/ios": "^7.4.0",
 		"@eslint/compat": "^1.2.5",
 		"@eslint/js": "^9.18.0",
+		"@iconify/svelte": "^5.0.0-beta.1",
 		"@internationalized/date": "^3.8.2",
 		"@lucide/svelte": "^0.515.0",
 		"@sveltejs/adapter-auto": "^6.0.0",
@@ -58,13 +59,11 @@
 		"vitest-mock-extended": "^3.1.0"
 	},
 	"dependencies": {
-		"@supabase/supabase-js": "^2.50.2",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"idb": "^8.0.3",
 		"js-yaml": "^4.1.0",
 		"jszip": "^3.10.1",
-		"lucide-react": "^0.539.0",
 		"neverthrow": "^8.2.0",
 		"tailwind-merge": "^3.3.1",
 		"uuid": "^11.1.0",
