@@ -2,11 +2,18 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import { isAnonymous } from '$lib/API/Auth/User';
-	import type { LoginCredentials } from '$lib/API/Auth/types';
-	import { ArgumentError, ErrorType, InputRequiredError } from '$lib/Errors';
+	import type { ILocalAuth, LoginCredentials } from '$lib/API/Auth/types';
+	import { InputRequiredError } from '$lib/Errors';
 	import { Button } from '@/components/ui/button';
+	import { onMount } from 'svelte';
+	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
+	import { isAnonymous, type User } from '@/API/Auth/User';
 	// import { SupabaseAuthError } from '$lib/API/Auth/SupabaseAuthProvider.js';
+
+	let auth = $state<ILocalAuth>();
+	let user = $state<User>();
+	let hasTasks = $state(false);
+	let multipleUsers = $state(false);
 
 	let redir = page.url.searchParams.get('redirect') || '/home';
 	let email = $state('');
@@ -17,13 +24,15 @@
 	let errorMessage = $state('');
 	let isLoading = $state(false);
 
-	// Get auth from parent layout
-	const { data } = $props();
-	const auth = data?.auth;
+	onMount(async () => {
+		auth = await authAPIPromise;
+		user = (await auth.getActiveUser()) ?? undefined;
 
-	if (!auth) {
-		goto('/home');
-	}
+		multipleUsers = (await auth.listUsers()).length > 1;
+		const tasks = await taskAPIPromise;
+		const roots = await tasks.getRootTasks();
+		hasTasks = roots._unsafeUnwrap().length > 0;
+	});
 
 	async function handleRegister() {
 		if (!auth) return;
@@ -60,7 +69,7 @@
 				// Registration successful, refresh and redirect
 				await invalidateAll();
 				goto(redir);
-			/* } else if (result.error instanceof SupabaseAuthError) {
+				/* } else if (result.error instanceof SupabaseAuthError) {
 				if (result.error.code === 'user_already_exists') {
 					errorMessage = 'User already exists'; // TODO should we just login
 				} else {
@@ -114,92 +123,111 @@
 	}
 </script>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-	<div class="bg-white p-8 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] w-full max-w-md">
-		{#if navigator.onLine}
-			<h1 class="text-center mb-8 text-gray-800">{isRegistering ? 'Create Account' : 'Login'}</h1>
+<div class="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+	<div class="w-full max-w-md rounded-lg bg-white p-8 shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
+		<!-- 		{#if navigator.onLine}
+ -->
+		<h1 class="text-center text-gray-800">{isRegistering ? 'Create Account' : 'Login'}</h1>
+		{#if user && isAnonymous(user) && hasTasks}
+			<p class="mb-8 text-center text-sm text-gray-500">
+				(Don't worry, all your data will come with you)
+			</p>
+		{/if}
+		{#if errorMessage}
+			<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
+				{errorMessage}
+			</div>
+		{/if}
 
-			{#if errorMessage}
-				<div class="bg-red-50 text-red-700 p-3 rounded mb-4 border border-red-200">
-					{errorMessage}
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				if (isRegistering) {
+					handleRegister();
+				} else {
+					handleLogin();
+				}
+			}}
+		>
+			{#if isRegistering}
+				<div class="mb-4">
+					<label for="displayName" class="mb-2 block font-medium text-gray-800">Display Name</label>
+					<input
+						id="displayName"
+						type="text"
+						bind:value={displayName}
+						placeholder="Enter your name"
+						required
+						class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
+					/>
 				</div>
 			{/if}
 
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					if (isRegistering) {
-						handleRegister();
-					} else {
-						handleLogin();
-					}
-				}}
-			>
-				{#if isRegistering}
-					<div class="mb-4">
-						<label for="displayName" class="block mb-2 text-gray-800 font-medium">Display Name</label>
-						<input
-							id="displayName"
-							type="text"
-							bind:value={displayName}
-							placeholder="Enter your name"
-							required
-							class="w-full p-3 border border-gray-300 rounded text-base box-border focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)]"
-						/>
-					</div>
-				{/if}
-
-				<div class="mb-4">
-					<label for="email" class="block mb-2 text-gray-800 font-medium">Email</label>
+			<!-- 				<div class="mb-4">
+					<label for="email" class="mb-2 block font-medium text-gray-800">Email</label>
 					<input
 						id="email"
 						type="email"
 						bind:value={email}
 						placeholder="Enter your email"
 						required
-						class="w-full p-3 border border-gray-300 rounded text-base box-border focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)]"
+						class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
 					/>
 				</div>
 
 				<div class="mb-4">
-					<label for="password" class="block mb-2 text-gray-800 font-medium">Password</label>
+					<label for="password" class="mb-2 block font-medium text-gray-800">Password</label>
 					<input
 						id="password"
 						type="password"
 						bind:value={password}
 						placeholder="Enter your password"
 						required
-						class="w-full p-3 border border-gray-300 rounded text-base box-border focus:outline-none focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)]"
+						class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
 					/>
-				</div>
+				</div> -->
 
-				<Button type="submit" class="w-full p-3 bg-blue-500 text-white border-none rounded text-base font-medium cursor-pointer mb-4 hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed" disabled={isLoading}>
-					{isLoading ? 'Please wait...' : isRegistering ? 'Create Account' : 'Login'}
-				</Button>
-			</form>
+			<Button
+				type="submit"
+				class="mb-4 w-full cursor-pointer rounded border-none bg-blue-500 p-3 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+				disabled={isLoading}
+			>
+				{isLoading ? 'Please wait...' : isRegistering ? 'Create Account' : 'Login'}
+			</Button>
+		</form>
 
-			<div class="text-center mb-4">
-				<Button type="button" class="bg-none border-none text-blue-500 cursor-pointer underline text-sm hover:text-blue-600" onclick={toggleMode}>
+		{#if multipleUsers}
+			<div class="mb-4 text-center">
+				<Button
+					type="button"
+					class="cursor-pointer border-none bg-none text-sm text-blue-500 underline hover:text-blue-600"
+					onclick={toggleMode}
+				>
 					{isRegistering ? 'Already have an account? Login' : "Don't have an account? Create one"}
 				</Button>
 			</div>
-		{:else}
-			<h1 class="text-center mb-8 text-gray-800">Offline</h1>
+		{/if}
+		<!-- {:else}
+			<h1 class="mb-8 text-center text-gray-800">Offline</h1>
 
 			{#if errorMessage}
-				<div class="bg-red-50 text-red-700 p-3 rounded mb-4 border border-red-200">
+				<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
 					{errorMessage}
 				</div>
 			{/if}
-			<div class="bg-red-50 text-red-700 p-3 rounded mb-4 border border-red-200">
+			<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
 				<p>Unable to manage account without an internet connection</p>
 			</div>
 
 			<br />
-		{/if}
+		{/if} -->
 
 		<div class="text-center">
-			<Button type="button" class="w-full p-3 bg-transparent text-gray-800 border border-gray-300 rounded text-base cursor-pointer hover:bg-gray-50" onclick={() => goto(redir ?? '/home')}>
+			<Button
+				type="button"
+				class="w-full cursor-pointer rounded border border-gray-300 bg-transparent p-3 text-base text-gray-800 hover:bg-gray-50"
+				onclick={() => goto(redir ?? '/home')}
+			>
 				Back to App
 			</Button>
 		</div>

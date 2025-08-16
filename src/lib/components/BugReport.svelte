@@ -15,35 +15,12 @@
 		// TODO reset form values
 	}
 
-	function clearError() {
-		console.log('Clearing error');
-
-		form?.querySelector('#bug-description')?.classList.remove('error');
-		form?.querySelector('#bug-steps')?.classList.remove('error');
-	}
-
 	function submitBugReport() {
 		if (!form) return;
-		clearError();
 		const formData = new FormData(form);
-		let error = false;
 
 		const bugDesc = formData.get('description');
-		if (!bugDesc) {
-			// Turn the field red
-			console.log('No description');
-
-			form?.querySelector('#bug-description')?.classList.add('error');
-			error = true;
-		}
-
 		const bugSteps = formData.get('steps');
-		if (!bugSteps) {
-			form?.querySelector('#bug-steps')?.classList.add('error');
-			error = true;
-		}
-		if (error) return;
-
 		const userEmail = formData.get('email');
 		const bugExpect = formData.get('expectation');
 
@@ -66,7 +43,7 @@
 </script>
 
 <div class="p-4">
-	<h1 class="m-0 mb-6 text-2xl font-bold">Thanks for catching a bug for us!</h1>
+	<h1 class="m-0 mb-6">Thanks for catching a bug for us!</h1>
 
 	<form onsubmit={submitBugReport} bind:this={form}>
 		<div class="mb-6 flex flex-col gap-5">
@@ -124,15 +101,8 @@
 			>
 		</div>
 		<div>
-			<Button onclick={submitBugReport} class="primary">Submit</Button>
+			<Button onclick={submitBugReport} type="submit" class="primary">Submit</Button>
 			<Button onclick={closeBugReport} variant="outline">Cancel</Button>
 		</div>
 	</form>
 </div>
-
-<style>
-	:global(.error) {
-		border-color: red;
-		background-color: pink;
-	}
-</style>

@@ -10,8 +10,63 @@ import { extractBatchAndLogErrors } from '../types';
 import { invalidateAll } from '$app/navigation';
 
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
+let db: LocalDB | null = null;
+let _remoteAuth: IAuth | null = null;
+let _authSyncQueue: AuthSyncQueue | null = null;
+let _tasks: ITasks | null = null;
+let _taskSyncQueue: TaskSyncQueue | null = null;
+
+const BrowserAuthProvider: ILocalAuthProvider = {
+  get: async function (
+    remoteAuth?: IAuth,
+    tasks?: ILocalTasks,
+  ) {
+    db = await dbPromise;
+
+    // Initialize with active user or create anonymous
+    const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    if (!activeUserId) {
+      const anonRes = await local.getDefaultUser();
+      if (anonRes.isOk()) {
+        await local.switchUser(anonRes.value.id);
+      }
+    }
+
+    if (remoteAuth) {
+      if (!tasks) {
+        Err.throw(new InvalidStateError("Must provide task provider if remote auth provider is given", { wrappedAuthProvider: remoteAuth, wrappedTaskProvider: tasks }));
+      } else {
+        _tasks = tasks;
+        _taskSyncQueue = tasks.getSyncQueue();
+        if (!_taskSyncQueue)
+          Err.throw(new InvalidStateError("Received remote auth provider, but received task provider does not have a remote"));
+      }
+
+      _remoteAuth = remoteAuth;
+
+      _authSyncQueue = new SyncQueue<Omit<IAuth,
+        | "getActiveUser"
+        | "getRegistrationRequirements"
+        | "getUser">, IAuthResponseHandler>({
+          deleteUser: remoteAuth.deleteUser,
+          handleDeleteUserResponse: auth.handleDeleteUserResponse,
+          login: auth.login,
+          logout: remoteAuth.logout,
+          register: remoteAuth.register,
+          updateUser: remoteAuth.updateUser,
+          handleUpdateUserResponse: auth.handleUpdateUserResponse,
+        });
+    }
+
+    return { ...auth, ...local, getSyncQueue: () => _authSyncQueue };
+  },
+};
+
+export default BrowserAuthProvider;
 
 const local: IAuthLocalFunctions = {
+  hasRemote: () => !!_remoteAuth,
+
   createUser: async function ({ user }) {
     assertDB(db);
 
@@ -166,7 +221,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     await db.put(AUTH_TABLE_NAME, updatedUser);
 
 
-    _authSyncQueue!.add('updateUser',
+    _authSyncQueue?.add('updateUser',
       { update },
       'handleUpdateUserResponse',
       {
@@ -198,7 +253,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
       await db.delete(AUTH_TABLE_NAME, userId);
 
-      _authSyncQueue!.add(
+      _authSyncQueue?.add(
         'deleteUser',
         { userId },
         'handleDeleteUserResponse',
@@ -291,7 +346,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     assertDB(db);
     // assertRemoteAuth(_remoteAuth);
 
-    await db.put(APP_TABLE_NAME, "", ACTIVEUSER_COLUMN_NAME);
+    await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
 
     // _remoteAuth.logout();
     invalidateAll(); // TODO I think notification is a better approach than invalidateAll()
@@ -339,56 +394,3 @@ function assertTasks(remoteTasks: ITasks | null, errorMessage?: string): asserts
 }
 // #endregion
 
-let db: LocalDB | null = null;
-let _remoteAuth: IAuth | null = null;
-let _authSyncQueue: AuthSyncQueue | null = null;
-let _tasks: ITasks | null = null;
-let _taskSyncQueue: TaskSyncQueue | null = null;
-
-const BrowserAuthProvider: ILocalAuthProvider = {
-  get: async function (
-    remoteAuth?: IAuth,
-    tasks?: ILocalTasks,
-  ) {
-    db = await dbPromise;
-
-    // Initialize with active user or create anonymous
-    const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    if (!activeUserId) {
-      const anonRes = await local.getDefaultUser();
-      if (anonRes.isOk()) {
-        await local.switchUser(anonRes.value.id);
-      }
-    }
-
-    if (remoteAuth) {
-      if (!tasks) {
-        Err.throw(new InvalidStateError("Must provide task provider if remote auth provider is given", { wrappedAuthProvider: remoteAuth, wrappedTaskProvider: tasks }));
-      } else {
-        _tasks = tasks;
-        _taskSyncQueue = tasks.getSyncQueue();
-        if (!_taskSyncQueue)
-          Err.throw(new InvalidStateError("Received remote auth provider, but received task provider does not have a remote"));
-      }
-
-      _remoteAuth = remoteAuth;
-
-      _authSyncQueue = new SyncQueue<Omit<IAuth,
-        | "getActiveUser"
-        | "getRegistrationRequirements"
-        | "getUser">, IAuthResponseHandler>({
-          deleteUser: remoteAuth.deleteUser,
-          handleDeleteUserResponse: auth.handleDeleteUserResponse,
-          login: auth.login,
-          logout: remoteAuth.logout,
-          register: remoteAuth.register,
-          updateUser: remoteAuth.updateUser,
-          handleUpdateUserResponse: auth.handleUpdateUserResponse,
-        });
-    }
-
-    return { ...auth, ...local, getSyncQueue: () => _authSyncQueue };
-  },
-};
-
-export default BrowserAuthProvider;

@@ -81,5 +81,7 @@ export interface IAuthLocalFunctions {
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
     /** Registers a remote user account and creates local user simultaneously */
     register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+
+    hasRemote(): boolean;
 }
 

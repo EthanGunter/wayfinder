@@ -2,26 +2,34 @@
 	import { goto } from '$app/navigation';
 	import type { IAuthAPI } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
-	import type { Snippet } from 'svelte';
-	import AppPulloutMenu from './AppPulloutMenu.svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
-	import type { LocalUser } from '$lib/API/Auth/User';
-	import * as Sheet from './ui/sheet';
+	import type { LocalUser, User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
-	import * as Dialog from './ui/dialog';
 	import BugReport from './BugReport.svelte';
 	import SearchBar from './SearchBar.svelte';
 	import Icon from '@iconify/svelte';
+	import * as Dialog from './ui/dialog';
+	import * as Sheet from './ui/sheet';
+	import UserAvatar from './UserAvatar.svelte';
+	import { authAPIPromise } from '@/stores/services';
 
 	interface Props {
-		user: LocalUser;
-		authAPI: IAuthAPI;
 		left?: Snippet;
 		right?: Snippet;
-		className?: string;
+		center?: Snippet;
+		class?: string;
 	}
-	const { user, authAPI, left, right, className }: Props = $props();
+	const { left, right, center, class: className }: Props = $props();
 	let bugDiagOpen = $state(false);
+	let user = $state<User | null>(null);
+	let multipleUsers = $state(false);
+
+	onMount(async () => {
+		const auth = await authAPIPromise;
+		user = await auth.getActiveUser();
+		multipleUsers = (await auth.listUsers()).length > 1;
+	});
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -64,32 +72,49 @@
 			</Dialog.Content>
 		</Dialog.Root>
 	{/if}
-	<SearchBar
-		handleQuery={search}
-		onItemSelected={gotoTask}
-		placeholder="Search tasks..."
-		defaultOptions={[{ title: 'Placeholder', completed: false } as Task]}
-	>
-		{#snippet children(task)}
-			{#if typeof task === 'string'}
-				<div class="flex w-full items-center gap-2">
-					<span class="flex-1 overflow-hidden text-left font-medium text-ellipsis whitespace-nowrap"
-						>{task}</span
-					>
-				</div>
-			{:else}
-				<div class="flex w-full items-center gap-2">
-					<span class="flex-1 overflow-hidden text-left font-medium text-ellipsis whitespace-nowrap"
-						>{task.title}</span
-					>
-					<span>{task.completed ? '👍' : '👎'}</span>
-				</div>
-			{/if}
-		{/snippet}
-	</SearchBar>
+
+	{#if center}
+		{@render center()}
+	{:else}
+		<SearchBar
+			handleQuery={search}
+			onItemSelected={gotoTask}
+			placeholder="Search tasks..."
+			defaultOptions={[{ title: 'Placeholder', completed: false } as Task]}
+		>
+			{#snippet children(task)}
+				{#if typeof task === 'string'}
+					<div class="flex w-full items-center gap-2">
+						<span
+							class="flex-1 overflow-hidden text-left font-medium text-ellipsis whitespace-nowrap"
+							>{task}</span
+						>
+					</div>
+				{:else}
+					<div class="flex w-full items-center gap-2">
+						<span
+							class="flex-1 overflow-hidden text-left font-medium text-ellipsis whitespace-nowrap"
+							>{task.title}</span
+						>
+						<span>{task.completed ? '👍' : '👎'}</span>
+					</div>
+				{/if}
+			{/snippet}
+		</SearchBar>
+	{/if}
+
 	{#if right}
 		{@render right()}
-	{:else}
-		<UserAccountMenu {user} {authAPI} />
+	{:else if user}
+		<Sheet.Root>
+			<Sheet.Trigger>
+				<div id="account-menu-btn" class="flex h-12 w-12 overflow-hidden rounded-full p-0">
+					<UserAvatar {user} />
+				</div>
+			</Sheet.Trigger>
+			<Sheet.Content>
+				<UserAccountMenu />
+			</Sheet.Content>
+		</Sheet.Root>
 	{/if}
 </div>

@@ -1,17 +1,15 @@
-import { goto } from '$app/navigation';
-import BrowserAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
-import { isAnonymous, type LocalUser } from '$lib/API/Auth/User';
-import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
 import { redirect } from '@sveltejs/kit';
+import { authAPIPromise, taskAPIPromise } from '$lib/stores/services';
 import type { LayoutLoad } from './$types';
 
 export const ssr = false;
 export const prerender = true;
 
 export const load: LayoutLoad = async ({ parent, url }) => {
-	// Wrap with browser providers (local-first, sync to remote when available)
-	const tasks = await BrowserTaskProvider.get(/* remoteTaskProvider */);
-	const auth = await BrowserAuthProvider.get(/* remoteAuth, tasks */);
+	// Resolve all services
+
+	// Get the resolved services
+	const auth = await authAPIPromise;
 
 	// Determine active user (prefer active, else default anonymous)
 	let activeUser = await auth.getActiveUser();
@@ -23,7 +21,7 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 		} else {
 			const users = await auth.listUsers();
 			if (users && users.length > 0) {
-				activeUser = users[0] as LocalUser;
+				activeUser = users[0];
 			}
 		}
 	}
@@ -33,5 +31,5 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 		throw redirect(302, '/login');
 	}
 
-	return { user: activeUser, auth, tasks };
+	return { user: activeUser };
 };

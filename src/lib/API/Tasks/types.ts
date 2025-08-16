@@ -13,7 +13,9 @@ export interface ILocalTaskProvider {
 }
 export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ITaskReverter = ITaskCoreResponseHandler
-export type ILocalTasks = ITasks & ITaskExporter & { getSyncQueue: () => TaskSyncQueue | null };
+export type ILocalTasks = ITasks & ITaskExporter & {
+  getSyncQueue: () => TaskSyncQueue | null, hasRemote(): boolean;
+};
 export type TaskSyncQueue = SyncQueue<Omit<ITasks,
   | "getAllUserTasks"
   | "getChildrenOf"

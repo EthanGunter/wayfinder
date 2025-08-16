@@ -161,8 +161,8 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const relUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
   await _updateTasksLocal(relUpdates, false); // Relationship updates should be handled by the server
 
-  if (updateServer) {
-    _taskSyncQueue?.add(
+  if (updateServer && _taskSyncQueue) {
+    _taskSyncQueue.add(
       "createTasks",
       { createDetails: tasks },
       "handleCreateTasksResponse",
@@ -194,9 +194,9 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
   await _updateTasksLocal(relUpdates, false);
 
-  if (updateServer) {
+  if (updateServer && _taskSyncQueue) {
     // Queue sync command
-    _taskSyncQueue!.add(
+    _taskSyncQueue.add(
       "updateTasks",
       { updates },
       'handleUpdateTasksResponse',
@@ -431,6 +431,7 @@ const dataExporter: ITaskExporter = {
 
 
 let _db: LocalDB | null;
+let _remoteTasks: ITasks | null = null;
 
 const api: ITasks & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
@@ -440,6 +441,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
     _db = await dbPromise;
 
     if (remoteTasks) {
+      _remoteTasks = remoteTasks;
       _taskSyncQueue = new SyncQueue<Omit<ITasks,
         | "getAllUserTasks"
         | "getChildrenOf"
@@ -464,7 +466,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
     }
-    return { ...api, getSyncQueue: () => _taskSyncQueue };
+    return { ...api, getSyncQueue: () => _taskSyncQueue, hasRemote: () => !!_remoteTasks };
   },
 }
 

@@ -2,9 +2,6 @@
 	import BugReportModal from './BugReport.svelte';
 	import { Button } from './ui/button';
 	import * as Dialog from './ui/dialog';
-	import * as Sheet from './ui/sheet';
-
-	let showSheet = $state(false);
 </script>
 
 <h1>Settings</h1>

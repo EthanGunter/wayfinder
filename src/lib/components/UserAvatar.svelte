@@ -3,15 +3,18 @@
 
 	interface Props {
 		user: LocalUser;
+		class?: string;
 	}
-	const { user }: Props = $props();
+	const { user, class: className }: Props = $props();
 </script>
 
-<div class="relative rounded-full overflow-hidden bg-gray-100 aspect-square">
+<div class="relative aspect-square overflow-hidden rounded-full bg-gray-100 {className}">
 	{#if user.avatar_url}
-		<img src={user.avatar_url} alt="User avatar" class="w-full h-full object-cover" />
+		<img src={user.avatar_url} alt="User avatar" class="h-full w-full object-cover" />
 	{:else}
-		<div class="w-full h-full object-cover flex items-center justify-center text-[200%] font-bold bg-gradient-to-br from-blue-400 to-purple-600 text-white">
+		<div
+			class="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-400 to-purple-600 object-cover text-[200%] font-bold text-white"
+		>
 			{user.display_name?.charAt(0)?.toUpperCase() || '?'}
 		</div>
 	{/if}
