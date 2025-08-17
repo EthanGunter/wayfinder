@@ -6,7 +6,8 @@ import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
-import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
+import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
+import type { User } from '../Auth/User';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
 import { error } from '@sveltejs/kit';
@@ -62,7 +63,13 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
       for (const id of ids) {
         const task = await _db.get(TASK_TABLE_NAME, id);
         if (task) {
-          tasks.push(new Task(task));
+          const taskObj = new Task(task);
+          // Only return tasks owned by the current user
+          if (await validateTaskOwnership(taskObj)) {
+            tasks.push(taskObj);
+          } else {
+            notFoundIds.push(id); // Treat unauthorized access as "not found"
+          }
         } else {
           notFoundIds.push(id);
         }
@@ -138,6 +145,12 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const createdTasks: Task[] = [];
   const errors: ArgumentError[] = [];
 
+  // Get current user to assign ownership
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return err(new InvalidStateError("Cannot create tasks without an authenticated user"));
+  }
+
   for (const taskDTO of tasks) {
     if (taskDTO.id) {
       const result = await taskCRUD.getTask({ id: taskDTO.id });
@@ -147,7 +160,9 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
       }
     }
 
-    const preparedTask = new Task(taskDTO);
+    // Ensure the task is owned by the current user
+    const taskWithOwnership = { ...taskDTO, user_id: currentUser.id };
+    const preparedTask = new Task(taskWithOwnership);
     preparedTask.created = new Date().toISOString();
     if (!taskDTO.id) {
       preparedTask.id = v4();
@@ -183,6 +198,13 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
     // const result = await api.updateTask({ taskOrId, changes: updates });
     const [task, error] = await getTaskOrID(taskOrId);
     if (error) { errors.push(error); continue; }
+    
+    // Validate user ownership before allowing update
+    if (!(await validateTaskOwnership(task))) {
+      errors.push(new NotFoundError(task.id, "Task (unauthorized)"));
+      continue;
+    }
+
     const updated: Task = new Task({ ...task, ...changes, last_edit: new Date().toISOString() });
 
     await _db.put(TASK_TABLE_NAME, updated);
@@ -218,6 +240,12 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
     const [task, error] = await getTaskOrID(taskOrId);
     if (error) {
       errors.push(error);
+      continue;
+    }
+
+    // Validate user ownership before allowing deletion
+    if (!(await validateTaskOwnership(task))) {
+      errors.push(new NotFoundError(task.id, "Task (unauthorized)"));
       continue;
     }
 
@@ -321,8 +349,14 @@ const taskRelations: ITaskRelations = {
 
   getRootTasks: async function () {
     assertDB(_db);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return ok([]); // No authenticated user, return empty array
+    }
+    
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const rootTasks = allTasks.filter(task => task.parents.length === 0);
+    const rootTasks = allTasks.filter(task => 
+      task.parents.length === 0 && task.user_id === currentUser.id);
     return ok(rootTasks.map(t => new Task(t)));
   }
 }
@@ -330,13 +364,27 @@ const taskRelations: ITaskRelations = {
 const advancedFeatures: ITaskAdvancedFeatures = {
   getTodaysTasks: async function () {
     assertDB(_db);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return ok([]); // No authenticated user, return empty array
+    }
+    
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    return ok(allTasks.filter(t => t.todays_task).map(t => new Task(t)));
+    return ok(allTasks
+      .filter(t => t.todays_task && t.user_id === currentUser.id)
+      .map(t => new Task(t)));
   },
 
   getPrioritizedTasks: async function (limit: number) {
     assertDB(_db);
-    let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME)).map(t => new Task(t));
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return ok([]); // No authenticated user, return empty array
+    }
+    
+    let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME))
+      .filter(t => t.user_id === currentUser.id)
+      .map(t => new Task(t));
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -395,7 +443,14 @@ const advancedFeatures: ITaskAdvancedFeatures = {
 const dataExporter: ITaskExporter = {
   exportData: async function ({ simplify }) {
     assertDB(_db);
-    const taskData = await _db.getAll(TASK_TABLE_NAME);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      throw new InvalidStateError("Cannot export data without an authenticated user");
+    }
+    
+    // Only export tasks owned by the current user
+    const allTasks = await _db.getAll(TASK_TABLE_NAME);
+    const taskData = allTasks.filter(task => task.user_id === currentUser.id);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
 
     // 1. Create a new zip
@@ -488,6 +543,32 @@ export default BrowserTaskProvider;
 
 function assertDB(db: LocalDB | null): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()"));
+}
+
+async function getCurrentUser(): Promise<User | null> {
+  assertDB(_db);
+  const activeUserId = await _db.get(APP_TABLE_NAME, ACTIVEUSER_NAME) as string | undefined;
+  if (activeUserId) {
+    const user = await _db.get(AUTH_TABLE_NAME, activeUserId);
+    return user ?? null;
+  }
+  return null;
+}
+
+async function validateTaskOwnership(task: Task): Promise<boolean> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return false; // No authenticated user
+  }
+  return task.user_id === currentUser.id;
+}
+
+async function validateTasksOwnership(tasks: Task[]): Promise<Task[]> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return []; // No authenticated user
+  }
+  return tasks.filter(task => task.user_id === currentUser.id);
 }
 
 async function getTaskOrID(taskOrId: Task | string): Promise<[Task, null] | [null, NotFoundError]> {
