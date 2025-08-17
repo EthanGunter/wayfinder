@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { isAnonymous, type User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
@@ -43,8 +43,9 @@
 	{#if !isAnonymous(user)}
 		<!-- If not anonymous account -->
 		<Button
-			onclick={() => {
-				auth!.logout();
+			onclick={async () => {
+				await auth!.logout();
+				goto('/');
 			}}
 		>
 			Sign out
