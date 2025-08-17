@@ -6,6 +6,7 @@ import { v4 } from 'uuid';
 import { Task, type TaskData } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
+import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
 import type { User } from '../Auth/User';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
@@ -176,6 +177,11 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const relUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
   await _updateTasksLocal(relUpdates, false); // Relationship updates should be handled by the server
 
+  // Update search index for newly created tasks
+  if (_searchService) {
+    createdTasks.forEach(task => _searchService!.indexTask(task));
+  }
+
   if (updateServer && _taskSyncQueue) {
     _taskSyncQueue.add(
       "createTasks",
@@ -215,6 +221,11 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
 
   const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
   await _updateTasksLocal(relUpdates, false);
+
+  // Update search index for updated tasks
+  if (_searchService) {
+    Array.from(updatedTasks.values()).forEach(task => _searchService!.indexTask(task));
+  }
 
   if (updateServer && _taskSyncQueue) {
     // Queue sync command
@@ -256,6 +267,12 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
 
     deletedTasks.push(task);
     await _db.delete(TASK_TABLE_NAME, task.id);
+    
+    // Remove from search index
+    if (_searchService) {
+      _searchService.removeTask(task.id);
+    }
+    
     const relUpdates = await getRelationshipUpdates(api, { oldTask: task, newTask: null });
     await _updateTasksLocal(relUpdates, false);
   }
@@ -435,8 +452,11 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     return ok(todoList);
   },
 
-  searchTasks: function (searchTerm) {
-    Err.throw(new NotImplementedError('BrowserTaskProvider.searchTasks'));
+  searchTasks: async function (searchTerm) {
+    if (!_searchService) {
+      return [];
+    }
+    return _searchService.searchTasks(searchTerm);
   },
 }
 
@@ -487,6 +507,7 @@ const dataExporter: ITaskExporter = {
 
 let _db: LocalDB | null;
 let _remoteTasks: ITasks | null = null;
+let _searchService: TaskSearchService | null = null;
 
 const api: ITasks & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
@@ -494,6 +515,19 @@ const BrowserTaskProvider: ILocalTaskProvider = {
   /** @param remoteTasks The backend task provider that this provider wraps */
   get: async function (remoteTasks) {
     _db = await dbPromise;
+
+    // Initialize search service
+    _searchService = new TaskSearchService();
+    
+    // Index existing tasks for the current user
+    const currentUser = await getCurrentUser();
+    if (currentUser) {
+      const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: currentUser.id });
+      if (existingTasksResult.isOk()) {
+        const tasks = extractBatchAndLogErrors(existingTasksResult);
+        _searchService.reindexTasks(tasks);
+      }
+    }
 
     if (remoteTasks) {
       _remoteTasks = remoteTasks;

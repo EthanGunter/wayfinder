@@ -61,6 +61,7 @@
 	"dependencies": {
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
+		"flexsearch": "^0.8.205",
 		"idb": "^8.0.3",
 		"js-yaml": "^4.1.0",
 		"jszip": "^3.10.1",

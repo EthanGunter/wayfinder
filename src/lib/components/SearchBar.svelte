@@ -1,6 +1,5 @@
 <script lang="ts" generics="T">
 	import type { Snippet } from 'svelte';
-	import { Button } from './ui/button';
 
 	interface Props {
 		onItemSelected?: (item: T | string) => void;
@@ -102,13 +101,17 @@
 		<ul class="absolute top-full left-0 right-0 z-[1000] max-h-[200px] overflow-y-auto m-0 p-0 list-none gap-1 flex flex-col" class:bottom-full={inverted}>
 			{#each displayResults as result}
 				<li class="bg-gray-100 rounded-lg shadow-[3px_3px_10px_0_rgba(25,24,24,0.32)]">
-					<Button onclick={() => selectItem(result)} tabindex={0} class="w-full p-2 border-none bg-transparent cursor-pointer text-left rounded-lg hover:bg-white focus:outline-2 focus:outline-blue-500 focus:outline-offset-2">
+					<button 
+						onclick={() => selectItem(result)} 
+						tabindex={0} 
+						class="w-full p-2 border-none bg-transparent cursor-pointer text-left rounded-lg hover:bg-white focus:outline-2 focus:outline-blue-500 focus:outline-offset-2 transition-colors"
+					>
 						{#if children}
 							{@render children(result)}
 						{:else}
-							{result?.toString() ?? ''}
+							<span class="text-gray-900">{result?.toString() ?? ''}</span>
 						{/if}
-					</Button>
+					</button>
 				</li>
 			{/each}
 		</ul>

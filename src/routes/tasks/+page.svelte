@@ -140,13 +140,10 @@
 	}
 
 	function onListOrderChanged(items: Task[]) {
-		// api.then((api) => {
 		for (let index = 0; index < items.length; index++) {
 			const item = items[index];
-
 			tasks!.updateTask({ taskOrId: item, changes: { priority: items.length - index } });
 		}
-		// });
 	}
 
 	async function handleTaskDelete(task: Task) {
