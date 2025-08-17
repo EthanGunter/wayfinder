@@ -2,7 +2,6 @@
 	import type { Snippet } from 'svelte';
 	import { Button } from './ui/button';
 	import * as Dialog from './ui/dialog';
-	import { Textarea } from './ui/textarea';
 
 	interface Props {
 		onSubmit?: () => void;
@@ -11,16 +10,14 @@
 
 	let form = $state<HTMLFormElement>();
 
-	function closeBugReport() {
-		// TODO reset form values
-	}
-
 	function submitBugReport() {
 		if (!form) return;
 		const formData = new FormData(form);
 
 		const bugDesc = formData.get('description');
 		const bugSteps = formData.get('steps');
+		if (!bugDesc || !bugSteps) return;
+
 		const userEmail = formData.get('email');
 		const bugExpect = formData.get('expectation');
 
@@ -35,11 +32,10 @@
 
 		alert('Bug report submitted! Thank you for your feedback.');
 		onSubmit?.();
-		closeBugReport();
 	}
 
 	const textAreaStyle =
-		'font-inherit min-h-[100px] w-full resize-y rounded border border-gray-400 bg-gray-100 p-2 text-gray-800 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(25,155,230,0.2)] focus:outline-none';
+		'font-inherit w-full rounded border border-gray-400 bg-gray-100 p-2 text-gray-800 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(25,155,230,0.2)] focus:outline-none';
 </script>
 
 <div class="p-4">
@@ -51,37 +47,37 @@
 				<label for="bug-description" class="mb-2 block font-medium text-gray-800"
 					>Description *</label
 				>
-				<Textarea
+				<textarea
 					id="bug-description"
 					name="description"
 					placeholder="Please describe what happened"
 					required
 					rows={2}
 					class={textAreaStyle}
-				></Textarea>
+				></textarea>
 			</div>
 			<div>
 				<label for="bug-expectation" class="mb-2 block font-medium text-gray-800"
 					>Expectation <span class="opacity-50">(optional)</span></label
 				>
-				<Textarea
+				<textarea
 					id="bug-expectation"
 					name="expectation"
-					placeholder="Explain what you expected to happen (optional)"
+					placeholder="What did you expected to happen?"
 					rows={2}
 					class={textAreaStyle}
-				></Textarea>
+				></textarea>
 			</div>
 			<div>
-				<label for="bug-steps" class="mb-2 block font-medium text-gray-800">Steps</label>
-				<Textarea
+				<label for="bug-steps" class="mb-2 block font-medium text-gray-800">Reproduction Steps *</label>
+				<textarea
 					id="bug-steps"
 					name="steps"
-					placeholder="What steps will help us reproduce this? (The more specific, the more likely it will get solved)"
+					placeholder="The more specific, the more likely it will get solved"
 					required
 					rows={2}
 					class={textAreaStyle}
-				></Textarea>
+				></textarea>
 			</div>
 		</div>
 
@@ -100,9 +96,9 @@
 				>We'll only use this to follow up on your report</small
 			>
 		</div>
-		<div>
+		<div class="flex justify-end gap-3">
+			<Button onclick={onSubmit} variant="outline">Cancel</Button>
 			<Button onclick={submitBugReport} type="submit" class="primary">Submit</Button>
-			<Button onclick={closeBugReport} variant="outline">Cancel</Button>
 		</div>
 	</form>
 </div>

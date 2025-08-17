@@ -76,7 +76,7 @@
 {#if auth && user}
 	<div
 		id="account-page"
-		class="grid-areas-[header_content_footer] relative grid h-full w-full grid-rows-[auto_1fr_auto] bg-gray-200"
+		class=" grid-areas-[header_content_footer] relative grid h-full w-full grid-rows-[auto_1fr_auto] bg-gray-200"
 	>
 		<AppHeader>
 			{#snippet left()}
@@ -86,7 +86,7 @@
 			{#snippet right()}{/snippet}
 		</AppHeader>
 		<div
-			class="grid-area-content mx-auto flex w-full max-w-[35rem] min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
+			class="grid-area-content mx-auto flex w-full max-w-[25rem] min-w-80 flex-col justify-center items-center gap-4 overflow-y-scroll p-4"
 		>
 			<div class="grid min-w-[70%] gap-4">
 				<AvatarEditor {user} class="m-auto max-h-[50vh] max-w-[50vw]" />

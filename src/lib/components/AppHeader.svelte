@@ -11,8 +11,10 @@
 	import Icon from '@iconify/svelte';
 	import * as Dialog from './ui/dialog';
 	import * as Sheet from './ui/sheet';
+	import { Tabs, TabsTrigger, TabsList, TabsContent } from './ui/tabs';
 	import UserAvatar from './UserAvatar.svelte';
 	import { authAPIPromise } from '@/stores/services';
+	import Feedback from './Feedback.svelte';
 
 	interface Props {
 		left?: Snippet;
@@ -21,7 +23,7 @@
 		class?: string;
 	}
 	const { left, right, center, class: className }: Props = $props();
-	let bugDiagOpen = $state(false);
+	let feedbacDiagOpen = $state(false);
 	let user = $state<User | null>(null);
 	let multipleUsers = $state(false);
 
@@ -57,18 +59,33 @@
 	{#if left}
 		{@render left()}
 	{:else}
-		<Dialog.Root bind:open={bugDiagOpen}>
+		<Dialog.Root bind:open={feedbacDiagOpen}>
 			<Dialog.Trigger>
-				<Button>
-					<Icon icon="lucide:bug" />
+				<Button class="size-12">
+					<Icon icon="material-symbols:feedback-outline" class=" size-5" />
 				</Button>
 			</Dialog.Trigger>
 			<Dialog.Content>
-				<BugReport
-					onSubmit={() => {
-						bugDiagOpen = false;
-					}}
-				/>
+				<Tabs>
+					<TabsList>
+						<TabsTrigger value="feedback">Feedback</TabsTrigger>
+						<TabsTrigger value="bugreport">Bug Report</TabsTrigger>
+					</TabsList>
+					<TabsContent value="bugreport">
+						<BugReport
+							onSubmit={() => {
+								feedbacDiagOpen = false;
+							}}
+						/>
+					</TabsContent>
+					<TabsContent value="feedback">
+						<Feedback
+							onSubmit={() => {
+								feedbacDiagOpen = false;
+							}}
+						/>
+					</TabsContent>
+				</Tabs>
 			</Dialog.Content>
 		</Dialog.Root>
 	{/if}
