@@ -160,10 +160,8 @@
 </script>
 
 {#if user && tasks}
-	<div
-		class="grid-areas-[header_content_footer] relative grid h-full w-full grid-rows-[auto_1fr_auto] bg-gray-200"
-	>
-		<AppHeader class="grid-area-header z-10 h-16" />
+	<div class="page page-root">
+		<AppHeader class="z-10 h-16" />
 		<div
 			class="grid-area-content mx-auto flex w-full max-w-[35rem] min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
 		>
@@ -207,6 +205,6 @@
 				<Button id="add-task-button" onclick={addTask}>New Project</Button>
 			{/if}
 		</div>
-		<AppFooter className="grid-area-footer z-10 h-16" />
+		<AppFooter className="z-10 h-16" />
 	</div>
 {/if}

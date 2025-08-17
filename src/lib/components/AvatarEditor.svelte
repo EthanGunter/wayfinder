@@ -76,7 +76,7 @@
 </script>
 
 <Dialog.Root>
-	<Dialog.Trigger>
+	<Dialog.Trigger type="button">
 		<div class="group relative cursor-pointer {className}">
 			<UserAvatar {user} class="transition-transform sm:group-hover:scale-105" />
 
@@ -196,6 +196,7 @@
 		<Dialog.Footer>
 			<Dialog.Close class="self-end">
 				<button
+					type="button"
 					class="self-end rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 				>
 					close

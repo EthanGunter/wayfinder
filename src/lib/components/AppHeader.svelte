@@ -54,7 +54,7 @@
 </script>
 
 <div
-	class="{className} flex items-center justify-between gap-4 bg-white p-4 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
+	class="flex items-center justify-between gap-4 bg-white p-4 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
 >
 	{#if left}
 		{@render left()}
@@ -125,7 +125,7 @@
 	{:else if user}
 		<Sheet.Root>
 			<Sheet.Trigger>
-				<div id="account-menu-btn" class="flex h-12 w-12 overflow-hidden rounded-full p-0">
+				<div id="account-menu-btn" class="flex h-12 w-12 overflow-hidden rounded-full p-0 btn">
 					<UserAvatar {user} />
 				</div>
 			</Sheet.Trigger>

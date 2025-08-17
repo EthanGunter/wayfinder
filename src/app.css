@@ -115,10 +115,30 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   h1 {
     @apply text-2xl font-bold mb-1;
+  }
+
+}
+
+@layer layout {
+  .page-root {
+    grid-template-areas: "header" "content" "footer";
+    grid-template-rows: auto 1fr auto;
+  }
+}
+
+@layer components {
+  .page {
+    @apply relative grid h-full w-full bg-gray-200;
+  }
+
+  .btn {
+    cursor: pointer;
   }
 }

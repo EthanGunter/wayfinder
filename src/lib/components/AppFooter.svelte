@@ -24,7 +24,7 @@
 </script>
 
 <div
-	class="{className} flex items-center justify-between gap-1 bg-white shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)]"
+	class="flex items-center justify-between gap-1 bg-white shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
 >
 	{#if children}
 		{@render children()}

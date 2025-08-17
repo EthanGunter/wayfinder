@@ -50,7 +50,7 @@
 				<textarea
 					id="bug-description"
 					name="description"
-					placeholder="Please describe what happened"
+					placeholder="What happened?"
 					required
 					rows={2}
 					class={textAreaStyle}
@@ -63,7 +63,7 @@
 				<textarea
 					id="bug-expectation"
 					name="expectation"
-					placeholder="What did you expected to happen?"
+					placeholder="What were you expecting?"
 					rows={2}
 					class={textAreaStyle}
 				></textarea>
@@ -73,7 +73,8 @@
 				<textarea
 					id="bug-steps"
 					name="steps"
-					placeholder="The more specific, the more likely it will get solved"
+					placeholder="How can we experience this too?
+(The more specific, the more likely it will get solved)"
 					required
 					rows={2}
 					class={textAreaStyle}

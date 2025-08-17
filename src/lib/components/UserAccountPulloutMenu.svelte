@@ -2,12 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { isAnonymous, type User } from '$lib/API/Auth/User';
-	import UserAvatar from './UserAvatar.svelte';
 	import { Button } from './ui/button';
-	import * as Sheet from './ui/sheet';
 	import { authAPIPromise } from '$lib/stores/services';
 	import { onMount } from 'svelte';
-	import { redirect } from '@sveltejs/kit';
 	import { type ILocalAuth } from '@/API/Auth/types';
 
 	let auth = $state<ILocalAuth>();
@@ -22,21 +19,22 @@
 </script>
 
 {#if auth && user}
-	<h1>Account</h1>
-	<h4>{user.display_name}</h4>
-	<Button
-		onclick={() =>
-			isAnonymous(user!)
-				? goto(`/login?register&redirect=${page.url.pathname + page.url.search}`)
-				: goto(`/account?redirect=${page.url.pathname + page.url.search}`)}
-	>
-		User Settings
-	</Button>
-	{#if multipleUsers}
-		<!-- TODO if there are multiple local accounts -->
+	<div class="flex items-center gap-5">
+		<h1>Account:</h1>
+		<h4>{user.display_name}</h4>
+	</div>
+	{#if isAnonymous(user!)}
+		<Button onclick={() => goto(`/register?redirect=${page.url.pathname + page.url.search}`)}>
+			Customize Account
+		</Button>
+	{:else}
+		<Button onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}>
+			User Settings
+		</Button>
+
 		<Button
 			onclick={() => {
-				throw new Error('NotImplemented');
+				goto(`/login?redirect=${page.url.pathname + page.url.search}`);
 			}}
 		>
 			Switch User

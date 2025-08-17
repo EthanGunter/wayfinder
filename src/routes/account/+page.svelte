@@ -1,18 +1,16 @@
 <script lang="ts">
-	import AvatarEditor from '../../lib/components/AvatarEditor.svelte';
-
 	import { goto, invalidateAll } from '$app/navigation';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 	import { userHasFeature, type LocalUser, type User } from '$lib/API/Auth/User';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { page } from '$app/state';
 	import { Button } from '@/components/ui/button';
 	import { authAPIPromise } from '@/stores/services';
 	import { onMount } from 'svelte';
 	import { type ILocalAuth } from '@/API/Auth/types';
 	import { redirect } from '@sveltejs/kit';
+	import AvatarEditor from '@/components/AvatarEditor.svelte';
 
 	let originalUser = $state<User>();
 	let user = $state<User>();
@@ -86,7 +84,7 @@
 			{#snippet right()}{/snippet}
 		</AppHeader>
 		<div
-			class="grid-area-content mx-auto flex w-full max-w-[25rem] min-w-80 flex-col justify-center items-center gap-4 overflow-y-scroll p-4"
+			class="grid-area-content mx-auto flex w-full max-w-[25rem] min-w-80 flex-col items-center justify-center gap-4 overflow-y-scroll p-4"
 		>
 			<div class="grid min-w-[70%] gap-4">
 				<AvatarEditor {user} class="m-auto max-h-[50vh] max-w-[50vw]" />

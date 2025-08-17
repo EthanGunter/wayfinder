@@ -143,9 +143,7 @@
 </script>
 
 {#if auth && user && tasks}
-	<div
-		class="grid-areas-[header_content_footer] relative grid h-full w-full grid-rows-[auto_1fr_auto] bg-gray-200"
-	>
+	<div class="page page-root">
 		<AppHeader class="grid-area-header z-10 h-16">{#snippet center()}{/snippet}</AppHeader>
 		<div
 			class="grid-area-content mx-auto flex w-full max-w-[35rem] min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
@@ -157,19 +155,22 @@
 					<h3 class="m-0 mb-2 text-2xl text-gray-800">Welcome to Wayfinder!</h3>
 					<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
 				</div>
-				<p class="m-0 text-sm text-gray-500 italic">Or sign in to sync your data.</p>
-				<Button
-					class="border border-gray-400 bg-transparent text-gray-800 transition-all duration-200 ease-in-out hover:border-gray-600 hover:bg-gray-100"
-					onclick={() => goto('/login')}
-				>
-					Sign In
-				</Button>
-				<Button
-					class="border-blue-500 bg-blue-500 text-white transition-all duration-200 ease-in-out hover:-translate-y-1 hover:border-blue-600 hover:bg-blue-600 hover:shadow-[0_4px_12px_rgba(0,122,204,0.3)]"
-					onclick={() => goto('/login?register')}
-				>
-					Create Account
-				</Button>
+				<!-- TODO:TEMP  -->
+				{#if false}
+					<p class="m-0 text-sm text-gray-500 italic">Or sign in to sync your data.</p>
+					<Button
+						class="border border-gray-400 bg-transparent text-gray-800 transition-all duration-200 ease-in-out hover:border-gray-600 hover:bg-gray-100"
+						onclick={() => goto('/login')}
+					>
+						Sign In
+					</Button>
+					<Button
+						class="border-blue-500 bg-blue-500 text-white transition-all duration-200 ease-in-out hover:-translate-y-1 hover:border-blue-600 hover:bg-blue-600 hover:shadow-[0_4px_12px_rgba(0,122,204,0.3)]"
+						onclick={() => goto('/register')}
+					>
+						Create Account
+					</Button>
+				{/if}
 			{:else}
 				<div
 					id="todays-tasks-list"
