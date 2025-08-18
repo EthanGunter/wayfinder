@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
-	import type { Task } from '$lib/API/Tasks/Task';
-	import * as Sheet from './ui/sheet';
-	import { Button } from './ui/button';
-	import * as Dialog from './ui/dialog';
+	import { TaskStatus, type Task } from '$lib/API/Tasks/Task';
+	import * as Sheet from '../../lib/components/ui/sheet';
+	import { Button } from '../../lib/components/ui/button';
+	import * as Dialog from '../../lib/components/ui/dialog';
+	import Icon from '@iconify/svelte';
+	import { Checkbox } from '@/components/ui/checkbox';
 
 	const {
-		task,
+		task = $bindable(),
 		onDragStart,
 		onDrop,
 		onDelete /* children */,
@@ -32,6 +34,24 @@
 	// Context menu state
 	let showContextMenu = $state(false);
 	let showDeleteDialog = $state(false);
+
+	// Create a reactive variable that's properly bound to the checkbox
+	let isCompleted = $state(task.completed);
+
+	// Keep isCompleted in sync with external changes to task.status
+	$effect(() => {
+		isCompleted = task.completed;
+	});
+
+	// If checkbox changes isCompleted, update the task
+	$effect(() => {
+		const newStatus = isCompleted ? TaskStatus.complete : TaskStatus.incomplete;
+		if (task.status !== newStatus) {
+			task.status = newStatus;
+			onTaskChange?.(task, { status: newStatus });
+		}
+	});
+
 	function rename() {
 		editName = true;
 		showContextMenu = false;
@@ -75,23 +95,13 @@
 	}
 </script>
 
-<li
-	bind:this={listItemEl}
-	class="flex min-h-min min-w-64 items-center justify-between gap-1 overflow-hidden rounded-xl border border-gray-400 bg-white text-ellipsis"
-	use:dragGroup
->
-	<span
-		class="drag-handle px-4 text-xl font-thin opacity-50 hover:opacity-75 transition-opacity duration-200"
-		use:draggable={{
-			type: 'task',
-			data: task,
-			onDragStart: handleDragStart,
-			onDrop: handleDrop,
-			delay: 0
-		}}
-	>
-		⧚
-	</span>
+<li bind:this={listItemEl} class="task-list-item" use:dragGroup>
+	<Checkbox
+		class="mx-3 rounded-md border-gray-500 p-2 text-xl"
+		bind:checked={isCompleted}
+		aria-label={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
+	/>
+
 	{#if editName}
 		<input
 			bind:this={inputEl}
@@ -109,11 +119,20 @@
 			onclick={handleTitleClick}
 			onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleTitleClick()}
 			aria-label="Edit task title"
+			use:draggable={{
+				type: 'task',
+				data: task,
+				onDragStart: handleDragStart,
+				onDrop: handleDrop,
+				delay: 0
+			}}
 		>
 			{title}
 		</span>
 	{/if}
-	<Button class="rounded-none bg-gray-800" onclick={() => (showContextMenu = true)}>⫶</Button>
+	<Button class="rounded-none bg-gray-800" onclick={() => (showContextMenu = true)}>
+		<Icon icon="ix:context-menu" />
+	</Button>
 
 	<Sheet.Root bind:open={showContextMenu}>
 		<Sheet.Content side="bottom" class="animate-slide-up p-6">
@@ -136,9 +155,9 @@
 			<div class="p-4">
 				<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
 				<!-- {#if task.children.length > 0}
-				 // TODO This is currently not true
-					<p>This will also delete <em>all</em> descendants.</p>
-				{/if} -->
+					 // TODO This is currently not true
+						<p>This will also delete <em>all</em> descendants.</p>
+					{/if} -->
 			</div>
 			<Dialog.Footer>
 				<Button variant="destructive" onclick={() => resolveDelete(true)}>Yes</Button>
@@ -148,17 +167,3 @@
 	</Dialog.Root>
 	<!-- <TaskItemContextMenu {task} /> -->
 </li>
-
-<style lang="scss">
-	li {
-		transition: border-color 0.2s ease-in-out;
-		
-		&:hover {
-			border-color: #9ca3af;
-		}
-
-		&:hover .drag-handle {
-			opacity: 0.8;
-		}
-	}
-</style>

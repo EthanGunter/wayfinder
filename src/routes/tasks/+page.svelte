@@ -2,7 +2,6 @@
 	import { type Task } from '$lib/API/Tasks/Task';
 	import { page } from '$app/state';
 	import ItemList from '$lib/components/ItemList.svelte';
-	import TaskListItem from '$lib/components/TaskListItem.svelte';
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
@@ -16,6 +15,7 @@
 	import { type ILocalTasks } from '@/API/Tasks';
 	import type { User } from '@/API/Auth/User';
 	import { redirect } from '@sveltejs/kit';
+	import TaskListItem from './TaskListItem.svelte';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -188,7 +188,7 @@
 				<TaskEditor bind:task={currentTask} {onTaskChange}>
 					<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 						{#snippet listItem(task, index)}
-							<TaskListItem {task} onDelete={handleTaskDelete} {onTaskChange} />
+							<TaskListItem {task} {onTaskChange} />
 						{/snippet}
 					</ItemList>
 				</TaskEditor>
@@ -196,7 +196,7 @@
 			{:else}
 				<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 					{#snippet listItem(task, index)}
-						<TaskListItem {task} onDelete={handleTaskDelete} />
+						<TaskListItem {task} {onTaskChange} />
 					{/snippet}
 				</ItemList>
 				<Button id="add-task-button" onclick={addTask}>New Project</Button>

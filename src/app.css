@@ -138,6 +138,10 @@
     @apply relative grid h-full w-full bg-gray-200;
   }
 
+  .task-list-item {
+    @apply flex min-h-min min-w-64 items-center justify-between gap-1 overflow-hidden rounded-xl border border-gray-400 bg-white text-ellipsis
+  }
+
   .btn {
     cursor: pointer;
   }

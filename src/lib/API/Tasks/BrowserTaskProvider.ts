@@ -11,7 +11,6 @@ import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER
 import type { User } from '../Auth/User';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
-import { error } from '@sveltejs/kit';
 
 
 //#region Task CRUD

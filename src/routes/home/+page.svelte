@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { DropEvent, droppable } from '$lib/actions/dnd';
 	import { Task, TaskStatus, type TaskData } from '$lib/API/Tasks/Task';
-	import { goto } from '$app/navigation';
-	import ItemList from '$lib/components/ItemList.svelte';
-	import TaskListItem from '$lib/components/TaskListItem.svelte';
+	import { goto, invalidateAll } from '$app/navigation';
+
+	import TaskListItem from './TaskListItem.svelte';
 	import { onMount } from 'svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
@@ -14,9 +14,7 @@
 	import type { ILocalTasks } from '@/API/Tasks';
 	import { page } from '$app/state';
 	import { redirect } from '@sveltejs/kit';
-
-	// TODO: Add auth redirect logic here if this route requires authentication
-	// TODO if the user is not synced, offer a "login" & "get started locally" option
+	import { Err } from '@/Errors';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -80,19 +78,8 @@
 		tasks!.updateTask({ taskOrId: task, changes: { todays_task: false } });
 	}
 
-	function todaysTaskChange(task: Task, changes: Partial<Task>) {
-		//TODO: Implement task change logic
-		if (changes.completed) {
-			tasks!.updateTask({ taskOrId: task, changes: { todays_task: false } });
-			todaysList = todaysList.filter((t) => t.id !== task.id);
-		}
-	}
-
-	function suggestedTaskChange(task: Task, changes: Partial<Task>) {
-		//TODO: Implement suggested task change logic
-		if (changes.completed) {
-			suggestedTasks = suggestedTasks.filter((t) => t.id !== task.id);
-		}
+	async function handleTaskComplete(task: Task, status: TaskStatus) {
+		tasks!.updateTask({ taskOrId: task, changes: { status } });
 	}
 
 	async function startProject() {
@@ -118,22 +105,10 @@
 		// alert('Start project (stub)');
 	}
 
-	async function handleDeleteTask(task: Task, source: 'today' | 'suggested') {
-		// TODO: Add recursive delete UI
-		const deleteRes = await tasks!.deleteTask({ taskOrId: task, recursive: false });
-		if (deleteRes.isOk()) {
-			if (source === 'today') {
-				todaysList = todaysList.filter((t) => t.id !== task.id);
-			} else {
-				suggestedTasks = suggestedTasks.filter((t) => t.id !== task.id);
-			}
-		}
-	}
-
 	// Filter completed tasks and duplicates
-	let filteredDaysTasks = $derived(
-		todaysList.filter((t) => !t.completed).sort((a, b) => (a.title < b.title ? -1 : 1))
-	);
+	// let filteredDaysTasks = $derived(
+	// 	todaysList.filter((t) => !t.completed).sort((a, b) => (a.title < b.title ? -1 : 1))
+	// );
 	let filteredSuggestedTasks = $derived(
 		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
 	);
@@ -182,7 +157,7 @@
 						}}
 					>
 						<h1>Today's Tasks</h1>
-						{#if filteredDaysTasks.length === 0}
+						{#if todaysList.length === 0}
 							<h4>Empty todolist!</h4>
 						{/if}
 						{#if filteredSuggestedTasks.length > 0}
@@ -195,11 +170,14 @@
 							</div>
 						{/if}
 
-						<ItemList items={filteredDaysTasks}>
-							{#snippet listItem(task, index)}
-								<TaskListItem {task} onDelete={(task) => handleDeleteTask(task, 'today')} />
-							{/snippet}
-						</ItemList>
+						<div class="tasks-list">
+							{#each todaysList as task, index (task.id)}
+								<TaskListItem
+									bind:task={todaysList[index]}
+									onTaskComplete={handleTaskComplete}
+								/>
+							{/each}
+						</div>
 					</div>
 					<div
 						id="suggested-tasks-list"
@@ -210,11 +188,11 @@
 						}}
 					>
 						<h2>Suggested Tasks</h2>
-						<ItemList items={filteredSuggestedTasks}>
-							{#snippet listItem(task, index)}
-								<TaskListItem {task} onDelete={(task) => handleDeleteTask(task, 'suggested')} />
-							{/snippet}
-						</ItemList>
+						<div class="tasks-list">
+							{#each filteredSuggestedTasks as task (task.id)}
+								<TaskListItem {task} onTaskComplete={handleTaskComplete} />
+							{/each}
+						</div>
 					</div>
 				</div>
 			{/if}
@@ -230,6 +208,12 @@
 		height: 100%;
 		gap: 1rem;
 		flex: 1;
+	}
+
+	.tasks-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 	}
 
 	.droppable-zone {
@@ -307,7 +291,11 @@
 		}
 
 		&::before {
-			background: linear-gradient(135deg, rgba(107, 114, 128, 0.1) 0%, rgba(107, 114, 128, 0.05) 100%);
+			background: linear-gradient(
+				135deg,
+				rgba(107, 114, 128, 0.1) 0%,
+				rgba(107, 114, 128, 0.05) 100%
+			);
 		}
 	}
 
