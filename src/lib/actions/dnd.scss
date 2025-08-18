@@ -1,30 +1,41 @@
 .dnd-draggable {
   cursor: grab;
   user-select: none;
+  transition: transform 0.1s ease-out;
+
+  &:hover {
+    cursor: grab;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
 }
 
 .dnd-ghost {
   position: absolute;
   pointer-events: none !important;
-  // opacity: 0.7;
   z-index: 2147483647;
+  transition: all 0.1s ease-out;
 }
 
-/* DEBUGGING STYLES */
-// .dnd-ghost.valid-drop {
-//   background-color: #00ff0055;
-// }
-// .dnd-ghost.invalid-drop {
-//   background-color: #ff000055;
-// }
-// .dnd-droppable.valid-drop {
-//   outline: 1px solid #00ff0055;
-// }
-// .dnd-droppable.invalid-drop {
-//   outline: 1px solid #ff000055;
-// }
-// [style*="pointer-events: none"] {
-//   /* Your highlighting styles here */
-//   background-color: yellow; /* Example: highlight with yellow background */
-//   border: 1px solid red; /* Example: add a red border */
-// }
+.dnd-droppable {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Active drop zone feedback */
+.dnd-ghost.valid-drop {
+  // Enhanced in component styles
+}
+
+.dnd-ghost.invalid-drop {
+  // Enhanced in component styles  
+}
+
+.dnd-droppable.valid-drop {
+  // Enhanced in component styles
+}
+
+.dnd-droppable.invalid-drop {
+  // Enhanced in component styles
+}

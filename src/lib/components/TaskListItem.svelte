@@ -81,7 +81,7 @@
 	use:dragGroup
 >
 	<span
-		class="px-4 text-xl font-thin opacity-50"
+		class="drag-handle px-4 text-xl font-thin opacity-50 hover:opacity-75 transition-opacity duration-200"
 		use:draggable={{
 			type: 'task',
 			data: task,
@@ -148,3 +148,17 @@
 	</Dialog.Root>
 	<!-- <TaskItemContextMenu {task} /> -->
 </li>
+
+<style lang="scss">
+	li {
+		transition: border-color 0.2s ease-in-out;
+		
+		&:hover {
+			border-color: #9ca3af;
+		}
+
+		&:hover .drag-handle {
+			opacity: 0.8;
+		}
+	}
+</style>
