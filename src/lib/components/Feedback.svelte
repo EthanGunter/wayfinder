@@ -6,6 +6,7 @@
 	import TabsList from './ui/tabs/tabs-list.svelte';
 	import TabsContent from './ui/tabs/tabs-content.svelte';
 	import { TabsTrigger } from './ui/tabs';
+	import { ReportingService } from '../API/ReportingService';
 
 	interface Props {
 		onSubmit?: () => void;
@@ -14,31 +15,27 @@
 
 	let form = $state<HTMLFormElement>();
 
-	function closeBugReport() {
+	function closeFeedback() {
 		// TODO reset form values
 	}
 
-	function submitBugReport() {
+	function submitFeedback() {
 		if (!form) return;
 		const formData = new FormData(form);
 
-		const msg = formData.get('message');
+		const msg = formData.get('message') as string;
 		if (!msg) return;
 
-		const userEmail = formData.get('email');
+		const userEmail = formData.get('email') as string;
 
-		//TODO In a real app, this would send the report to a backend service
-		console.log('Bug report submitted:', {
-			description: `${msg} - ${userEmail}`,
-			email: userEmail,
-			timestamp: new Date().toISOString(),
-			userAgent: navigator.userAgent,
-			url: window.location.href
+		ReportingService.reportFeedback({
+			message: msg,
+			email: userEmail || undefined
 		});
 
-		alert('Bug report submitted! Thank you for your feedback.');
+		alert('Opening feedback form in new tab. Thank you for your input!');
 		onSubmit?.();
-		closeBugReport();
+		closeFeedback();
 	}
 
 	const textAreaStyle =
@@ -48,12 +45,12 @@
 <div class="p-4">
 	<h1 class="m-0 mb-6">Something on your mind?</h1>
 
-	<form onsubmit={submitBugReport} bind:this={form}>
+	<form onsubmit={submitFeedback} bind:this={form}>
 		<div class="mb-6">
 			<label for="message" class="mb-2 block font-medium text-gray-800">Message *</label>
 			<textarea
 				id="message"
-				name="description"
+				name="message"
 				placeholder="Write your message here"
 				required
 				rows={2}
@@ -77,8 +74,8 @@
 			>
 		</div>
 		<div class="flex justify-end gap-3">
-			<Button onclick={closeBugReport} variant="outline">Cancel</Button>
-			<Button onclick={submitBugReport} type="submit" class="primary">Submit</Button>
+			<Button onclick={closeFeedback} variant="outline">Cancel</Button>
+			<Button onclick={submitFeedback} type="submit" class="primary">Submit</Button>
 		</div>
 	</form>
 </div>

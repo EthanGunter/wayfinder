@@ -16,12 +16,14 @@ export class Err {
         return new Err(1, nativeError.name ?? "unknown", nativeError.message, JSON.stringify(nativeError, undefined, 2));
     }
     static UNHANDLED(error: Err | any, message?: string): never {
-        // TODO link to bug report system. Unhandled errors shouldn't happen
+        // TODO: link to bug report system. Unhandled errors shouldn't happen
         if (!(error instanceof Err)) {
             error = new Err(1, "Unknown", message ?? "", error);
         }
         error.inheritanceDepth++;
         error.withTrace();
+        
+        // TODO: Import ReportingService and call reportError() here when ready
         if (error.context)
             console.error("HANDLER NOT IMPLEMENTED for: ", error.type + ": " + error.msg, error.context);
         else
@@ -29,12 +31,14 @@ export class Err {
         throw error.stack;
     }
     static throw(error: Err | any, message?: string): never {
-        // TODO link to bug report system. Unhandled errors shouldn't happen
+        // TODO: link to bug report system. Unhandled errors shouldn't happen  
         if (!(error instanceof Err)) {
             error = new Err(1, "Unknown", message ?? "", JSON.stringify(error, undefined, 2));
         }
         error.inheritanceDepth++;
         error.withTrace();
+        
+        // TODO: Import ReportingService and call reportError() here when ready
         if (error.context)
             console.error(error.type + ": " + error.msg, error.context);
         else
@@ -82,7 +86,8 @@ export class Err {
     }
 
     logError() {
-        // TODO link to bug report system. Unhandled errors shouldn't happen
+        // TODO: link to bug report system. Unhandled errors shouldn't happen
+        // TODO: Import ReportingService and call reportError() here when ready
         if (this.context) {
             if (this.stack)
                 console.error(this.type + ": " + this.msg, this.context, this.stack);
@@ -97,7 +102,8 @@ export class Err {
         }
     }
     logWarning() {
-        // TODO link to bug report system. Unhandled warnings shouldn't happen
+        // TODO: link to bug report system. Unhandled warnings shouldn't happen
+        // TODO: Import ReportingService and call reportError() here when ready
         if (this.context)
             console.warn(this.type + ": " + this.msg, this.context);
         else
