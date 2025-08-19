@@ -33,34 +33,50 @@
 	}
 </script>
 
-<div class="flex h-full flex-col p-4">
-	<div class="flex items-center border-t border-b border-gray-400 px-4">
+<div class="flex flex-col p-6">
+	<!-- Task Header -->
+	<div class="flex items-start gap-4 pb-2 mb-3 border-b-1 border-gray-200">
 		<Checkbox
-			class="rounded-md border-gray-500 p-2 text-xl size-5"
+			class="mt-1 size-5 rounded-md border-gray-300"
 			bind:checked
 			aria-label={checked ? 'Mark as incomplete' : 'Mark as complete'}
 		/>
-		<input
-			name="title"
-			class="my-4 ms-4 flex-grow border-b border-gray-400 text-2xl"
-			placeholder="Title"
-			bind:value={task.title}
-			oninput={handleInput}
-		/>
+		<div class="flex-1">
+			<input
+				name="title"
+				class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+				placeholder="Task title"
+				bind:value={task.title}
+				oninput={handleInput}
+			/>
+		</div>
 	</div>
-	<div class="flex gap-2 p-2">
-		<textarea
-			name="description"
-			id="task-editor-notes"
-			placeholder="Notes"
-			bind:value={task.content}
-			oninput={handleInput}
-			class="min-h-12 w-full"
-		></textarea>
+
+	<!-- Task Description -->
+
+	<textarea
+		name="description"
+		id="task-editor-notes"
+		placeholder="Add notes or description..."
+		bind:value={task.content}
+		oninput={handleInput}
+		class="w-full resize-none border-0 bg-transparent text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
+		rows="3"
+	></textarea>
+
+	<!-- Future: Expandable Details Section -->
+	<!-- This will house additional fields like due date, priority, tags, etc. -->
+	<!--
+	<div class="pb-6">
+		<button class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+			<span>Show more details</span>
+			<Icon icon="lucide:chevron-down" />
+		</button>
 	</div>
-	<div
-		class="relative mb-4 flex flex-grow flex-col before:pointer-events-none before:absolute before:top-0 before:right-0 before:bottom-0 before:left-0 before:z-[5] before:block before:border-b before:border-gray-400 before:shadow-[inset_0_10px_0.6rem_-10px_rgba(25,24,24,0.32),inset_0_-10px_0.6rem_-10px_rgba(25,24,24,0.32)] before:content-['']"
-	>
+	-->
+
+	<!-- Children Section -->
+	<div class="border-t border-gray-300 pt-6">
 		{@render children()}
 	</div>
 </div>

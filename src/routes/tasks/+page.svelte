@@ -16,6 +16,7 @@
 	import type { User } from '@/API/Auth/User';
 	import { redirect } from '@sveltejs/kit';
 	import TaskListItem from './TaskListItem.svelte';
+	import Icon from '@iconify/svelte';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -157,49 +158,72 @@
 </script>
 
 {#if user && tasks}
-	<div class="page page-root">
+	<div class="page page-root bg-gray-50">
 		<AppHeader class="z-10 h-16" />
 		<div
-			class="grid-area-content mx-auto flex w-full max-w-[35rem] min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
+			class="grid-area-content mx-auto flex w-full max-w-4xl flex-col overflow-y-scroll px-4 py-4 sm:px-6 lg:px-8"
 		>
 			<!-- TODO: <TasksTutorial /> -->
+			<!-- TODO:BUG get full ancestry for breadcrumbs -->
 			{#if currentTask}
-				<div class="mb-4 flex items-center gap-2 text-sm text-black/50">
+				<!-- Breadcrumb Navigation -->
+				<nav class="mb-4 flex items-center gap-2 text-sm text-gray-500" aria-label="Breadcrumb">
 					<a
-						class="rounded border border-black/20 px-2 py-1 text-gray-600 no-underline hover:bg-black/5"
+						class="rounded-lg px-3 py-1.5 text-gray-600 no-underline transition-colors hover:bg-gray-100 hover:text-gray-900"
 						href="/tasks"
 					>
-						<!-- Go to root -->
 						Projects
 					</a>
 					{#if parents.length > 0}
 						{#each parents as parent, index}
-							>
+							<span class="text-gray-400">›</span>
 							<a
-								class="rounded border border-black/20 px-2 py-1 text-gray-600 no-underline hover:bg-black/5"
+								class="rounded-lg px-3 py-1.5 text-gray-600 no-underline transition-colors hover:bg-gray-100 hover:text-gray-900"
 								href={`/tasks?id=${parent.id}`}
 							>
-								<!-- TODO: Replace with real icon -->
-								{parent.title ?? 'Projects'}
+								{parent.title ?? 'Untitled'}
 							</a>
 						{/each}
 					{/if}
+				</nav>
+				<!-- Current Task Editor -->
+				<div class="mb-8 rounded-xl bg-white shadow-sm ring-1 ring-gray-200/50">
+					<TaskEditor bind:task={currentTask} {onTaskChange}>
+						<!-- Child Tasks Section -->
+						<div class="mt-6">
+							<div class="mb-4 flex items-center justify-between px-10">
+								<h3 class="text-lg font-medium text-gray-900">Subtasks</h3>
+								<Button id="add-task-button" onclick={addTask} size="sm">Add Task</Button>
+							</div>
+							<ItemList items={children} accepts={['task']} {onListOrderChanged}>
+								{#snippet listItem(task, index)}
+									<TaskListItem {task} {onTaskChange} />
+								{/snippet}
+							</ItemList>
+						</div>
+					</TaskEditor>
 				</div>
-				<TaskEditor bind:task={currentTask} {onTaskChange}>
-					<ItemList items={children} accepts={['task']} {onListOrderChanged}>
-						{#snippet listItem(task, index)}
-							<TaskListItem {task} {onTaskChange} />
-						{/snippet}
-					</ItemList>
-				</TaskEditor>
-				<Button id="add-task-button" onclick={addTask} class="mt-auto">Add Task</Button>
 			{:else}
-				<ItemList items={children} accepts={['task']} {onListOrderChanged}>
-					{#snippet listItem(task, index)}
-						<TaskListItem {task} {onTaskChange} />
-					{/snippet}
-				</ItemList>
-				<Button id="add-task-button" onclick={addTask}>New Project</Button>
+				<!-- Root Projects View -->
+				<div class="mb-6">
+					<div class="mb-6 flex items-center justify-between">
+						<h1 class="text-2xl font-semibold text-gray-900">Projects</h1>
+						<Button id="add-task-button" onclick={addTask}>New Project</Button>
+					</div>
+					<div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50">
+						<ItemList items={children} accepts={['task']} {onListOrderChanged}>
+							{#snippet listItem(task, index)}
+								<TaskListItem {task} {onTaskChange} />
+							{/snippet}
+						</ItemList>
+						{#if children.length === 0}
+							<div class="py-12 text-center text-gray-500">
+								<p class="text-lg">No projects yet</p>
+								<p class="text-sm">Create your first project to get started</p>
+							</div>
+						{/if}
+					</div>
+				</div>
 			{/if}
 		</div>
 		<AppFooter className="z-10 h-16" />
