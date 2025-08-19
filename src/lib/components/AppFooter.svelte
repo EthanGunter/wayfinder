@@ -39,7 +39,7 @@
 		</Button>
 		<Separator orientation="vertical" />
 		<Button
-			onclick={() => navTo('/tasks')}
+			onclick={() => goto('/tasks')}
 			aria-label="Go to tasks"
 			class="flex-1 rounded-none bg-transparent text-gray-600"
 		>

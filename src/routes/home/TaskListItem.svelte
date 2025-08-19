@@ -19,11 +19,11 @@
 	} = $props();
 
 	// Create a reactive variable that's properly bound to the checkbox
-	let isCompleted = $state(task.completed);
+	let checked = $state(task.completed);
 
 	// Watch for changes to isCompleted and update the task
 	$effect(() => {
-		const newStatus = isCompleted ? TaskStatus.complete : TaskStatus.incomplete;
+		const newStatus = checked ? TaskStatus.complete : TaskStatus.incomplete;
 		if (task.status !== newStatus) {
 			task.status = newStatus;
 			onTaskChange?.(task, { status: newStatus });
@@ -32,7 +32,7 @@
 
 	// Keep isCompleted in sync with external changes to task.status
 	$effect(() => {
-		isCompleted = task.completed;
+		checked = task.completed;
 	});
 
 	function handleDragStart(e: CustomEvent) {
@@ -48,12 +48,12 @@
 	}
 </script>
 
-<li class="task-list-item" class:completed={isCompleted} use:dragGroup>
+<li class="task-list-item" class:completed={checked} use:dragGroup>
 	<!-- Completion checkbox -->
 	<Checkbox
 		class="mx-3 rounded-md border-gray-500 p-2 text-xl"
-		bind:checked={isCompleted}
-		aria-label={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
+		bind:checked
+		aria-label={checked ? 'Mark as incomplete' : 'Mark as complete'}
 	/>
 
 	<!-- Draggable task title -->

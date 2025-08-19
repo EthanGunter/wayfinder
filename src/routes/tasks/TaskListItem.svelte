@@ -36,16 +36,16 @@
 	let showDeleteDialog = $state(false);
 
 	// Create a reactive variable that's properly bound to the checkbox
-	let isCompleted = $state(task.completed);
+	let checked = $state(task.completed);
 
 	// Keep isCompleted in sync with external changes to task.status
 	$effect(() => {
-		isCompleted = task.completed;
+		checked = task.completed;
 	});
 
 	// If checkbox changes isCompleted, update the task
 	$effect(() => {
-		const newStatus = isCompleted ? TaskStatus.complete : TaskStatus.incomplete;
+		const newStatus = checked ? TaskStatus.complete : TaskStatus.incomplete;
 		if (task.status !== newStatus) {
 			task.status = newStatus;
 			onTaskChange?.(task, { status: newStatus });
@@ -98,8 +98,8 @@
 <li bind:this={listItemEl} class="task-list-item" use:dragGroup>
 	<Checkbox
 		class="mx-3 rounded-md border-gray-500 p-2 text-xl"
-		bind:checked={isCompleted}
-		aria-label={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
+		bind:checked={checked}
+		aria-label={checked ? 'Mark as incomplete' : 'Mark as complete'}
 	/>
 
 	{#if editName}
@@ -124,7 +124,7 @@
 				data: task,
 				onDragStart: handleDragStart,
 				onDrop: handleDrop,
-				delay: 0
+				delay: 150
 			}}
 		>
 			{title}
