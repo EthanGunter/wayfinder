@@ -160,8 +160,8 @@
 					{/if} -->
 			</div>
 			<Dialog.Footer>
-				<Button variant="destructive" onclick={() => resolveDelete(true)}>Yes</Button>
 				<Button onclick={() => resolveDelete(false)}>Cancel</Button>
+				<Button variant="destructive" onclick={() => resolveDelete(true)}>Yes</Button>
 			</Dialog.Footer>
 		</Dialog.Content>
 	</Dialog.Root>

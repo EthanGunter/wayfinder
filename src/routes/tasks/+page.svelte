@@ -5,7 +5,7 @@
 	import TaskEditor from '$lib/components/TaskEditor.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import debounce from '$lib/debounce';
 	import { ErrorType } from '$lib/Errors.js';
 	import Button from '@/components/ui/button/button.svelte';
@@ -72,7 +72,14 @@
 
 		// Now currentTask is guaranteed to be a Task object, not a string
 		if (!currentTask) return;
-		(await tasks.getParentsOf({ taskOrId: currentTask })).match(
+		await fetchAncestorsOf(currentTask);
+		await fetchChildrenOf(currentTask);
+		// TODO change id url param
+	}
+
+	async function fetchAncestorsOf(task: Task) {
+		if (!tasks) return;
+		(await tasks.getParentsOf({ taskOrId: task })).match(
 			(deps) => {
 				parents = deps;
 			},
@@ -80,7 +87,11 @@
 				err.logError();
 			}
 		);
-		(await tasks.getChildrenOf({ taskOrId: currentTask })).match(
+	}
+
+	async function fetchChildrenOf(task: Task) {
+		if (!tasks) return;
+		(await tasks.getChildrenOf({ taskOrId: task.id })).match(
 			(deps) => {
 				children = deps;
 			},
@@ -88,7 +99,6 @@
 				err.logError();
 			}
 		);
-		// TODO change id url param
 	}
 
 	async function fetchRootTasks() {
@@ -116,7 +126,8 @@
 				})
 			).match(
 				(newTask) => {
-					fetchCurrentTask(newTask);
+					// fetchCurrentTask(newTask);
+					fetchChildrenOf(currentTask!);
 				},
 				(err) => {
 					err.logError();
@@ -127,7 +138,8 @@
 				await tasks!.createTask({ createDetail: { user_id: user!.id, title: 'New Project' } })
 			).match(
 				(newTask) => {
-					fetchCurrentTask(newTask);
+					// fetchCurrentTask(newTask);
+					fetchRootTasks();
 				},
 				(err) => {
 					err.logError();
@@ -147,7 +159,7 @@
 		}
 	}
 
-	async function handleTaskDelete(task: Task) {
+	async function onDelete(task: Task) {
 		// Remove the task from the visual list
 		const deleteResult = await tasks!.deleteTask({ taskOrId: task.id });
 
@@ -191,35 +203,63 @@
 					<TaskEditor bind:task={currentTask} {onTaskChange}>
 						<!-- Child Tasks Section -->
 						<div class="mt-6">
-							<div class="mb-4 flex items-center justify-between px-10">
+							<div class="mb-4 flex items-center gap-2 px-10">
 								<h3 class="text-lg font-medium text-gray-900">Subtasks</h3>
-								<Button id="add-task-button" onclick={addTask} size="sm">Add Task</Button>
 							</div>
-							<ItemList items={children} accepts={['task']} {onListOrderChanged}>
-								{#snippet listItem(task, index)}
-									<TaskListItem {task} {onTaskChange} />
-								{/snippet}
-							</ItemList>
+							{#if children.length > 0}
+								<ItemList items={children} accepts={['task']} {onListOrderChanged}>
+									{#snippet listItem(task, index)}
+										<TaskListItem {task} {onTaskChange} {onDelete} />
+									{/snippet}
+								</ItemList>
+							{/if}
+							<!-- Add task button at bottom -->
+							<div class="mt-2 px-10">
+								<button
+									onclick={addTask}
+									class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+								>
+									<Icon icon="lucide:plus" class="size-4" />
+									<span>Add subtask</span>
+								</button>
+							</div>
 						</div>
 					</TaskEditor>
 				</div>
 			{:else}
 				<!-- Root Projects View -->
 				<div class="mb-6">
-					<div class="mb-6 flex items-center justify-between">
+					<div class="mb-6 flex items-center gap-2">
 						<h1 class="text-2xl font-semibold text-gray-900">Projects</h1>
-						<Button id="add-task-button" onclick={addTask}>New Project</Button>
+						<button
+							onclick={addTask}
+							class="ml-2 flex size-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+							title="New project"
+						>
+							<Icon icon="lucide:plus" class="size-5" />
+						</button>
 					</div>
 					<div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50">
 						<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 							{#snippet listItem(task, index)}
-								<TaskListItem {task} {onTaskChange} />
+								<TaskListItem {task} {onTaskChange} {onDelete} />
 							{/snippet}
 						</ItemList>
 						{#if children.length === 0}
 							<div class="py-12 text-center text-gray-500">
 								<p class="text-lg">No projects yet</p>
 								<p class="text-sm">Create your first project to get started</p>
+							</div>
+						{:else}
+							<!-- Add project button at bottom -->
+							<div class="mt-3 border-t border-gray-100 pt-3">
+								<button
+									onclick={addTask}
+									class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+								>
+									<Icon icon="lucide:plus" class="size-4" />
+									<span>New project</span>
+								</button>
 							</div>
 						{/if}
 					</div>
