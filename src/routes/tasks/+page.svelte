@@ -126,8 +126,9 @@
 				})
 			).match(
 				(newTask) => {
-					// fetchCurrentTask(newTask);
-					fetchChildrenOf(currentTask!);
+					fetchCurrentTask(newTask);
+					// TODO:TEMP once task/project creation panel is created
+					// fetchChildrenOf(currentTask!);
 				},
 				(err) => {
 					err.logError();
@@ -138,8 +139,9 @@
 				await tasks!.createTask({ createDetail: { user_id: user!.id, title: 'New Project' } })
 			).match(
 				(newTask) => {
-					// fetchCurrentTask(newTask);
-					fetchRootTasks();
+					fetchCurrentTask(newTask);
+					// TODO:TEMP once task/project creation panel is created
+					// fetchRootTasks();
 				},
 				(err) => {
 					err.logError();
@@ -159,9 +161,9 @@
 		}
 	}
 
-	async function onDelete(task: Task) {
+	async function onDelete(task: Task, recursive: boolean) {
 		// Remove the task from the visual list
-		const deleteResult = await tasks!.deleteTask({ taskOrId: task.id });
+		const deleteResult = await tasks!.deleteTask({ taskOrId: task.id, recursive });
 
 		if (deleteResult.isOk()) {
 			children = children.filter((x) => x.id !== task.id);
@@ -203,9 +205,7 @@
 					<TaskEditor bind:task={currentTask} {onTaskChange}>
 						<!-- Child Tasks Section -->
 						<div class="mt-6">
-							<div class="mb-4 flex items-center gap-2 px-10">
-								<h3 class="text-lg font-medium text-gray-900">Subtasks</h3>
-							</div>
+							<h3 class="mb-4 text-lg font-medium text-gray-900">Subtasks</h3>
 							{#if children.length > 0}
 								<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 									{#snippet listItem(task, index)}
@@ -214,13 +214,13 @@
 								</ItemList>
 							{/if}
 							<!-- Add task button at bottom -->
-							<div class="mt-2 px-10">
+							<div class="mt-3 border-t border-gray-100 pt-3">
 								<button
 									onclick={addTask}
 									class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
 								>
 									<Icon icon="lucide:plus" class="size-4" />
-									<span>Add subtask</span>
+									<span>New subtask</span>
 								</button>
 							</div>
 						</div>
@@ -229,16 +229,7 @@
 			{:else}
 				<!-- Root Projects View -->
 				<div class="mb-6">
-					<div class="mb-6 flex items-center gap-2">
-						<h1 class="text-2xl font-semibold text-gray-900">Projects</h1>
-						<button
-							onclick={addTask}
-							class="ml-2 flex size-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-							title="New project"
-						>
-							<Icon icon="lucide:plus" class="size-5" />
-						</button>
-					</div>
+					<h1 class="mb-6 text-2xl font-semibold text-gray-900">Projects</h1>
 					<div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50">
 						<ItemList items={children} accepts={['task']} {onListOrderChanged}>
 							{#snippet listItem(task, index)}
@@ -247,8 +238,13 @@
 						</ItemList>
 						{#if children.length === 0}
 							<div class="py-12 text-center text-gray-500">
-								<p class="text-lg">No projects yet</p>
-								<p class="text-sm">Create your first project to get started</p>
+								<p class="mb-4 text-lg">No projects yet</p>
+								<Button
+									onclick={addTask}
+									class="mx-auto flex items-center gap-2 rounded-lg px-3 py-2 text-left"
+								>
+									<p class="text-sm">Create your first project to get started</p>
+								</Button>
 							</div>
 						{:else}
 							<!-- Add project button at bottom -->

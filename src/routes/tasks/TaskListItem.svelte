@@ -18,7 +18,7 @@
 		task: Task;
 		onDragStart?: (e: CustomEvent) => void;
 		onDrop?: (e: CustomEvent) => void;
-		onDelete?: (task: Task) => void;
+		onDelete?: (task: Task, recursive: boolean) => void;
 		onTaskChange?: (original: Task, changes: Partial<Task>) => void;
 	} = $props();
 
@@ -33,6 +33,7 @@
 
 	// Context menu state
 	let showContextMenu = $state(false);
+
 	let showDeleteDialog = $state(false);
 
 	// Create a reactive variable that's properly bound to the checkbox
@@ -76,7 +77,7 @@
 	}
 	async function resolveDelete(confirm: boolean) {
 		if (confirm) {
-			onDelete?.(task);
+			onDelete?.(task, true);
 		}
 		showDeleteDialog = false;
 	}
@@ -98,7 +99,7 @@
 <li bind:this={listItemEl} class="task-list-item" use:dragGroup>
 	<Checkbox
 		class="mx-3 rounded-md border-gray-500 p-2 text-xl"
-		bind:checked={checked}
+		bind:checked
 		aria-label={checked ? 'Mark as incomplete' : 'Mark as complete'}
 	/>
 
@@ -150,14 +151,12 @@
 	<Dialog.Root bind:open={showDeleteDialog}>
 		<Dialog.Content>
 			<Dialog.Header>
-				<Dialog.Title>Delete Task</Dialog.Title>
+				<Dialog.Title>Are you sure you want to delete <strong>{task.title}</strong>?</Dialog.Title>
 			</Dialog.Header>
 			<div class="p-4">
-				<p>Are you sure you want to delete <strong>{task.title}</strong>?</p>
-				<!-- {#if task.children.length > 0}
-					 // TODO This is currently not true
-						<p>This will also delete <em>all</em> descendants.</p>
-					{/if} -->
+				{#if task.children.length > 0}
+					<p>This will also delete <em>all</em> descendants.</p>
+				{/if}
 			</div>
 			<Dialog.Footer>
 				<Button onclick={() => resolveDelete(false)}>Cancel</Button>
