@@ -5,6 +5,7 @@
 	import type { Snippet } from 'svelte';
 	import { Button } from './ui/button';
 	import { Separator } from './ui/separator';
+	import Icon from '@iconify/svelte';
 
 	interface Props {
 		children?: Snippet;
@@ -24,7 +25,7 @@
 </script>
 
 <div
-	class="flex items-center justify-between gap-1 bg-white shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
+	class="flex items-center justify-between gap-1 border-t border-gray-200/50 bg-white/80 shadow-sm backdrop-blur-sm {className}"
 >
 	{#if children}
 		{@render children()}
@@ -32,19 +33,25 @@
 		<Button
 			onclick={() => navTo('/home')}
 			aria-label="Go to home"
-			class="flex-1 rounded-none bg-transparent text-gray-600"
+			class="mx-1 flex-1 rounded-lg border-0 bg-transparent text-gray-700 shadow-none transition-colors duration-200 hover:bg-gray-100/80 hover:text-gray-900"
 		>
 			<!-- TODO: Replace with real icon - using ChecklistIcon equivalent -->
-			<span>✓</span>
+			<span class="flex items-center gap-4">
+				<Icon icon="lucide:list-todo" class="size-5" />
+				<span class="font-extralight text-gray-600">Planner</span>
+			</span>
 		</Button>
-		<Separator orientation="vertical" />
+		<Separator orientation="vertical" class="h-6 bg-gray-300/60" />
 		<Button
 			onclick={() => goto('/tasks')}
 			aria-label="Go to tasks"
-			class="flex-1 rounded-none bg-transparent text-gray-600"
+			class="mx-1 flex-1 rounded-lg border-0 bg-transparent text-gray-700 shadow-none transition-colors duration-200 hover:bg-gray-100/80 hover:text-gray-900"
 		>
 			<!-- TODO: Replace with real icon - using AccountTreeIcon equivalent -->
-			<span>🌳</span>
+			<span class="flex items-center gap-4">
+				<Icon icon="grommet-icons:tree" class="size-4" />
+				<span class="font-extralight text-gray-600">Browser</span>
+			</span>
 		</Button>
 	{/if}
 </div>
