@@ -1,3 +1,5 @@
+// Applied to the original HTML element that use:draggable
+// note: this gets applied to the nearest use:group element if one is defined
 .dnd-draggable {
   cursor: grab;
   user-select: none;
@@ -10,6 +12,12 @@
   &:active {
     cursor: grabbing;
   }
+
+}
+
+// Applied to the original HTML [group] element while dragging
+.dnd-dragging {
+  opacity: 0.3;
 }
 
 .dnd-ghost {
@@ -19,6 +27,7 @@
   transition: all 0.1s ease-out;
 }
 
+// Applied to HTML elements that use:droppable
 .dnd-droppable {
   transition: all 0.2s ease-in-out;
 }

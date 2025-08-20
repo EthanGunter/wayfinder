@@ -96,7 +96,7 @@
 	}
 </script>
 
-<li bind:this={listItemEl} class="task-list-item" use:dragGroup>
+<li bind:this={listItemEl} class="task-list-item" class:completed={checked} use:dragGroup>
 	<Checkbox
 		class="mx-3 rounded-md border-gray-500 p-2 text-xl"
 		bind:checked

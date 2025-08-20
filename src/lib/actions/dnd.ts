@@ -36,6 +36,7 @@ export const eventNames = {
 // --- CSS names
 export const DRAGGABLE_CSS_CLASS = "dnd-draggable";
 export const DROPPABLE_CSS_CLASS = "dnd-droppable";
+export const DRAGGING_CSS_CLASS = "dnd-dragging"; // Applied to the drag group or node during drag
 const VALID_DROP_CLASS = "valid-drop";
 const INVALID_DROP_CLASS = "invalid-drop";
 const CONTROLS_DRAGGABLE_ATTR = "data-controls-draggable"; // Used by droppable to indicate it influences ghost rendering/position
@@ -515,9 +516,15 @@ export function draggable<T>(
 
     // Create ghost element
     const groupNode = groupElement ?? node; // Use the group as the ghost if available
+    
+    // Add dragging class to the appropriate node for styling (group if exists, otherwise individual node)
+    groupNode.classList.add(DRAGGING_CSS_CLASS);
     ghost = groupNode.cloneNode(true) as HTMLElement;
     ghost.setAttribute("draggable", "false"); // Prevent nested dragging
+    // Remove classes that should only be on the original node
     ghost.classList.remove(DRAGGABLE_CSS_CLASS);
+    ghost.classList.remove(DRAGGING_CSS_CLASS);
+    // Add the ghost-defining class
     ghost.classList.add("dnd-ghost");
     copyComputedSizeAndPosition(groupNode, ghost); // Ensure ghost has same dimensions
 
@@ -700,6 +707,9 @@ export function draggable<T>(
         }
       }
 
+      // Remove dragging class from the appropriate node (group if exists, otherwise individual node)
+      groupNode.classList.remove(DRAGGING_CSS_CLASS);
+
       // Restore original node's pointer events only if we were managing them
       if (shouldRestorePointerEvents) {
         node.style.pointerEvents = initialPointerEvents || "initial";
@@ -745,11 +755,11 @@ export function draggable<T>(
 
       if (finalDropTarget && finalDropValid) {
         finalDropTarget.dispatchEvent(dropEvent);
-        // resetAllDroppableStates();
+        resetAllDroppableStates();
       } else {
         // Dispatch drop event on the draggable node itself for failed drops
         node.dispatchEvent(dropEvent);
-        // resetAllDroppableStates();
+        resetAllDroppableStates();
       }
 
       // Perform cleanup regardless of drop success
@@ -799,6 +809,13 @@ export function draggable<T>(
             groupApi.notifyMemberDragEnd(node);
           }
         }
+        
+        // Reset all droppable states
+        resetAllDroppableStates();
+        
+        // Remove dragging class from appropriate node (group if exists, otherwise individual node)
+        const groupNodeForCleanup = groupElement ?? node;
+        groupNodeForCleanup.classList.remove(DRAGGING_CSS_CLASS);
         
         // Clean up ghost
         if (ghost && ghost.parentNode) {

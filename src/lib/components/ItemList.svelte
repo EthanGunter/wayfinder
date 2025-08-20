@@ -136,7 +136,7 @@
 	/** Called when an item from this list gets dropped somewhere other than this */
 	function handleDropElsewhere(event: DropEvent) {
 		if (event.detail.dropAllowed) {
-			// The drop was successful on this list
+			// The drop was successfully removed from this list
 			onListOrderChanged?.(items);
 			// Note: Re-sorting will happen automatically when the parent 
 			// updates the items prop after updating priorities

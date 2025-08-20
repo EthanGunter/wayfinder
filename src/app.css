@@ -141,6 +141,9 @@
   .task-list-item {
     @apply flex min-h-min min-w-64 items-center justify-between gap-1 overflow-hidden rounded-xl border border-gray-400 bg-white text-ellipsis
   }
+  .task-list-item.completed {
+    background-color: rgb(201, 255, 201);
+  }
 
   .btn {
     cursor: pointer;

@@ -78,8 +78,8 @@
 		tasks!.updateTask({ taskOrId: task, changes: { todays_task: false } });
 	}
 
-	async function handleTaskComplete(task: Task, status: TaskStatus) {
-		tasks!.updateTask({ taskOrId: task, changes: { status } });
+	async function onTaskChange(task: Task, changes: Partial<Task>) {
+		tasks!.updateTask({ taskOrId: task, changes });
 	}
 
 	async function startProject() {
@@ -172,10 +172,7 @@
 
 						<div class="tasks-list">
 							{#each todaysList as task, index (task.id)}
-								<TaskListItem
-									bind:task={todaysList[index]}
-									onTaskComplete={handleTaskComplete}
-								/>
+								<TaskListItem bind:task={todaysList[index]} {onTaskChange} />
 							{/each}
 						</div>
 					</div>
@@ -190,7 +187,7 @@
 						<h2>Suggested Tasks</h2>
 						<div class="tasks-list">
 							{#each filteredSuggestedTasks as task (task.id)}
-								<TaskListItem {task} onTaskComplete={handleTaskComplete} />
+								<TaskListItem {task} {onTaskChange} />
 							{/each}
 						</div>
 					</div>

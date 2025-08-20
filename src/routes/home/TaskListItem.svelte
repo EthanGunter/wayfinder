@@ -75,9 +75,3 @@
 		<Icon icon="majesticons:open" />
 	</Button>
 </li>
-
-<style lang="scss">
-	.completed {
-		outline: 1px solid #189e47;
-	}
-</style>
