@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { TaskStatus, type Task } from '$lib/API/Tasks/Task';
 	import { type Snippet } from 'svelte';
-	import Checkbox from './ui/checkbox/checkbox.svelte';
+	import Checkbox from '../../lib/components/ui/checkbox/checkbox.svelte';
 	import Icon from '@iconify/svelte';
-	import * as Dialog from './ui/dialog';
-	import Button from './ui/button/button.svelte';
-	
+	import * as Dialog from '../../lib/components/ui/dialog';
+	import Button from '../../lib/components/ui/button/button.svelte';
+
 	interface Props {
 		task: Task;
 		onTaskChange?: (original: Task, update: Partial<Task>) => void;
-		onDelete?: (task: Task, recursive: boolean) => void;
+		onDelete: (task: Task, recursive: boolean) => void;
 		children: Snippet;
 	}
 	let { task = $bindable(), onTaskChange, onDelete, children }: Props = $props();
@@ -42,15 +42,15 @@
 		showDeleteDialog = true;
 	}
 
-	function handleDelete(recursive: boolean) {
-		onDelete?.(task, recursive);
+	function handleDelete() {
+		onDelete?.(task, true); // Always delete recursively to maintain graph integrity
 		showDeleteDialog = false;
 	}
 </script>
 
 <div class="flex flex-col p-6">
 	<!-- Task Header -->
-	<div class="flex items-start gap-4 pb-2 mb-3 border-b-1 border-gray-200">
+	<div class="mb-3 flex items-start gap-4 border-b-1 border-gray-200 pb-2">
 		<Checkbox
 			class="mt-1 size-5 rounded-md border-gray-300"
 			bind:checked
@@ -59,21 +59,19 @@
 		<div class="flex-1">
 			<input
 				name="title"
-				class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+				class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none border-r-1"
 				placeholder="Task title"
 				bind:value={task.title}
 				oninput={handleInput}
 			/>
 		</div>
-		{#if onDelete}
-			<button 
-				onclick={openDeleteDialog}
-				class="mt-1 flex size-6 items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
-				title="Delete task"
-			>
-				<Icon icon="lucide:trash-2" class="size-4" />
-			</button>
-		{/if}
+		<button
+			onclick={openDeleteDialog}
+			class="mt-1 flex size-6 items-center justify-center rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
+			title="Delete task"
+		>
+			<Icon icon="lucide:trash-2" class="size-4" />
+		</button>
 	</div>
 
 	<!-- Task Description -->
@@ -113,12 +111,13 @@
 		</Dialog.Header>
 		<div class="p-4">
 			<p class="mb-4">Are you sure you want to delete <strong>{task.title}</strong>?</p>
-			<p class="text-sm text-gray-600">Choose whether to delete just this task or include all subtasks:</p>
+			<p class="text-sm text-gray-600">
+				This will permanently delete the task and all of its subtasks.
+			</p>
 		</div>
 		<Dialog.Footer class="flex gap-2">
 			<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Cancel</Button>
-			<Button variant="destructive" onclick={() => handleDelete(false)}>Delete Task Only</Button>
-			<Button variant="destructive" onclick={() => handleDelete(true)}>Delete with Subtasks</Button>
+			<Button variant="destructive" onclick={handleDelete}>Delete Task & Subtasks</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

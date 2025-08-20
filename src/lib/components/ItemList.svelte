@@ -20,6 +20,8 @@
 		items: T[];
 		listItem: Snippet<[T, number]>;
 		onListOrderChanged?: (items: T[]) => void;
+		sortFunction?: (a: T, b: T) => number;
+		sortEnabled?: boolean;
 		// onItemAdded?: (item: T) => void;
 		// onItemRemoved?: (item: T) => void;
 	}
@@ -30,7 +32,9 @@
 		accepts,
 		items: initialItems = [],
 		listItem,
-		onListOrderChanged = undefined
+		onListOrderChanged = undefined,
+		sortFunction = undefined,
+		sortEnabled = true
 	}: Props = $props();
 
 	let items = $state([...initialItems]);
@@ -38,9 +42,17 @@
 	let isDraggingFromThisList = false;
 	let temporaryItem: T | null = null;
 
+	// Helper function to apply sorting if enabled
+	function applySorting(itemsToSort: T[]): T[] {
+		if (sortEnabled && sortFunction) {
+			return [...itemsToSort].sort(sortFunction);
+		}
+		return itemsToSort;
+	}
+
 	// Update items when props change
 	$effect(() => {
-		items = [...initialItems];
+		items = applySorting([...initialItems]);
 	});
 
 	function handleDragEnter(event: DragEnterEvent) {
@@ -108,6 +120,8 @@
 		if (event.detail.dropAllowed) {
 			// The drop was successful on this list
 			onListOrderChanged?.(items);
+			// Note: Re-sorting will happen automatically when the parent 
+			// updates the items prop after updating priorities
 		} else {
 			// Drop failed - revert to original order
 			items = originalItems;
@@ -124,6 +138,8 @@
 		if (event.detail.dropAllowed) {
 			// The drop was successful on this list
 			onListOrderChanged?.(items);
+			// Note: Re-sorting will happen automatically when the parent 
+			// updates the items prop after updating priorities
 		} else {
 			// Drop failed - revert to original order
 			items = originalItems;
