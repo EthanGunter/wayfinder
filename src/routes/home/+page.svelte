@@ -259,12 +259,6 @@
 			font-style: italic;
 			margin: 0.5rem 0;
 		}
-
-		// Hover state
-		&:hover {
-			background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-			border-color: #cbd5e1;
-		}
 	}
 
 	.todays-tasks {
@@ -272,11 +266,6 @@
 		background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
 		flex: 2; // Priority - takes 2/3 of available space
 		min-height: 200px;
-
-		&:hover {
-			background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
-			border-color: #3b82f6;
-		}
 
 		&::before {
 			background: linear-gradient(
@@ -292,11 +281,6 @@
 		background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
 		flex: 1; // Takes 1/3 of available space
 		min-height: 150px;
-
-		&:hover {
-			background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-			border-color: #9ca3af;
-		}
 
 		&::before {
 			background: linear-gradient(
