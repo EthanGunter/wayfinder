@@ -66,7 +66,10 @@
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			tasks!.updateTask({ taskOrId: task, changes: { todays_task: true } });
+			tasks!.updateTask({
+				taskOrId: task,
+				changes: { todays_task: new Date().toISOString().split('T')[0] }
+			});
 		}
 	}
 
@@ -75,7 +78,7 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		tasks!.updateTask({ taskOrId: task, changes: { todays_task: false } });
+		tasks!.updateTask({ taskOrId: task, changes: { todays_task: '' } });
 	}
 
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
@@ -106,9 +109,19 @@
 	}
 
 	// Filter completed tasks and duplicates
-	// let filteredDaysTasks = $derived(
-	// 	todaysList.filter((t) => !t.completed).sort((a, b) => (a.title < b.title ? -1 : 1))
-	// );
+	let filteredDaysTasks = $derived(
+		// TODO:UX this should sort by priority, but the tasks' priorities are not related to each other... Today's tasks need their own local priority :(
+		[...todaysList].sort((a, b) => {
+			const ac = a.completed;
+			const bc = b.completed;
+			
+			// If both or neither are completed, sort by title
+			if (ac && bc || !(ac || bc)) return a.title < b.title ? -1 : 1;
+			// Otherwise move completed lower
+			else if (a.completed) return 1;
+			else return -1;
+		})
+	);
 	let filteredSuggestedTasks = $derived(
 		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
 	);
@@ -157,22 +170,12 @@
 						}}
 					>
 						<h1>Today's Tasks</h1>
-						{#if todaysList.length === 0}
-							<h4>Empty todolist!</h4>
-						{/if}
 						{#if filteredSuggestedTasks.length > 0}
-							<h4>Drag some suggestions in!</h4>
+							<h4>Nothing here. Drag some suggestions in!</h4>
 						{/if}
-						{#if suggestedTasks.length === 0 && todaysList.length === 0}
-							<div>
-								<br />
-								<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
-							</div>
-						{/if}
-
 						<div class="tasks-list">
-							{#each todaysList as task, index (task.id)}
-								<TaskListItem bind:task={todaysList[index]} {onTaskChange} />
+							{#each filteredDaysTasks as task, index (task.id)}
+								<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
 							{/each}
 						</div>
 					</div>
@@ -185,6 +188,14 @@
 						}}
 					>
 						<h2>Suggested Tasks</h2>
+
+						{#if filteredSuggestedTasks.length === 0}
+							<div>
+								<h4>There's nothing to suggest!</h4>
+								<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
+							</div>
+						{/if}
+
 						<div class="tasks-list">
 							{#each filteredSuggestedTasks as task (task.id)}
 								<TaskListItem {task} {onTaskChange} />

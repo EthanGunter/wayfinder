@@ -197,7 +197,7 @@
 </script>
 
 {#if user && tasks}
-	<div class="page page-root bg-gray-50">
+	<div class="page page-root">
 		<AppHeader class="z-10 h-16" />
 		<div
 			class="grid-area-content mx-auto flex w-full max-w-4xl flex-col overflow-y-scroll px-4 py-4 sm:px-6 lg:px-8"

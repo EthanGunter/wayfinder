@@ -387,7 +387,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
     return ok(allTasks
-      .filter(t => t.todays_task && t.user_id === currentUser.id)
+      .filter(t => t.todays_task === new Date().toISOString().split('T')[0] && t.user_id === currentUser.id)
       .map(t => new Task(t)));
   },
 

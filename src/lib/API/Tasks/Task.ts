@@ -11,7 +11,7 @@ export interface TaskData {
     title: string,
     content?: string,
     status: TaskStatus,
-    todays_task: boolean,
+    todays_task: string, // ISO Timestamp
     priority?: number,
     /** 
      * Tasks that depend on this one's completion.
@@ -37,7 +37,7 @@ export function isTask(value: any): value is Task {
         && typeof value.title === 'string'
         && typeof value.created === 'string'
         && typeof value.last_edit === 'string'
-        && typeof value.todays_task === 'boolean'
+        && typeof value.todays_task === 'string'
         && typeof value.parents === 'object'
         && typeof value.children === 'object'
         ;
@@ -50,7 +50,7 @@ export class Task implements TaskData {
     title: string;
     content?: string;
     status: TaskStatus;
-    todays_task: boolean;
+    todays_task: string;
     priority?: number;
     parents: string[];
     children: string[];
@@ -68,7 +68,7 @@ export class Task implements TaskData {
         title,
         content,
         status = TaskStatus.incomplete,
-        todays_task: todaysTask = false,
+        todays_task: todaysTask = new Date().toISOString(),
         priority = 0,
         created = new Date().toISOString(),
         last_edit: last_edit = new Date().toISOString(),
@@ -111,7 +111,7 @@ export class Task implements TaskData {
             content: dto.content,
             // filepath: dto.filepath ?? `${dto.title}.md`,
             status: dto.status ?? TaskStatus.incomplete,
-            todays_task: dto.todays_task ?? false,
+            todays_task: dto.todays_task ?? new Date().toISOString(),
             created: dto.created ?? new Date().toISOString(),
             last_edit: dto.last_edit ?? new Date().toISOString(),
             parents: dto.parents ?? [],
