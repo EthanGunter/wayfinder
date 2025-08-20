@@ -16,18 +16,18 @@
 	let checked = $state(task.completed);
 	let showDeleteDialog = $state(false);
 
-	// Watch for changes to isCompleted and update the task
+	// First, keep isCompleted in sync with external changes to task.status
+	$effect(() => {
+		checked = task.completed;
+	});
+
+	// Then watch for changes to isCompleted and update the task
 	$effect(() => {
 		const newStatus = checked ? TaskStatus.complete : TaskStatus.incomplete;
 		if (task.status !== newStatus) {
 			task.status = newStatus;
 			onTaskChange?.(task, { status: newStatus });
 		}
-	});
-
-	// Keep isCompleted in sync with external changes to task.status
-	$effect(() => {
-		checked = task.completed;
 	});
 
 	function handleInput(event: Event) {
@@ -59,7 +59,7 @@
 		<div class="flex-1">
 			<input
 				name="title"
-				class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none border-r-1"
+				class="w-full border-0 border-r-1 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
 				placeholder="Task title"
 				bind:value={task.title}
 				oninput={handleInput}

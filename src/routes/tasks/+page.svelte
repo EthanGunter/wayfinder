@@ -7,7 +7,7 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { goto, invalidate } from '$app/navigation';
 	import debounce from '$lib/debounce';
-	import { ErrorType } from '$lib/Errors.js';
+	import { Err, ErrorType } from '$lib/Errors.js';
 	import Button from '@/components/ui/button/button.svelte';
 	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
 	import { onMount } from 'svelte';
@@ -66,7 +66,7 @@
 						goto('/tasks');
 						break;
 					default:
-						result.error.logError();
+						Err.UNHANDLED(result.error);
 				}
 				return;
 			}
@@ -76,7 +76,6 @@
 		}
 
 		// Now currentTask is guaranteed to be a Task object, not a string
-		if (!currentTask) return;
 		await fetchAncestorsOf(currentTask);
 		await fetchChildrenOf(currentTask);
 		// TODO change id url param
@@ -229,13 +228,42 @@
 				<!-- Current Task Editor -->
 				<div class="mb-8 rounded-xl bg-white shadow-sm ring-1 ring-gray-200/50">
 					<TaskEditor bind:task={currentTask} {onTaskChange} onDelete={onDeleteCurrentTask}>
-					<!-- Child Tasks Section -->
-					<div class="mt-6">
-						<h3 class="mb-4 text-lg font-medium text-gray-900">Subtasks</h3>
-											{#if children.length > 0}
-						<ItemList 
-							items={children} 
-							accepts={['task']} 
+						<!-- Child Tasks Section -->
+						<div class="mt-6">
+							<h3 class="mb-4 text-lg font-medium text-gray-900">Subtasks</h3>
+							{#if children.length > 0}
+								<ItemList
+									items={children}
+									accepts={['task']}
+									{onListOrderChanged}
+									sortFunction={sortTasksByPriority}
+								>
+									{#snippet listItem(task, index)}
+										<TaskListItem {task} {onTaskChange} {onDelete} />
+									{/snippet}
+								</ItemList>
+							{/if}
+							<!-- Add task button at bottom -->
+							<div class="mt-3 border-t border-gray-100 pt-3">
+								<button
+									onclick={addTask}
+									class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+								>
+									<Icon icon="lucide:plus" class="size-4" />
+									<span>New subtask</span>
+								</button>
+							</div>
+						</div>
+					</TaskEditor>
+				</div>
+			{:else}
+				<!-- Root Projects View -->
+				<div class="mb-6">
+					<h1 class="mb-6 text-2xl font-semibold text-gray-900">Projects</h1>
+					<div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50">
+						<ItemList
+							items={children}
+							accepts={['task']}
 							{onListOrderChanged}
 							sortFunction={sortTasksByPriority}
 						>
@@ -243,35 +271,6 @@
 								<TaskListItem {task} {onTaskChange} {onDelete} />
 							{/snippet}
 						</ItemList>
-					{/if}
-						<!-- Add task button at bottom -->
-						<div class="mt-3 border-t border-gray-100 pt-3">
-							<button
-								onclick={addTask}
-								class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-							>
-								<Icon icon="lucide:plus" class="size-4" />
-								<span>New subtask</span>
-							</button>
-						</div>
-					</div>
-				</TaskEditor>
-				</div>
-			{:else}
-				<!-- Root Projects View -->
-				<div class="mb-6">
-					<h1 class="mb-6 text-2xl font-semibold text-gray-900">Projects</h1>
-					<div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50">
-											<ItemList 
-						items={children} 
-						accepts={['task']} 
-						{onListOrderChanged}
-						sortFunction={sortTasksByPriority}
-					>
-						{#snippet listItem(task, index)}
-							<TaskListItem {task} {onTaskChange} {onDelete} />
-						{/snippet}
-					</ItemList>
 						{#if children.length === 0}
 							<div class="py-12 text-center text-gray-500">
 								<p class="mb-4 text-lg">No projects yet</p>
