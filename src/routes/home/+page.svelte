@@ -15,6 +15,7 @@
 	import { page } from '$app/state';
 	import { redirect } from '@sveltejs/kit';
 	import { Err } from '@/Errors';
+	import TutorialWelcome from './TutorialWelcome.svelte';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -114,9 +115,9 @@
 		[...todaysList].sort((a, b) => {
 			const ac = a.completed;
 			const bc = b.completed;
-			
+
 			// If both or neither are completed, sort by title
-			if (ac && bc || !(ac || bc)) return a.title < b.title ? -1 : 1;
+			if ((ac && bc) || !(ac || bc)) return a.title < b.title ? -1 : 1;
 			// Otherwise move completed lower
 			else if (a.completed) return 1;
 			else return -1;
@@ -131,6 +132,7 @@
 </script>
 
 {#if auth && user && tasks}
+	<TutorialWelcome />
 	<div class="page page-root">
 		<AppHeader class="grid-area-header z-10 h-16">{#snippet center()}{/snippet}</AppHeader>
 		<div

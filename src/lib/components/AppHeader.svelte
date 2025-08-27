@@ -95,7 +95,7 @@
 	{:else}
 		<Sheet.Root>
 			<Sheet.Trigger>
-				<Button class="size-12">
+				<Button id="btn-feedback" class="size-12">
 					<Icon icon="material-symbols:feedback-outline" class="size-5" />
 				</Button>
 			</Sheet.Trigger>
