@@ -62,7 +62,7 @@
 
 	async function initializeExample() {
 		if (!tasks || !user) return;
-		await tasks.deleteTask({ taskOrId: 'gototheball', recursive: true });
+		await tasks.deleteTask({ id: 'gototheball', recursive: true });
 
 		const result = await tasks.createTask({
 			createDetail: {

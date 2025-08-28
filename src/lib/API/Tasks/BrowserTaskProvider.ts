@@ -200,7 +200,6 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   const errors: Err[] = [];
 
   for (const { id, changes: changes } of updates) {
-    // const result = await api.updateTask({ taskOrId, changes: updates });
     const taskResult = await taskCRUD.getTask({ id });
     if (taskResult.isErr()) { errors.push(taskResult.error); continue; }
     const task = taskResult.value;

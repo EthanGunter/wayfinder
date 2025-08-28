@@ -5,6 +5,8 @@
 	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
 	import Icon from '@iconify/svelte';
 	import TGate from '@/tutorials/primitives/TGate.svelte';
+	import { goto } from '$app/navigation';
+	import { taskAPIPromise } from '@/stores/services';
 
 	let active = $state(false);
 	let step = $state(0);
@@ -15,15 +17,12 @@
 	onMount(() => {
 		// Must have completed the example project tutorial first
 		if (!tutorials.isDone('tasks.example-project')) {
-			console.log('TutorialPlanner: tasks.example-project not completed yet');
 			return;
 		}
 		if (tutorials.isDone(id)) {
-			console.log('TutorialPlanner: home.planner already completed');
 			return;
 		}
 
-		console.log('TutorialPlanner: Prerequisites met, checking for suggested tasks...');
 		// Check if there are suggested tasks to work with
 		checkForSuggestedTasks();
 	});
@@ -35,17 +34,10 @@
 
 		while (attempts < maxAttempts) {
 			const suggestedTasksList = document.querySelector('#suggested-tasks-list .tasks-list');
-			console.log(
-				`TutorialPlanner: Attempt ${attempts + 1}: Found element:`,
-				!!suggestedTasksList,
-				'Children count:',
-				suggestedTasksList?.children.length || 0
-			);
 
 			if (suggestedTasksList && suggestedTasksList.children.length > 0) {
-				console.log('TutorialPlanner: Found suggested tasks, starting tutorial');
 				hasSuggestedTasks = true;
-				tutorials.reset(id);
+				// tutorials.reset(id);
 				step = tutorials.getStep(id);
 				active = true;
 				return;
@@ -55,8 +47,6 @@
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			attempts++;
 		}
-
-		console.log('TutorialPlanner: No suggested tasks found after waiting 5 seconds');
 	}
 
 	function proceed() {
@@ -88,7 +78,9 @@
 		}
 	}
 
-	function markDone() {
+	async function markDone() {
+		const tasks = await taskAPIPromise;
+		await tasks.deleteTask({ id: 'gototheball', recursive: true });
 		tutorials.complete(id);
 		active = false;
 	}
@@ -103,7 +95,7 @@
 			This is how we help you stay focused on what matters.
 		</TModal>
 	{:else if step === 1}
-		<TModal primaryLabel="Ok" onPrimary={proceed} selector="#suggested-tasks-list" placement="top">
+		<TModal primaryLabel="Ok" onPrimary={proceed} selector="#suggested-tasks-list" placement="top" disableTargetInteraction>
 			{#snippet title()}
 				Notice anything missing?
 			{/snippet}
@@ -126,7 +118,7 @@
 			disableTargetInteraction
 		>
 			{#snippet title()}
-				You don't need to see <em>every</em> task you've gotten out of your head
+				You don't need to see <em>every</em> task you've come up with
 			{/snippet}
 			Wayfinder only bothers you with actionable next-steps
 		</TModal>
@@ -144,11 +136,14 @@
 			to mark this task complete.
 		</TModal>
 	{:else if step === 5}
-		<EventHandler
-			selector="html"
-			type="click"
-			onEvent={markDone}
-		/>
+		<TModal primaryLabel="Seems simple!" onPrimary={proceed}>
+			{#snippet title()}
+				Today's tasks reset at the end of the day
+			{/snippet}
+			Scientists recommend 3-5 each day
+		</TModal>
+	{:else if step === 6}
+		<EventHandler selector="html" type="click" onEvent={markDone} />
 		<TModal
 			primaryLabel="Have fun conquering your dreams!"
 			onPrimary={markDone}

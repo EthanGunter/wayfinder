@@ -17,6 +17,7 @@
 	import { Err } from '@/Errors';
 	import TutorialWelcome from './TutorialWelcome.svelte';
 	import TutorialPlanner from './TutorialPlanner.svelte';
+	import { extractBatchAndLogErrors } from '$lib/API/types';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -24,6 +25,7 @@
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
+	let hasAnyTasksExplicit = $state(false);
 
 	onMount(async () => {
 		tasks = await taskAPIPromise;
@@ -60,6 +62,21 @@
 				}
 			)
 		);
+
+		// Check if the user has any tasks at all (even if none are actionable)
+		if (user) {
+			tasks!.getAllUserTasks({ userId: user.id }).then((batch) =>
+				batch.match(
+					(results) => {
+						const all = extractBatchAndLogErrors(results);
+						hasAnyTasksExplicit = all.length > 0;
+					},
+					(err) => {
+						err.logError();
+					}
+				)
+			);
+		}
 	}
 
 	async function handleTodaysTaskDrop(e: DropEvent<Task>) {
@@ -68,31 +85,33 @@
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			const res = await tasks!.updateTask({
+			await tasks!.updateTask({
 				id: task.id,
 				changes: { todays_task: new Date().toISOString() }
 			});
-			res.match(
-				() => {
-					refreshTasks();
-				},
-				(err) => {
-					err.logError();
-				}
-			);
+			refreshTasks();
 		}
 	}
 
-	function handleSuggestedTaskDrop(e: DropEvent<Task>) {
+	async function handleSuggestedTaskDrop(e: DropEvent<Task>) {
 		const task = e.detail.data;
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		tasks!.updateTask({ id: task.id, changes: { todays_task: '' } });
+		const res = await tasks!.updateTask({ id: task.id, changes: { todays_task: '' } });
+		res.match(
+			() => {},
+			(err) => { err.logError(); }
+		);
+		refreshTasks();
 	}
 
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
-		await tasks!.updateTask({ id: task.id, changes });
+		const result = await tasks!.updateTask({ id: task.id, changes });
+		result.match(
+			() => {},
+			(err) => { err.logError(); }
+		);
 		refreshTasks();
 	}
 
@@ -139,7 +158,7 @@
 	);
 
 	// Check if user has any tasks at all
-	let hasAnyTasks = $derived(todaysList.length > 0 || suggestedTasks.length > 0);
+	let hasAnyTasks = $derived(hasAnyTasksExplicit || todaysList.length > 0 || suggestedTasks.length > 0);
 </script>
 
 {#if auth && user && tasks}
@@ -209,7 +228,9 @@
 						{#if filteredSuggestedTasks.length === 0}
 							<div>
 								<h4>There's nothing to suggest!</h4>
-								<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
+								{#if !hasAnyTasks}
+									<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
+								{/if}
 							</div>
 						{/if}
 

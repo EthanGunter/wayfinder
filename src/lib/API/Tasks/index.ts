@@ -123,7 +123,7 @@ async function getParentUpdates(provider: ITasks, parentAdditions: Map<string, S
 
         if (parentsToAdd.length > 0) {
             return {
-                taskOrId: child,
+                id: child.id,
                 changes: { parents: [...child.parents, ...parentsToAdd] }
             };
         }
@@ -157,7 +157,7 @@ async function processParentRemovals(provider: ITasks, parentRemovals: Map<strin
 
                 if (parentsToRemove.length > 0) {
                     return {
-                        taskOrId: child,
+                        id: child.id,
                         changes: { parents: child.parents.filter(p => !parentsToRemove.includes(p)) }
                     };
                 }
@@ -195,7 +195,7 @@ async function processChildAdditions(provider: ITasks, childAdditions: Map<strin
 
                 if (childrenToAdd.length > 0) {
                     return {
-                        taskOrId: parent,
+                        id: parent.id,
                         changes: { children: [...parent.children, ...childrenToAdd] }
                     };
                 }
@@ -232,7 +232,7 @@ async function processChildRemovals(provider: ITasks, childRemovals: Map<string,
 
                 if (childrenToRemove.length > 0) {
                     return {
-                        taskOrId: parent,
+                        id: parent.id,
                         changes: { children: parent.children.filter(c => !childrenToRemove.includes(c)) }
                     };
                 }

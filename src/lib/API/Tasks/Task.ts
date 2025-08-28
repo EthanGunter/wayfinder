@@ -68,7 +68,7 @@ export class Task implements TaskData {
         title,
         content,
         status = TaskStatus.incomplete,
-        todays_task: todaysTask = new Date().toISOString(),
+        todays_task = '',
         priority = 0,
         created = new Date().toISOString(),
         last_edit: last_edit = new Date().toISOString(),
@@ -81,7 +81,7 @@ export class Task implements TaskData {
         this.content = content;
         // this.filepath = filepath ?? `${title}.md`;
         this.status = status;
-        this.todays_task = todaysTask;
+        this.todays_task = todays_task;
         this.priority = priority;
         this.created = created;
         this.last_edit = last_edit;
@@ -119,7 +119,7 @@ export class Task implements TaskData {
         }
         if (!populated.id)
             delete populated.id;
-        
+
         return populated;
     }
 

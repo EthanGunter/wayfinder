@@ -100,7 +100,7 @@
 			if (rootRes.isErr()) Err.UNHANDLED(rootRes.error);
 
 			await tasks!.deleteTasks({
-				deleteArgs: rootRes.value.map((r) => ({ taskOrId: r, recursive: true }))
+				deleteArgs: rootRes.value.map((r) => ({ id: r.id, recursive: true }))
 			});
 			
 			// Delete the user account
