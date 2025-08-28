@@ -36,7 +36,7 @@
 	function gotoTasksBrowser(e: Event) {
 		e.preventDefault();
 		e.stopImmediatePropagation();
-		
+
 		tutorials.complete(id);
 		active = false;
 
@@ -46,7 +46,9 @@
 
 {#if active}
 	{#if step === 0}
-		<TModal primaryLabel="Thanks for having me!" onPrimary={proceed}>Welcome to Wayfinder!</TModal>
+		<TModal primaryLabel="Thanks for having me!" onPrimary={proceed}>
+			Welcome to Wayfinder alpha!
+		</TModal>
 		<!-- TODO The following belong in the last stage of the planner tutorial -->
 		<!-- {:else if step === 1}
 		<TModal primaryLabel="Of course!" onPrimary={proceed}
@@ -66,9 +68,8 @@
 			onSecondary={skipAll}
 			selector="#add-task-button"
 			placement="top"
-			blockPage={false}
 		>
-			Click "Start a Project" so I can show you what makes Wayfinder unique!
+			Let's create a sample project so I can show you what makes Wayfinder unique!
 		</TModal>
 	{/if}
 {/if}

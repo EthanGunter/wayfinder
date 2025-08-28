@@ -12,7 +12,7 @@
 		active = $bindable(true)
 	}: {
 		selector: string;
-		type?: keyof DocumentEventMap;
+		type?: string;
 		capture?: boolean;
 		once?: boolean;
 		passive?: boolean;

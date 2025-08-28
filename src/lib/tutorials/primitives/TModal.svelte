@@ -4,7 +4,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { queryOrWait } from '../dom';
 	import * as Popover from '@/components/ui/popover';
-	import TGate from './_TGate.svelte';
+	import TGate from './TGate.svelte';
 
 	type Props = {
 		title?: Snippet;
@@ -19,6 +19,7 @@
 		blockPage?: boolean;
 		disableTargetInteraction?: boolean;
 		onOutsideClick?: () => void;
+		onEscapeKey?: () => void;
 	};
 
 	let {
@@ -33,7 +34,8 @@
 		placement = 'bottom',
 		blockPage = true,
 		disableTargetInteraction = false,
-		onOutsideClick
+		onOutsideClick,
+		onEscapeKey
 	}: Props = $props();
 
 	function handlePrimary() {
@@ -115,6 +117,25 @@
 	onDestroy(() => {
 		cleanupFunctions.forEach((cleanup) => cleanup());
 		cleanupFunctions = [];
+	});
+
+	// ESC key handling - prevent TModal from closing if onEscapeKey is provided
+	$effect(() => {
+		if (!open) return;
+
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === 'Escape') {
+				console.log("Preventing tutorial esc");
+				
+				e.preventDefault();
+				e.stopPropagation();
+				onEscapeKey?.();
+			}
+		}
+
+		// Capture phase to intercept before Popover gets it
+		document.addEventListener('keydown', handleKeyDown, true);
+		return () => document.removeEventListener('keydown', handleKeyDown, true);
 	});
 </script>
 

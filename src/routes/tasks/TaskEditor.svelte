@@ -60,7 +60,7 @@
 			<input
 				id="input-task-title"
 				name="title"
-				class="w-full border-0 border-r-1 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+				class="w-full border-0 border-r-1 bg-transparent text-xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
 				placeholder="Task title"
 				bind:value={task.title}
 				oninput={handleInput}

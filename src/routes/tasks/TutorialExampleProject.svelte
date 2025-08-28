@@ -149,8 +149,8 @@
 			{#snippet title()}
 				In order to get clothes, you need money, right?
 			{/snippet}
-			Most task apps would force you to put your <strong>money</strong> subtask next to your
-			<strong>clothes</strong> subtask, but that doesn't make sense.
+			Most task apps would force you to put your <em>money</em> subtask next to your
+			<em>clothes</em> subtask, but that doesn't make sense.
 		</TModal>
 	{:else if step === 3}
 		<TModal
@@ -193,7 +193,7 @@
 			If not, you probably need to break it down into further subtasks.
 		</TModal>
 	{:else if step === 7}
-		<EventHandler selector="document" type="click" onEvent={markDone} />
+		<EventHandler selector="#btn-nav-planner" type="click" onEvent={markDone} />
 		<TModal selector="#btn-nav-planner" placement="top" blockPage={false} onOutsideClick={markDone}>
 			Once you've cast the vision, we'll handle the rest. Go to the planner page anytime and I'll
 			show you how.

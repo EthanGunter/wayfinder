@@ -16,7 +16,14 @@
 		parentTask?: Task | null;
 	}
 
-	let { open = $bindable(), onOpenChange, onTaskCreated, tasks, user, parentTask }: Props = $props();
+	let {
+		open = $bindable(),
+		onOpenChange,
+		onTaskCreated,
+		tasks,
+		user,
+		parentTask
+	}: Props = $props();
 
 	// Form state
 	let formData = $state({
@@ -42,7 +49,7 @@
 
 		const createDetail: any = {
 			user_id: user.id,
-			title: formData.title.trim(),
+			title: formData.title.trim()
 		};
 
 		if (formData.content.trim()) {
@@ -78,53 +85,65 @@
 </script>
 
 <Sheet.Root bind:open {onOpenChange}>
-	<Sheet.Content side="bottom" id="drawer-task-creation" class="max-h-[85vh] rounded-t-xl p-0">
-		<!-- Header -->
-		<div class="px-6 pt-4">
-			<p class="text-xs uppercase tracking-wide text-gray-500">
-				{parentTask ? 'New Subtask' : 'New Project'}
-			</p>
+	<Sheet.Content
+		side="bottom"
+		id="drawer-task-creation"
+		class="mx-auto max-h-[85vh] max-w-2xl rounded-t-xl p-0"
+	>
+		<div class=" w-full">
+			<!-- Header -->
+			<div class="px-6 pt-4">
+				<p class="text-xs tracking-wide text-gray-500 uppercase">
+					{parentTask ? 'New Subtask' : 'New Project'}
+				</p>
+			</div>
+
+			<form onsubmit={handleSubmit} class="flex h-full flex-col">
+				<!-- Title row matching TaskEditor style -->
+				<div class="mb-3 flex items-start gap-4 border-b-1 border-gray-200 px-6 pt-2 pb-3">
+					<div class="flex-1">
+						<input
+							id="task-title"
+							name="title"
+							class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+							placeholder={parentTask ? 'Subtask title' : 'Project title'}
+							bind:value={formData.title}
+							required
+							autofocus
+						/>
+					</div>
+				</div>
+
+				<!-- Description -->
+				<div class="flex-1 overflow-y-auto px-6">
+					<textarea
+						id="task-description"
+						placeholder="Add notes or description..."
+						bind:value={formData.content}
+						class="w-full resize-none border-0 bg-transparent text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
+						rows="6"
+					></textarea>
+				</div>
+
+				<!-- Footer actions -->
+				<Sheet.Footer>
+					<div class="flex w-full gap-3 px-6 pb-6">
+						<Button
+							id="btn-task-drawer-cancel"
+							type="button"
+							variant="outline"
+							class="flex-1"
+							onclick={handleCancel}
+						>
+							Cancel
+						</Button>
+						<Button id="btn-task-drawer-create" type="submit" class="flex-1" disabled={!isValid}>
+							<Icon icon="lucide:plus" class="mr-2 size-4" />
+							{parentTask ? 'Create Subtask' : 'Create Project'}
+						</Button>
+					</div>
+				</Sheet.Footer>
+			</form>
 		</div>
-
-		<form onsubmit={handleSubmit} class="flex h-full flex-col">
-			<!-- Title row matching TaskEditor style -->
-			<div class="mb-3 flex items-start gap-4 border-b-1 border-gray-200 px-6 pb-3 pt-2">
-				<div class="flex-1">
-					<input
-						id="task-title"
-						name="title"
-						class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
-						placeholder={parentTask ? 'Subtask title' : 'Project title'}
-						bind:value={formData.title}
-						required
-						autofocus
-					/>
-				</div>
-			</div>
-
-			<!-- Description -->
-			<div class="flex-1 overflow-y-auto px-6">
-				<textarea
-					id="task-description"
-					placeholder="Add notes or description..."
-					bind:value={formData.content}
-					class="w-full resize-none border-0 bg-transparent text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
-					rows="6"
-				></textarea>
-			</div>
-
-			<!-- Footer actions -->
-			<Sheet.Footer>
-				<div class="flex w-full gap-3 px-6 pb-6">
-					<Button id="btn-task-drawer-cancel" type="button" variant="outline" class="flex-1" onclick={handleCancel}>
-						Cancel
-					</Button>
-					<Button id="btn-task-drawer-create" type="submit" class="flex-1" disabled={!isValid}>
-						<Icon icon="lucide:plus" class="size-4 mr-2" />
-						{parentTask ? 'Create Subtask' : 'Create Project'}
-					</Button>
-				</div>
-			</Sheet.Footer>
-		</form>
 	</Sheet.Content>
 </Sheet.Root>
