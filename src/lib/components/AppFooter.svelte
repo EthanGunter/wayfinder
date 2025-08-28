@@ -22,6 +22,8 @@
 			goto(path);
 		}
 	}
+	const btnClass =
+		'mx-1 h-4/5 flex-1 rounded-lg border-0 bg-transparent text-gray-700 shadow-none transition-colors duration-200 hover:bg-gray-100/80 hover:text-gray-900';
 </script>
 
 <div
@@ -34,12 +36,15 @@
 			id="btn-nav-planner"
 			onclick={() => navTo('/home')}
 			aria-label="Go to home"
-			class="mx-1 flex-1 rounded-lg border-0 bg-transparent text-gray-700 shadow-none transition-colors duration-200 hover:bg-gray-100/80 hover:text-gray-900"
+			class="{btnClass} {page.url.pathname.startsWith('/home') ? 'bg-gray-200 text-gray-900' : ''}"
 		>
-			<!-- TODO: Replace with real icon - using ChecklistIcon equivalent -->
 			<span class="flex items-center gap-4">
 				<Icon icon="lucide:list-todo" class="size-5" />
-				<span class="font-extralight text-gray-600">Planner</span>
+				<span
+					class="font-extralight {page.url.pathname.startsWith('/home')
+						? 'text-gray-900'
+						: 'text-gray-600'}">Planner</span
+				>
 			</span>
 		</Button>
 		<Separator orientation="vertical" class="h-6 bg-gray-300/60" />
@@ -47,12 +52,15 @@
 			id="btn-nav-tasks"
 			onclick={() => goto('/tasks')}
 			aria-label="Go to tasks"
-			class="mx-1 flex-1 rounded-lg border-0 bg-transparent text-gray-700 shadow-none transition-colors duration-200 hover:bg-gray-100/80 hover:text-gray-900"
+			class="{btnClass} {page.url.pathname.startsWith('/tasks') ? 'bg-gray-200 text-gray-900' : ''}"
 		>
-			<!-- TODO: Replace with real icon - using AccountTreeIcon equivalent -->
 			<span class="flex items-center gap-4">
 				<Icon icon="grommet-icons:tree" class="size-4" />
-				<span class="font-extralight text-gray-600">Browser</span>
+				<span
+					class="font-extralight {page.url.pathname.startsWith('/tasks')
+						? 'text-gray-900'
+						: 'text-gray-600'}">Browser</span
+				>
 			</span>
 		</Button>
 	{/if}
