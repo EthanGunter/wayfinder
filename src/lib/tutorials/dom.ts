@@ -3,21 +3,28 @@ export type QueryWaitOptions = {
   root?: ParentNode;
 };
 
-export async function queryOrWait(
+/**
+ * Query an element by selector; if not found, wait up to `timeoutMs` for it to appear.
+ * Returns the element, or `null` on timeout.
+ */
+export async function queryOrWait<T extends HTMLElement>(
   selector: string,
   { timeoutMs = 10000, root = document }: QueryWaitOptions = {}
-): Promise<Element | null> {
-  const immediate = root.querySelector(selector);
+): Promise<T | null> {
+  // Fast path: return immediately if present
+  const immediate = root.querySelector<T>(selector);
   if (immediate) return immediate;
 
-  let resolveFn: (el: Element | null) => void;
+  let resolveFn: (el: T | null) => void;
   let timer: number | undefined;
 
-  const result = new Promise<Element | null>((resolve) => (resolveFn = resolve));
+  const result = new Promise<T | null>((resolve) => (resolveFn = resolve));
 
+  // Set up an observer to watch for DOM changes under the chosen root
   const observer = new MutationObserver(() => {
-    const el = root.querySelector(selector);
+    const el = root.querySelector<T>(selector);
     if (el) {
+      // Element appeared; stop observing and resolve
       cleanup();
       resolveFn(el);
     }
@@ -28,12 +35,14 @@ export async function queryOrWait(
     if (timer) window.clearTimeout(timer);
   }
 
+  // Observe the entire subtree to catch late-mounted nodes
   observer.observe(root === document ? document.documentElement : (root as Element), {
     childList: true,
     subtree: true,
   });
 
   if (timeoutMs > 0) {
+    // Give up after the requested timeout
     timer = window.setTimeout(() => {
       cleanup();
       resolveFn(null);

@@ -14,9 +14,10 @@
 	import { type ILocalAuth } from '@/API/Auth/types';
 	import { type ILocalTasks } from '@/API/Tasks';
 	import type { User } from '@/API/Auth/User';
-	import { redirect } from '@sveltejs/kit';
 	import TaskListItem from './TaskListItem.svelte';
 	import Icon from '@iconify/svelte';
+	import TutorialExampleProject from './TutorialExampleProject.svelte';
+	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -25,6 +26,9 @@
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
 	let parents = $state<Task[]>([]);
+	
+	// Task creation drawer state
+	let showTaskCreationDrawer = $state(false);
 
 	let debouncedUpdate = $derived(tasks ? debounce(tasks?.updateTask, 500) : undefined);
 
@@ -118,40 +122,22 @@
 		);
 	}
 
-	async function addTask() {
+	function addTask() {
+		showTaskCreationDrawer = true;
+	}
+
+	function handleTaskCreated(newTask: Task) {
 		if (currentTask) {
-			(
-				await tasks!.createTask({
-					createDetail: {
-						user_id: user!.id,
-						title: 'New Subtask',
-						parents: [currentTask.id]
-					}
-				})
-			).match(
-				(newTask) => {
-					fetchCurrentTask(newTask);
-					// TODO:TEMP once task/project creation panel is created
-					// fetchChildrenOf(currentTask!);
-				},
-				(err) => {
-					err.logError();
-				}
-			);
+			// If we're viewing a specific task, refresh its children
+			fetchChildrenOf(currentTask);
 		} else {
-			(
-				await tasks!.createTask({ createDetail: { user_id: user!.id, title: 'New Project' } })
-			).match(
-				(newTask) => {
-					fetchCurrentTask(newTask);
-					// TODO:TEMP once task/project creation panel is created
-					// fetchRootTasks();
-				},
-				(err) => {
-					err.logError();
-				}
-			);
+			// If we're at the root level, refresh root tasks
+			fetchRootTasks();
 		}
+	}
+
+	function handleDrawerOpenChange(open: boolean) {
+		showTaskCreationDrawer = open;
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
@@ -197,6 +183,7 @@
 </script>
 
 {#if user && tasks}
+	<TutorialExampleProject />
 	<div class="page page-root">
 		<AppHeader class="z-10 h-16" />
 		<div
@@ -229,7 +216,7 @@
 				<div class="mb-8 rounded-xl bg-white shadow-sm ring-1 ring-gray-200/50">
 					<TaskEditor bind:task={currentTask} {onTaskChange} onDelete={onDeleteCurrentTask}>
 						<!-- Child Tasks Section -->
-						<div class="mt-6">
+						<section id="sec-task-list" class="mt-6">
 							<h3 class="mb-4 text-lg font-medium text-gray-900">Subtasks</h3>
 							{#if children.length > 0}
 								<ItemList
@@ -246,14 +233,15 @@
 							<!-- Add task button at bottom -->
 							<div class="mt-3 border-t border-gray-100 pt-3">
 								<button
+									id="btn-add-task"
 									onclick={addTask}
-									class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+									class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
 								>
 									<Icon icon="lucide:plus" class="size-4" />
 									<span>New subtask</span>
 								</button>
 							</div>
-						</div>
+						</section>
 					</TaskEditor>
 				</div>
 			{:else}
@@ -285,8 +273,9 @@
 							<!-- Add project button at bottom -->
 							<div class="mt-3 border-t border-gray-100 pt-3">
 								<button
+									id="btn-add-task"
 									onclick={addTask}
-									class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+									class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
 								>
 									<Icon icon="lucide:plus" class="size-4" />
 									<span>New project</span>
@@ -299,4 +288,16 @@
 		</div>
 		<AppFooter className="z-10 h-16" />
 	</div>
+
+	<!-- Task Creation Drawer -->
+	{#if tasks && user}
+		<TaskCreationDrawer
+			bind:open={showTaskCreationDrawer}
+			onOpenChange={handleDrawerOpenChange}
+			onTaskCreated={handleTaskCreated}
+			{tasks}
+			{user}
+			parentTask={currentTask}
+		/>
+	{/if}
 {/if}

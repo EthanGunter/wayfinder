@@ -48,7 +48,7 @@
 	}
 </script>
 
-<div class="flex flex-col p-6">
+<div class="task-editor flex flex-col p-6">
 	<!-- Task Header -->
 	<div class="mb-3 flex items-start gap-4 border-b-1 border-gray-200 pb-2">
 		<Checkbox
@@ -58,6 +58,7 @@
 		/>
 		<div class="flex-1">
 			<input
+				id="input-task-title"
 				name="title"
 				class="w-full border-0 border-r-1 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
 				placeholder="Task title"

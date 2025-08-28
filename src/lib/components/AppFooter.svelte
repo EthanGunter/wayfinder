@@ -31,6 +31,7 @@
 		{@render children()}
 	{:else}
 		<Button
+			id="btn-nav-planner"
 			onclick={() => navTo('/home')}
 			aria-label="Go to home"
 			class="mx-1 flex-1 rounded-lg border-0 bg-transparent text-gray-700 shadow-none transition-colors duration-200 hover:bg-gray-100/80 hover:text-gray-900"
@@ -43,6 +44,7 @@
 		</Button>
 		<Separator orientation="vertical" class="h-6 bg-gray-300/60" />
 		<Button
+			id="btn-nav-tasks"
 			onclick={() => goto('/tasks')}
 			aria-label="Go to tasks"
 			class="mx-1 flex-1 rounded-lg border-0 bg-transparent text-gray-700 shadow-none transition-colors duration-200 hover:bg-gray-100/80 hover:text-gray-900"

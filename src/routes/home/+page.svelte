@@ -16,6 +16,7 @@
 	import { redirect } from '@sveltejs/kit';
 	import { Err } from '@/Errors';
 	import TutorialWelcome from './TutorialWelcome.svelte';
+	import TutorialPlanner from './TutorialPlanner.svelte';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -133,6 +134,7 @@
 
 {#if auth && user && tasks}
 	<TutorialWelcome />
+	<TutorialPlanner />
 	<div class="page page-root">
 		<AppHeader class="grid-area-header z-10 h-16">{#snippet center()}{/snippet}</AppHeader>
 		<div
