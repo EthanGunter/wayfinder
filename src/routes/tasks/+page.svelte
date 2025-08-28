@@ -87,7 +87,7 @@
 
 	async function fetchAncestorsOf(task: Task) {
 		if (!tasks) return;
-		(await tasks.getParentsOf({ taskOrId: task })).match(
+		(await tasks.getParentsOf({ id: task.id })).match(
 			(deps) => {
 				parents = deps;
 			},
@@ -99,7 +99,7 @@
 
 	async function fetchChildrenOf(task: Task) {
 		if (!tasks) return;
-		(await tasks.getChildrenOf({ taskOrId: task.id })).match(
+		(await tasks.getChildrenOf({ id: task.id })).match(
 			(deps) => {
 				children = deps;
 			},
@@ -141,25 +141,45 @@
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		debouncedUpdate!({ taskOrId: original, changes: update });
+		const res = await tasks!.updateTask({ id: original.id, changes: update });
+		res.match(
+			() => {},
+			(err) => { err.logError(); }
+		);
+		if (currentTask) {
+			await fetchChildrenOf(currentTask);
+			await fetchAncestorsOf(currentTask);
+		} else {
+			await fetchRootTasks();
+		}
 	}
 
-	function onListOrderChanged(items: Task[]) {
+	async function onListOrderChanged(items: Task[]) {
 		for (let index = 0; index < items.length; index++) {
 			const item = items[index];
 			const newPriority = items.length - index;
 			// Update the in-memory object immediately
 			item.priority = newPriority;
-			// Also update the database
-			tasks!.updateTask({ taskOrId: item, changes: { priority: newPriority } });
 		}
+		// Persist in bulk and then refresh
+		await Promise.all(
+			items.map((item, idx, arr) => {
+				const newPriority = arr.length - idx;
+				return tasks!.updateTask({ id: item.id, changes: { priority: newPriority } });
+			})
+		);
 		// Force update of the children array to trigger reactivity
 		children = [...children];
+		if (currentTask) {
+			await fetchChildrenOf(currentTask);
+		} else {
+			await fetchRootTasks();
+		}
 	}
 
 	async function onDelete(task: Task, recursive: boolean) {
 		// Remove the task from the visual list
-		const deleteResult = await tasks!.deleteTask({ taskOrId: task.id, recursive });
+		const deleteResult = await tasks!.deleteTask({ id: task.id, recursive });
 
 		if (deleteResult.isOk()) {
 			children = children.filter((x) => x.id !== task.id);
@@ -168,7 +188,7 @@
 
 	async function onDeleteCurrentTask(task: Task, recursive: boolean) {
 		// Always delete recursively to maintain graph integrity
-		const deleteResult = await tasks!.deleteTask({ taskOrId: task.id, recursive: true });
+		const deleteResult = await tasks!.deleteTask({ id: task.id, recursive: true });
 
 		if (deleteResult.isOk()) {
 			// Navigate back to parent or root after deleting current task

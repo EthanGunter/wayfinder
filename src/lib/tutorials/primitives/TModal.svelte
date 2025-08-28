@@ -124,9 +124,7 @@
 		if (!open) return;
 
 		function handleKeyDown(e: KeyboardEvent) {
-			if (e.key === 'Escape') {
-				console.log("Preventing tutorial esc");
-				
+			if (e.key === 'Escape') {				
 				e.preventDefault();
 				e.stopPropagation();
 				onEscapeKey?.();

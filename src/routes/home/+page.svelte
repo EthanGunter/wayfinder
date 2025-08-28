@@ -68,31 +68,33 @@
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			const res = await tasks!.updateTask({
+			await tasks!.updateTask({
 				id: task.id,
 				changes: { todays_task: new Date().toISOString() }
 			});
-			res.match(
-				() => {
-					refreshTasks();
-				},
-				(err) => {
-					err.logError();
-				}
-			);
+			refreshTasks();
 		}
 	}
 
-	function handleSuggestedTaskDrop(e: DropEvent<Task>) {
+	async function handleSuggestedTaskDrop(e: DropEvent<Task>) {
 		const task = e.detail.data;
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		tasks!.updateTask({ id: task.id, changes: { todays_task: '' } });
+		const res = await tasks!.updateTask({ id: task.id, changes: { todays_task: '' } });
+		res.match(
+			() => {},
+			(err) => { err.logError(); }
+		);
+		refreshTasks();
 	}
 
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
-		await tasks!.updateTask({ id: task.id, changes });
+		const result = await tasks!.updateTask({ id: task.id, changes });
+		result.match(
+			() => {},
+			(err) => { err.logError(); }
+		);
 		refreshTasks();
 	}
 
