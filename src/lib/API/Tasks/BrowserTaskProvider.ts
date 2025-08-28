@@ -36,7 +36,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   handleCreateTasksResponse: async function (response) {
     if (response.isErr()) {
       const { createdIds } = response.error;
-      await _deleteTasksLocal(createdIds.map(i => ({ taskOrId: i })), false);
+      await _deleteTasksLocal(createdIds.map(i => ({ id: i })), false);
     }
   },
 
@@ -107,7 +107,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState } = response.error;
-      await _updateTasksLocal(oldState.map(t => ({ taskOrId: t.updatedId, changes: t.task })), false);
+      await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, changes: t.task })), false);
     }
   },
 
@@ -199,11 +199,12 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   const updatedTasks: Map<Task, Task> = new Map();
   const errors: Err[] = [];
 
-  for (const { taskOrId, changes: changes } of updates) {
+  for (const { id, changes: changes } of updates) {
     // const result = await api.updateTask({ taskOrId, changes: updates });
-    const [task, error] = await getTaskOrID(taskOrId);
-    if (error) { errors.push(error); continue; }
-    
+    const taskResult = await taskCRUD.getTask({ id });
+    if (taskResult.isErr()) { errors.push(taskResult.error); continue; }
+    const task = taskResult.value;
+
     // Validate user ownership before allowing update
     if (!(await validateTaskOwnership(task))) {
       errors.push(new NotFoundError(task.id, "Task (unauthorized)"));
@@ -245,13 +246,14 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
 
   const deletedTasks: Task[] = [];
   const errors: NotFoundError[] = [];
-  for (const { taskOrId, recursive } of deleteArgs) {
+  for (const { id, recursive } of deleteArgs) {
 
-    const [task, error] = await getTaskOrID(taskOrId);
-    if (error) {
-      errors.push(error);
+    const taskResult = await taskCRUD.getTask({ id });
+    if (taskResult.isErr()) {
+      errors.push(taskResult.error);
       continue;
     }
+    const task = taskResult.value;
 
     // Validate user ownership before allowing deletion
     if (!(await validateTaskOwnership(task))) {
@@ -261,17 +263,17 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
 
     if (recursive && task.children.length > 0) {
       // TODO:handle-error
-      const result = await _deleteTasksLocal(task.children.map(c => ({ taskOrId: c, recursive })));
+      const result = await _deleteTasksLocal(task.children.map(c => ({ id: c, recursive })));
     }
 
     deletedTasks.push(task);
     await _db.delete(TASK_TABLE_NAME, task.id);
-    
+
     // Remove from search index
     if (_searchService) {
       _searchService.removeTask(task.id);
     }
-    
+
     const relUpdates = await getRelationshipUpdates(api, { oldTask: task, newTask: null });
     await _updateTasksLocal(relUpdates, false);
   }
@@ -313,15 +315,13 @@ async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updat
 //#endregion
 
 const taskRelations: ITaskRelations = {
-  getChildrenOf: async function ({ taskOrId }) {
+  getChildrenOf: async function ({ id }) {
     // First get the parent task to access its children array
-    let parentTask: Task;
-    if (typeof taskOrId === "string") {
-      const parentTaskResult = await taskCRUD.getTask({ id: taskOrId });
-      if (parentTaskResult.isErr()) {
-        return err(parentTaskResult.error);
-      } else parentTask = parentTaskResult.value;
-    } else parentTask = taskOrId;
+    const parentResult = await taskCRUD.getTask({ id });
+    if (parentResult.isErr()) {
+      return err(parentResult.error);
+    }
+    const parentTask = parentResult.value;
 
     if (parentTask.children.length === 0) {
       return ok([]);
@@ -338,16 +338,14 @@ const taskRelations: ITaskRelations = {
 
     return ok(children);
   },
-  getParentsOf: async function ({ taskOrId }) {
-    let childTask: Task;
+  getParentsOf: async function ({ id }) {
 
     // Convert id to task object
-    if (typeof taskOrId === "string") {
-      const childTaskResult = await taskCRUD.getTask({ id: taskOrId });
-      if (childTaskResult.isErr()) {
-        return err(childTaskResult.error);
-      } else childTask = childTaskResult.value;
-    } else childTask = taskOrId;
+    const childTaskResult = await taskCRUD.getTask({ id });
+    if (childTaskResult.isErr()) {
+      return err(childTaskResult.error);
+    }
+    const childTask = childTaskResult.value;
 
     // Get the parents
     if (childTask.parents.length > 0) {
@@ -369,9 +367,9 @@ const taskRelations: ITaskRelations = {
     if (!currentUser) {
       return ok([]); // No authenticated user, return empty array
     }
-    
+
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const rootTasks = allTasks.filter(task => 
+    const rootTasks = allTasks.filter(task =>
       task.parents.length === 0 && task.user_id === currentUser.id);
     return ok(rootTasks.map(t => new Task(t)));
   }
@@ -384,11 +382,12 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     if (!currentUser) {
       return ok([]); // No authenticated user, return empty array
     }
-    
+
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    return ok(allTasks
-      .filter(t => t.todays_task === new Date().toISOString().split('T')[0] && t.user_id === currentUser.id)
-      .map(t => new Task(t)));
+    const userTasks = allTasks.filter(t => t.user_id === currentUser.id);
+    const today = new Date().toISOString().split('T')[0];
+    const todays = userTasks.filter(t => t.todays_task.startsWith(today));
+    return ok(todays.map(t => new Task(t)));
   },
 
   getPrioritizedTasks: async function (limit: number) {
@@ -397,7 +396,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     if (!currentUser) {
       return ok([]); // No authenticated user, return empty array
     }
-    
+
     let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME))
       .filter(t => t.user_id === currentUser.id)
       .map(t => new Task(t));
@@ -466,7 +465,7 @@ const dataExporter: ITaskExporter = {
     if (!currentUser) {
       throw new InvalidStateError("Cannot export data without an authenticated user");
     }
-    
+
     // Only export tasks owned by the current user
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
     const taskData = allTasks.filter(task => task.user_id === currentUser.id);
@@ -517,7 +516,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
 
     // Initialize search service
     _searchService = new TaskSearchService();
-    
+
     // Index existing tasks for the current user
     const currentUser = await getCurrentUser();
     if (currentUser) {
@@ -602,21 +601,6 @@ async function validateTasksOwnership(tasks: Task[]): Promise<Task[]> {
     return []; // No authenticated user
   }
   return tasks.filter(task => task.user_id === currentUser.id);
-}
-
-async function getTaskOrID(taskOrId: Task | string): Promise<[Task, null] | [null, NotFoundError]> {
-  assertDB(_db);
-
-  if (typeof taskOrId == 'string') {
-    const taskResponse = await _db.get(TASK_TABLE_NAME, taskOrId);
-    if (!taskResponse) {
-      return [null, new NotFoundError("Task not found for update", taskOrId)];
-    }
-
-    return [new Task(taskResponse), null];
-  } else {
-    return [taskOrId, null];
-  }
 }
 
 /** This function manages writing the markdown file, then updating the index */

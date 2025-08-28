@@ -69,11 +69,11 @@ export interface ITaskRelations {
   /**
    * Finds all tasks that must be completed before `id`
    */
-  getChildrenOf(params: { taskOrId: string | Task }): Promise<Result<Task[], Err>>;
+  getChildrenOf(params: { id: string }): Promise<Result<Task[], Err>>;
   /**
    * Gets all tasks that are waiting for `id`
    */
-  getParentsOf(params: { taskOrId: string | Task }): Promise<Result<Task[], Err>>;
+  getParentsOf(params: { id: string }): Promise<Result<Task[], Err>>;
   /**
    * Gets all tasks that nothing depends on
    */
@@ -114,7 +114,7 @@ export type CreateTaskParams = Partial<TaskData> & Omit<TaskData,
 // | "filepath"
 >
 export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed" | "equals">
-export type UpdateTaskParams = { taskOrId: string | Task, changes: Partial<Task> };
-export type DeleteTaskParams = { taskOrId: string | Task, recursive?: boolean };
+export type UpdateTaskParams = { id: string, changes: Partial<Task> };
+export type DeleteTaskParams = { id: string, recursive?: boolean };
 
 //#endregion

@@ -62,16 +62,24 @@
 		);
 	}
 
-	function handleTodaysTaskDrop(e: DropEvent<Task>) {
+	async function handleTodaysTaskDrop(e: DropEvent<Task>) {
 		const task = e.detail.data;
 		if (!task) return;
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			tasks!.updateTask({
-				taskOrId: task,
-				changes: { todays_task: new Date().toISOString().split('T')[0] }
+			const res = await tasks!.updateTask({
+				id: task.id,
+				changes: { todays_task: new Date().toISOString() }
 			});
+			res.match(
+				() => {
+					refreshTasks();
+				},
+				(err) => {
+					err.logError();
+				}
+			);
 		}
 	}
 
@@ -80,11 +88,12 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		tasks!.updateTask({ taskOrId: task, changes: { todays_task: '' } });
+		tasks!.updateTask({ id: task.id, changes: { todays_task: '' } });
 	}
 
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
-		tasks!.updateTask({ taskOrId: task, changes });
+		await tasks!.updateTask({ id: task.id, changes });
+		refreshTasks();
 	}
 
 	async function startProject() {
@@ -124,6 +133,7 @@
 			else return -1;
 		})
 	);
+	let firstCompletedIndex = $derived(filteredDaysTasks.findIndex((t) => t.completed));
 	let filteredSuggestedTasks = $derived(
 		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
 	);
@@ -179,6 +189,9 @@
 						{/if}
 						<div class="tasks-list">
 							{#each filteredDaysTasks as task, index (task.id)}
+								{#if index === firstCompletedIndex && firstCompletedIndex !== -1}
+									<div class="completed-separator" aria-hidden="true">Completed</div>
+								{/if}
 								<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
 							{/each}
 						</div>
@@ -293,6 +306,14 @@
 				rgba(107, 114, 128, 0.05) 100%
 			);
 		}
+	}
+
+	.completed-separator {
+		margin: 0.25rem 0 0.5rem;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.8rem;
+		color: #6b7280;
+		border-top: 1px dashed #9ca3af;
 	}
 
 	// Drop zone states during drag
