@@ -1,5 +1,0 @@
-package com.yourcompany.wayfinder;
-
-import com.getcapacitor.BridgeActivity;
-
-public class MainActivity extends BridgeActivity {}
