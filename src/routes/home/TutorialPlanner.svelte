@@ -5,7 +5,7 @@
 	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
 	import Icon from '@iconify/svelte';
 	import TGate from '@/tutorials/primitives/TGate.svelte';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { taskAPIPromise } from '@/stores/services';
 
 	let active = $state(false);
@@ -83,6 +83,7 @@
 		await tasks.deleteTask({ id: 'gototheball', recursive: true });
 		tutorials.complete(id);
 		active = false;
+		goto('/tasks');
 	}
 </script>
 
@@ -143,10 +144,10 @@
 			Scientists recommend 3-5 each day
 		</TModal>
 	{:else if step === 6}
-		<EventHandler selector="html" type="click" onEvent={markDone} />
 		<TModal
 			primaryLabel="Have fun conquering your dreams!"
 			onPrimary={markDone}
+			onOutsideClick={markDone}
 			selector="#btn-feedback"
 			placement="bottom"
 		>

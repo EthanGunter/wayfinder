@@ -47,7 +47,9 @@
 {#if active}
 	{#if step === 0}
 		<TModal primaryLabel="Thanks for having me!" onPrimary={proceed}>
-			Welcome to Wayfinder alpha!
+			{#snippet title()}
+				Welcome to Wayfinder alpha!
+			{/snippet}
 		</TModal>
 		<!-- TODO The following belong in the last stage of the planner tutorial -->
 		<!-- {:else if step === 1}
