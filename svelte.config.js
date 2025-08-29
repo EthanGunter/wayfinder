@@ -1,17 +1,21 @@
-import adapter from '@sveltejs/adapter-static';
+import staticAdapter from '@sveltejs/adapter-static';
+import vercelAdapter from '@sveltejs/adapter-vercel'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+const target = process.env.ADAPTER ?? 'vercel'; // default to vercel for CI
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter({
-      pages: 'build',
-      assets: 'build',
-      fallback: 'index.html',
-      precompress: false,
-      strict: true
-    }),
+    adapter: target === "vercel" ? vercelAdapter() :
+      staticAdapter({
+        pages: 'build',
+        assets: 'build',
+        fallback: 'index.html',
+        precompress: false,
+        strict: true
+      }),
     alias: {
       "@/*": "./src/lib",
     },
