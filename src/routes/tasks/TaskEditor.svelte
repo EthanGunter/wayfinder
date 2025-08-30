@@ -32,7 +32,7 @@
 
 	function handleInput(event: Event) {
 		const target = event.target as HTMLInputElement;
-		if (target.name === 'description') {
+		if (target.name === 'content') {
 			task.content = target.value;
 		}
 		onTaskChange?.(task, { [target.name]: target.value });
@@ -78,7 +78,7 @@
 	<!-- Task Description -->
 
 	<textarea
-		name="description"
+		name="content"
 		id="task-editor-notes"
 		placeholder="Add notes or description..."
 		bind:value={task.content}
