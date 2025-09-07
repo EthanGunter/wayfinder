@@ -80,7 +80,7 @@
 
 	async function markDone() {
 		const tasks = await taskAPIPromise;
-		await tasks.deleteTask({ id: 'gototheball', recursive: true });
+		// await tasks.deleteTask({ id: 'gototheball', recursive: true });
 		tutorials.complete(id);
 		active = false;
 		goto('/tasks');
@@ -139,9 +139,9 @@
 	{:else if step === 5}
 		<TModal primaryLabel="Seems simple!" onPrimary={proceed}>
 			{#snippet title()}
-				Today's tasks reset at the end of the day
+				Each day, today's tasks reset
 			{/snippet}
-			Scientists recommend 3-5 each day
+			Scientists recommend picking 3-5 a day
 		</TModal>
 	{:else if step === 6}
 		<TModal
