@@ -12,6 +12,8 @@
 	import UserAvatar from './UserAvatar.svelte';
 	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
 	import type { ILocalTasks } from '@/API/Tasks';
+	import { isTaskCompleted } from '$lib/API/Tasks/Task';
+	import { tutorials } from '$lib/tutorials/store';
 
 	interface Props {
 		left?: Snippet;
@@ -48,6 +50,25 @@
 			}
 		}
 	});
+
+	async function resetWalkthrough() {
+		if (!tasks || !user) return;
+		const confirmed = confirm(
+			'This will permanently delete all your tasks and reset all tutorials. Continue?'
+		);
+		if (!confirmed) return;
+		const all = await tasks.getAllUserTasks({ userId: user.id });
+		if (all.isOk()) {
+			const list = all.value.filter((r) => r.isOk()).map((r) => r._unsafeUnwrap());
+			if (list.length > 0) {
+				await tasks.deleteTasks({ deleteArgs: list.map((t) => ({ id: t.id, recursive: true })) });
+			}
+		}
+		try {
+			localStorage.removeItem('wf.tutorials.v1');
+		} catch {}
+		location.reload();
+	}
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -133,6 +154,19 @@
 							<div class="text-sm text-gray-500">Share your ideas</div>
 						</div>
 					</Button>
+
+					<!-- Reset Walkthrough -->
+					<Button
+						variant="outline"
+						class="flex h-16 items-center justify-start gap-3"
+						onclick={resetWalkthrough}
+					>
+						<Icon icon="material-symbols:refresh" class="size-6 text-gray-700" />
+						<div class="text-left">
+							<div class="font-medium">Reset Walkthrough</div>
+							<div class="text-sm text-gray-500">Deletes tasks and resets tutorials</div>
+						</div>
+					</Button>
 				</div>
 			</Sheet.Content>
 		</Sheet.Root>
@@ -160,7 +194,7 @@
 				{:else}
 					<div class="flex w-full items-center gap-2">
 						<div class="flex items-center gap-1">
-							{#if task.completed}
+							{#if isTaskCompleted(task)}
 								<Icon icon="material-symbols:check-circle" class="size-4 text-green-600" />
 							{:else}
 								<Icon icon="material-symbols:radio-button-unchecked" class="size-4 text-gray-400" />

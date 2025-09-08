@@ -73,17 +73,16 @@
 	function handleTaskDropped(event: Event) {
 		const customEvent = event as CustomEvent<any>;
 		const detail = customEvent?.detail;
-		if (detail?.dropAllowed) {
+		if (detail?.dropAllowed && detail.data.id === "DEMO-3") {
 			proceed();
 		}
 	}
 
 	async function markDone() {
-		const tasks = await taskAPIPromise;
-		// await tasks.deleteTask({ id: 'gototheball', recursive: true });
+		// const tasks = await taskAPIPromise;
+		// await tasks.deleteTask({ id: 'DEMO-1', recursive: true });
 		tutorials.complete(id);
 		active = false;
-		goto('/tasks');
 	}
 </script>
 
@@ -96,12 +95,18 @@
 			This is how we help you stay focused on what matters.
 		</TModal>
 	{:else if step === 1}
-		<TModal primaryLabel="Ok" onPrimary={proceed} selector="#suggested-tasks-list" placement="top" disableTargetInteraction>
+		<TModal
+			primaryLabel="Ok"
+			onPrimary={proceed}
+			selector="#suggested-tasks-list"
+			placement="top"
+			disableTargetInteraction
+		>
 			{#snippet title()}
 				Notice anything missing?
 			{/snippet}
 			You'll notice "Go to the ball 💃🕺" isn't suggested. That's because you still have things to do
-			before you go. Try dragging a task into Today's list
+			before you go. Try dragging "Ask a genie for money 🧞‍♂️💰" into Today's list
 		</TModal>
 	{:else if step === 2}
 		<EventHandler selector="#todays-tasks-list" type="dnd-drop" once onEvent={handleTaskDropped} />

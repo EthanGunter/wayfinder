@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TaskStatus, type Task } from '$lib/API/Tasks/Task';
+	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { type Snippet } from 'svelte';
 	import Checkbox from '../../lib/components/ui/checkbox/checkbox.svelte';
 	import Icon from '@iconify/svelte';
@@ -8,17 +8,17 @@
 
 	interface Props {
 		task: Task;
-		onTaskChange?: (original: Task, update: Partial<Task>) => void;
+		onTaskChange: (original: Task, update: Partial<Task>) => void;
 		onDelete: (task: Task, recursive: boolean) => void;
-		children: Snippet;
+		children?: Snippet;
 	}
 	let { task = $bindable(), onTaskChange, onDelete, children }: Props = $props();
-	let checked = $state(task.completed);
+	let checked = $state(isTaskCompleted(task));
 	let showDeleteDialog = $state(false);
 
 	// First, keep isCompleted in sync with external changes to task.status
 	$effect(() => {
-		checked = task.completed;
+		checked = isTaskCompleted(task);
 	});
 
 	// Then watch for changes to isCompleted and update the task
@@ -98,10 +98,11 @@
 	</div>
 	-->
 
-	<!-- Children Section -->
-	<div class="border-t border-gray-300 pt-6">
-		{@render children()}
-	</div>
+	{#if children}
+		<div class="border-t border-gray-300 pt-6">
+			{@render children()}
+		</div>
+	{/if}
 </div>
 
 <!-- Delete Confirmation Dialog -->

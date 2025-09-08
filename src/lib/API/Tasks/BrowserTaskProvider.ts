@@ -1,9 +1,10 @@
 import { type IDBPDatabase } from 'idb';
-import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type DeleteTaskParams } from './types';
+import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type DeleteTaskParams, type TaskDelta } from './types';
 import { err, ok } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError } from '$lib/Errors';
 import { v4 } from 'uuid';
-import { Task, type TaskData } from './Task';
+import type { Task } from './Task';
+import { createTask, toMarkdown, isTaskCompleted } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
@@ -63,7 +64,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
       for (const id of ids) {
         const task = await _db.get(TASK_TABLE_NAME, id);
         if (task) {
-          const taskObj = new Task(task);
+          const taskObj = task as Task;
           // Only return tasks owned by the current user
           if (await validateTaskOwnership(taskObj)) {
             tasks.push(taskObj);
@@ -84,7 +85,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   getAllUserTasks: async function ({ userId }) {
     assertDB(_db);
     const userTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
-    return okBatch(userTasks.map(t => new Task(t)));
+    return okBatch(userTasks as Task[]);
   },
 
   /**
@@ -107,7 +108,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState } = response.error;
-      await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, changes: t.task })), false);
+      await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false); // TODO This needs to perform the inverse relationship operations
     }
   },
 
@@ -162,7 +163,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
 
     // Ensure the task is owned by the current user
     const taskWithOwnership = { ...taskDTO, user_id: currentUser.id };
-    const preparedTask = new Task(taskWithOwnership);
+    const preparedTask = createTask(taskWithOwnership);
     preparedTask.created = new Date().toISOString();
     if (!taskDTO.id) {
       preparedTask.id = v4();
@@ -190,6 +191,9 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
     );
   }
 
+  // Notify subscribers
+  await _emitDeltas(createdTasks.map(newTask => ({ oldTask: null, newTask })) as TaskDelta[]);
+
   return okBatch(createdTasks, errors);
 };
 async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: boolean = true) {
@@ -199,7 +203,8 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   const updatedTasks: Map<Task, Task> = new Map();
   const errors: Err[] = [];
 
-  for (const { id, changes: changes } of updates) {
+  for (const update of updates) {
+    const { id, data: changes = {}, relations = [] } = update;
     const taskResult = await taskCRUD.getTask({ id });
     if (taskResult.isErr()) { errors.push(taskResult.error); continue; }
     const task = taskResult.value;
@@ -210,7 +215,34 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
       continue;
     }
 
-    const updated: Task = new Task({ ...task, ...changes, last_edit: new Date().toISOString() });
+    // Apply relationship changes
+    let updatedChildren = new Set(task.children || []);
+    let updatedParents = new Set(task.parents || []);
+
+    for (const relation of relations) {
+      switch (relation.operation) {
+        case 'addChild':
+          updatedChildren.add(relation.id);
+          break;
+        case 'removeChild':
+          updatedChildren.delete(relation.id);
+          break;
+        case 'addParent':
+          updatedParents.add(relation.id);
+          break;
+        case 'removeParent':
+          updatedParents.delete(relation.id);
+          break;
+      }
+    }
+
+    const updated: Task = {
+      ...(task as Task),
+      ...(changes as Partial<Task>),
+      children: Array.from(updatedChildren),
+      parents: Array.from(updatedParents),
+      last_edit: new Date().toISOString()
+    };
 
     await _db.put(TASK_TABLE_NAME, updated);
 
@@ -235,6 +267,10 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
       { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) }
     );
   }
+
+  // Notify subscribers with per-task deltas
+  const deltas: TaskDelta[] = Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask }));
+  await _emitDeltas(deltas);
 
   return okBatch(updatedTasks.values().toArray(), errors);
 };
@@ -289,12 +325,14 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
   if (errors.length > 0) {
     return err(new IOError("Batch delete", errors));
   }
+  // Notify subscribers
+  await _emitDeltas(deletedTasks.map(oldTask => ({ oldTask, newTask: null })) as TaskDelta[]);
   return ok();
 };
 async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updateServer: boolean = true): Promise<BatchResult<Task>> {
   assertDB(_db);
   const originalTasks = await _db.getAllFromIndex('tasks', 'by-user', oldUserID);
-  const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
+  const convertedTasks = (originalTasks as Task[]).map(t => ({ ...t, user_id: newUserID } as Task));
 
   for (const task of convertedTasks) {
     await _db.put('tasks', task);
@@ -368,9 +406,84 @@ const taskRelations: ITaskRelations = {
     }
 
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const rootTasks = allTasks.filter(task =>
+    const rootTasks = (allTasks as Task[]).filter(task =>
       task.parents.length === 0 && task.user_id === currentUser.id);
-    return ok(rootTasks.map(t => new Task(t)));
+    return ok(rootTasks);
+  }
+}
+
+type UserSubscription = {
+  kind: 'user';
+  userId: string;
+  onInitialize: (tasks: Task[]) => void;
+  onChange: (changes: TaskDelta[]) => void;
+};
+type ScopedSubscription = {
+  kind: 'scoped';
+  ids: string[];
+  ancestorDepth: number;
+  descendantDepth: number;
+  includedIds?: Set<string>;
+  onInitialize: (tasks: Task[]) => void;
+  onChange: (changes: TaskDelta[]) => void;
+};
+type Subscription = UserSubscription | ScopedSubscription;
+
+let _subscriptions: Subscription[] = [];
+type IncludedSet = Set<string>;
+async function _computeIncludedIds(seedIds: string[], ancestorDepth: number, descendantDepth: number): Promise<IncludedSet> {
+  const included: IncludedSet = new Set(seedIds);
+  const get = async (id: string) => {
+    const res = await taskCRUD.getTask({ id });
+    return res.isOk() ? res.value : null;
+  };
+  // Ancestors (parents)
+  let up = [...seedIds];
+  for (let d = 0; d < ancestorDepth && up.length; d++) {
+    const next: string[] = [];
+    for (const id of up) {
+      const t = await get(id); if (!t) continue;
+      for (const pid of t.parents ?? []) if (!included.has(pid)) { included.add(pid); next.push(pid); }
+    }
+    up = next;
+  }
+  // Descendants (children)
+  let down = [...seedIds];
+  for (let d = 0; d < descendantDepth && down.length; d++) {
+    const next: string[] = [];
+    for (const id of down) {
+      const t = await get(id); if (!t) continue;
+      for (const cid of t.children ?? []) if (!included.has(cid)) { included.add(cid); next.push(cid); }
+    }
+    down = next;
+  }
+  return included;
+}
+
+async function _getAllTasksForCurrentUser(): Promise<Task[]> {
+  assertDB(_db);
+  const all = await _db.getAll(TASK_TABLE_NAME);
+  const mine = await validateTasksOwnership(all as Task[]);
+  return mine;
+}
+
+async function _emitDeltas(deltas: TaskDelta[]) {
+  if (deltas.length === 0) return;
+  for (const sub of _subscriptions) {
+    if (sub.kind === 'user') {
+      const filtered = deltas.filter(d => (d.newTask?.user_id ?? d.oldTask?.user_id) === sub.userId);
+      if (filtered.length > 0) sub.onChange(filtered);
+    } else {
+      // Recompute included set per event to reflect latest graph state
+      const included = await _computeIncludedIds(sub.ids, sub.ancestorDepth, sub.descendantDepth);
+      sub.includedIds = included;
+      const filtered = deltas.filter(d => {
+        const nid = d.newTask?.id;
+        const oid = d.oldTask?.id;
+        return (nid && included.has(nid)) || (oid && included.has(oid));
+      });
+      if (filtered.length > 0) sub.onChange(filtered);
+    }
   }
 }
 
@@ -383,10 +496,10 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     }
 
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const userTasks = allTasks.filter(t => t.user_id === currentUser.id);
+    const userTasks = (allTasks as Task[]).filter(t => t.user_id === currentUser.id);
     const today = new Date().toISOString().split('T')[0];
     const todays = userTasks.filter(t => t.todays_task.startsWith(today));
-    return ok(todays.map(t => new Task(t)));
+    return ok(todays);
   },
 
   getPrioritizedTasks: async function (limit: number) {
@@ -396,9 +509,8 @@ const advancedFeatures: ITaskAdvancedFeatures = {
       return ok([]); // No authenticated user, return empty array
     }
 
-    let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME))
-      .filter(t => t.user_id === currentUser.id)
-      .map(t => new Task(t));
+    let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME) as Task[])
+      .filter(t => t.user_id === currentUser.id);
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -409,16 +521,16 @@ const advancedFeatures: ITaskAdvancedFeatures = {
       else return (b.priority ?? 0) - (a.priority ?? 0)
     };
 
-    let todoList: Task[] = [];
+    let todoList: Set<Task> = new Set();
 
     const inOrderTraversalAssignment = (task: Task) => {
-      if (todoList.length === limit/*  || task.tags?.includes('disabled') */)
+      if (todoList.size === limit/*  || task.tags?.includes('disabled') */)
         return; // stop searching once all tasks are acquired
 
       // TODO this lil check right here may not be ideal... user testing will tell
       if (task.children.length === 0) { // is leaf node
-        if (!task.completed) {// and it's not already completed
-          todoList.push(task); // add to todolist
+        if (!isTaskCompleted(task)) {// and it's not already completed
+          todoList.add(task); // add to todolist
         }
       }
       else { // continue for all children, starting with highest priority
@@ -426,27 +538,27 @@ const advancedFeatures: ITaskAdvancedFeatures = {
         for (const child of children) {
           if (!child) continue;
 
-          if (!child.completed) {
+          if (!isTaskCompleted(child)) {
             inOrderTraversalAssignment(child);
           }
         }
 
-        if (children.every(c => !c || c.completed) && !task.completed) {
-          todoList.push(task);
+        if (children.every(c => !c || isTaskCompleted(c)) && !isTaskCompleted(task)) {
+          todoList.add(task);
         }
       }
     }
 
-    roots.sort(sorter)
+    roots.sort(sorter);
     for (let i = 0; i < roots.length; i++) {
-      if (todoList.length === limit)
-        return ok(todoList);
+      if (todoList.size === limit)
+        return ok(Array.from(todoList));
 
       const root = roots[i];
       inOrderTraversalAssignment(root);
     }
 
-    return ok(todoList);
+    return ok(Array.from(todoList));
   },
 
   searchTasks: async function (searchTerm) {
@@ -455,6 +567,49 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     }
     return _searchService.searchTasks(searchTerm);
   },
+  subscribeTasks: function (params: any): () => void {
+    const isUserSub = 'userId' in params;
+
+    if (isUserSub) {
+      const sub: UserSubscription = {
+        kind: 'user',
+        userId: params.userId,
+        onInitialize: params.onInitialize,
+        onChange: params.onChange,
+      };
+      _subscriptions.push(sub);
+      // Initialize
+      _getAllTasksForCurrentUser().then(tasks => {
+        const init = tasks.filter(t => t.user_id === sub.userId);
+        sub.onInitialize(init);
+      });
+      return () => {
+        _subscriptions = _subscriptions.filter(s => s !== sub);
+      };
+    } else {
+      const sub: ScopedSubscription = {
+        kind: 'scoped',
+        ids: params.ids,
+        ancestorDepth: params.ancestorDepth,
+        descendantDepth: params.descendantDepth,
+        includedIds: undefined,
+        onInitialize: params.onInitialize,
+        onChange: params.onChange,
+      };
+      _subscriptions.push(sub);
+      // Initialize
+      (async () => {
+        const tasks = await _getAllTasksForCurrentUser();
+        const included = await _computeIncludedIds(sub.ids, sub.ancestorDepth, sub.descendantDepth);
+        sub.includedIds = included;
+        const init = tasks.filter(t => included.has(t.id));
+        sub.onInitialize(init);
+      })();
+      return () => {
+        _subscriptions = _subscriptions.filter(s => s !== sub);
+      };
+    }
+  }
 }
 
 const dataExporter: ITaskExporter = {
@@ -467,7 +622,7 @@ const dataExporter: ITaskExporter = {
 
     // Only export tasks owned by the current user
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const taskData = allTasks.filter(task => task.user_id === currentUser.id);
+    const taskData = (allTasks as Task[]).filter(task => task.user_id === currentUser.id);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
 
     // 1. Create a new zip
@@ -482,7 +637,7 @@ const dataExporter: ITaskExporter = {
       else
         filename = `${task.title}.md`
 
-      zip.file(filename, Task.toMarkdown(task));
+      zip.file(filename, toMarkdown(task));
     }
 
     // 3. Generate the zip and trigger download
@@ -516,7 +671,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
     // Initialize search service
     _searchService = new TaskSearchService();
 
-    // Index existing tasks for the current user
+    // Reindex search for current user
     const currentUser = await getCurrentUser();
     if (currentUser) {
       const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: currentUser.id });
@@ -528,7 +683,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
 
     if (remoteTasks) {
       _remoteTasks = remoteTasks;
-      _taskSyncQueue = new SyncQueue<Omit<ITasks,
+      type LocalSyncable = Omit<ITasks,
         | "getAllUserTasks"
         | "getChildrenOf"
         | "getParentsOf"
@@ -538,7 +693,9 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         | "getTasks"
         | "getTodaysTasks"
         | "searchTasks"
-      >, ITaskReverter>({
+        | "subscribeTasks"
+      >;
+      _taskSyncQueue = new SyncQueue<LocalSyncable, ITaskReverter>({
         changeOwnership: remoteTasks.changeOwnership,
         handleChangeOwnershipResponse: taskCRUD.handleChangeOwnershipResponse,
         createTask: remoteTasks.createTask,
@@ -566,6 +723,7 @@ let _taskSyncQueue: SyncQueue<Omit<ITasks,
   | "getTasks"
   | "getTodaysTasks"
   | "searchTasks"
+  | "subscribeTasks"
 >, ITaskReverter> | null = null;
 
 export default BrowserTaskProvider;

@@ -10,6 +10,8 @@
 	import { type ILocalAuth } from '@/API/Auth/types';
 	import type { User } from '@/API/Auth/User';
 	import { queryOrWait } from '@/tutorials/dom';
+	import demoData from '@/tutorials/DemoData.json';
+	import { TaskStatus } from '@/API/Tasks/Task';
 
 	let active = $state(false);
 	let step = $state(0);
@@ -62,17 +64,17 @@
 
 	async function initializeExample() {
 		if (!tasks || !user) return;
-		await tasks.deleteTask({ id: 'gototheball', recursive: true });
+		await tasks.deleteTask({ id: 'DEMO-1', recursive: true });
 
 		const result = await tasks.createTask({
 			createDetail: {
-				id: 'gototheball',
+				id: 'DEMO-1',
 				user_id: user.id,
 				title: 'Go to the ball 💃🕺'
 			}
 		});
 
-		goto(`tasks?id=gototheball`);
+		goto(`tasks?id=DEMO-1`);
 	}
 
 	async function createDressClothesTask(e: Event) {
@@ -82,10 +84,10 @@
 
 		const result = await tasks.createTask({
 			createDetail: {
-				id: 'getdressclothes',
+				id: 'DEMO-2',
 				user_id: user.id,
 				title: 'Get dress clothes 🥿👗👔👞',
-				parents: ['gototheball']
+				parents: ['DEMO-1']
 			}
 		});
 
@@ -120,6 +122,41 @@
 	function navigateToPlanner() {
 		markDone();
 		goto('/home');
+	}
+
+	async function createDemoTasks() {
+		if (!tasks || !user) return;
+
+		type DemoItem = {
+			id: string;
+			title: string;
+			content?: string;
+			children: string[];
+			parents: string[];
+			status: number;
+		};
+
+		const items = demoData as DemoItem[];
+
+		// Prepare create DTOs for all except the two already created
+		const createDetails = items.map((i) => {
+			const dto: any = {
+				id: i.id,
+				title: i.title,
+				status: i.status === 1 ? TaskStatus.complete : TaskStatus.incomplete
+			};
+			const parents = i.parents ?? [];
+			const children = i.children ?? [];
+			if (parents.length) dto.parents = parents;
+			if (children.length) dto.children = children;
+			if (i.content && i.content.trim().length > 0) dto.content = i.content.trim();
+			return dto;
+		});
+
+		if (createDetails.length > 0) {
+			await tasks.createTasks({ createDetails });
+			invalidateAll();
+		}
 	}
 </script>
 
@@ -184,7 +221,14 @@
 			Clicking "+ New Subtask" will open the "new task" drawer
 		</TModal>
 	{:else if step === 6}
-		<EventHandler selector="#btn-task-drawer-create" type="click" onEvent={proceed} />
+		<EventHandler
+			selector="#btn-task-drawer-create"
+			type="click"
+			onEvent={(e) => {
+				e.preventDefault();
+				proceed();
+			}}
+		/>
 		<EventHandler selector="#btn-task-drawer-cancel" type="click" onEvent={proceed} />
 		<TModal selector="#drawer-task-creation" blockPage={false} onOutsideClick={proceed}>
 			{#snippet title()}
@@ -193,10 +237,29 @@
 			If not, you probably need to break it down into further subtasks.
 		</TModal>
 	{:else if step === 7}
+		<TModal
+			primaryLabel="ok!"
+			onPrimary={async () => {
+				await createDemoTasks();
+				proceed();
+			}}
+		>
+			{#snippet title()}To save you a bit of time...{/snippet}
+			We'll go ahead and fill things out with a few more tasks so you can see how Wayfinder handles the
+			volume
+		</TModal>
+	{:else if step === 8}
+		<EventHandler selector="#sec-task-list" type="dnd-drop" onEvent={proceed} />
+		<TModal selector="#sec-task-list" placement="top">
+			{#snippet title()}Prioritize your subtasks{/snippet}
+			Drag and drop items within the list to reorder. Higher items get higher priority
+			and will surface sooner in the planner.
+		</TModal>
+	{:else if step === 9}
 		<EventHandler selector="#btn-nav-planner" type="click" onEvent={markDone} />
 		<TModal selector="#btn-nav-planner" placement="top" blockPage={false} onOutsideClick={markDone}>
-			Once you've cast the vision, we'll handle the rest. Go to the planner page anytime and I'll
-			show you how.
+			Once you've cast the vision, Wayfinder manages the planning. Go to the planner page anytime
+			and I'll show you how.
 		</TModal>
 	{/if}
 {/if}

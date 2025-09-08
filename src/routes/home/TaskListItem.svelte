@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
-	import { TaskStatus, type Task } from '$lib/API/Tasks/Task';
+	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { Button } from '@/components/ui/button';
 	import { Checkbox } from '@/components/ui/checkbox';
 	import Icon from '@iconify/svelte';
@@ -19,7 +19,7 @@
 	} = $props();
 
 	// Create a reactive variable that's properly bound to the checkbox
-	let checked = $state(task.completed);
+	let checked = $state(isTaskCompleted(task));
 
 	// Watch for changes to isCompleted and update the task
 	$effect(() => {
@@ -32,7 +32,7 @@
 
 	// Keep isCompleted in sync with external changes to task.status
 	$effect(() => {
-		checked = task.completed;
+		checked = isTaskCompleted(task);
 	});
 
 	function handleDragStart(e: CustomEvent) {

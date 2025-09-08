@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { type Task } from '$lib/API/Tasks/Task';
+	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import { page } from '$app/state';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskEditor from './TaskEditor.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
-	import { goto, invalidate } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
-	import { Err, ErrorType } from '$lib/Errors.js';
 	import Button from '@/components/ui/button/button.svelte';
 	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
 	import { onMount } from 'svelte';
@@ -16,8 +16,8 @@
 	import type { User } from '@/API/Auth/User';
 	import TaskListItem from './TaskListItem.svelte';
 	import Icon from '@iconify/svelte';
-	import TutorialExampleProject from './TutorialExampleProject.svelte';
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
+	import TutorialExampleProject from './TutorialExampleProject.svelte';
 
 	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
@@ -26,7 +26,7 @@
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
 	let parents = $state<Task[]>([]);
-	
+
 	// Task creation drawer state
 	let showTaskCreationDrawer = $state(false);
 
@@ -49,91 +49,79 @@
 		user = active;
 	});
 
-	$effect(() => {
+	let unsubscribe: (() => void) | null = null;
+	let taskIndex = new Map<string, Task>();
+
+	function recomputeFromIndex() {
 		const id = page.url.searchParams.get('id');
-		if (id) fetchCurrentTask(id);
-		else {
-			currentTask = null;
-			fetchRootTasks();
-		}
-	});
-
-	async function fetchCurrentTask(task: string | Task) {
-		if (!tasks) return;
-
-		if (typeof task === 'string') {
-			// TODO: Fetch currentTask, children, and parents based on id
-			const result = await tasks.getTask({ id: task });
-			if (result.isErr()) {
-				switch (result.error.type) {
-					case ErrorType.NotFoundError:
-						goto('/tasks');
-						break;
-					default:
-						Err.UNHANDLED(result.error);
-				}
+		if (id) {
+			const t = taskIndex.get(id) ?? null;
+			currentTask = t;
+			if (!t) {
+				goto('/tasks');
+				parents = [];
+				children = [];
 				return;
 			}
-			currentTask = result.value;
+			parents = (t.parents ?? []).map((pid) => taskIndex.get(pid)).filter(Boolean) as Task[];
+			children = (t.children ?? []).map((cid) => taskIndex.get(cid)).filter(Boolean) as Task[];
 		} else {
-			currentTask = task;
+			currentTask = null;
+			parents = [];
+			children = Array.from(taskIndex.values()).filter((t) => (t.parents?.length ?? 0) === 0);
 		}
-
-		// Now currentTask is guaranteed to be a Task object, not a string
-		await fetchAncestorsOf(currentTask);
-		await fetchChildrenOf(currentTask);
-		// TODO change id url param
 	}
 
-	async function fetchAncestorsOf(task: Task) {
-		if (!tasks) return;
-		(await tasks.getParentsOf({ id: task.id })).match(
-			(deps) => {
-				parents = deps;
-			},
-			(err) => {
-				err.logError();
+	function handleInit(initialTasks: Task[]) {
+		taskIndex = new Map(initialTasks.map((t) => [t.id, t]));
+		recomputeFromIndex();
+	}
+
+	function handleChanges(changes: TaskDelta[]) {
+		for (const change of changes) {
+			if (change.newTask && change.oldTask) {
+				taskIndex.set(change.newTask.id, change.newTask);
+			} else if (change.newTask && !change.oldTask) {
+				taskIndex.set(change.newTask.id, change.newTask);
+			} else if (!change.newTask && change.oldTask) {
+				taskIndex.delete(change.oldTask.id);
 			}
-		);
+		}
+		recomputeFromIndex();
 	}
 
-	async function fetchChildrenOf(task: Task) {
-		if (!tasks) return;
-		(await tasks.getChildrenOf({ id: task.id })).match(
-			(deps) => {
-				children = deps;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
-	}
-
-	async function fetchRootTasks() {
-		if (!tasks) return;
-
-		(await tasks.getRootTasks()).match(
-			(roots) => {
-				children = roots;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
-	}
+	$effect(() => {
+		if (!tasks || !user) return;
+		unsubscribe?.();
+		const id = page.url.searchParams.get('id');
+		if (id) {
+			unsubscribe = tasks.subscribeTasks({
+				ids: [id],
+				ancestorDepth: 1,
+				descendantDepth: 1,
+				onInitialize: handleInit,
+				onChange: handleChanges
+			});
+		} else {
+			unsubscribe = tasks.subscribeTasks({
+				userId: user.id,
+				onInitialize: handleInit,
+				onChange: handleChanges
+			});
+		}
+		return () => {
+			unsubscribe?.();
+			unsubscribe = null;
+		};
+	});
 
 	function addTask() {
 		showTaskCreationDrawer = true;
 	}
 
 	function handleTaskCreated(newTask: Task) {
-		if (currentTask) {
-			// If we're viewing a specific task, refresh its children
-			fetchChildrenOf(currentTask);
-		} else {
-			// If we're at the root level, refresh root tasks
-			fetchRootTasks();
-		}
+		// Subscription will deliver the new task; no manual fetch needed
+		showTaskCreationDrawer = false;
 	}
 
 	function handleDrawerOpenChange(open: boolean) {
@@ -141,49 +129,26 @@
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		const res = await tasks!.updateTask({ id: original.id, changes: update });
+		const res = await tasks!.updateTask({ id: original.id, data: update });
 		res.match(
 			() => {},
-			(err) => { err.logError(); }
+			(err) => {
+				err.logError();
+			}
 		);
-		if (currentTask) {
-			await fetchChildrenOf(currentTask);
-			await fetchAncestorsOf(currentTask);
-		} else {
-			await fetchRootTasks();
-		}
 	}
 
 	async function onListOrderChanged(items: Task[]) {
-		for (let index = 0; index < items.length; index++) {
-			const item = items[index];
-			const newPriority = items.length - index;
-			// Update the in-memory object immediately
-			item.priority = newPriority;
-		}
-		// Persist in bulk and then refresh
 		await Promise.all(
 			items.map((item, idx, arr) => {
 				const newPriority = arr.length - idx;
-				return tasks!.updateTask({ id: item.id, changes: { priority: newPriority } });
+				return tasks!.updateTask({ id: item.id, data: { priority: newPriority } });
 			})
 		);
-		// Force update of the children array to trigger reactivity
-		children = [...children];
-		if (currentTask) {
-			await fetchChildrenOf(currentTask);
-		} else {
-			await fetchRootTasks();
-		}
 	}
 
 	async function onDelete(task: Task, recursive: boolean) {
-		// Remove the task from the visual list
-		const deleteResult = await tasks!.deleteTask({ id: task.id, recursive });
-
-		if (deleteResult.isOk()) {
-			children = children.filter((x) => x.id !== task.id);
-		}
+		await tasks!.deleteTask({ id: task.id, recursive });
 	}
 
 	async function onDeleteCurrentTask(task: Task, recursive: boolean) {
@@ -306,7 +271,7 @@
 				</div>
 			{/if}
 		</div>
-		<AppFooter className="z-10 h-16" />
+		<AppFooter className="z-10" />
 	</div>
 
 	<!-- Task Creation Drawer -->
@@ -317,7 +282,7 @@
 			onTaskCreated={handleTaskCreated}
 			{tasks}
 			{user}
-			parentTask={currentTask}
+			relation={currentTask ? { task: currentTask, mode: 'parent' } : null}
 		/>
 	{/if}
 {/if}

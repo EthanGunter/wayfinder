@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropEvent, droppable } from '$lib/actions/dnd';
-	import { Task, TaskStatus, type TaskData } from '$lib/API/Tasks/Task';
+	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { goto, invalidateAll } from '$app/navigation';
 
 	import TaskListItem from './TaskListItem.svelte';
@@ -87,7 +87,7 @@
 			todaysList = [...todaysList, task];
 			await tasks!.updateTask({
 				id: task.id,
-				changes: { todays_task: new Date().toISOString() }
+				data: { todays_task: new Date().toISOString() }
 			});
 			refreshTasks();
 		}
@@ -98,19 +98,25 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		const res = await tasks!.updateTask({ id: task.id, changes: { todays_task: '' } });
+		const res = await tasks!.updateTask({ id: task.id, data: { todays_task: '' } });
 		res.match(
 			() => {},
-			(err) => { err.logError(); }
+			(err) => {
+				err.logError();
+			}
 		);
 		refreshTasks();
 	}
 
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
-		const result = await tasks!.updateTask({ id: task.id, changes });
+		if (changes.children || changes.parents) Err.UNHANDLED('Relational updates not handled');
+
+		const result = await tasks!.updateTask({ id: task.id, data: changes });
 		result.match(
 			() => {},
-			(err) => { err.logError(); }
+			(err) => {
+				err.logError();
+			}
 		);
 		refreshTasks();
 	}
@@ -142,24 +148,28 @@
 	let filteredDaysTasks = $derived(
 		// TODO:UX this should sort by priority, but the tasks' priorities are not related to each other... Today's tasks need their own local priority :(
 		[...todaysList].sort((a, b) => {
-			const ac = a.completed;
-			const bc = b.completed;
+			const ac = isTaskCompleted(a);
+			const bc = isTaskCompleted(b);
 
 			// If both or neither are completed, sort by title
 			if ((ac && bc) || !(ac || bc)) return a.title < b.title ? -1 : 1;
 			// Otherwise move completed lower
-			else if (a.completed) return 1;
+			else if (isTaskCompleted(a)) return 1;
 			else return -1;
 		})
 	);
-	let firstCompletedIndex = $derived(filteredDaysTasks.findIndex((t) => t.completed));
+	let firstCompletedIndex = $derived(filteredDaysTasks.findIndex((t) => isTaskCompleted(t)));
 	let filteredSuggestedTasks = $derived(
-		suggestedTasks.filter((task) => !task.completed && !todaysList.find((t) => task.id === t.id))
+		suggestedTasks.filter(
+			(task) => !isTaskCompleted(task) && !todaysList.find((t) => task.id === t.id)
+		)
 	);
 
 	// Check if user has any tasks at all
-	let hasAnyTasks = $derived(hasAnyTasksExplicit || todaysList.length > 0 || suggestedTasks.length > 0);
-</script>
+	let hasAnyTasks = $derived(
+		hasAnyTasksExplicit || todaysList.length > 0 || suggestedTasks.length > 0
+	);
+ </script>
 
 {#if auth && user && tasks}
 	<TutorialWelcome />
@@ -243,7 +253,7 @@
 				</div>
 			{/if}
 		</div>
-		<AppFooter className="h-16 grid-area-footer z-10" />
+		<AppFooter className="grid-area-footer z-10" />
 	</div>
 {/if}
 

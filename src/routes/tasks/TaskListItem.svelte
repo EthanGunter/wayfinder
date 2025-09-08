@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
-	import { TaskStatus, type Task } from '$lib/API/Tasks/Task';
+	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Sheet from '../../lib/components/ui/sheet';
 	import { Button } from '../../lib/components/ui/button';
 	import * as Dialog from '../../lib/components/ui/dialog';
@@ -37,11 +37,11 @@
 	let showDeleteDialog = $state(false);
 
 	// Create a reactive variable that's properly bound to the checkbox
-	let checked = $state(task.completed);
+	let checked = $state(isTaskCompleted(task));
 
 	// Keep isCompleted in sync with external changes to task.status
 	$effect(() => {
-		checked = task.completed;
+		checked = isTaskCompleted(task);
 	});
 
 	// If checkbox changes isCompleted, update the task

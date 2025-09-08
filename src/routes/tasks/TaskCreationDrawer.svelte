@@ -4,7 +4,7 @@
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import Icon from '@iconify/svelte';
 	import { type Task, TaskStatus } from '$lib/API/Tasks/Task';
-	import { type ILocalTasks } from '$lib/API/Tasks';
+	import { type CreateTaskParams, type ILocalTasks } from '$lib/API/Tasks';
 	import type { User } from '$lib/API/Auth/User';
 
 	interface Props {
@@ -13,17 +13,10 @@
 		onTaskCreated: (task: Task) => void;
 		tasks: ILocalTasks;
 		user: User;
-		parentTask?: Task | null;
+		relation?: { task: Task; mode: 'child' | 'parent' } | null;
 	}
 
-	let {
-		open = $bindable(),
-		onOpenChange,
-		onTaskCreated,
-		tasks,
-		user,
-		parentTask
-	}: Props = $props();
+	let { open = $bindable(), onOpenChange, onTaskCreated, tasks, user, relation }: Props = $props();
 
 	// Form state
 	let formData = $state({
@@ -47,7 +40,7 @@
 		e.preventDefault();
 		if (!formData.title.trim()) return;
 
-		const createDetail: any = {
+		const createDetail: CreateTaskParams = {
 			user_id: user.id,
 			title: formData.title.trim()
 		};
@@ -60,8 +53,15 @@
 			createDetail.status = TaskStatus.complete;
 		}
 
-		if (parentTask) {
-			createDetail.parents = [parentTask.id];
+		if (relation) {
+			switch (relation.mode) {
+				case 'parent':
+					createDetail.parents = [relation.task.id];
+					break;
+				case 'child':
+					createDetail.children = [relation.task.id];
+					break;
+			}
 		}
 
 		const result = await tasks.createTask({ createDetail });
@@ -94,7 +94,7 @@
 			<!-- Header -->
 			<div class="px-6 pt-4">
 				<p class="text-xs tracking-wide text-gray-500 uppercase">
-					{parentTask ? 'New Subtask' : 'New Project'}
+					{relation ? 'New Subtask' : 'New Project'}
 				</p>
 			</div>
 
@@ -106,7 +106,7 @@
 							id="task-title"
 							name="title"
 							class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
-							placeholder={parentTask ? 'Subtask title' : 'Project title'}
+							placeholder={relation ? 'Subtask title' : 'Project title'}
 							bind:value={formData.title}
 							required
 							autofocus
@@ -139,7 +139,7 @@
 						</Button>
 						<Button id="btn-task-drawer-create" type="submit" class="flex-1" disabled={!isValid}>
 							<Icon icon="lucide:plus" class="mr-2 size-4" />
-							{parentTask ? 'Create Subtask' : 'Create Project'}
+							{relation ? 'Create Subtask' : 'Create Project'}
 						</Button>
 					</div>
 				</Sheet.Footer>

@@ -63,5 +63,21 @@
 				>
 			</span>
 		</Button>
+		<Separator orientation="vertical" class="h-6 bg-gray-300/60" />
+		<Button
+			id="btn-nav-tasks"
+			onclick={() => goto('/graph')}
+			aria-label="Go to tasks"
+			class="{btnClass} {page.url.pathname.startsWith('/graph') ? 'bg-gray-200 text-gray-900' : ''}"
+		>
+			<span class="flex items-center gap-4">
+				<Icon icon="mdi:graph" class="size-4" />
+				<span
+					class="font-extralight {page.url.pathname.startsWith('/graph')
+						? 'text-gray-900'
+						: 'text-gray-600'}">Graph</span
+				>
+			</span>
+		</Button>
 	{/if}
 </div>

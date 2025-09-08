@@ -1,4 +1,4 @@
 {
     "codium.codeCompletion.enable": false,
-    "todo-tree.tree.scanMode": "current file"
+    "todo-tree.tree.scanMode": "workspace only"
 }

@@ -1,5 +1,6 @@
 import { Index } from 'flexsearch';
 import type { Task } from './Task';
+import { isTaskCompleted } from './Task';
 
 export interface TaskSearchResult {
 	task: Task;
@@ -136,7 +137,7 @@ export class TaskSearchService {
 			let additionalScore = 0;
 
 			// Boost incomplete tasks
-			if (!result.task.completed) {
+			if (!isTaskCompleted(result.task)) {
 				additionalScore += 2;
 			}
 
