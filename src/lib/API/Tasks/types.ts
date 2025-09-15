@@ -1,7 +1,7 @@
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
 import type { NotFoundError, Err, ArgumentError } from "$lib/Errors";
-import type { Task, TaskData } from "./Task";
+import type { Task } from "./Task";
 import type { BatchResult, Result } from "../types";
 import { SyncQueue } from "../SyncQueue";
 
@@ -13,7 +13,9 @@ export interface ILocalTaskProvider {
 }
 export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ITaskReverter = ITaskCoreResponseHandler
-export type ILocalTasks = ITasks & ITaskExporter & { getSyncQueue: () => TaskSyncQueue | null };
+export type ILocalTasks = ITasks & ITaskExporter & {
+  getSyncQueue: () => TaskSyncQueue | null, hasRemote(): boolean;
+};
 export type TaskSyncQueue = SyncQueue<Omit<ITasks,
   | "getAllUserTasks"
   | "getChildrenOf"
@@ -24,7 +26,14 @@ export type TaskSyncQueue = SyncQueue<Omit<ITasks,
   | "getTasks"
   | "getTodaysTasks"
   | "searchTasks"
+  | "subscribeTasks"
 >, ITaskReverter>;
+/**
+ * Delta describing a task change. Creation: oldTask=null. Deletion: newTask=null.
+ */
+export type TaskDelta = { oldTask: Task | null; newTask: Task | null };
+
+
 
 /**
  * Manages modifications to markdown files that represent tasks,
@@ -67,11 +76,11 @@ export interface ITaskRelations {
   /**
    * Finds all tasks that must be completed before `id`
    */
-  getChildrenOf(params: { taskOrId: string | Task }): Promise<Result<Task[], Err>>;
+  getChildrenOf(params: { id: string }): Promise<Result<Task[], Err>>;
   /**
    * Gets all tasks that are waiting for `id`
    */
-  getParentsOf(params: { taskOrId: string | Task }): Promise<Result<Task[], Err>>;
+  getParentsOf(params: { id: string }): Promise<Result<Task[], Err>>;
   /**
    * Gets all tasks that nothing depends on
    */
@@ -90,7 +99,34 @@ export interface ITaskAdvancedFeatures {
     deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
 } */): Promise<Result<Task[], Err>>;
   searchTasks(searchTerm: string): Promise<Task[]>;
+  /**
+   * @param userId Used to subscribe to ALL tasks for a user
+   * @param ids For tracking only specific tasks
+   * @param depth the recursive depth of ancestor/descendants to include in the subscription
+   * @param onInitialize Called immediately on subscription. Provides the initial state of data
+   * @param onChange Called everytime a task is modified. 
+   * @return unsubscribe function
+ */
+  subscribeTasks(
+    params:
+      | {
+        userId: string;
+        ids?: never;
+        onInitialize: (tasks: Task[]) => void;
+        onChange: (changes: TaskDelta[]) => void;
+      }
+      | {
+        ids: string[];
+        ancestorDepth: number;
+        descendantDepth: number;
+        userId?: never;
+        onInitialize: (tasks: Task[]) => void;
+        onChange: (changes: TaskDelta[]) => void;
+      }
+  ): () => void;
+
 }
+
 
 export interface ITaskExporter {
   exportData(params: { simplify?: boolean }): Promise<void>;
@@ -101,7 +137,7 @@ export interface ITaskExporter {
 // #region Shared function parameter types
 
 // All fields in the Omit<> become optional
-export type CreateTaskParams = Partial<TaskData> & Omit<TaskData,
+export type CreateTaskParams = Partial<Task> & Omit<Task,
   | "id"
   | "created"
   | "last_edit"
@@ -111,8 +147,9 @@ export type CreateTaskParams = Partial<TaskData> & Omit<TaskData,
   | "children"
 // | "filepath"
 >
-export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id" | "completed" | "equals">
-export type UpdateTaskParams = { taskOrId: string | Task, changes: Partial<Task> };
-export type DeleteTaskParams = { taskOrId: string | Task, recursive?: boolean };
+export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id">
+type RelationChange = { id: string, operation: "addChild" | "removeChild" | "addParent" | "removeParent" }
+export type UpdateTaskParams = { id: string, data?: Partial<Omit<Task, "children" | "parents">>, relations?: RelationChange[] };
+export type DeleteTaskParams = { id: string, recursive?: boolean };
 
 //#endregion

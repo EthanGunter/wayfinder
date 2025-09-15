@@ -1,14 +1,16 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Task, TaskData } from "./Tasks";
-import { AUTH_TABLE_NAME, TASK_TABLE_NAME } from "./SupabaseClient";
+import type { Task, Task } from "./Tasks";
 import type { LocalUser } from "./Auth/User";
 
+export const AUTH_TABLE_NAME = 'users';
 interface AuthDB extends DBSchema {
     users: {
         key: string;
         value: LocalUser
     };
 }
+
+export const TASK_TABLE_NAME = 'tasks';
 interface TaskDB extends DBSchema {
     // files: {
     //   key: string;
@@ -16,7 +18,7 @@ interface TaskDB extends DBSchema {
     // };
     tasks: {
         key: string;
-        value: TaskData;
+        value: Task;
         indexes: {
             'by-user': string,
             'by-parents': string,

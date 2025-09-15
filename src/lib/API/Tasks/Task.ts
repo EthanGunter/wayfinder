@@ -4,14 +4,14 @@ import yaml from 'js-yaml'
 import type { CreateTaskParams, PopulatedTaskDTO } from "./types";
 import type { Result } from "../types";
 
-export interface TaskData {
+export interface Task {
     id: string,
     user_id: string,
     // filepath?: string // TODO I'd eventually like to make Wayfinder local-plain-text-first, but that's a future feature
     title: string,
     content?: string,
     status: TaskStatus,
-    todays_task: boolean,
+    todays_task: string, // ISO Timestamp
     priority?: number,
     /** 
      * Tasks that depend on this one's completion.
@@ -37,110 +37,92 @@ export function isTask(value: any): value is Task {
         && typeof value.title === 'string'
         && typeof value.created === 'string'
         && typeof value.last_edit === 'string'
-        && typeof value.todays_task === 'boolean'
+        && typeof value.todays_task === 'string'
         && typeof value.parents === 'object'
         && typeof value.children === 'object'
         ;
 }
 
-export class Task implements TaskData {
-    id: string;
-    user_id: string;
-    // filepath?: string;
-    title: string;
-    content?: string;
-    status: TaskStatus;
-    todays_task: boolean;
-    priority?: number;
-    parents: string[];
-    children: string[];
-    created: string;
-    last_edit: string;
+export function isTaskCompleted(task: Task): boolean {
+    return task.status === TaskStatus.complete;
+}
 
-    public get completed(): boolean {
-        return this.status === TaskStatus.complete;
-    }
-
-    constructor({
+export function createTask(params: CreateTaskParams): Task {
+    const {
         id,
         user_id,
-        // filepath,
         title,
         content,
         status = TaskStatus.incomplete,
-        todays_task: todaysTask = false,
+        todays_task = '',
         priority = 0,
         created = new Date().toISOString(),
-        last_edit: last_edit = new Date().toISOString(),
+        last_edit = new Date().toISOString(),
         parents = [],
-        children = []
-    }: CreateTaskParams) {
-        this.id = id ?? "NO-ID";
-        this.user_id = user_id;
-        this.title = title;
-        this.content = content;
-        // this.filepath = filepath ?? `${title}.md`;
-        this.status = status;
-        this.todays_task = todaysTask;
-        this.priority = priority;
-        this.created = created;
-        this.last_edit = last_edit;
-        this.parents = parents;
-        this.children = children;
-    }
+        children = [],
+    } = params;
+    return {
+        id: id ?? "NO-ID",
+        user_id: user_id!,
+        title: title!,
+        content,
+        status,
+        todays_task,
+        priority,
+        created,
+        last_edit,
+        parents,
+        children,
+    };
+}
 
-    equals(o: TaskData, ignoreId: boolean = false): boolean {
-        return ignoreId ? true : this.id === o.id
-            && this.user_id === o.user_id
-            && this.title === o.title
-            && this.content === o.content
-            && this.status === o.status
-            && this.priority === o.priority
-            && this.parents === o.parents
-            && this.children === o.children
-            && this.created === o.created
-        // && this.last_edit === o.last_edit // This might cause change between checks on server and local
-    }
+export function taskEquals(a: Task, b: Task, ignoreId: boolean = false): boolean {
+    if (!ignoreId && a.id !== b.id) return false;
+    return a.user_id === b.user_id
+        && a.title === b.title
+        && a.content === b.content
+        && a.status === b.status
+        && a.priority === b.priority
+        && a.parents === b.parents
+        && a.children === b.children
+        && a.created === b.created;
+    // && a.last_edit === b.last_edit // This might cause change between checks on server and local
+}
 
-    static populateDTO(dto: CreateTaskParams): PopulatedTaskDTO {
-        const populated = {
-            id: dto.id,
-            user_id: dto.user_id,
-            priority: dto.priority ?? 0,
-            title: dto.title,
-            content: dto.content,
-            // filepath: dto.filepath ?? `${dto.title}.md`,
-            status: dto.status ?? TaskStatus.incomplete,
-            todays_task: dto.todays_task ?? false,
-            created: dto.created ?? new Date().toISOString(),
-            last_edit: dto.last_edit ?? new Date().toISOString(),
-            parents: dto.parents ?? [],
-            children: dto.children ?? [],
-        }
-        if (!populated.id)
-            delete populated.id;
-        
-        return populated;
-    }
+export function populateTaskDTO(dto: CreateTaskParams): PopulatedTaskDTO {
+    const populated = {
+        id: dto.id,
+        user_id: dto.user_id,
+        priority: dto.priority ?? 0,
+        title: dto.title,
+        content: dto.content,
+        // filepath: dto.filepath ?? `${dto.title}.md`,
+        status: dto.status ?? TaskStatus.incomplete,
+        todays_task: dto.todays_task ?? new Date().toISOString(),
+        created: dto.created ?? new Date().toISOString(),
+        last_edit: dto.last_edit ?? new Date().toISOString(),
+        parents: dto.parents ?? [],
+        children: dto.children ?? [],
+    };
+    if (!populated.id)
+        delete (populated as any).id;
+    return populated;
+}
 
-    // Helper: Convert TaskData to markdown string
-    static toMarkdown(task: TaskData): string {
-        const { content, /* filepath, */ ...meta } = task;
-        return `---\n${yaml.dump(meta)}---\n${content ?? ''}`;
-    }
+export function toMarkdown(task: Task): string {
+    const { content, /* filepath, */ ...meta } = task;
+    return `---\n${yaml.dump(meta)}---\n${content ?? ''}`;
+}
 
-    // Helper: Parse markdown string to TaskData
-    /**
-     * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
-     */
-    static fromMarkdown(md: string, filepath: string): Result<Task, ParseError> {
-        const match = md.match(/^---\n([\s\S]+?)---\n([\s\S]*)$/);
-        if (!match) {
-            return err(new ParseError(md, "TaskNode"));
-        }
-
-        const meta = yaml.load(match[1]) as Omit<Task, 'content'>;
-        return ok({ ...meta, filepath, content: match[2].trim() });
+/**
+ * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
+ */
+export function fromMarkdown(md: string, filepath: string): Result<Task, ParseError> {
+    const match = md.match(/^---\n([\s\S]+?)---\n([\s\S]*)$/);
+    if (!match) {
+        return err(new ParseError(md, "TaskNode"));
     }
+    const meta = yaml.load(match[1]) as Omit<Task, 'content'>;
+    return ok({ ...(meta as any), filepath, content: match[2].trim() });
 }
 

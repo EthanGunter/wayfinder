@@ -1,52 +1,21 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
-	import type { LocalUser } from '$lib/API/Auth/types';
-	import AppFooter from '$lib/components/AppFooter.svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
-	import debounce from '$lib/debounce';
+	import type { LocalUser } from '@/API/Auth/User';
 
 	interface Props {
 		user: LocalUser;
+		class?: string;
 	}
-	const { user }: Props = $props();
+	const { user, class: className }: Props = $props();
 </script>
 
-<div class="user-avatar">
+<div class="relative aspect-square overflow-hidden rounded-full bg-gray-100 {className}">
 	{#if user.avatar_url}
-		<img src={user.avatar_url} alt="User avatar" />
+		<img src={user.avatar_url} alt="User avatar" class="h-full w-full object-cover" />
 	{:else}
-		<div class="user-avatar-placeholder">
+		<div
+			class="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-400 to-purple-600 object-cover text-[200%] font-bold text-white"
+		>
 			{user.display_name?.charAt(0)?.toUpperCase() || '?'}
 		</div>
 	{/if}
 </div>
-
-<style>
-	.user-avatar {
-		position: relative;
-		border-radius: 50%;
-		overflow: hidden;
-		background: #f0f0f0;
-		aspect-ratio: 1;
-	}
-
-	.user-avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.user-avatar-placeholder {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 200%;
-		font-weight: bold;
-		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-		color: white;
-	}
-</style>

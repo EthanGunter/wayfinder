@@ -1,16 +1,17 @@
 import { type IDBPDatabase } from 'idb';
-import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type DeleteTaskParams } from './types';
+import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type DeleteTaskParams, type TaskDelta } from './types';
 import { err, ok } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError } from '$lib/Errors';
 import { v4 } from 'uuid';
-import { Task, type TaskData } from './Task';
+import type { Task } from './Task';
+import { createTask, toMarkdown, isTaskCompleted } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
-import { dbPromise, type LocalDB } from '../localDB';
+import { TaskSearchService } from './TaskSearchService';
+import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
+import type { User } from '../Auth/User';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
 import { SyncQueue } from '../SyncQueue';
-import { error } from '@sveltejs/kit';
-import { TASK_TABLE_NAME } from '../SupabaseClient';
 
 
 //#region Task CRUD
@@ -36,7 +37,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   handleCreateTasksResponse: async function (response) {
     if (response.isErr()) {
       const { createdIds } = response.error;
-      await _deleteTasksLocal(createdIds.map(i => ({ taskOrId: i })), false);
+      await _deleteTasksLocal(createdIds.map(i => ({ id: i })), false);
     }
   },
 
@@ -63,7 +64,13 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
       for (const id of ids) {
         const task = await _db.get(TASK_TABLE_NAME, id);
         if (task) {
-          tasks.push(new Task(task));
+          const taskObj = task as Task;
+          // Only return tasks owned by the current user
+          if (await validateTaskOwnership(taskObj)) {
+            tasks.push(taskObj);
+          } else {
+            notFoundIds.push(id); // Treat unauthorized access as "not found"
+          }
         } else {
           notFoundIds.push(id);
         }
@@ -78,7 +85,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   getAllUserTasks: async function ({ userId }) {
     assertDB(_db);
     const userTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
-    return okBatch(userTasks.map(t => new Task(t)));
+    return okBatch(userTasks as Task[]);
   },
 
   /**
@@ -101,7 +108,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState } = response.error;
-      await _updateTasksLocal(oldState.map(t => ({ taskOrId: t.updatedId, changes: t.task })), false);
+      await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false); // TODO This needs to perform the inverse relationship operations
     }
   },
 
@@ -139,6 +146,12 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const createdTasks: Task[] = [];
   const errors: ArgumentError[] = [];
 
+  // Get current user to assign ownership
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return err(new InvalidStateError("Cannot create tasks without an authenticated user"));
+  }
+
   for (const taskDTO of tasks) {
     if (taskDTO.id) {
       const result = await taskCRUD.getTask({ id: taskDTO.id });
@@ -148,7 +161,9 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
       }
     }
 
-    const preparedTask = new Task(taskDTO);
+    // Ensure the task is owned by the current user
+    const taskWithOwnership = { ...taskDTO, user_id: currentUser.id };
+    const preparedTask = createTask(taskWithOwnership);
     preparedTask.created = new Date().toISOString();
     if (!taskDTO.id) {
       preparedTask.id = v4();
@@ -162,14 +177,22 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const relUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
   await _updateTasksLocal(relUpdates, false); // Relationship updates should be handled by the server
 
-  if (updateServer) {
-    _taskSyncQueue?.add(
+  // Update search index for newly created tasks
+  if (_searchService) {
+    createdTasks.forEach(task => _searchService!.indexTask(task));
+  }
+
+  if (updateServer && _taskSyncQueue) {
+    _taskSyncQueue.add(
       "createTasks",
       { createDetails: tasks },
       "handleCreateTasksResponse",
       { createdIds: createdTasks.map(t => t.id) },
     );
   }
+
+  // Notify subscribers
+  await _emitDeltas(createdTasks.map(newTask => ({ oldTask: null, newTask })) as TaskDelta[]);
 
   return okBatch(createdTasks, errors);
 };
@@ -180,11 +203,46 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   const updatedTasks: Map<Task, Task> = new Map();
   const errors: Err[] = [];
 
-  for (const { taskOrId, changes: changes } of updates) {
-    // const result = await api.updateTask({ taskOrId, changes: updates });
-    const [task, error] = await getTaskOrID(taskOrId);
-    if (error) { errors.push(error); continue; }
-    const updated: Task = new Task({ ...task, ...changes, last_edit: new Date().toISOString() });
+  for (const update of updates) {
+    const { id, data: changes = {}, relations = [] } = update;
+    const taskResult = await taskCRUD.getTask({ id });
+    if (taskResult.isErr()) { errors.push(taskResult.error); continue; }
+    const task = taskResult.value;
+
+    // Validate user ownership before allowing update
+    if (!(await validateTaskOwnership(task))) {
+      errors.push(new NotFoundError(task.id, "Task (unauthorized)"));
+      continue;
+    }
+
+    // Apply relationship changes
+    let updatedChildren = new Set(task.children || []);
+    let updatedParents = new Set(task.parents || []);
+
+    for (const relation of relations) {
+      switch (relation.operation) {
+        case 'addChild':
+          updatedChildren.add(relation.id);
+          break;
+        case 'removeChild':
+          updatedChildren.delete(relation.id);
+          break;
+        case 'addParent':
+          updatedParents.add(relation.id);
+          break;
+        case 'removeParent':
+          updatedParents.delete(relation.id);
+          break;
+      }
+    }
+
+    const updated: Task = {
+      ...(task as Task),
+      ...(changes as Partial<Task>),
+      children: Array.from(updatedChildren),
+      parents: Array.from(updatedParents),
+      last_edit: new Date().toISOString()
+    };
 
     await _db.put(TASK_TABLE_NAME, updated);
 
@@ -195,15 +253,24 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
   await _updateTasksLocal(relUpdates, false);
 
-  if (updateServer) {
+  // Update search index for updated tasks
+  if (_searchService) {
+    Array.from(updatedTasks.values()).forEach(task => _searchService!.indexTask(task));
+  }
+
+  if (updateServer && _taskSyncQueue) {
     // Queue sync command
-    _taskSyncQueue!.add(
+    _taskSyncQueue.add(
       "updateTasks",
       { updates },
       'handleUpdateTasksResponse',
       { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) }
     );
   }
+
+  // Notify subscribers with per-task deltas
+  const deltas: TaskDelta[] = Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask }));
+  await _emitDeltas(deltas);
 
   return okBatch(updatedTasks.values().toArray(), errors);
 };
@@ -214,28 +281,41 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
 
   const deletedTasks: Task[] = [];
   const errors: NotFoundError[] = [];
-  for (const { taskOrId, recursive } of deleteArgs) {
+  for (const { id, recursive } of deleteArgs) {
 
-    const [task, error] = await getTaskOrID(taskOrId);
-    if (error) {
-      errors.push(error);
+    const taskResult = await taskCRUD.getTask({ id });
+    if (taskResult.isErr()) {
+      errors.push(taskResult.error);
+      continue;
+    }
+    const task = taskResult.value;
+
+    // Validate user ownership before allowing deletion
+    if (!(await validateTaskOwnership(task))) {
+      errors.push(new NotFoundError(task.id, "Task (unauthorized)"));
       continue;
     }
 
     if (recursive && task.children.length > 0) {
       // TODO:handle-error
-      const result = await _deleteTasksLocal(task.children.map(c => ({ taskOrId: c, recursive })));
+      const result = await _deleteTasksLocal(task.children.map(c => ({ id: c, recursive })));
     }
 
     deletedTasks.push(task);
     await _db.delete(TASK_TABLE_NAME, task.id);
+
+    // Remove from search index
+    if (_searchService) {
+      _searchService.removeTask(task.id);
+    }
+
     const relUpdates = await getRelationshipUpdates(api, { oldTask: task, newTask: null });
     await _updateTasksLocal(relUpdates, false);
   }
 
-  if (updateServer) {
+  if (updateServer && _taskSyncQueue) {
     // Queue Sync command
-    _taskSyncQueue!.add(
+    _taskSyncQueue.add(
       'deleteTasks',
       { deleteArgs },
       'handleDeleteTasksResponse',
@@ -245,19 +325,21 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
   if (errors.length > 0) {
     return err(new IOError("Batch delete", errors));
   }
+  // Notify subscribers
+  await _emitDeltas(deletedTasks.map(oldTask => ({ oldTask, newTask: null })) as TaskDelta[]);
   return ok();
 };
 async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updateServer: boolean = true): Promise<BatchResult<Task>> {
   assertDB(_db);
   const originalTasks = await _db.getAllFromIndex('tasks', 'by-user', oldUserID);
-  const convertedTasks = originalTasks.map(t => new Task({ ...t, user_id: newUserID }));
+  const convertedTasks = (originalTasks as Task[]).map(t => ({ ...t, user_id: newUserID } as Task));
 
   for (const task of convertedTasks) {
-    await _db!.put('tasks', task);
+    await _db.put('tasks', task);
   }
 
-  if (updateServer) {
-    _taskSyncQueue!.add(
+  if (updateServer && _taskSyncQueue) {
+    _taskSyncQueue.add(
       'changeOwnership',
       { oldUserID, newUserID },
       'handleChangeOwnershipResponse',
@@ -270,15 +352,13 @@ async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updat
 //#endregion
 
 const taskRelations: ITaskRelations = {
-  getChildrenOf: async function ({ taskOrId }) {
+  getChildrenOf: async function ({ id }) {
     // First get the parent task to access its children array
-    let parentTask: Task;
-    if (typeof taskOrId === "string") {
-      const parentTaskResult = await taskCRUD.getTask({ id: taskOrId });
-      if (parentTaskResult.isErr()) {
-        return err(parentTaskResult.error);
-      } else parentTask = parentTaskResult.value;
-    } else parentTask = taskOrId;
+    const parentResult = await taskCRUD.getTask({ id });
+    if (parentResult.isErr()) {
+      return err(parentResult.error);
+    }
+    const parentTask = parentResult.value;
 
     if (parentTask.children.length === 0) {
       return ok([]);
@@ -295,16 +375,14 @@ const taskRelations: ITaskRelations = {
 
     return ok(children);
   },
-  getParentsOf: async function ({ taskOrId }) {
-    let childTask: Task;
+  getParentsOf: async function ({ id }) {
 
     // Convert id to task object
-    if (typeof taskOrId === "string") {
-      const childTaskResult = await taskCRUD.getTask({ id: taskOrId });
-      if (childTaskResult.isErr()) {
-        return err(childTaskResult.error);
-      } else childTask = childTaskResult.value;
-    } else childTask = taskOrId;
+    const childTaskResult = await taskCRUD.getTask({ id });
+    if (childTaskResult.isErr()) {
+      return err(childTaskResult.error);
+    }
+    const childTask = childTaskResult.value;
 
     // Get the parents
     if (childTask.parents.length > 0) {
@@ -322,22 +400,117 @@ const taskRelations: ITaskRelations = {
 
   getRootTasks: async function () {
     assertDB(_db);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return ok([]); // No authenticated user, return empty array
+    }
+
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const rootTasks = allTasks.filter(task => task.parents.length === 0);
-    return ok(rootTasks.map(t => new Task(t)));
+    const rootTasks = (allTasks as Task[]).filter(task =>
+      task.parents.length === 0 && task.user_id === currentUser.id);
+    return ok(rootTasks);
+  }
+}
+
+type UserSubscription = {
+  kind: 'user';
+  userId: string;
+  onInitialize: (tasks: Task[]) => void;
+  onChange: (changes: TaskDelta[]) => void;
+};
+type ScopedSubscription = {
+  kind: 'scoped';
+  ids: string[];
+  ancestorDepth: number;
+  descendantDepth: number;
+  includedIds?: Set<string>;
+  onInitialize: (tasks: Task[]) => void;
+  onChange: (changes: TaskDelta[]) => void;
+};
+type Subscription = UserSubscription | ScopedSubscription;
+
+let _subscriptions: Subscription[] = [];
+type IncludedSet = Set<string>;
+async function _computeIncludedIds(seedIds: string[], ancestorDepth: number, descendantDepth: number): Promise<IncludedSet> {
+  const included: IncludedSet = new Set(seedIds);
+  const get = async (id: string) => {
+    const res = await taskCRUD.getTask({ id });
+    return res.isOk() ? res.value : null;
+  };
+  // Ancestors (parents)
+  let up = [...seedIds];
+  for (let d = 0; d < ancestorDepth && up.length; d++) {
+    const next: string[] = [];
+    for (const id of up) {
+      const t = await get(id); if (!t) continue;
+      for (const pid of t.parents ?? []) if (!included.has(pid)) { included.add(pid); next.push(pid); }
+    }
+    up = next;
+  }
+  // Descendants (children)
+  let down = [...seedIds];
+  for (let d = 0; d < descendantDepth && down.length; d++) {
+    const next: string[] = [];
+    for (const id of down) {
+      const t = await get(id); if (!t) continue;
+      for (const cid of t.children ?? []) if (!included.has(cid)) { included.add(cid); next.push(cid); }
+    }
+    down = next;
+  }
+  return included;
+}
+
+async function _getAllTasksForCurrentUser(): Promise<Task[]> {
+  assertDB(_db);
+  const all = await _db.getAll(TASK_TABLE_NAME);
+  const mine = await validateTasksOwnership(all as Task[]);
+  return mine;
+}
+
+async function _emitDeltas(deltas: TaskDelta[]) {
+  if (deltas.length === 0) return;
+  for (const sub of _subscriptions) {
+    if (sub.kind === 'user') {
+      const filtered = deltas.filter(d => (d.newTask?.user_id ?? d.oldTask?.user_id) === sub.userId);
+      if (filtered.length > 0) sub.onChange(filtered);
+    } else {
+      // Recompute included set per event to reflect latest graph state
+      const included = await _computeIncludedIds(sub.ids, sub.ancestorDepth, sub.descendantDepth);
+      sub.includedIds = included;
+      const filtered = deltas.filter(d => {
+        const nid = d.newTask?.id;
+        const oid = d.oldTask?.id;
+        return (nid && included.has(nid)) || (oid && included.has(oid));
+      });
+      if (filtered.length > 0) sub.onChange(filtered);
+    }
   }
 }
 
 const advancedFeatures: ITaskAdvancedFeatures = {
   getTodaysTasks: async function () {
     assertDB(_db);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return ok([]); // No authenticated user, return empty array
+    }
+
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    return ok(allTasks.filter(t => t.todays_task).map(t => new Task(t)));
+    const userTasks = (allTasks as Task[]).filter(t => t.user_id === currentUser.id);
+    const today = new Date().toISOString().split('T')[0];
+    const todays = userTasks.filter(t => t.todays_task.startsWith(today));
+    return ok(todays);
   },
 
   getPrioritizedTasks: async function (limit: number) {
     assertDB(_db);
-    let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME)).map(t => new Task(t));
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return ok([]); // No authenticated user, return empty array
+    }
+
+    let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME) as Task[])
+      .filter(t => t.user_id === currentUser.id);
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -348,16 +521,16 @@ const advancedFeatures: ITaskAdvancedFeatures = {
       else return (b.priority ?? 0) - (a.priority ?? 0)
     };
 
-    let todoList: Task[] = [];
+    let todoList: Set<Task> = new Set();
 
     const inOrderTraversalAssignment = (task: Task) => {
-      if (todoList.length === limit/*  || task.tags?.includes('disabled') */)
+      if (todoList.size === limit/*  || task.tags?.includes('disabled') */)
         return; // stop searching once all tasks are acquired
 
       // TODO this lil check right here may not be ideal... user testing will tell
       if (task.children.length === 0) { // is leaf node
-        if (!task.completed) {// and it's not already completed
-          todoList.push(task); // add to todolist
+        if (!isTaskCompleted(task)) {// and it's not already completed
+          todoList.add(task); // add to todolist
         }
       }
       else { // continue for all children, starting with highest priority
@@ -365,38 +538,91 @@ const advancedFeatures: ITaskAdvancedFeatures = {
         for (const child of children) {
           if (!child) continue;
 
-          if (!child.completed) {
+          if (!isTaskCompleted(child)) {
             inOrderTraversalAssignment(child);
           }
         }
 
-        if (children.every(c => !c || c.completed) && !task.completed) {
-          todoList.push(task);
+        if (children.every(c => !c || isTaskCompleted(c)) && !isTaskCompleted(task)) {
+          todoList.add(task);
         }
       }
     }
 
-    roots.sort(sorter)
+    roots.sort(sorter);
     for (let i = 0; i < roots.length; i++) {
-      if (todoList.length === limit)
-        return ok(todoList);
+      if (todoList.size === limit)
+        return ok(Array.from(todoList));
 
       const root = roots[i];
       inOrderTraversalAssignment(root);
     }
 
-    return ok(todoList);
+    return ok(Array.from(todoList));
   },
 
-  searchTasks: function (searchTerm) {
-    Err.throw(new NotImplementedError('BrowserTaskProvider.searchTasks'));
+  searchTasks: async function (searchTerm) {
+    if (!_searchService) {
+      return [];
+    }
+    return _searchService.searchTasks(searchTerm);
   },
+  subscribeTasks: function (params: any): () => void {
+    const isUserSub = 'userId' in params;
+
+    if (isUserSub) {
+      const sub: UserSubscription = {
+        kind: 'user',
+        userId: params.userId,
+        onInitialize: params.onInitialize,
+        onChange: params.onChange,
+      };
+      _subscriptions.push(sub);
+      // Initialize
+      _getAllTasksForCurrentUser().then(tasks => {
+        const init = tasks.filter(t => t.user_id === sub.userId);
+        sub.onInitialize(init);
+      });
+      return () => {
+        _subscriptions = _subscriptions.filter(s => s !== sub);
+      };
+    } else {
+      const sub: ScopedSubscription = {
+        kind: 'scoped',
+        ids: params.ids,
+        ancestorDepth: params.ancestorDepth,
+        descendantDepth: params.descendantDepth,
+        includedIds: undefined,
+        onInitialize: params.onInitialize,
+        onChange: params.onChange,
+      };
+      _subscriptions.push(sub);
+      // Initialize
+      (async () => {
+        const tasks = await _getAllTasksForCurrentUser();
+        const included = await _computeIncludedIds(sub.ids, sub.ancestorDepth, sub.descendantDepth);
+        sub.includedIds = included;
+        const init = tasks.filter(t => included.has(t.id));
+        sub.onInitialize(init);
+      })();
+      return () => {
+        _subscriptions = _subscriptions.filter(s => s !== sub);
+      };
+    }
+  }
 }
 
 const dataExporter: ITaskExporter = {
   exportData: async function ({ simplify }) {
     assertDB(_db);
-    const taskData = await _db.getAll(TASK_TABLE_NAME);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      throw new InvalidStateError("Cannot export data without an authenticated user");
+    }
+
+    // Only export tasks owned by the current user
+    const allTasks = await _db.getAll(TASK_TABLE_NAME);
+    const taskData = (allTasks as Task[]).filter(task => task.user_id === currentUser.id);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
 
     // 1. Create a new zip
@@ -411,7 +637,7 @@ const dataExporter: ITaskExporter = {
       else
         filename = `${task.title}.md`
 
-      zip.file(filename, Task.toMarkdown(task));
+      zip.file(filename, toMarkdown(task));
     }
 
     // 3. Generate the zip and trigger download
@@ -432,6 +658,8 @@ const dataExporter: ITaskExporter = {
 
 
 let _db: LocalDB | null;
+let _remoteTasks: ITasks | null = null;
+let _searchService: TaskSearchService | null = null;
 
 const api: ITasks & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
@@ -440,8 +668,22 @@ const BrowserTaskProvider: ILocalTaskProvider = {
   get: async function (remoteTasks) {
     _db = await dbPromise;
 
+    // Initialize search service
+    _searchService = new TaskSearchService();
+
+    // Reindex search for current user
+    const currentUser = await getCurrentUser();
+    if (currentUser) {
+      const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: currentUser.id });
+      if (existingTasksResult.isOk()) {
+        const tasks = extractBatchAndLogErrors(existingTasksResult);
+        _searchService.reindexTasks(tasks);
+      }
+    }
+
     if (remoteTasks) {
-      _taskSyncQueue = new SyncQueue<Omit<ITasks,
+      _remoteTasks = remoteTasks;
+      type LocalSyncable = Omit<ITasks,
         | "getAllUserTasks"
         | "getChildrenOf"
         | "getParentsOf"
@@ -451,7 +693,9 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         | "getTasks"
         | "getTodaysTasks"
         | "searchTasks"
-      >, ITaskReverter>({
+        | "subscribeTasks"
+      >;
+      _taskSyncQueue = new SyncQueue<LocalSyncable, ITaskReverter>({
         changeOwnership: remoteTasks.changeOwnership,
         handleChangeOwnershipResponse: taskCRUD.handleChangeOwnershipResponse,
         createTask: remoteTasks.createTask,
@@ -465,7 +709,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
     }
-    return { ...api, getSyncQueue: () => _taskSyncQueue };
+    return { ...api, getSyncQueue: () => _taskSyncQueue, hasRemote: () => !!_remoteTasks };
   },
 }
 
@@ -479,6 +723,7 @@ let _taskSyncQueue: SyncQueue<Omit<ITasks,
   | "getTasks"
   | "getTodaysTasks"
   | "searchTasks"
+  | "subscribeTasks"
 >, ITaskReverter> | null = null;
 
 export default BrowserTaskProvider;
@@ -489,19 +734,30 @@ function assertDB(db: LocalDB | null): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()"));
 }
 
-async function getTaskOrID(taskOrId: Task | string): Promise<[Task, null] | [null, NotFoundError]> {
+async function getCurrentUser(): Promise<User | null> {
   assertDB(_db);
-
-  if (typeof taskOrId == 'string') {
-    const taskResponse = await _db.get(TASK_TABLE_NAME, taskOrId);
-    if (!taskResponse) {
-      return [null, new NotFoundError("Task not found for update", taskOrId)];
-    }
-
-    return [new Task(taskResponse), null];
-  } else {
-    return [taskOrId, null];
+  const activeUserId = await _db.get(APP_TABLE_NAME, ACTIVEUSER_NAME) as string | undefined;
+  if (activeUserId) {
+    const user = await _db.get(AUTH_TABLE_NAME, activeUserId);
+    return user ?? null;
   }
+  return null;
+}
+
+async function validateTaskOwnership(task: Task): Promise<boolean> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return false; // No authenticated user
+  }
+  return task.user_id === currentUser.id;
+}
+
+async function validateTasksOwnership(tasks: Task[]): Promise<Task[]> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return []; // No authenticated user
+  }
+  return tasks.filter(task => task.user_id === currentUser.id);
 }
 
 /** This function manages writing the markdown file, then updating the index */

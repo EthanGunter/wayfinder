@@ -20,6 +20,8 @@
 		items: T[];
 		listItem: Snippet<[T, number]>;
 		onListOrderChanged?: (items: T[]) => void;
+		sortFunction?: (a: T, b: T) => number;
+		sortEnabled?: boolean;
 		// onItemAdded?: (item: T) => void;
 		// onItemRemoved?: (item: T) => void;
 	}
@@ -30,7 +32,9 @@
 		accepts,
 		items: initialItems = [],
 		listItem,
-		onListOrderChanged = undefined
+		onListOrderChanged = undefined,
+		sortFunction = undefined,
+		sortEnabled = true
 	}: Props = $props();
 
 	let items = $state([...initialItems]);
@@ -38,9 +42,17 @@
 	let isDraggingFromThisList = false;
 	let temporaryItem: T | null = null;
 
+	// Helper function to apply sorting if enabled
+	function applySorting(itemsToSort: T[]): T[] {
+		if (sortEnabled && sortFunction) {
+			return [...itemsToSort].sort(sortFunction);
+		}
+		return itemsToSort;
+	}
+
 	// Update items when props change
 	$effect(() => {
-		items = [...initialItems];
+		items = applySorting([...initialItems]);
 	});
 
 	function handleDragEnter(event: DragEnterEvent) {
@@ -108,6 +120,8 @@
 		if (event.detail.dropAllowed) {
 			// The drop was successful on this list
 			onListOrderChanged?.(items);
+			// Note: Re-sorting will happen automatically when the parent 
+			// updates the items prop after updating priorities
 		} else {
 			// Drop failed - revert to original order
 			items = originalItems;
@@ -122,8 +136,10 @@
 	/** Called when an item from this list gets dropped somewhere other than this */
 	function handleDropElsewhere(event: DropEvent) {
 		if (event.detail.dropAllowed) {
-			// The drop was successful on this list
+			// The drop was successfully removed from this list
 			onListOrderChanged?.(items);
+			// Note: Re-sorting will happen automatically when the parent 
+			// updates the items prop after updating priorities
 		} else {
 			// Drop failed - revert to original order
 			items = originalItems;
@@ -155,7 +171,7 @@
 
 {#if accepts && accepts.length > 0}
 	<ol
-		class="item-list"
+		class="h-min max-w-full flex flex-col p-2 gap-1 list-none m-0 relative"
 		{id}
 		data-scrollable={scrollable}
 		use:droppable={{
@@ -171,52 +187,9 @@
 		{/each}
 	</ol>
 {:else}
-	<ol class="item-list" {id} data-scrollable={scrollable}>
+	<ol class="h-min max-w-full flex flex-col p-2 gap-1 list-none m-0 relative" {id} data-scrollable={scrollable}>
 		{#each items as item, index (item)}
 			{@render listItem(item, index)}
 		{/each}
 	</ol>
 {/if}
-
-<style lang="scss">
-	.item-list {
-		// Fill the containing element
-		height: min-content;
-		max-width: 100%;
-
-		display: flex;
-		flex-direction: column;
-		padding: 0.5rem;
-		gap: 0.2rem;
-		list-style: none;
-		margin: 0;
-		position: relative;
-
-		li {
-			margin: 0;
-			padding: 0;
-			transition: transform 0.2s ease;
-		}
-	}
-
-	.item-list[data-scrollable] {
-		overflow-y: scroll;
-	}
-
-	:global(.dnd-droppable) {
-		min-height: 2rem;
-		transition:
-			background-color 0.2s,
-			border-color 0.2s;
-		border: 2px dashed transparent;
-	}
-	:global(.dnd-droppable.valid-drop) {
-		background-color: var(--background-modifier-hover, rgba(0, 122, 204, 0.1));
-		border-color: var(--color-accent, #007acc);
-	}
-
-	:global(.dnd-droppable.invalid-drop) {
-		background-color: var(--background-modifier-error, rgba(255, 0, 0, 0.1));
-		border-color: var(--color-error, #ff0000);
-	}
-</style>

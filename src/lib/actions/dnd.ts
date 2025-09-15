@@ -36,6 +36,7 @@ export const eventNames = {
 // --- CSS names
 export const DRAGGABLE_CSS_CLASS = "dnd-draggable";
 export const DROPPABLE_CSS_CLASS = "dnd-droppable";
+export const DRAGGING_CSS_CLASS = "dnd-dragging"; // Applied to the drag group or node during drag
 const VALID_DROP_CLASS = "valid-drop";
 const INVALID_DROP_CLASS = "invalid-drop";
 const CONTROLS_DRAGGABLE_ATTR = "data-controls-draggable"; // Used by droppable to indicate it influences ghost rendering/position
@@ -386,13 +387,33 @@ export function draggable<T>(
   }
   setupEventListeners({ onDragStart, onDragOver, onDrop } as DraggableParams<T>);
 
+  const DRAG_DISTANCE_THRESHOLD = 10; // pixels
+  let startClientX = 0;
+  let startClientY = 0;
+
+  // Clean up threshold checking listeners
+  function cleanupThresholdListeners() {
+    document.removeEventListener("mouseup", cancelDelayedStart);
+    document.removeEventListener("touchend", cancelDelayedStart);
+    document.removeEventListener("mousemove", checkDragThreshold);
+    document.removeEventListener("touchmove", checkDragThreshold);
+  }
+
   // Handle both mouse and touch start events
   function handleStart(event: MouseEvent | TouchEvent) {
-    // Prevent default to avoid text selection during delay
-    event.preventDefault();
+    // Don't prevent default here - let normal clicks work
     
     // Store the initial event for later use
     initialMouseDownEvent = event;
+    
+    // Store initial pointer position for distance calculation
+    const isTouch = event.type === "touchstart";
+    startClientX = isTouch
+      ? (event as TouchEvent).touches[0].clientX
+      : (event as MouseEvent).clientX;
+    startClientY = isTouch
+      ? (event as TouchEvent).touches[0].clientY
+      : (event as MouseEvent).clientY;
     
     // Clear any existing timeout
     if (delayTimeout) {
@@ -402,7 +423,13 @@ export function draggable<T>(
 
     // Set up the delay timeout
     delayTimeout = setTimeout(() => {
-      if (!initialMouseDownEvent) return;
+      if (!initialMouseDownEvent || isDragging) return;
+      
+      // Clean up threshold listeners first
+      cleanupThresholdListeners();
+      
+      // Prevent default now that we're starting to drag
+      initialMouseDownEvent.preventDefault();
       
       const isTouch = initialMouseDownEvent.type === "touchstart";
       const clientX = isTouch
@@ -419,23 +446,55 @@ export function draggable<T>(
     // Add listeners for mouse/touch up to cancel the delay
     document.addEventListener("mouseup", cancelDelayedStart);
     document.addEventListener("touchend", cancelDelayedStart);
-    document.addEventListener("mousemove", cancelDelayedStart);
-    document.addEventListener("touchmove", cancelDelayedStart);
+    document.addEventListener("mousemove", checkDragThreshold);
+    document.addEventListener("touchmove", checkDragThreshold);
   }
 
-  // Cancel the delayed start if mouse is released or moved before delay
-  function cancelDelayedStart() {
+  // Check if we should start dragging based on distance moved
+  function checkDragThreshold(event: MouseEvent | TouchEvent) {
+    if (!initialMouseDownEvent || isDragging) return;
+    
+    const isTouch = event.type.includes("touch");
+    const clientX = isTouch
+      ? (event as TouchEvent).touches[0].clientX
+      : (event as MouseEvent).clientX;
+    const clientY = isTouch
+      ? (event as TouchEvent).touches[0].clientY
+      : (event as MouseEvent).clientY;
+    
+    const distance = Math.sqrt(
+      Math.pow(clientX - startClientX, 2) + Math.pow(clientY - startClientY, 2)
+    );
+    
+    if (distance > DRAG_DISTANCE_THRESHOLD) {
+      // Distance threshold exceeded, start dragging immediately
+      if (delayTimeout) {
+        clearTimeout(delayTimeout);
+        delayTimeout = null;
+      }
+      
+      // Clean up threshold listeners first
+      cleanupThresholdListeners();
+      
+      // Prevent default now that we're starting to drag
+      initialMouseDownEvent.preventDefault();
+      event.preventDefault();
+      
+      isDragging = true;
+      startDrag(clientX, clientY);
+    }
+  }
+
+  // Cancel the delayed start if mouse is released before delay/threshold
+  function cancelDelayedStart(event: MouseEvent | TouchEvent) {
     if (delayTimeout) {
       clearTimeout(delayTimeout);
       delayTimeout = null;
     }
     initialMouseDownEvent = null;
     
-    // Remove the cancel listeners
-    document.removeEventListener("mouseup", cancelDelayedStart);
-    document.removeEventListener("touchend", cancelDelayedStart);
-    document.removeEventListener("mousemove", cancelDelayedStart);
-    document.removeEventListener("touchmove", cancelDelayedStart);
+    // Clean up threshold listeners
+    cleanupThresholdListeners();
   }
 
   // Start the actual drag operation
@@ -450,22 +509,35 @@ export function draggable<T>(
       groupApi = groupApis.get(groupId);
     }
 
+    // Notify group FIRST so it can set up its state properly
+    if (groupApi) {
+      groupApi.notifyMemberDragStart(node);
+    }
+
     // Create ghost element
     const groupNode = groupElement ?? node; // Use the group as the ghost if available
+    
+    // Add dragging class to the appropriate node for styling (group if exists, otherwise individual node)
+    groupNode.classList.add(DRAGGING_CSS_CLASS);
     ghost = groupNode.cloneNode(true) as HTMLElement;
     ghost.setAttribute("draggable", "false"); // Prevent nested dragging
+    // Remove classes that should only be on the original node
     ghost.classList.remove(DRAGGABLE_CSS_CLASS);
+    ghost.classList.remove(DRAGGING_CSS_CLASS);
+    // Add the ghost-defining class
     ghost.classList.add("dnd-ghost");
     copyComputedSizeAndPosition(groupNode, ghost); // Ensure ghost has same dimensions
 
     // Prevent pointer events on the original node while dragging its ghost
-    // TODO this is redundant with dragGroup's behaviour, but it's necessary in the case there isn't a group to handle this draggable...
+    // Only manage pointer events directly if there's no group (group will handle it otherwise)
     const initialPointerEvents = node.style.pointerEvents;
+    let shouldRestorePointerEvents = false;
 
-    // Use timeout 0 to ensure this runs after other start logic potentially setting pointerEvents
-    setTimeout(() => {
+    if (!groupApi) {
+      // No group - we manage pointer events directly
       node.style.pointerEvents = "none";
-    }, 0);
+      shouldRestorePointerEvents = true;
+    }
 
     // Calculate initial cursor offset relative to the node's top-left corner
     const rect = node.getBoundingClientRect();
@@ -478,10 +550,6 @@ export function draggable<T>(
 
 
     // Dispatch dnd-dragstart events
-    if (groupApi) {
-      // *** Notify the group that this node started dragging ***
-      groupApi.notifyMemberDragStart(node);
-    }
     const dragStartEvent = new DragStartEvent({
       draggableType,
       data,
@@ -600,10 +668,14 @@ export function draggable<T>(
       // --- End Event Dispatching and Ghost Rendering ---
     }
 
-    // Initial positioning and rendering with the stored initial event
-    if (initialMouseDownEvent) {
-      moveGhost(initialMouseDownEvent);
-    }
+    // Initial positioning - create a synthetic event with current position
+    const syntheticEvent = {
+      type: 'mousemove',
+      clientX,
+      clientY,
+      preventDefault: () => {}
+    } as MouseEvent;
+    moveGhost(syntheticEvent);
 
     // Add move listeners
     document.addEventListener("mousemove", moveGhost);
@@ -624,13 +696,24 @@ export function draggable<T>(
 
       // Remove ghost (with optional delay for debugging)
       if (devDelay) {
-        setTimeout(() => ghost?.remove(), devDelay);
+        setTimeout(() => {
+          if (ghost && ghost.parentNode) {
+            ghost.remove();
+          }
+        }, devDelay);
       } else {
-        ghost?.remove();
+        if (ghost && ghost.parentNode) {
+          ghost.remove();
+        }
       }
 
-      // Restore original node's pointer events
-      node.style.pointerEvents = initialPointerEvents || "initial"; // Restore original or remove
+      // Remove dragging class from the appropriate node (group if exists, otherwise individual node)
+      groupNode.classList.remove(DRAGGING_CSS_CLASS);
+
+      // Restore original node's pointer events only if we were managing them
+      if (shouldRestorePointerEvents) {
+        node.style.pointerEvents = initialPointerEvents || "initial";
+      }
       // Remove end listeners (added below) - crucial to prevent leaks
       document.removeEventListener("mouseup", handleEnd);
       document.removeEventListener("touchend", handleEnd);
@@ -672,11 +755,11 @@ export function draggable<T>(
 
       if (finalDropTarget && finalDropValid) {
         finalDropTarget.dispatchEvent(dropEvent);
-        // resetAllDroppableStates();
+        resetAllDroppableStates();
       } else {
         // Dispatch drop event on the draggable node itself for failed drops
         node.dispatchEvent(dropEvent);
-        // resetAllDroppableStates();
+        resetAllDroppableStates();
       }
 
       // Perform cleanup regardless of drop success
@@ -712,8 +795,40 @@ export function draggable<T>(
         delayTimeout = null;
       }
       
-      // Cancel any delayed start
-      cancelDelayedStart();
+      // Clean up threshold listeners
+      cleanupThresholdListeners();
+      
+      // Clean up any ongoing drag
+      if (isDragging) {
+        // Notify group that drag ended if there was one
+        const groupElement = node.closest<HTMLElement>(`[${DRAG_GROUP_ID_ATTR}]`);
+        if (groupElement && groupElement.dataset.dragGroupId) {
+          const groupId = parseInt(groupElement.dataset.dragGroupId, 10);
+          const groupApi = groupApis.get(groupId);
+          if (groupApi) {
+            groupApi.notifyMemberDragEnd(node);
+          }
+        }
+        
+        // Reset all droppable states
+        resetAllDroppableStates();
+        
+        // Remove dragging class from appropriate node (group if exists, otherwise individual node)
+        const groupNodeForCleanup = groupElement ?? node;
+        groupNodeForCleanup.classList.remove(DRAGGING_CSS_CLASS);
+        
+        // Clean up ghost
+        if (ghost && ghost.parentNode) {
+          ghost.remove();
+        }
+        
+        // Reset pointer events
+        node.style.pointerEvents = "initial";
+      }
+      
+      // Reset state
+      initialMouseDownEvent = null;
+      isDragging = false;
       
       // Remove all managed event listeners
       removeAllManagedListeners();

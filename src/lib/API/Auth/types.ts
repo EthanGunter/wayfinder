@@ -3,10 +3,6 @@ import type { ArgumentError, InvalidStateError, NotFoundError, NotImplementedErr
 import type { IProvider, Result } from "../types";
 import type { SyncQueue } from "../SyncQueue";
 import type { User, LocalUser } from "./User";
-import type { Tables } from "../supabase";
-
-// Raw user data from database
-export type UserData = Tables<'users'>;
 
 export type LoginCredentials =
     | { type: 'email_password'; email: string; password: string }
@@ -85,5 +81,7 @@ export interface IAuthLocalFunctions {
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
     /** Registers a remote user account and creates local user simultaneously */
     register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+
+    hasRemote(): boolean;
 }
 

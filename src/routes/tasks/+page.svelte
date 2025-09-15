@@ -1,206 +1,288 @@
 <script lang="ts">
 	import { type Task } from '$lib/API/Tasks/Task';
+	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import { page } from '$app/state';
 	import ItemList from '$lib/components/ItemList.svelte';
-	import TaskListItem from '$lib/components/TaskListItem.svelte';
-	import TaskEditor from '$lib/components/TaskEditor.svelte';
+	import TaskEditor from './TaskEditor.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
-	import { ErrorType } from '$lib/Errors.js';
+	import Button from '@/components/ui/button/button.svelte';
+	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
+	import { onMount } from 'svelte';
+	import { type ILocalAuth } from '@/API/Auth/types';
+	import { type ILocalTasks } from '@/API/Tasks';
+	import type { User } from '@/API/Auth/User';
+	import TaskListItem from './TaskListItem.svelte';
+	import Icon from '@iconify/svelte';
+	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
+	import TutorialExampleProject from './TutorialExampleProject.svelte';
 
-	const { data } = $props();
-	const auth = data.auth;
-	const tasks = data.tasks;
-	const user = data.user;
+	let auth = $state<ILocalAuth>();
+	let tasks = $state<ILocalTasks>();
+	let user = $state<User>();
 
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
 	let parents = $state<Task[]>([]);
 
-	const debouncedUpdate = debounce(tasks.updateTask, 500);
+	// Task creation drawer state
+	let showTaskCreationDrawer = $state(false);
 
-	// TODO: Implement real query param reading and task fetching
-	$effect(() => {
-		const id = page.url.searchParams.get('id');
-		if (id) fetchCurrentTask(id);
-		else {
-			currentTask = null;
-			fetchRootTasks();
+	let debouncedUpdate = $derived(tasks ? debounce(tasks?.updateTask, 500) : undefined);
+
+	// Sort tasks by priority (higher priority first)
+	function sortTasksByPriority(a: Task, b: Task): number {
+		return (b.priority ?? 0) - (a.priority ?? 0);
+	}
+
+	onMount(async () => {
+		tasks = await taskAPIPromise;
+
+		auth = await authAPIPromise;
+		const active = await auth.getActiveUser();
+		if (!active) {
+			goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
+			return;
 		}
+		user = active;
 	});
 
-	async function fetchCurrentTask(task: string | Task) {
-		if (typeof task === 'string') {
-			// TODO: Fetch currentTask, children, and parents based on id
-			const result = await tasks.getTask({ id: task });
-			if (result.isErr()) {
-				switch (result.error.type) {
-					case ErrorType.NotFoundError:
-						goto('/tasks');
-						break;
-					default:
-						result.error.logError();
-				}
+	let unsubscribe: (() => void) | null = null;
+	let taskIndex = new Map<string, Task>();
+
+	function recomputeFromIndex() {
+		const id = page.url.searchParams.get('id');
+		if (id) {
+			const t = taskIndex.get(id) ?? null;
+			currentTask = t;
+			if (!t) {
+				goto('/tasks');
+				parents = [];
+				children = [];
 				return;
 			}
-			currentTask = result.value;
+			parents = (t.parents ?? []).map((pid) => taskIndex.get(pid)).filter(Boolean) as Task[];
+			children = (t.children ?? []).map((cid) => taskIndex.get(cid)).filter(Boolean) as Task[];
 		} else {
-			currentTask = task;
+			currentTask = null;
+			parents = [];
+			children = Array.from(taskIndex.values()).filter((t) => (t.parents?.length ?? 0) === 0);
 		}
-
-		// Now currentTask is guaranteed to be a Task object, not a string
-		if (!currentTask) return;
-		(await tasks.getParentsOf({ taskOrId: currentTask })).match(
-			(deps) => {
-				parents = deps;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
-		(await tasks.getChildrenOf({ taskOrId: currentTask })).match(
-			(deps) => {
-				children = deps;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
-		// TODO change id url param
 	}
 
-	async function fetchRootTasks() {
-		// const api = await api;
-
-		(await tasks.getRootTasks()).match(
-			(roots) => {
-				children = roots;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
+	function handleInit(initialTasks: Task[]) {
+		taskIndex = new Map(initialTasks.map((t) => [t.id, t]));
+		recomputeFromIndex();
 	}
 
-	async function addTask() {
-		// const api = await api;
-		if (currentTask) {
-			(
-				await tasks.createTask({
-					createDetail: {
-						user_id: user.id,
-						title: 'New Subtask',
-						parents: [currentTask.id]
-					}
-				})
-			).match(
-				(newTask) => {
-					fetchCurrentTask(newTask);
-				},
-				(err) => {
-					err.logError();
-				}
-			);
-		} else {
-			(await tasks.createTask({ createDetail: { user_id: user.id, title: 'New Project' } })).match(
-				(newTask) => {
-					fetchCurrentTask(newTask);
-				},
-				(err) => {
-					err.logError();
-				}
-			);
+	function handleChanges(changes: TaskDelta[]) {
+		for (const change of changes) {
+			if (change.newTask && change.oldTask) {
+				taskIndex.set(change.newTask.id, change.newTask);
+			} else if (change.newTask && !change.oldTask) {
+				taskIndex.set(change.newTask.id, change.newTask);
+			} else if (!change.newTask && change.oldTask) {
+				taskIndex.delete(change.oldTask.id);
+			}
 		}
+		recomputeFromIndex();
+	}
+
+	$effect(() => {
+		if (!tasks || !user) return;
+		unsubscribe?.();
+		const id = page.url.searchParams.get('id');
+		if (id) {
+			unsubscribe = tasks.subscribeTasks({
+				ids: [id],
+				ancestorDepth: 1,
+				descendantDepth: 1,
+				onInitialize: handleInit,
+				onChange: handleChanges
+			});
+		} else {
+			unsubscribe = tasks.subscribeTasks({
+				userId: user.id,
+				onInitialize: handleInit,
+				onChange: handleChanges
+			});
+		}
+		return () => {
+			unsubscribe?.();
+			unsubscribe = null;
+		};
+	});
+
+	function addTask() {
+		showTaskCreationDrawer = true;
+	}
+
+	function handleTaskCreated(newTask: Task) {
+		// Subscription will deliver the new task; no manual fetch needed
+		showTaskCreationDrawer = false;
+	}
+
+	function handleDrawerOpenChange(open: boolean) {
+		showTaskCreationDrawer = open;
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		debouncedUpdate({ taskOrId: original, changes: update });
+		const res = await tasks!.updateTask({ id: original.id, data: update });
+		res.match(
+			() => {},
+			(err) => {
+				err.logError();
+			}
+		);
 	}
 
-	function onListOrderChanged(items: Task[]) {
-		// api.then((api) => {
-		for (let index = 0; index < items.length; index++) {
-			const item = items[index];
-
-			tasks.updateTask({ taskOrId: item, changes: { priority: items.length - index } });
-		}
-		// });
+	async function onListOrderChanged(items: Task[]) {
+		await Promise.all(
+			items.map((item, idx, arr) => {
+				const newPriority = arr.length - idx;
+				return tasks!.updateTask({ id: item.id, data: { priority: newPriority } });
+			})
+		);
 	}
 
-	async function handleTaskDelete(task: Task) {
-		// Remove the task from the visual list
-		const deleteResult = await tasks.deleteTask({ taskOrId: task.id });
+	async function onDelete(task: Task, recursive: boolean) {
+		await tasks!.deleteTask({ id: task.id, recursive });
+	}
+
+	async function onDeleteCurrentTask(task: Task, recursive: boolean) {
+		// Always delete recursively to maintain graph integrity
+		const deleteResult = await tasks!.deleteTask({ id: task.id, recursive: true });
 
 		if (deleteResult.isOk()) {
-			children = children.filter((x) => x.id !== task.id);
+			// Navigate back to parent or root after deleting current task
+			if (parents.length > 0) {
+				const parentTask = parents[parents.length - 1];
+				goto(`/tasks?id=${parentTask.id}`);
+			} else {
+				goto('/tasks');
+			}
 		}
 	}
 </script>
 
-<div class="task-browser page">
-	<AppHeader user={data.user} authAPI={auth} />
-	<div class="content">
-		<!-- TODO: <TasksTutorial /> -->
-		{#if currentTask}
-			<div class="navigation">
-				<a class="breadcrumb-link" href="/tasks">
-					<!-- Go to root -->
-					Projects
-				</a>
-				{#if parents.length > 0}
-					{#each parents as parent, index}
+{#if user && tasks}
+	<TutorialExampleProject />
+	<div class="page page-root">
+		<AppHeader class="z-10 h-16" />
+		<div
+			class="grid-area-content mx-auto flex w-full max-w-4xl flex-col overflow-y-scroll px-4 py-4 sm:px-6 lg:px-8"
+		>
+			<!-- TODO: <TasksTutorial /> -->
+			<!-- TODO:BUG get full ancestry for breadcrumbs -->
+			{#if currentTask}
+				<!-- Breadcrumb Navigation -->
+				<nav class="mb-4 flex items-center gap-2 text-sm text-gray-500" aria-label="Breadcrumb">
+					<a
+						class="rounded-lg px-3 py-1.5 text-gray-600 no-underline transition-colors hover:bg-gray-100 hover:text-gray-900"
+						href="/tasks"
+					>
+						Projects
+					</a>
+					{#if parents.length > 0}
+						{#each parents as parent, index}
+							<span class="text-gray-400">›</span>
+							<a
+								class="rounded-lg px-3 py-1.5 text-gray-600 no-underline transition-colors hover:bg-gray-100 hover:text-gray-900"
+								href={`/tasks?id=${parent.id}`}
+							>
+								{parent.title ?? 'Untitled'}
+							</a>
+						{/each}
+					{/if}
+				</nav>
+				<!-- Current Task Editor -->
+				<div class="mb-8 rounded-xl bg-white shadow-sm ring-1 ring-gray-200/50">
+					<TaskEditor bind:task={currentTask} {onTaskChange} onDelete={onDeleteCurrentTask}>
+						<!-- Child Tasks Section -->
+						<section id="sec-task-list" class="mt-6">
+							<h3 class="mb-4 text-lg font-medium text-gray-900">Subtasks</h3>
+							{#if children.length > 0}
+								<ItemList
+									items={children}
+									accepts={['task']}
+									{onListOrderChanged}
+									sortFunction={sortTasksByPriority}
+								>
+									{#snippet listItem(task, index)}
+										<TaskListItem {task} {onTaskChange} {onDelete} />
+									{/snippet}
+								</ItemList>
+							{/if}
+							<!-- Add task button at bottom -->
+							<div class="mt-3 border-t border-gray-100 pt-3">
+								<button
+									id="btn-add-task"
+									onclick={addTask}
+									class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+								>
+									<Icon icon="lucide:plus" class="size-4" />
+									<span>New subtask</span>
+								</button>
+							</div>
+						</section>
+					</TaskEditor>
+				</div>
+			{:else}
+				<!-- Root Projects View -->
+				<div class="mb-6">
+					<h1 class="mb-6 text-2xl font-semibold text-gray-900">Projects</h1>
+					<div class="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200/50">
+						<ItemList
+							items={children}
+							accepts={['task']}
+							{onListOrderChanged}
+							sortFunction={sortTasksByPriority}
 						>
-						<a class="breadcrumb-link" href={`/tasks?id=${parent.id}`}>
-							<!-- TODO: Replace with real icon -->
-							{parent.title ?? 'Projects'}
-						</a>
-					{/each}
-				{/if}
-			</div>
-			<TaskEditor bind:task={currentTask} {onTaskChange}>
-				<ItemList items={children} accepts={['task']} {onListOrderChanged}>
-					{#snippet listItem(task, index)}
-						<TaskListItem {task} onDelete={handleTaskDelete} {onTaskChange} />
-					{/snippet}
-				</ItemList>
-			</TaskEditor>
-			<button id="add-task-button" onclick={addTask}>Add Task</button>
-		{:else}
-			<ItemList items={children} accepts={['task']} {onListOrderChanged}>
-				{#snippet listItem(task, index)}
-					<TaskListItem {task} onDelete={handleTaskDelete} />
-				{/snippet}
-			</ItemList>
-			<button id="add-task-button" onclick={addTask}>New Project</button>
-		{/if}
+							{#snippet listItem(task, index)}
+								<TaskListItem {task} {onTaskChange} {onDelete} />
+							{/snippet}
+						</ItemList>
+						{#if children.length === 0}
+							<div class="py-12 text-center text-gray-500">
+								<p class="mb-4 text-lg">No projects yet</p>
+								<Button
+									onclick={addTask}
+									class="mx-auto flex items-center gap-2 rounded-lg px-3 py-2 text-left"
+								>
+									<p class="text-sm">Create your first project to get started</p>
+								</Button>
+							</div>
+						{:else}
+							<!-- Add project button at bottom -->
+							<div class="mt-3 border-t border-gray-100 pt-3">
+								<button
+									id="btn-add-task"
+									onclick={addTask}
+									class="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+								>
+									<Icon icon="lucide:plus" class="size-4" />
+									<span>New project</span>
+								</button>
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+		</div>
+		<AppFooter className="z-10" />
 	</div>
-	<AppFooter />
-</div>
 
-<style>
-	.navigation {
-		display: flex;
-		gap: 0.5em;
-		align-items: center;
-		margin-bottom: 1em;
-
-		color: #0005;
-		font-size: small;
-
-		a {
-			text-decoration: none;
-			color: var(--c-text_2);
-			border: 1px solid #0003;
-			border-radius: 0.25rem;
-			padding: 0.2rem 0.5rem;
-			&:hover {
-				background-color: #0001;
-			}
-		}
-	}
-	#add-task-button {
-		margin-top: auto;
-	}
-</style>
+	<!-- Task Creation Drawer -->
+	{#if tasks && user}
+		<TaskCreationDrawer
+			bind:open={showTaskCreationDrawer}
+			onOpenChange={handleDrawerOpenChange}
+			onTaskCreated={handleTaskCreated}
+			{tasks}
+			{user}
+			relation={currentTask ? { task: currentTask, mode: 'parent' } : null}
+		/>
+	{/if}
+{/if}

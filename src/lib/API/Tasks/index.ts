@@ -1,15 +1,14 @@
-// Supabase's RLS handles this: TODO Task API's need to take auth into consideration
 import { Err } from '$lib/Errors';
 import { extractBatchAndLogErrors } from '../types';
-import { Task, type TaskData } from './Task';
+import { type Task } from './Task';
 import type { ITasks, UpdateTaskParams } from './types';
 
 export * from './types';
 export * from './Task'
 
 export interface RelationshipUpdate {
-    oldTask: TaskData | null;
-    newTask: TaskData | null;
+    oldTask: Task | null;
+    newTask: Task | null;
 }
 
 export async function getRelationshipUpdates(provider: ITasks, updates: RelationshipUpdate | RelationshipUpdate[]): Promise<UpdateTaskParams[]> {
@@ -124,8 +123,9 @@ async function getParentUpdates(provider: ITasks, parentAdditions: Map<string, S
 
         if (parentsToAdd.length > 0) {
             return {
-                taskOrId: child,
-                changes: { parents: [...child.parents, ...parentsToAdd] }
+                id: child.id,
+                data: {},
+                relations: parentsToAdd.map(parentId => ({ id: parentId, operation: 'addParent' as const }))
             };
         }
         return [];
@@ -158,8 +158,9 @@ async function processParentRemovals(provider: ITasks, parentRemovals: Map<strin
 
                 if (parentsToRemove.length > 0) {
                     return {
-                        taskOrId: child,
-                        changes: { parents: child.parents.filter(p => !parentsToRemove.includes(p)) }
+                        id: child.id,
+                        data: {},
+                        relations: parentsToRemove.map(parentId => ({ id: parentId, operation: 'removeParent' as const }))
                     };
                 }
                 return [];
@@ -196,8 +197,9 @@ async function processChildAdditions(provider: ITasks, childAdditions: Map<strin
 
                 if (childrenToAdd.length > 0) {
                     return {
-                        taskOrId: parent,
-                        changes: { children: [...parent.children, ...childrenToAdd] }
+                        id: parent.id,
+                        data: {},
+                        relations: childrenToAdd.map(childId => ({ id: childId, operation: 'addChild' as const }))
                     };
                 }
                 return [];
@@ -233,8 +235,9 @@ async function processChildRemovals(provider: ITasks, childRemovals: Map<string,
 
                 if (childrenToRemove.length > 0) {
                     return {
-                        taskOrId: parent,
-                        changes: { children: parent.children.filter(c => !childrenToRemove.includes(c)) }
+                        id: parent.id,
+                        data: {},
+                        relations: childrenToRemove.map(childId => ({ id: childId, operation: 'removeChild' as const }))
                     };
                 }
                 return [];
