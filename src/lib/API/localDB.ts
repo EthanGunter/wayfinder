@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Task, Task } from "./Tasks";
+import type { Task } from "./Tasks";
 import type { LocalUser } from "./Auth/User";
 
 export const AUTH_TABLE_NAME = 'users';
