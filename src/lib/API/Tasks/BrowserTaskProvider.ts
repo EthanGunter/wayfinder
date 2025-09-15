@@ -708,6 +708,36 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         updateTasks: remoteTasks.updateTasks,
         handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
+
+      // Initial hydration: pull remote tasks for current user and upsert newer copies locally
+      if (currentUser) {
+        try {
+          const remoteBatch = await remoteTasks.getAllUserTasks({ userId: currentUser.id });
+          if (remoteBatch.isOk()) {
+            const remoteList = extractBatchAndLogErrors(remoteBatch);
+            const localList = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', currentUser.id) as Task[];
+            const localById = new Map(localList.map(t => [t.id, t] as [string, Task]));
+
+            let changed = false;
+            for (const rt of remoteList) {
+              const lt = localById.get(rt.id);
+              const rtEdit = rt.last_edit ? new Date(rt.last_edit).getTime() : 0;
+              const ltEdit = lt?.last_edit ? new Date(lt.last_edit).getTime() : 0;
+              if (!lt || rtEdit > ltEdit) {
+                await _db.put(TASK_TABLE_NAME, rt);
+                changed = true;
+              }
+            }
+
+            if (changed && _searchService) {
+              const updatedUserTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', currentUser.id) as Task[];
+              _searchService.reindexTasks(updatedUserTasks);
+            }
+          }
+        } catch (e) {
+          // Non-fatal: remain usable offline
+        }
+      }
     }
     return { ...api, getSyncQueue: () => _taskSyncQueue, hasRemote: () => !!_remoteTasks };
   },

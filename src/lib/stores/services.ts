@@ -3,11 +3,21 @@ import type { ILocalAuth } from '$lib/API/Auth/types';
 import type { ILocalTasks } from '$lib/API/Tasks/types';
 import BrowserAuthProvider from '$lib/API/Auth/BrowserAuthProvider';
 import BrowserTaskProvider from '$lib/API/Tasks/BrowserTaskProvider';
+import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuthProvider';
 // Tasks remote will be wired in a later slice
 
 // Create singletons to ensure consistent configuration across store and exports
-const tasksAPIPromise = BrowserTaskProvider.get();
+const remoteTasksPromise = SupabaseTaskProvider.get();
+const tasksAPIPromise = (async () => {
+  try {
+    const remote = await remoteTasksPromise;
+    return BrowserTaskProvider.get(remote);
+  } catch {
+    // Fallback to local-only tasks if remote provider initialization fails
+    return BrowserTaskProvider.get();
+  }
+})();
 const remoteAuthPromise = SupabaseAuthProvider.get();
 const authAPIPromiseInternal: Promise<ILocalAuth> = (async () => {
   const [remoteAuth, tasks] = await Promise.all([remoteAuthPromise, tasksAPIPromise]);
@@ -39,6 +49,10 @@ const createServiceStore = () => {
           tasks.getSyncQueue?.()?.process?.();
         });
       }
+
+      // Immediately process any pending queues on startup
+      auth.getSyncQueue()?.process?.();
+      tasks.getSyncQueue?.()?.process?.();
 
       set({ auth, tasks, isInitialized: true });
     },

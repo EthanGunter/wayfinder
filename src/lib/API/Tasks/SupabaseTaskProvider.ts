@@ -228,8 +228,22 @@ const advanced: ITaskAdvancedFeatures = {
 
 const api: ITasks = { ...crud, ...relations, ...advanced };
 
+async function verifyConnectivity(): Promise<void> {
+  try {
+    const probe = await supabase.from(TASK_TABLE_NAME).select('id').limit(1);
+    if (probe.error) {
+      throw probe.error;
+    }
+  } catch (e) {
+    throw new IOError('Supabase connectivity check failed', e);
+  }
+}
+
 const SupabaseTaskProvider: IProvider<ITasks> = {
-  get: async () => api,
+  get: async () => {
+    await verifyConnectivity();
+    return api;
+  },
 };
 
 export default SupabaseTaskProvider;

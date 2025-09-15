@@ -103,7 +103,7 @@
 			>
 				<Icon icon="material-symbols:person-add" class="size-6 text-blue-600" />
 				<div class="text-left">
-					<div class="font-medium">Customize Account</div>
+					<div class="font-medium">Create Account</div>
 					<div class="text-sm text-gray-500">Create a personalized profile</div>
 				</div>
 			</Button>
