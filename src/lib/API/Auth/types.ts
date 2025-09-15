@@ -25,6 +25,7 @@ export enum AccountIssueTarget {
 
 export interface ILocalAuthProvider {
     get(): Promise<ILocalAuth>;
+    get(remoteAuth: IAuth): Promise<ILocalAuth>;
     get(remoteAuth: IAuth, localTaskProvider: ILocalTasks): Promise<ILocalAuth>;
 }
 

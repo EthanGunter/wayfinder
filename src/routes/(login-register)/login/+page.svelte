@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import type { ILocalAuth } from '$lib/API/Auth/types';
+	import type { ILocalAuth, LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
 	import { authAPIPromise } from '@/stores/services';
@@ -16,6 +16,9 @@
 	let redir = page.url.searchParams.get('redirect') || '/home';
 	let errorMessage = $state('');
 	let isLoading = $state(false);
+	let email = $state('');
+	let password = $state('');
+	let showMigrationPrompt = $state<{ anonId: string; remoteUserId: string } | null>(null);
 
 	onMount(async () => {
 		auth = await authAPIPromise;
@@ -64,12 +67,75 @@
 		// For now, just redirect to register page
 		goto(`/register?redirect=${redir}`);
 	}
+
+	async function handleRemoteLogin() {
+		if (!auth || isLoading) return;
+		isLoading = true;
+		errorMessage = '';
+
+		try {
+			const creds: LoginCredentials = { type: 'email_password', email, password };
+			const result = await auth.login({ creds });
+			if (result.isOk()) {
+				await invalidateAll();
+				goto(redir);
+			} else {
+				const e: any = result.error;
+				if (e?.data?.requiresMigration) {
+					showMigrationPrompt = { anonId: e.data.anonymousUserId, remoteUserId: e.data.remoteUserId };
+				} else {
+					errorMessage = e?.message || 'Login failed';
+				}
+			}
+		} catch (e) {
+			errorMessage = 'An unexpected error occurred';
+			console.error('Remote login error:', e);
+		} finally {
+			isLoading = false;
+		}
+	}
+
+	async function confirmMigration(accept: boolean) {
+		if (!auth || !showMigrationPrompt) { showMigrationPrompt = null; return; }
+		const { anonId, remoteUserId } = showMigrationPrompt;
+		showMigrationPrompt = null;
+		try {
+			if (!accept) {
+				await auth.deleteUser({ userId: anonId });
+			}
+			await auth.switchUser(remoteUserId);
+			await invalidateAll();
+			goto(redir);
+		} catch (e) {
+			console.error('Migration handling failed', e);
+			errorMessage = 'Migration failed';
+		}
+	}
 </script>
 
 <h1 class="text-center text-gray-800">{currentUser ? 'Switch User' : 'Login'}</h1>
 {#if errorMessage}
 	<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
 		{errorMessage}
+	</div>
+{/if}
+
+<!-- Remote login -->
+<div class="mb-6 space-y-3">
+	<label class="block text-sm text-gray-600">Email</label>
+	<input type="email" bind:value={email} class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none" />
+	<label class="block text-sm text-gray-600">Password</label>
+	<input type="password" bind:value={password} class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none" />
+	<Button class="w-full" onclick={handleRemoteLogin} disabled={isLoading}>{isLoading ? 'Please wait...' : 'Sign in'}</Button>
+</div>
+
+{#if showMigrationPrompt}
+	<div class="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-amber-800">
+		Local data from a guest user was detected. Migrate data to this account?
+		<div class="mt-2 flex gap-2">
+			<Button variant="outline" onclick={() => confirmMigration(true)}>Migrate</Button>
+			<Button variant="outline" onclick={() => confirmMigration(false)}>Discard</Button>
+		</div>
 	</div>
 {/if}
 

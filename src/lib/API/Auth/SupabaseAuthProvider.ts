@@ -4,13 +4,12 @@ import {
     AccountIssueTarget,
     type IAuth,
     type MigrationRequirements,
-    type SignOutOptions,
 } from './types';
 import { type IProvider } from '../types';
 import type { AuthError, UserAttributes } from '@supabase/auth-js';
 import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError } from '$lib/Errors';
 import { type User } from './User';
-import type { Tables } from '../supabase';
+import type { Tables, TablesInsert } from '../supabase';
 
 const core: IAuth = {
     getRegistrationRequirements: function (cred) {
@@ -61,7 +60,7 @@ const core: IAuth = {
         }
 
         // Then, create the user record in our public.users table
-        const userDataForDB: Tables<'users'> = {
+        const userInsert: TablesInsert<'users'> = {
             id: authRes.data.user.id,
             display_name: userData.display_name,
             avatar_url: userData.avatar_url,
@@ -70,9 +69,11 @@ const core: IAuth = {
             features: userData.features,
         };
 
-        const { error: insertError } = await supabase
+        const { data: inserted, error: insertError } = await supabase
             .from('users')
-            .insert(userDataForDB);
+            .insert(userInsert)
+            .select('*')
+            .single();
 
         if (insertError) {
             // If we can't create the user record, we should clean up the auth user
@@ -80,7 +81,15 @@ const core: IAuth = {
             Err.UNHANDLED(insertError);
         }
 
-        return ok(userDataForDB);
+        const created: User = {
+            id: inserted!.id,
+            display_name: inserted!.display_name,
+            avatar_url: inserted!.avatar_url ?? undefined,
+            created_at: inserted!.created_at,
+            status: (inserted!.status ?? 'active') as User['status'],
+            features: inserted!.features ?? [],
+        };
+        return ok(created);
     },
 
     getUser: async function ({ id }) {
@@ -99,7 +108,15 @@ const core: IAuth = {
             return err(new NotFoundError(id, "User account has been deleted"));
         }
 
-        return ok(userData);
+        const mapped: User = {
+            id: userData.id,
+            display_name: userData.display_name,
+            avatar_url: userData.avatar_url ?? undefined,
+            created_at: userData.created_at,
+            status: (userData.status ?? 'active') as User['status'],
+            features: userData.features ?? [],
+        };
+        return ok(mapped);
     },
 
     updateUser: async function ({ update }) {
@@ -136,7 +153,15 @@ const core: IAuth = {
             return err(new NotFoundError(update.id, "User"));
         }
 
-        return ok(updatedUser);
+        const mapped: User = {
+            id: updatedUser.id,
+            display_name: updatedUser.display_name,
+            avatar_url: updatedUser.avatar_url ?? undefined,
+            created_at: updatedUser.created_at,
+            status: (updatedUser.status ?? 'active') as User['status'],
+            features: updatedUser.features ?? [],
+        };
+        return ok(mapped);
     },
 
     // TODO Need to update all access to check for deleted users
@@ -189,16 +214,23 @@ const core: IAuth = {
                         return err(new ArgumentError(user.id, "User account has been deleted"));
                     }
 
-                    return ok(userData);
+                    const mapped: User = {
+                        id: userData.id,
+                        display_name: userData.display_name,
+                        avatar_url: userData.avatar_url ?? undefined,
+                        created_at: userData.created_at,
+                        status: (userData.status ?? 'active') as User['status'],
+                        features: userData.features ?? [],
+                    };
+                    return ok(mapped);
                 }
             }
             default: Err.throw(new NotImplementedError(`SupabaseAuth.${creds.type} sign-in`));
         }
     },
 
-    logout: async function (options?: SignOutOptions) {
-        let scope: 'global' | 'local' | 'others' = options?.signOutSelf ? (options.signOutOthers ? 'global' : 'local') : 'others';
-        const error = await supabase.auth.signOut({ scope });
+    logout: async function () {
+        const error = await supabase.auth.signOut();
         if (error.error) {
             Err.throw(error.error);
         }
