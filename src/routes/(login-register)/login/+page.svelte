@@ -52,7 +52,7 @@
 				await invalidateAll();
 				goto(redir);
 			} else {
-				errorMessage = result.error.msg || 'Failed to switch user';
+				errorMessage = result.error.message || 'Failed to switch user';
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';

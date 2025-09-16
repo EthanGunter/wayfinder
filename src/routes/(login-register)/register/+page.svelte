@@ -75,7 +75,7 @@
 				await invalidateAll();
 				goto(redir);
 			} else {
-				errorMessage = result.error.msg || 'Registration failed';
+				errorMessage = result.error.message || 'Registration failed';
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';

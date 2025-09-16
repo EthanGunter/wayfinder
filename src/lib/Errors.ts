@@ -1,3 +1,5 @@
+import { dev } from "$app/environment";
+
 export enum ErrorType {
     PlaceholderError = "Error - PlaceholderError",
     ArgumentError = "Error - InvalidArgument",
@@ -22,7 +24,7 @@ export class Err {
         }
         error.inheritanceDepth++;
         error.withTrace();
-        
+
         // TODO: Import ReportingService and call reportError() here when ready
         if (error.context)
             console.error("HANDLER NOT IMPLEMENTED for: ", error.type + ": " + error.msg, error.context);
@@ -37,7 +39,7 @@ export class Err {
         }
         error.inheritanceDepth++;
         error.withTrace();
-        
+
         // TODO: Import ReportingService and call reportError() here when ready
         if (error.context)
             console.error(error.type + ": " + error.msg, error.context);
@@ -46,14 +48,18 @@ export class Err {
         throw error.stack;
     }
 
-    stack: Error | null = null;
+    stack: Error | string[] | null = null;
     // stack: string[] = ["call .withTraceDepth() for stacktrace"];
     private traceDepth: number | undefined;
     // private inheritanceDepth: number;
     /**
      * @param inheritanceDepth helps keep the stacktrace clean. -1 doesn't generate a stacktrace
      */
-    constructor(private inheritanceDepth: number, public type: string, public msg: string, public context?: any) {
+    constructor(private inheritanceDepth: number, public type: string, public message: string, public context?: any) {
+        if (dev) {
+            console.log("Err system in DEV mode");
+            this.withTrace();
+        }
     }
 
     /**
@@ -81,7 +87,7 @@ export class Err {
         }
         err.stack = stack.join('\n');
         err.name = this.type.split('- ')[1] + " | TRACE:"
-        this.stack = err;
+        this.stack = stack;
         return this;
     }
 
@@ -90,28 +96,28 @@ export class Err {
         // TODO: Import ReportingService and call reportError() here when ready
         if (this.context) {
             if (this.stack)
-                console.error(this.type + ": " + this.msg, this.context, this.stack);
+                console.error(this.type + ": " + this.message, this.context, this.stack);
             else
-                console.error(this.type + ": " + this.msg, this.context);
+                console.error(this.type + ": " + this.message, this.context);
         }
         else {
             if (this.stack)
-                console.error(this.type + ": " + this.msg, this.stack);
+                console.error(this.type + ": " + this.message, this.stack);
             else
-                console.error(this.type + ": " + this.msg);
+                console.error(this.type + ": " + this.message);
         }
     }
     logWarning() {
         // TODO: link to bug report system. Unhandled warnings shouldn't happen
         // TODO: Import ReportingService and call reportError() here when ready
         if (this.context)
-            console.warn(this.type + ": " + this.msg, this.context);
+            console.warn(this.type + ": " + this.message, this.context);
         else
-            console.warn(this.type + ": " + this.msg);
+            console.warn(this.type + ": " + this.message);
     }
 
     toString() {
-        return this.type + ": " + this.msg
+        return this.type + ": " + this.message
     }
 
     private prepForConsole() {

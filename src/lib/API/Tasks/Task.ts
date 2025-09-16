@@ -98,7 +98,7 @@ export function populateTaskDTO(dto: CreateTaskParams): PopulatedTaskDTO {
         content: dto.content,
         // filepath: dto.filepath ?? `${dto.title}.md`,
         status: dto.status ?? TaskStatus.incomplete,
-        todays_task: dto.todays_task ?? new Date().toISOString(),
+        todays_task: dto.todays_task,
         created: dto.created ?? new Date().toISOString(),
         last_edit: dto.last_edit ?? new Date().toISOString(),
         parents: dto.parents ?? [],

@@ -8,6 +8,7 @@ import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, N
 import { queueAuthSyncCommand } from './types';
 import { extractBatchAndLogErrors } from '../types';
 import { invalidateAll } from '$app/navigation';
+import { processQueueInClient } from '../SyncQueue';
 import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
@@ -337,6 +338,9 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
     // Switch to the logged in user
     await local.switchUser(remoteUser.id);
+
+    // After login, try processing the queue so prior offline work flushes
+    try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
 
     return ok(remoteUser);
   },

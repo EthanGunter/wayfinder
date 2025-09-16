@@ -1,9 +1,28 @@
-import SupabaseAuthProvider from './Auth/SupabaseAuthProvider';
-import SupabaseTaskProvider from './Tasks/SupabaseTaskProvider';
-import BrowserAuthProvider from './Auth/BrowserAuthProvider';
-import BrowserTaskProvider from './Tasks/BrowserTaskProvider';
 import type { IAuth, ILocalAuth } from './Auth/types';
 import type { ILocalTasks, ITasks } from './Tasks/types';
+// Static imports for remote providers are safe in Service Worker contexts
+import SupabaseAuthProvider from './Auth/SupabaseAuthProvider';
+import SupabaseTaskProvider from './Tasks/SupabaseTaskProvider';
+
+// Guard to avoid evaluating browser-only singletons in Service Worker / non-window contexts
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+
+// Returns a thenable that only rejects when actually consumed (then/catch/finally called)
+function createUnavailablePromise<T>(message: string): Promise<T> {
+    const thenable: any = {
+        then(onFulfilled?: any, onRejected?: any) {
+            return Promise.reject(new Error(message)).then(onFulfilled, onRejected);
+        },
+        catch(onRejected?: any) {
+            return Promise.reject(new Error(message)).catch(onRejected);
+        },
+        finally(onFinally?: any) {
+            return Promise.reject(new Error(message)).finally(onFinally);
+        },
+        get [Symbol.toStringTag]() { return 'Promise'; }
+    };
+    return thenable as Promise<T>;
+}
 
 /**
  * Returns remote providers (compile-time selected here).
@@ -21,6 +40,12 @@ export async function getRemoteProviders(): Promise<{ auth: IAuth, tasks: ITasks
  * Centralizes Browser/SQLite selection and remote pairing.
  */
 export async function getLocalProviders(): Promise<{ auth: ILocalAuth, tasks: ILocalTasks }> {
+    // Lazily import browser providers to avoid pulling them into non-window contexts
+    const [{ default: BrowserTaskProvider }, { default: BrowserAuthProvider }] = await Promise.all([
+        import('./Tasks/BrowserTaskProvider'),
+        import('./Auth/BrowserAuthProvider'),
+    ]);
+
     const { auth: remoteAuth, tasks: remoteTasks } = await getRemoteProviders();
     const tasks = await BrowserTaskProvider.get(remoteTasks);
     const auth = await BrowserAuthProvider.get(remoteAuth, tasks);
@@ -28,8 +53,14 @@ export async function getLocalProviders(): Promise<{ auth: ILocalAuth, tasks: IL
 }
 
 // Export singletons for app-wide consumption
-const localProvidersPromise = getLocalProviders();
-export const taskAPIPromise = localProvidersPromise.then(x => x.tasks) as Promise<ILocalTasks>;
-export const authAPIPromise = localProvidersPromise.then(x => x.auth) as Promise<ILocalAuth>;
+const localProvidersPromise = isBrowser ? getLocalProviders() : null;
+export const taskAPIPromise = (isBrowser
+    ? (localProvidersPromise as Promise<{ auth: ILocalAuth, tasks: ILocalTasks }>).then(x => x.tasks)
+    : createUnavailablePromise<ILocalTasks>('taskAPIPromise is not available in Service Worker or non-browser contexts')
+) as Promise<ILocalTasks>;
+export const authAPIPromise = (isBrowser
+    ? (localProvidersPromise as Promise<{ auth: ILocalAuth, tasks: ILocalTasks }>).then(x => x.auth)
+    : createUnavailablePromise<ILocalAuth>('authAPIPromise is not available in Service Worker or non-browser contexts')
+) as Promise<ILocalAuth>;
 
 
