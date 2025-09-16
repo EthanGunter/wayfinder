@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { authAPIPromise, taskAPIPromise } from '$lib/stores/services';
+import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
 import type { LayoutLoad } from './$types';
 
 export const ssr = false;

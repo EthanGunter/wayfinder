@@ -5,7 +5,7 @@
 	import type { ILocalAuth, LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
-	import { authAPIPromise } from '@/stores/services';
+	import { authAPIPromise } from '@/API/providerRegistry';
 	import { type LocalUser } from '@/API/Auth/User';
 	import UserAvatar from '@/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';

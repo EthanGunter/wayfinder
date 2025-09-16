@@ -10,7 +10,7 @@
 	import { type User } from '$lib/API/Auth/User.js';
 	import { Button } from '@/components/ui/button';
 	import { type ILocalAuth } from '@/API/Auth/types';
-	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
+	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
 	import type { ILocalTasks } from '@/API/Tasks';
 	import { page } from '$app/state';
 	import { redirect } from '@sveltejs/kit';

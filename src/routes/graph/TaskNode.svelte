@@ -5,7 +5,7 @@
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from '../tasks/TaskEditor.svelte';
-	import { taskAPIPromise } from '$lib/stores/services';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 	import type { ILocalTasks } from '$lib/API/Tasks/types';
 
 	let { data }: { data: Task } = $props();

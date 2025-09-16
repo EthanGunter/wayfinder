@@ -1,7 +1,7 @@
-import type { ILocalTaskProvider, ILocalTasks, ITasks as ITasks, TaskSyncQueue } from "../Tasks";
+import type { ILocalTaskProvider, ILocalTasks, ITasks as ITasks } from "../Tasks";
+import { enqueueSyncCommand } from "../SyncQueue";
 import type { ArgumentError, InvalidStateError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import type { IProvider, Result } from "../types";
-import type { SyncQueue } from "../SyncQueue";
 import type { User, LocalUser } from "./User";
 
 export type LoginCredentials =
@@ -29,13 +29,7 @@ export interface ILocalAuthProvider {
     get(remoteAuth: IAuth, localTaskProvider: ILocalTasks): Promise<ILocalAuth>;
 }
 
-export type ILocalAuth = IAuthResponseHandler & Omit<IAuth, "register"> & IAuthLocalFunctions & {
-    getSyncQueue: () => AuthSyncQueue | null;
-}
-export type AuthSyncQueue = SyncQueue<Omit<IAuth,
-    | "getActiveUser"
-    | "getRegistrationRequirements"
-    | "getUser">, IAuthResponseHandler>;
+export type ILocalAuth = IAuthResponseHandler & Omit<IAuth, "register"> & IAuthLocalFunctions;
 
 // NOTE All SyncQueued functions must use the params signature
 export interface IAuth {
@@ -85,4 +79,17 @@ export interface IAuthLocalFunctions {
 
     hasRemote(): boolean;
 }
+
+// #region Command surface typing and enqueue helper
+type ParamsOf<T> = T extends (arg: infer P) => any ? P : never;
+export type AuthRemoteMap = Omit<IAuth, 'getActiveUser' | 'getRegistrationRequirements' | 'getUser'>;
+export const AUTH_SYNC_CHANNEL = 'auth';
+export async function queueAuthSyncCommand<K extends keyof AuthRemoteMap>(
+  fnName: K,
+  args: ParamsOf<AuthRemoteMap[K]>,
+  revertArgs?: any
+): Promise<void> {
+  return enqueueSyncCommand(AUTH_SYNC_CHANNEL, String(fnName), args, undefined, revertArgs);
+}
+// #endregion
 

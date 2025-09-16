@@ -6,7 +6,7 @@
 	import Icon from '@iconify/svelte';
 	import TGate from '@/tutorials/primitives/TGate.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import { taskAPIPromise } from '@/stores/services';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 
 	let active = $state(false);
 	let step = $state(0);

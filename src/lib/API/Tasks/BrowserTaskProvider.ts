@@ -11,7 +11,7 @@ import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
 import type { User } from '../Auth/User';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
-import { SyncQueue } from '../SyncQueue';
+import { queueTaskSyncCommand } from './types';
 
 
 //#region Task CRUD
@@ -37,6 +37,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
   handleCreateTasksResponse: async function (response) {
     if (response.isErr()) {
       const { createdIds } = response.error;
+      // TODO:task-sync userHasFeature('task-sync') instead of false constant
       await _deleteTasksLocal(createdIds.map(i => ({ id: i })), false);
     }
   },
@@ -108,6 +109,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState } = response.error;
+      // TODO:task-sync userHasFeature('task-sync') instead of false constant
       await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false); // TODO This needs to perform the inverse relationship operations
     }
   },
@@ -126,6 +128,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState } = response.error;
+      // TODO:task-sync userHasFeature('task-sync') instead of false constant
       await _createTasksLocal(oldState, false);
     }
   },
@@ -135,6 +138,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldUserID, newUserID } = response.error;
+      // TODO:task-sync userHasFeature('task-sync') instead of false constant
       await _changeOwnershipLocal(newUserID, oldUserID, false);
     }
   },
@@ -175,6 +179,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   }
 
   const relUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
+  // TODO:task-sync userHasFeature('task-sync') instead of false constant
   await _updateTasksLocal(relUpdates, false); // Relationship updates should be handled by the server
 
   // Update search index for newly created tasks
@@ -182,13 +187,8 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
     createdTasks.forEach(task => _searchService!.indexTask(task));
   }
 
-  if (updateServer && _taskSyncQueue) {
-    _taskSyncQueue.add(
-      "createTasks",
-      { createDetails: tasks },
-      "handleCreateTasksResponse",
-      { createdIds: createdTasks.map(t => t.id) },
-    );
+  if (updateServer) {
+    await queueTaskSyncCommand('createTasks', { createDetails: tasks }, { createdIds: createdTasks.map(t => t.id) });
   }
 
   // Notify subscribers
@@ -251,6 +251,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   }
 
   const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
+  // TODO:task-sync userHasFeature('task-sync') instead of false constant
   await _updateTasksLocal(relUpdates, false);
 
   // Update search index for updated tasks
@@ -258,14 +259,8 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
     Array.from(updatedTasks.values()).forEach(task => _searchService!.indexTask(task));
   }
 
-  if (updateServer && _taskSyncQueue) {
-    // Queue sync command
-    _taskSyncQueue.add(
-      "updateTasks",
-      { updates },
-      'handleUpdateTasksResponse',
-      { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) }
-    );
+  if (updateServer) {
+    await queueTaskSyncCommand('updateTasks', { updates }, { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) });
   }
 
   // Notify subscribers with per-task deltas
@@ -310,17 +305,12 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
     }
 
     const relUpdates = await getRelationshipUpdates(api, { oldTask: task, newTask: null });
+    // TODO:task-sync userHasFeature('task-sync') instead of false constant
     await _updateTasksLocal(relUpdates, false);
   }
 
-  if (updateServer && _taskSyncQueue) {
-    // Queue Sync command
-    _taskSyncQueue.add(
-      'deleteTasks',
-      { deleteArgs },
-      'handleDeleteTasksResponse',
-      { oldState: deletedTasks }
-    );
+  if (updateServer) {
+    await queueTaskSyncCommand('deleteTasks', { deleteArgs }, { oldState: deletedTasks });
   }
   if (errors.length > 0) {
     return err(new IOError("Batch delete", errors));
@@ -338,13 +328,8 @@ async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updat
     await _db.put('tasks', task);
   }
 
-  if (updateServer && _taskSyncQueue) {
-    _taskSyncQueue.add(
-      'changeOwnership',
-      { oldUserID, newUserID },
-      'handleChangeOwnershipResponse',
-      { oldUserID, newUserID },
-    );
+  if (updateServer) {
+    await queueTaskSyncCommand('changeOwnership', { oldUserID, newUserID }, { oldUserID, newUserID });
   }
 
   return okBatch(convertedTasks);
@@ -683,31 +668,6 @@ const BrowserTaskProvider: ILocalTaskProvider = {
 
     if (remoteTasks) {
       _remoteTasks = remoteTasks;
-      type LocalSyncable = Omit<ITasks,
-        | "getAllUserTasks"
-        | "getChildrenOf"
-        | "getParentsOf"
-        | "getPrioritizedTasks"
-        | "getRootTasks"
-        | "getTask"
-        | "getTasks"
-        | "getTodaysTasks"
-        | "searchTasks"
-        | "subscribeTasks"
-      >;
-      _taskSyncQueue = new SyncQueue<LocalSyncable, ITaskReverter>({
-        changeOwnership: remoteTasks.changeOwnership,
-        handleChangeOwnershipResponse: taskCRUD.handleChangeOwnershipResponse,
-        createTask: remoteTasks.createTask,
-        createTasks: remoteTasks.createTasks,
-        handleCreateTasksResponse: taskCRUD.handleCreateTasksResponse,
-        deleteTask: remoteTasks.deleteTask,
-        deleteTasks: remoteTasks.deleteTasks,
-        handleDeleteTasksResponse: taskCRUD.handleDeleteTasksResponse,
-        updateTask: remoteTasks.updateTask,
-        updateTasks: remoteTasks.updateTasks,
-        handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
-      });
 
       // TODO initial hydration of tasks needs to move to the user's login (and when the app opens, if they are separate events)
       // Initial hydration: pull remote tasks for current user and upsert newer copies locally
@@ -740,22 +700,10 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         }
       }
     }
-    return { ...api, getSyncQueue: () => _taskSyncQueue, hasRemote: () => !!_remoteTasks };
+    return { ...api, hasRemote: () => !!_remoteTasks };
   },
 }
 
-let _taskSyncQueue: SyncQueue<Omit<ITasks,
-  | "getAllUserTasks"
-  | "getChildrenOf"
-  | "getParentsOf"
-  | "getPrioritizedTasks"
-  | "getRootTasks"
-  | "getTask"
-  | "getTasks"
-  | "getTodaysTasks"
-  | "searchTasks"
-  | "subscribeTasks"
->, ITaskReverter> | null = null;
 
 export default BrowserTaskProvider;
 

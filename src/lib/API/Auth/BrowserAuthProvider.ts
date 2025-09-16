@@ -1,11 +1,11 @@
 import { v4 } from 'uuid';
-import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler, AuthSyncQueue } from './types';
+import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler } from './types';
 import { getDefaultUserFeatures, isAnonymous, userHasFeature, type User } from './User';
-import type { ILocalTaskProvider, ILocalTasks, ITasks, TaskSyncQueue } from '../Tasks';
+import type { ILocalTaskProvider, ILocalTasks, ITasks } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
-import { SyncQueue } from '../SyncQueue';
+import { queueAuthSyncCommand } from './types';
 import { extractBatchAndLogErrors } from '../types';
 import { invalidateAll } from '$app/navigation';
 import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
@@ -13,9 +13,7 @@ import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
 let db: LocalDB | null = null;
 let _remoteAuth: IAuth | null = null;
-let _authSyncQueue: AuthSyncQueue | null = null;
 let _tasks: ITasks | null = null;
-let _taskSyncQueue: TaskSyncQueue | null = null;
 
 const BrowserAuthProvider: ILocalAuthProvider = {
   get: async function (
@@ -40,29 +38,15 @@ const BrowserAuthProvider: ILocalAuthProvider = {
       try {
         const localTasks = await BrowserTaskProvider.get();
         _tasks = localTasks;
-        _taskSyncQueue = localTasks.getSyncQueue();
       } catch {
         _tasks = null;
-        _taskSyncQueue = null;
       }
 
       _remoteAuth = remoteAuth;
 
-      _authSyncQueue = new SyncQueue<Omit<IAuth,
-        | "getActiveUser"
-        | "getRegistrationRequirements"
-        | "getUser">, IAuthResponseHandler>({
-          deleteUser: remoteAuth.deleteUser,
-          handleDeleteUserResponse: auth.handleDeleteUserResponse,
-          login: auth.login,
-          logout: remoteAuth.logout,
-          register: remoteAuth.register,
-          updateUser: remoteAuth.updateUser,
-          handleUpdateUserResponse: auth.handleUpdateUserResponse,
-        });
     }
 
-    return { ...auth, ...local, getSyncQueue: () => _authSyncQueue };
+    return { ...auth, ...local };
   },
 };
 
@@ -239,16 +223,9 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     await db.put(AUTH_TABLE_NAME, updatedUser);
 
 
-    // Only sync to remote if this user participates in remote sync
+    // TODO: This is an invalid gate. A user can't update their account info if they aren't paying for task sync??
     if (userHasFeature(user, 'task-sync')) {
-      _authSyncQueue?.add('updateUser',
-        { update },
-        'handleUpdateUserResponse',
-        {
-          oldUser: user,
-        });
-      // Process immediately for Auth (no durable queue yet)
-      _authSyncQueue?.process();
+      await queueAuthSyncCommand('updateUser', { update }, { oldUser: user });
     }
 
     return ok(updatedUser);
@@ -276,16 +253,9 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
       await db.delete(AUTH_TABLE_NAME, userId);
 
-      // Only sync to remote if this user participates in remote sync
+      // TODO: This is an invalid gate. A user can't update their account info if they aren't paying for task sync??
       if (userHasFeature(user, 'task-sync')) {
-        _authSyncQueue?.add(
-          'deleteUser',
-          { userId },
-          'handleDeleteUserResponse',
-          { oldUser: user }
-        )
-        // Process immediately for Auth (no durable queue yet)
-        _authSyncQueue?.process();
+        await queueAuthSyncCommand('deleteUser', { userId }, { oldUser: user });
       }
     }
 

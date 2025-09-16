@@ -11,7 +11,7 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { type Task } from '$lib/API/Tasks/Task';
-	import { authAPIPromise, taskAPIPromise } from '$lib/stores/services';
+	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
 	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import AppHeader from '@/components/AppHeader.svelte';
 	import AppFooter from '@/components/AppFooter.svelte';

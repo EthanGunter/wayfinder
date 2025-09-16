@@ -3,7 +3,7 @@
 import type { NotFoundError, Err, ArgumentError } from "$lib/Errors";
 import type { Task } from "./Task";
 import type { BatchResult, Result } from "../types";
-import { SyncQueue } from "../SyncQueue";
+import { enqueueSyncCommand } from "../SyncQueue";
 
 
 
@@ -14,20 +14,8 @@ export interface ILocalTaskProvider {
 export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ITaskReverter = ITaskCoreResponseHandler
 export type ILocalTasks = ITasks & ITaskExporter & {
-  getSyncQueue: () => TaskSyncQueue | null, hasRemote(): boolean;
+  hasRemote(): boolean;
 };
-export type TaskSyncQueue = SyncQueue<Omit<ITasks,
-  | "getAllUserTasks"
-  | "getChildrenOf"
-  | "getParentsOf"
-  | "getPrioritizedTasks"
-  | "getRootTasks"
-  | "getTask"
-  | "getTasks"
-  | "getTodaysTasks"
-  | "searchTasks"
-  | "subscribeTasks"
->, ITaskReverter>;
 /**
  * Delta describing a task change. Creation: oldTask=null. Deletion: newTask=null.
  */
@@ -153,3 +141,28 @@ export type UpdateTaskParams = { id: string, data?: Partial<Omit<Task, "children
 export type DeleteTaskParams = { id: string, recursive?: boolean };
 
 //#endregion
+
+// #region Command surface typing and enqueue helper
+type ParamsOf<T> = T extends (arg: infer P) => any ? P : never;
+export type TaskRemoteMap = Omit<ITasks,
+  | "getAllUserTasks"
+  | "getChildrenOf"
+  | "getParentsOf"
+  | "getPrioritizedTasks"
+  | "getRootTasks"
+  | "getTask"
+  | "getTasks"
+  | "getTodaysTasks"
+  | "searchTasks"
+  | "subscribeTasks"
+>;
+
+export const TASKS_SYNC_CHANNEL = 'tasks';
+export async function queueTaskSyncCommand<K extends keyof TaskRemoteMap>(
+  fnName: K,
+  args: ParamsOf<TaskRemoteMap[K]>,
+  revertArgs?: any
+): Promise<void> {
+  return enqueueSyncCommand(TASKS_SYNC_CHANNEL, String(fnName), args, undefined, revertArgs);
+}
+// #endregion

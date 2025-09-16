@@ -5,7 +5,7 @@
 	import TModal from '@/tutorials/primitives/TModal.svelte';
 
 	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
-	import { taskAPIPromise, authAPIPromise } from '@/stores/services';
+	import { taskAPIPromise, authAPIPromise } from '@/API/providerRegistry';
 	import { type ILocalTasks } from '@/API/Tasks';
 	import { type ILocalAuth } from '@/API/Auth/types';
 	import type { User } from '@/API/Auth/User';

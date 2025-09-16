@@ -1,63 +1,78 @@
-import { err, ok } from "neverthrow";
-import type { Result } from "./types";
-import { Err } from "$lib/Errors";
+import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
 
-type FunctionMap<T> = {
-    [K in keyof T]: T[K] extends (...args: any[]) => any
-    ? (args: ParamsOf<T[K]>) => ReturnType<T[K]>
-    : never;
+// #region Durable queue (processed by Service Worker)
+export type DurableSyncQueueEntry = {
+    id?: number;
+    channel: string;
+    fnName: string;
+    args: any;
+    handlerFnName?: string;
+    revertArgs?: any;
+    createdAt: string;
+    tryCount: number;
+    errors?: string[];
 };
 
-type ParamsOf<T> = T extends (arg: infer P) => any ? P : never;
+interface SyncDB extends DBSchema {
+    sync_queue: {
+        key: number;
+        value: DurableSyncQueueEntry;
+        indexes: {
+            'by-createdAt': string;
+        };
+    };
+}
 
-type FailureOfHandler<T> =
-    T extends (result: Result<any, infer F>) => any ? F : "SyncQueue handlers must use single Result<T,E> parameter";
+export const DURABLE_DB_NAME = 'wayfinder-sync';
+export const DURABLE_STORE_NAME = 'sync_queue';
 
-type SyncQueueEntry<RemoteT, CallbackT, RemoteK extends keyof RemoteT, CallbackK extends keyof CallbackT> = {
-    fnName: RemoteK;
-    args: ParamsOf<RemoteT[RemoteK]>;
-    handlerFnName: CallbackK;
-    revertArgs: FailureOfHandler<CallbackT[CallbackK]>,
-};
-
-
-export class SyncQueue<RemoteT, CallbackT> {
-    private queue: Array<SyncQueueEntry<RemoteT, CallbackT, keyof RemoteT, keyof CallbackT>> = []
-    private fnMap: FunctionMap<RemoteT & CallbackT>;
-
-    constructor(fnMap: FunctionMap<RemoteT & CallbackT>) {
-        this.fnMap = fnMap;
+let durableDbPromise: Promise<IDBPDatabase<SyncDB>> | null = null;
+function getDurableDB() {
+    if (!durableDbPromise) {
+        durableDbPromise = openDB<SyncDB>(DURABLE_DB_NAME, 1, {
+            upgrade(db) {
+                const store = db.createObjectStore(DURABLE_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                store.createIndex('by-createdAt', 'createdAt');
+            },
+        });
     }
+    return durableDbPromise!;
+}
 
-    add<RemoteK extends keyof RemoteT, CallbackK extends keyof CallbackT>(
-        fnName: RemoteK,
-        args: ParamsOf<RemoteT[RemoteK]>,
-        handlerFnName: CallbackK,
-        revertArgs: FailureOfHandler<CallbackT[CallbackK]>,
-    ) {
-        this.queue.push({ fnName, args, handlerFnName: handlerFnName, revertArgs });
-        // this.process();
-    }
+export async function enqueueSyncCommand(
+    channel: string,
+    fnName: string,
+    args: any,
+    handlerFnName?: string,
+    revertArgs?: any,
+): Promise<void> {
+    const db = await getDurableDB();
+    const createdAt = new Date().toISOString();
+    const entry: DurableSyncQueueEntry = {
+        channel,
+        fnName,
+        args,
+        handlerFnName,
+        revertArgs,
+        createdAt,
+        tryCount: 0,
+    };
+    await db.add(DURABLE_STORE_NAME, entry);
+    await requestBackgroundSync();
+}
 
-    async process() {
-        for (const entry of [...this.queue]) {
-            try {
-                const fn = this.fnMap[entry.fnName];
-                if (!fn) Err.throw(`${entry.fnName.toString()} not found in syncQueue`);
-                const result = await fn(entry.args);
-                if (!result) Err.throw(`${entry.fnName.toString()} returned an undefined result`)
-
-                if (result.isErr()) {
-                    await (this.fnMap[entry.handlerFnName] as any)(err(entry.revertArgs));
-                } else {
-                    await (this.fnMap[entry.handlerFnName] as any)(ok(entry.revertArgs));
-                }
-                this.queue.shift();
+export async function requestBackgroundSync(): Promise<void> {
+    try {
+        if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            const syncMgr = (reg as any).sync;
+            if (syncMgr && typeof syncMgr.register === 'function') {
+                await syncMgr.register('wayfinder-sync');
             }
-            catch (e) {
-                await (this.fnMap[entry.handlerFnName] as any)(err(entry.revertArgs));
-                throw e;
-            }
+            navigator.serviceWorker.controller?.postMessage({ type: 'process-sync-queue' });
         }
+    } catch {
+        // ignore
     }
 }
+// #endregion

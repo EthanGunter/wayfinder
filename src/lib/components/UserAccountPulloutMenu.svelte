@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { type User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
-	import { authAPIPromise, taskAPIPromise } from '$lib/stores/services';
+	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
 	import { onMount } from 'svelte';
 	import { type ILocalAuth } from '@/API/Auth/types';
 	import Icon from '@iconify/svelte';

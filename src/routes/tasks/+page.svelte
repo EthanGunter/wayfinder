@@ -9,7 +9,7 @@
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
 	import Button from '@/components/ui/button/button.svelte';
-	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
+	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
 	import { onMount } from 'svelte';
 	import { type ILocalAuth } from '@/API/Auth/types';
 	import { type ILocalTasks } from '@/API/Tasks';

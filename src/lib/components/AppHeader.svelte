@@ -10,7 +10,7 @@
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import UserAvatar from './UserAvatar.svelte';
-	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
+	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
 	import type { ILocalTasks } from '@/API/Tasks';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { tutorials } from '$lib/tutorials/store';
