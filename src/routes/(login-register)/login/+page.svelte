@@ -6,7 +6,7 @@
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
 	import { authAPIPromise } from '@/stores/services';
-	import { isAnonymous, type LocalUser } from '@/API/Auth/User';
+	import { type LocalUser } from '@/API/Auth/User';
 	import UserAvatar from '@/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
 
@@ -18,7 +18,6 @@
 	let isLoading = $state(false);
 	let email = $state('');
 	let password = $state('');
-	let showMigrationPrompt = $state<{ anonId: string; remoteUserId: string } | null>(null);
 
 	onMount(async () => {
 		auth = await authAPIPromise;
@@ -81,8 +80,8 @@
 				goto(redir);
 			} else {
 				const e: any = result.error;
-				if (e?.data?.requiresMigration) {
-					showMigrationPrompt = { anonId: e.data.anonymousUserId, remoteUserId: e.data.remoteUserId };
+				// TODO:Temp anonymous accounts disabled
+				if (false/* e?.data?.requiresMigration */) {
 				} else {
 					errorMessage = e?.message || 'Login failed';
 				}
@@ -95,22 +94,24 @@
 		}
 	}
 
-	async function confirmMigration(accept: boolean) {
-		if (!auth || !showMigrationPrompt) { showMigrationPrompt = null; return; }
-		const { anonId, remoteUserId } = showMigrationPrompt;
-		showMigrationPrompt = null;
-		try {
-			if (!accept) {
-				await auth.deleteUser({ userId: anonId });
-			}
-			await auth.switchUser(remoteUserId);
-			await invalidateAll();
-			goto(redir);
-		} catch (e) {
-			console.error('Migration handling failed', e);
-			errorMessage = 'Migration failed';
+/* TODO:Temp Disabled anonymous migration flow
+async function confirmMigration(accept: boolean) {
+	if (!auth || !showMigrationPrompt) { showMigrationPrompt = null; return; }
+	const { anonId, remoteUserId } = showMigrationPrompt;
+	showMigrationPrompt = null;
+	try {
+		if (!accept) {
+			await auth.deleteUser({ userId: anonId });
 		}
+		await auth.switchUser(remoteUserId);
+		await invalidateAll();
+		goto(redir);
+	} catch (e) {
+		console.error('Migration handling failed', e);
+		errorMessage = 'Migration failed';
 	}
+}
+*/
 </script>
 
 <h1 class="text-center text-gray-800">{currentUser ? 'Switch User' : 'Login'}</h1>
@@ -129,15 +130,6 @@
 	<Button class="w-full" onclick={handleRemoteLogin} disabled={isLoading}>{isLoading ? 'Please wait...' : 'Sign in'}</Button>
 </div>
 
-{#if showMigrationPrompt}
-	<div class="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-amber-800">
-		Local data from a guest user was detected. Migrate data to this account?
-		<div class="mt-2 flex gap-2">
-			<Button variant="outline" onclick={() => confirmMigration(true)}>Migrate</Button>
-			<Button variant="outline" onclick={() => confirmMigration(false)}>Discard</Button>
-		</div>
-	</div>
-{/if}
 
 {#if users.length === 0}
 	<div class="mb-4 rounded border border-gray-200 bg-gray-50 p-4 text-center text-gray-600">
@@ -161,9 +153,6 @@
 					<div class="flex-1">
 						<div class="font-medium text-gray-900">
 							{user.display_name}
-							{#if isAnonymous(user)}
-								<span class="text-xs text-gray-500">(Guest)</span>
-							{/if}
 						</div>
 						{#if currentUser?.id === user.id}
 							<div class="text-xs text-blue-600">Currently active</div>

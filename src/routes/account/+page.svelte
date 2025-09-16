@@ -3,7 +3,7 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
-	import { isAnonymous, type LocalUser, type User } from '$lib/API/Auth/User';
+	import { type LocalUser, type User } from '$lib/API/Auth/User';
 	import { page } from '$app/state';
 	import { Button } from '@/components/ui/button';
 	import { authAPIPromise, taskAPIPromise } from '@/stores/services';
@@ -32,10 +32,12 @@
 		if (!active) {
 			goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
 			return;
-		} else if (isAnonymous(active)) {
+		}
+		// TODO:Temp anonymous accounts disabled
+		/* else if (isAnonymous(active)) {
 			goto(`/`);
 			return;
-		}
+		} */
 		user = active;
 		originalUser = { ...user };
 
@@ -102,15 +104,16 @@
 			await tasks!.deleteTasks({
 				deleteArgs: rootRes.value.map((r) => ({ id: r.id, recursive: true }))
 			});
-			
+
 			// Delete the user account
 			const deleteRes = await auth.deleteUser({ userId: user.id });
 			if (deleteRes.isErr()) Err.UNHANDLED(deleteRes.error);
 
-			const defaultUserResult = await auth.getDefaultUser();
+			// TODO:Temp anonymous accounts disabled
+			/* const defaultUserResult = await auth.getDefaultUser();
 			if (defaultUserResult.isOk()) {
 				await auth.switchUser(defaultUserResult.value.id);
-			}
+			} */
 
 			// Redirect to login page since current user is deleted
 			goto('/login');

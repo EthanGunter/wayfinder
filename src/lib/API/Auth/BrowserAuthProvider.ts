@@ -25,12 +25,15 @@ const BrowserAuthProvider: ILocalAuthProvider = {
 
     // Initialize with active user or create anonymous
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    // TODO:Temp anonymous accounts disabled
+    /*
     if (!activeUserId) {
       const anonRes = await local.getDefaultUser();
       if (anonRes.isOk()) {
         await local.switchUser(anonRes.value.id);
       }
-    }
+    } 
+    */
 
     if (remoteAuth) {
       // Lazily acquire local tasks provider; used for local data detection and migration
@@ -93,9 +96,11 @@ const local: IAuthLocalFunctions = {
 
     // Check if there's an anonymous user with local data that needs migration
     const currentUser = await local.getActiveUser();
-    const hasAnonymousWithData = currentUser &&
+    // TODO:Temp anonymous accounts disabled
+    const hasAnonymousWithData = false /* currentUser &&
       isAnonymous(currentUser) &&
-      await _hasLocalData(currentUser.id);
+      await _hasLocalData(currentUser.id); 
+      */
 
     // Create the new account on the server
     const registerResult = await _remoteAuth.register({ creds, userData });
@@ -107,7 +112,8 @@ const local: IAuthLocalFunctions = {
     // Create local user with registered user data
     await db.put(AUTH_TABLE_NAME, registeredUser);
 
-    // If we have anonymous user with local data, migrate it to the new account
+    // TODO:Temp anonymous accounts disabled
+    /* 
     if (hasAnonymousWithData && currentUser) {
       if (!_tasks) {
         return err(new InputRequiredError(
@@ -122,11 +128,12 @@ const local: IAuthLocalFunctions = {
       if (changeResult.isErr()) {
         // Log the error but don't fail the registration
         Err.UNHANDLED(changeResult.error, 'Failed to change task ownership during registration:');
+      } 
+      
+        // Remove the anonymous user since data has been migrated
+        await db.delete(AUTH_TABLE_NAME, currentUser.id);
       }
-
-      // Remove the anonymous user since data has been migrated
-      await db.delete(AUTH_TABLE_NAME, currentUser.id);
-    }
+      */
 
     // Switch to the new representation of the user
     await local.switchUser(registeredUser.id);
@@ -167,6 +174,9 @@ const local: IAuthLocalFunctions = {
     assertDB(db);
     const users = await db.getAll(AUTH_TABLE_NAME);
     if (users.length === 0) {
+      // TODO:Temp anonymous accounts disabled
+      return err(new InvalidStateError("There are too many users to select a default"));
+      /* 
       // Only create the anonymous user the first time
       const userData: User = {
         id: 'anonymous',
@@ -178,7 +188,8 @@ const local: IAuthLocalFunctions = {
 
 
       await db.put(AUTH_TABLE_NAME, userData);
-      return ok(userData);
+      return ok(userData); 
+      */
     } else if (users.length === 1) {
       const userData = users[0];
       return ok(userData);
@@ -326,8 +337,9 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     if (loginResult.isErr()) {
       return err(loginResult.error);
     }
-
     // Check if current user is anonymous and has local data
+    // TODO:Temp anonymous accounts disabled
+    /* 
     const currentUser = await local.getActiveUser();
     if (currentUser && isAnonymous(currentUser)) {
       const hasLocalData = await _hasLocalData(currentUser.id);
@@ -345,7 +357,8 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
         await db.delete(AUTH_TABLE_NAME, currentUser.id);
         await db.put(APP_TABLE_NAME, undefined, ACTIVEUSER_COLUMN_NAME);
       }
-    }
+    } 
+    */
 
     const remoteUser = loginResult.value;
 
@@ -373,7 +386,10 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
 // Helper function to check if a user has local data
 async function _hasLocalData(userId: string): Promise<boolean> {
-  if (!_tasks) return false;
+  // TODO:Temp anonymous accounts disabled; treat as no local data
+  return false;
+  /*
+   if (!_tasks) return false;
 
   try {
     const result = await _tasks.getAllUserTasks({ userId });
@@ -386,6 +402,7 @@ async function _hasLocalData(userId: string): Promise<boolean> {
     // If we can't get tasks, assume no local data
     return false;
   }
+ */
 }
 
 // #region UTILITIES

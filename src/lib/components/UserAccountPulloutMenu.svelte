@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { isAnonymous, type User } from '$lib/API/Auth/User';
+	import { type User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
 	import { authAPIPromise, taskAPIPromise } from '$lib/stores/services';
 	import { onMount } from 'svelte';
@@ -95,19 +95,7 @@
 	</Sheet.Header>
 
 	<div class="mt-6 flex flex-col gap-4">
-		{#if isAnonymous(user!)}
-			<Button
-				variant="outline"
-				class="flex h-16 items-center justify-start gap-3"
-				onclick={() => goto(`/register?redirect=${page.url.pathname + page.url.search}`)}
-			>
-				<Icon icon="material-symbols:person-add" class="size-6 text-blue-600" />
-				<div class="text-left">
-					<div class="font-medium">Create Account</div>
-					<div class="text-sm text-gray-500">Create a personalized profile</div>
-				</div>
-			</Button>
-		{:else}
+		{#if user}
 			<Button
 				variant="outline"
 				class="flex h-16 items-center justify-start gap-3"
@@ -117,37 +105,6 @@
 				<div class="text-left">
 					<div class="font-medium">User Settings</div>
 					<div class="text-sm text-gray-500">Manage your preferences</div>
-				</div>
-			</Button>
-
-			<Button
-				variant="outline"
-				class="flex h-16 items-center justify-start gap-3"
-				onclick={() => {
-					goto(`/login?redirect=${page.url.pathname + page.url.search}`);
-				}}
-			>
-				<Icon icon="material-symbols:switch-account" class="size-6 text-purple-600" />
-				<div class="text-left">
-					<div class="font-medium">Switch User</div>
-					<div class="text-sm text-gray-500">Change to a different account</div>
-				</div>
-			</Button>
-		{/if}
-
-		{#if !isAnonymous(user)}
-			<Button
-				variant="outline"
-				class="flex h-16 items-center justify-start gap-3"
-				onclick={async () => {
-					await auth!.logout();
-					goto('/');
-				}}
-			>
-				<Icon icon="material-symbols:logout" class="size-6 text-red-600" />
-				<div class="text-left">
-					<div class="font-medium">Sign Out</div>
-					<div class="text-sm text-gray-500">Leave this session</div>
 				</div>
 			</Button>
 		{/if}
