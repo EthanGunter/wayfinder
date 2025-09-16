@@ -498,7 +498,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
     const userTasks = (allTasks as Task[]).filter(t => t.user_id === currentUser.id);
     const today = new Date().toISOString().split('T')[0];
-    const todays = userTasks.filter(t => t.todays_task.startsWith(today));
+    const todays = userTasks.filter(t => t.todays_task && t.todays_task.startsWith(today));
     return ok(todays);
   },
 
@@ -709,6 +709,7 @@ const BrowserTaskProvider: ILocalTaskProvider = {
         handleUpdateTasksResponse: taskCRUD.handleUpdateTasksResponse,
       });
 
+      // TODO initial hydration of tasks needs to move to the user's login (and when the app opens, if they are separate events)
       // Initial hydration: pull remote tasks for current user and upsert newer copies locally
       if (currentUser) {
         try {

@@ -2,7 +2,7 @@ export type Json =
   | string
   | number
   | boolean
-  | null
+  | undefined
   | { [key: string]: Json | undefined }
   | Json[]
 
@@ -42,7 +42,7 @@ export type Database = {
       tasks: {
         Row: {
           children: string[]
-          content: string | undefined
+          content?: string
           created: string
           id: string
           last_edit: string
@@ -50,7 +50,7 @@ export type Database = {
           priority: number
           status: number
           title: string
-          todays_task: boolean
+          todays_task?: string
           user_id: string
         }
         Insert: {
@@ -63,7 +63,7 @@ export type Database = {
           priority?: number
           status?: number
           title: string
-          todays_task?: boolean
+          todays_task?: string
           user_id?: string
         }
         Update: {
@@ -76,7 +76,7 @@ export type Database = {
           priority?: number
           status?: number
           title?: string
-          todays_task?: boolean
+          todays_task?: string
           user_id?: string
         }
         Relationships: []
@@ -88,7 +88,7 @@ export type Database = {
           display_name: string
           features: string[]
           id: string
-          status: Database["public"]["Enums"]["user_status"] | null
+          status?: Database["public"]["Enums"]["user_status"]
         }
         Insert: {
           avatar_url?: string
@@ -104,7 +104,7 @@ export type Database = {
           display_name?: string
           features?: string[]
           id?: string
-          status?: Database["public"]["Enums"]["user_status"] | null
+          status?: Database["public"]["Enums"]["user_status"]
         }
         Relationships: []
       }

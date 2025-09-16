@@ -11,7 +11,7 @@ export interface Task {
     title: string,
     content?: string,
     status: TaskStatus,
-    todays_task: string, // ISO Timestamp
+    todays_task?: string, // ISO Timestamp
     priority?: number,
     /** 
      * Tasks that depend on this one's completion.

@@ -4,18 +4,17 @@ import type { ITasks, ITaskCore, ITaskRelations, ITaskAdvancedFeatures, CreateTa
 import { type Task, populateTaskDTO } from "./Task";
 import supabase, { TASK_TABLE_NAME } from "../SupabaseClient";
 import { okBatch, type IProvider } from "../types";
-import type { TablesInsert } from "../supabase";
+import type { Tables, TablesInsert } from "../supabase";
 
 // Helpers to map between DB row and app Task shape
-function mapRowToTask(row: any): Task {
+function mapRowToTask(row: Tables<'tasks'>): Task {
   return {
     id: row.id,
     user_id: row.user_id,
     title: row.title,
     content: row.content ?? undefined,
     status: row.status,
-    // DB may still be boolean; coerce to informational ISO string
-    todays_task: typeof row.todays_task === 'string' ? row.todays_task : (row.todays_task ? new Date().toISOString() : ''),
+    todays_task: row.todays_task,
     priority: row.priority ?? 0,
     parents: row.parents ?? [],
     children: row.children ?? [],
@@ -31,8 +30,7 @@ function mapTaskToInsert(dto: Partial<Task>): TablesInsert<'tasks'> {
     title: dto.title!,
     content: dto.content,
     status: dto.status,
-    // If string present => true; else false
-    todays_task: dto.todays_task ? dto.todays_task.length > 0 : undefined,
+    todays_task: dto.todays_task,
     priority: dto.priority,
     parents: dto.parents ?? [],
     children: dto.children ?? [],
@@ -188,8 +186,23 @@ const relations: ITaskRelations = {
 
 const advanced: ITaskAdvancedFeatures = {
   getTodaysTasks: async () => {
-    // Schema mismatch tolerated: treat any truthy DB flag as today
-    const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').eq('todays_task', true);
+    // Mirror Browser logic: tasks for the current user whose todays_task falls within [start, nextStart) UTC
+    const { data: userRes, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userRes?.user?.id) {
+      return ok([]);
+    }
+    const userId = userRes.user.id;
+
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)).toISOString();
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0)).toISOString();
+
+    const { data, error } = await supabase
+      .from(TASK_TABLE_NAME)
+      .select('*')
+      .eq('user_id', userId)
+      .gte('todays_task', start)
+      .lt('todays_task', next);
     if (error) return err(new IOError(`Failed to fetch today's tasks`, error));
     return ok((data ?? []).map(mapRowToTask));
   },

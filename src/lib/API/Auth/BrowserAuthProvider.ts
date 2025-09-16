@@ -373,12 +373,9 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
   logout: async function () {
     assertDB(db);
-    // assertRemoteAuth(_remoteAuth);
-
     await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
-
-    // _remoteAuth.logout();
-    invalidateAll(); // TODO I think notification is a better approach than invalidateAll()
+    try { await _remoteAuth?.logout(); } catch { /* offline or already invalid */ }
+    invalidateAll();
     return ok();
   },
   ...local
