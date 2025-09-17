@@ -27,13 +27,10 @@ function getDB() {
 }
 
 self.addEventListener('install', () => {
-	console.log("sw installed");
-	
 	self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-	console.log("sw activated");
 	event.waitUntil(self.clients.claim());
 });
 

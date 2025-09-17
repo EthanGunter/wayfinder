@@ -95,6 +95,9 @@
 						{data?.content}
 					</div>
 				{/if}
+				<div class="mt-0.5 line-clamp-2 text-gray-600 text-[7px]" title={data?.content}>
+					{data.id}
+				</div>
 			</div>
 		</div>
 

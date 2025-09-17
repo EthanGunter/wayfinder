@@ -3,6 +3,7 @@ import { err, ok } from "neverthrow";
 import yaml from 'js-yaml'
 import type { CreateTaskParams, PopulatedTaskDTO } from "./types";
 import type { Result } from "../types";
+import { v4 } from "uuid";
 
 export interface Task {
     id: string,
@@ -54,7 +55,7 @@ export function createTask(params: CreateTaskParams): Task {
         title,
         content,
         status = TaskStatus.incomplete,
-        todays_task = '',
+        todays_task,
         priority = 0,
         created = new Date().toISOString(),
         last_edit = new Date().toISOString(),
@@ -62,7 +63,7 @@ export function createTask(params: CreateTaskParams): Task {
         children = [],
     } = params;
     return {
-        id: id ?? "NO-ID",
+        id: id ?? v4(),
         user_id: user_id!,
         title: title!,
         content,

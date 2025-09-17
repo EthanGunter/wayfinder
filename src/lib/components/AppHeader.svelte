@@ -61,7 +61,7 @@
 		if (all.isOk()) {
 			const list = all.value.filter((r) => r.isOk()).map((r) => r._unsafeUnwrap());
 			if (list.length > 0) {
-				await tasks.deleteTasks({ deleteArgs: list.map((t) => ({ id: t.id, recursive: true })) });
+				await tasks.deleteTasks({ ids: list.map((t) => t.id) });
 			}
 		}
 		try {

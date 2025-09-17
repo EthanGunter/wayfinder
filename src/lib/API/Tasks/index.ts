@@ -1,7 +1,7 @@
 import { Err } from '$lib/Errors';
-import { extractBatchAndLogErrors } from '../types';
+import { extractBatch, extractBatchAndLogErrors } from '../types';
 import { type Task } from './Task';
-import type { ITasks, UpdateTaskParams } from './types';
+import type { ITasks, ITaskCoreLocal, UpdateTaskParams } from './types';
 
 export * from './types';
 export * from './Task'
@@ -11,7 +11,7 @@ export interface RelationshipUpdate {
     newTask: Task | null;
 }
 
-export async function getRelationshipUpdates(provider: ITasks, updates: RelationshipUpdate | RelationshipUpdate[]): Promise<UpdateTaskParams[]> {
+export async function getRelationshipUpdates(provider: ITasks | ITaskCoreLocal, updates: RelationshipUpdate | RelationshipUpdate[]): Promise<UpdateTaskParams[]> {
     // Normalize to array for consistent handling
     const updateArray = Array.isArray(updates) ? updates : [updates];
 
@@ -102,7 +102,7 @@ function collectChildRemovals(map: Map<string, Set<string>>, childId: string, pa
 }
 
 // Process batch updates
-async function getParentUpdates(provider: ITasks, parentAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function getParentUpdates(provider: ITasks | ITaskCoreLocal, parentAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (parentAdditions.size === 0) return [];
 
     // Get all child IDs that need updating
@@ -135,7 +135,7 @@ async function getParentUpdates(provider: ITasks, parentAdditions: Map<string, S
 
 }
 
-async function processParentRemovals(provider: ITasks, parentRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function processParentRemovals(provider: ITasks | ITaskCoreLocal, parentRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (parentRemovals.size === 0) return [];
 
     // Get all child IDs that need updating
@@ -145,7 +145,8 @@ async function processParentRemovals(provider: ITasks, parentRemovals: Map<strin
     const childrenResult = await provider.getTasks({ ids: uniqueChildIds });
     return await childrenResult.match(
         async (childResults) => {
-            const children = extractBatchAndLogErrors(childResults);
+            // TODO not found errors will be returned during recursive delete. I'm not sure why exactly, and I don't know if it matters...
+            const [children, errors] = extractBatch(childResults);
 
             const updates = children.flatMap(child => {
                 // Find all parents that should be removed from this child
@@ -175,7 +176,7 @@ async function processParentRemovals(provider: ITasks, parentRemovals: Map<strin
     );
 }
 
-async function processChildAdditions(provider: ITasks, childAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function processChildAdditions(provider: ITasks | ITaskCoreLocal, childAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (childAdditions.size === 0) return [];
 
     // Get all parent IDs that need updating
@@ -213,7 +214,7 @@ async function processChildAdditions(provider: ITasks, childAdditions: Map<strin
     );
 }
 
-async function processChildRemovals(provider: ITasks, childRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function processChildRemovals(provider: ITasks | ITaskCoreLocal, childRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (childRemovals.size === 0) return [];
 
     // Get all parent IDs that need updating

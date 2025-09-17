@@ -1,44 +1,52 @@
 import { type IDBPDatabase } from 'idb';
-import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskReverter, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type DeleteTaskParams, type TaskDelta } from './types';
+import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type TaskDelta, type ITaskCoreLocal } from './types';
 import { err, ok } from 'neverthrow';
-import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError } from '$lib/Errors';
+import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError } from '$lib/Errors';
 import { v4 } from 'uuid';
 import type { Task } from './Task';
-import { createTask, toMarkdown, isTaskCompleted } from './Task';
+import { createTask, toMarkdown, isTaskCompleted, TaskStatus } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
-import type { User } from '../Auth/User';
+import { userHasFeature, type User } from '../Auth/User';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
 // import { queueTaskSyncCommand } from './types';
 
 
 //#region Task CRUD
-const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
+const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
   /**
    * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   createTask: async function ({ createDetail: task }) {
-    const [success, errors] = extractBatch(await taskCRUD.createTasks({ createDetails: [task] }));
-    if (errors.length > 0) {
-      return err(errors[0]);
-    } else {
-      return ok(success[0]);
-    }
+    const res = await _createTasksLocal([task]);
+    if (res.isErr()) return err(res.error as any);
+    const [success, errors] = extractBatch(res);
+    if (errors.length > 0) return err(errors[0]);
+    return ok(success[0]);
   },
 
   /**
   * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
   * @error {@link IOError} if the IndexedDB.put() attempt fails
   */
-  createTasks: ({ createDetails }) => _createTasksLocal(createDetails),
+  createTasks: async ({ createDetails }) => {
+    const res = await _createTasksLocal(createDetails);
+    if (res.isErr()) return err(res.error as any);
+    // Mapping will be delivered asynchronously via remote handler
+    return ok({ updatedIds: new Map<string, string>() });
+  },
   handleCreateTasksResponse: async function (response) {
-    if (response.isErr()) {
-      const { createdIds } = response.error;
+    if (response.isOk()) {
+      const updated = response.value.updatedIds;
+      await _remapLocalIdsAndRelationships(updated);
+    }
+    else {
+      const { idsToDelete } = response.error;
       // TODO:task-sync userHasFeature('task-sync') instead of false constant
-      await _deleteTasksLocal(createdIds.map(i => ({ id: i })), false);
+      await _deleteTasksLocal(idsToDelete, false, false);
     }
   },
 
@@ -77,7 +85,7 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
         }
       }
 
-      return okBatch(tasks, notFoundIds.map(e => new NotFoundError(e, TASK_TABLE_NAME)));
+      return okBatch(tasks, notFoundIds.map(id => new NotFoundError("failed to get task", id)));
     } catch (e) {
       return err(new IOError("Batch read", ids.join(', '), e));
     }
@@ -119,11 +127,11 @@ const taskCRUD: ITaskCore & ITaskCoreResponseHandler = {
    * @param recursive NOT IMPLEMENTED
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  deleteTask: async function (deleteArg) {
-    return await taskCRUD.deleteTasks({ deleteArgs: [deleteArg] });
+  deleteTask: async function ({ id, recursive }) {
+    return await taskCRUD.deleteTasks({ ids: [id], recursive });
   },
 
-  deleteTasks: ({ deleteArgs }) => _deleteTasksLocal(deleteArgs),
+  deleteTasks: ({ ids, recursive }) => _deleteTasksLocal(ids, recursive ?? false),
   handleDeleteTasksResponse: async function (response) {
     if (response.isErr()) {
       assertDB(_db);
@@ -154,6 +162,8 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     return err(new InvalidStateError("Cannot create tasks without an authenticated user"));
+  } else if (!userHasFeature(currentUser, 'task-sync')) {
+    return err(new InvalidStateError(`User, ${currentUser.display_name} (${currentUser.id}) does not have 'task-sync' feature flag`));
   }
 
   for (const taskDTO of tasks) {
@@ -169,35 +179,50 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
     const taskWithOwnership = { ...taskDTO, user_id: currentUser.id };
     const preparedTask = createTask(taskWithOwnership);
     preparedTask.created = new Date().toISOString();
-    if (!taskDTO.id) {
-      preparedTask.id = v4();
-    }
 
     await _db.put(TASK_TABLE_NAME, preparedTask);
 
     createdTasks.push(preparedTask);
   }
 
-  const relUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
-  // TODO:task-sync userHasFeature('task-sync') instead of false constant
-  await _updateTasksLocal(relUpdates, false); // Relationship updates should be handled by the server
+  // Ensure inverse relations exist locally before notifying subscribers.
+  // This makes descendant-scoped subscribers include newly created children immediately.
+  const localRelUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
+  if (localRelUpdates.length > 0) {
+    await _updateTasksLocal(localRelUpdates, false);
+  }
 
   // Update search index for newly created tasks
   if (_searchService) {
     createdTasks.forEach(task => _searchService!.indexTask(task));
   }
 
+  // TODO:debug (eg) - emit create deltas
+  console.log("[Tasks/Browser] emit create", createdTasks.map(t => t.id));
+  await _emitChanges(createdTasks.map(newTask => ({ oldTask: null, newTask })) as TaskDelta[]);
+
   /* if (updateServer) {
       await queueTaskSyncCommand('createTasks', { createDetails: tasks }, { createdIds: createdTasks.map(t => t.id) }); */
   if (updateServer && _remoteTasks) {
-    const response = await _remoteTasks.createTasks({ createDetails: tasks });
-    if (response.isErr()) {
-      await _deleteTasksLocal(createdTasks.map(t => ({ id: t.id })), false);
-    }
+    void _remoteTasks.createTasks({ createDetails: createdTasks })
+      .then(async (response) => {
+        // TODO:sync this error handling is a stand-in for the SyncQueue
+        if (response.isErr()) {
+          await taskCRUD.handleCreateTasksResponse(err({ idsToDelete: createdTasks.map(t => t.id) }));
+        } else {
+          // Remote now returns mapping directly
+          await taskCRUD.handleCreateTasksResponse(ok(response.value));
+          // Compute and send relationship updates using authoritative ids
+          const updatedIds = response.value.updatedIds;
+          const remappedNewTasksLocal = createdTasks.map(t => ({ ...t, id: updatedIds.get(t.id) ?? t.id }));
+          const postRelUpdates = await getRelationshipUpdates(api, remappedNewTasksLocal.map(newTask => ({ oldTask: null, newTask })));
+          await _updateTasksLocal(postRelUpdates); // allow server update
+        }
+      })
+      .catch(async () => {
+        await taskCRUD.handleCreateTasksResponse(err({ idsToDelete: createdTasks.map(t => t.id) }));
+      });
   }
-
-  // Notify subscribers
-  await _emitDeltas(createdTasks.map(newTask => ({ oldTask: null, newTask })) as TaskDelta[]);
 
   return okBatch(createdTasks, errors);
 };
@@ -254,49 +279,61 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
     // We can use the updates id since id can't be changed via update
     updatedTasks.set(task, updated);
   }
-
-  const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
-  // TODO:task-sync userHasFeature('task-sync') instead of false constant
-  await _updateTasksLocal(relUpdates, false);
+  try {
+    const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
+    // TODO:task-sync userHasFeature('task-sync') instead of false constant
+    await _updateTasksLocal(relUpdates, false);
+  } catch (e) {
+    console.error("Task relationship update failed:", updatedTasks);
+  }
 
   // Update search index for updated tasks
   if (_searchService) {
+    // TODO:optimization this should probably be removing old data as well...
     Array.from(updatedTasks.values()).forEach(task => _searchService!.indexTask(task));
   }
   /*   if (updateServer) {
       await queueTaskSyncCommand('updateTasks', { updates }, { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) });
    */
-  if (updateServer && _remoteTasks) {
-    const response = await _remoteTasks.updateTasks({ updates });
-    if (response.isErr()) {
-      // Revert local updates on failure
-      assertDB(_db);
-      for (const [oldTask, newTask] of updatedTasks) {
-        await _db.put(TASK_TABLE_NAME, oldTask);
-        if (_searchService) {
-          _searchService.indexTask(oldTask);
-        }
-      }
-      const revertDeltas: TaskDelta[] = Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask: newTask, newTask: oldTask }));
-      await _emitDeltas(revertDeltas);
-    }
-  }
-
-  // Notify subscribers with per-task deltas
+  // Notify subscribers immediately; remote handling will revert as needed
   const deltas: TaskDelta[] = Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask }));
-  await _emitDeltas(deltas);
+  // TODO:debug (eg) - emit update deltas
+  console.log("[Tasks/Browser] emit update", deltas.map(d => ({ old: d.oldTask?.id, new: d.newTask?.id })));
+  await _emitChanges(deltas);
+
+  if (updateServer && _remoteTasks) {
+    void _remoteTasks.updateTasks({ updates })
+      .then(async (response) => {
+        // TODO:sync this error handling is a stand-in for the SyncQueue
+        if (response.isErr()) {
+          const oldState = Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task }));
+          await taskCRUD.handleUpdateTasksResponse(err({ oldState }) as any);
+        } else {
+          const [success] = extractBatch(response);
+          const successIds = new Set((success as Task[]).map(t => t.id));
+          const failedOldState = Array.from(updatedTasks)
+            .filter(([oldTask]) => !successIds.has(oldTask.id))
+            .map(([oldTask]) => ({ updatedId: oldTask.id, task: oldTask }));
+          const handlerRes = failedOldState.length > 0 ? err({ oldState: failedOldState }) : ok(undefined);
+          await taskCRUD.handleUpdateTasksResponse(handlerRes as any);
+        }
+      })
+      .catch(async () => {
+        const oldState = Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task }));
+        await taskCRUD.handleUpdateTasksResponse(err({ oldState }) as any);
+      });
+  }
 
   return okBatch(updatedTasks.values().toArray(), errors);
 };
-async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: boolean = true) {
-  if (deleteArgs.length === 0) return ok();
+async function _deleteTasksLocal(ids: string[], recursive: boolean, updateServer: boolean = true) {
+  if (ids.length === 0) return ok();
 
   assertDB(_db);
 
   const deletedTasks: Task[] = [];
-  const errors: NotFoundError[] = [];
-  for (const { id, recursive } of deleteArgs) {
-
+  const errors: (NotFoundError | NotAuthorizedError)[] = [];
+  for (const id of ids) {
     const taskResult = await taskCRUD.getTask({ id });
     if (taskResult.isErr()) {
       errors.push(taskResult.error);
@@ -306,13 +343,13 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
 
     // Validate user ownership before allowing deletion
     if (!(await validateTaskOwnership(task))) {
-      errors.push(new NotFoundError(task.id, "Task (unauthorized)"));
+      errors.push(new NotAuthorizedError("User does not own task", task));
       continue;
     }
 
     if (recursive && task.children.length > 0) {
-      // TODO:handle-error
-      const result = await _deleteTasksLocal(task.children.map(c => ({ id: c, recursive })));
+      // Recursively delete children first to avoid transient dangling refs
+      await _deleteTasksLocal(task.children, recursive, false);
     }
 
     deletedTasks.push(task);
@@ -323,25 +360,33 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
       _searchService.removeTask(task.id);
     }
 
+    // After removal, clean up relationships for parents/children that reference this id
     const relUpdates = await getRelationshipUpdates(api, { oldTask: task, newTask: null });
-    // TODO:task-sync userHasFeature('task-sync') instead of false constant
     await _updateTasksLocal(relUpdates, false);
   }
+
+  // Notify subscribers
+  const deleteDeltas: TaskDelta[] = deletedTasks.map(oldTask => ({ oldTask, newTask: null })) as TaskDelta[];
+  await _emitChanges(deleteDeltas);
+
   /*   if (updateServer) {
       await queueTaskSyncCommand('deleteTasks', { deleteArgs }, { oldState: deletedTasks });
    */
   if (updateServer && _remoteTasks) {
-    const response = await _remoteTasks.deleteTasks({ deleteArgs });
-    if (response.isErr()) {
-      // Recreate deleted tasks on failure
-      await _createTasksLocal(deletedTasks as any, false);
-    }
+    // Send server the IDs of tasks that were actually deleted (post-recursion)
+    const idsToDelete = deletedTasks.map(task => task.id);
+    void _remoteTasks.deleteTasks({ ids: idsToDelete })
+      .then(async (response) => {
+        const handlerRes = response.isErr() ? err({ oldState: deletedTasks }) : ok(undefined);
+        await taskCRUD.handleDeleteTasksResponse(handlerRes as any);
+      })
+      .catch(async () => {
+        await taskCRUD.handleDeleteTasksResponse(err({ oldState: deletedTasks }) as any);
+      });
   }
   if (errors.length > 0) {
     return err(new IOError("Batch delete", errors));
   }
-  // Notify subscribers
-  await _emitDeltas(deletedTasks.map(oldTask => ({ oldTask, newTask: null })) as TaskDelta[]);
   return ok();
 };
 async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updateServer: boolean = true): Promise<BatchResult<Task>> {
@@ -356,10 +401,14 @@ async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updat
       await queueTaskSyncCommand('changeOwnership', { oldUserID, newUserID }, { oldUserID, newUserID });
    */
   if (updateServer && _remoteTasks) {
-    const response = await _remoteTasks.changeOwnership({ oldUserID, newUserID });
-    if (response.isErr()) {
-      await _changeOwnershipLocal(newUserID, oldUserID, false);
-    }
+    void _remoteTasks.changeOwnership({ oldUserID, newUserID })
+      .then(async (response) => {
+        const handlerRes = response.isErr() ? err({ oldUserID, newUserID }) : ok(undefined);
+        await taskCRUD.handleChangeOwnershipResponse(handlerRes as any);
+      })
+      .catch(async () => {
+        await taskCRUD.handleChangeOwnershipResponse(err({ oldUserID, newUserID }) as any);
+      });
   }
 
   return okBatch(convertedTasks);
@@ -428,13 +477,13 @@ const taskRelations: ITaskRelations = {
 }
 
 type UserSubscription = {
-  kind: 'user';
+  kind: 'user-tasks';
   userId: string;
   onInitialize: (tasks: Task[]) => void;
   onChange: (changes: TaskDelta[]) => void;
 };
 type ScopedSubscription = {
-  kind: 'scoped';
+  kind: 'task-ids';
   ids: string[];
   ancestorDepth: number;
   descendantDepth: number;
@@ -482,10 +531,12 @@ async function _getAllTasksForCurrentUser(): Promise<Task[]> {
   return mine;
 }
 
-async function _emitDeltas(deltas: TaskDelta[]) {
+async function _emitChanges(deltas: TaskDelta[]) {
   if (deltas.length === 0) return;
+  // TODO:debug (eg) - dispatch to subscriptions
+  console.log("[Tasks/Browser] dispatch", deltas.map(d => ({ n: d.newTask?.id, o: d.oldTask?.id })));
   for (const sub of _subscriptions) {
-    if (sub.kind === 'user') {
+    if (sub.kind === 'user-tasks') {
       const filtered = deltas.filter(d => (d.newTask?.user_id ?? d.oldTask?.user_id) === sub.userId);
       if (filtered.length > 0) sub.onChange(filtered);
     } else {
@@ -587,7 +638,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
 
     if (isUserSub) {
       const sub: UserSubscription = {
-        kind: 'user',
+        kind: 'user-tasks',
         userId: params.userId,
         onInitialize: params.onInitialize,
         onChange: params.onChange,
@@ -603,7 +654,7 @@ const advancedFeatures: ITaskAdvancedFeatures = {
       };
     } else {
       const sub: ScopedSubscription = {
-        kind: 'scoped',
+        kind: 'task-ids',
         ids: params.ids,
         ancestorDepth: params.ancestorDepth,
         descendantDepth: params.descendantDepth,
@@ -708,7 +759,7 @@ async function _hydrateForUser(user: User): Promise<void> {
   }
 }
 
-const api: ITasks & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
+const api: ITaskCoreLocal & ITaskRelations & ITaskCoreResponseHandler & ITaskAdvancedFeatures & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
 const BrowserTaskProvider: ILocalTaskProvider = {
   /** @param remoteTasks The backend task provider that this provider wraps */
@@ -818,3 +869,64 @@ async function validateTasksOwnership(tasks: Task[]): Promise<Task[]> {
 //     });
 // }
 //#endregion
+
+async function _remapLocalIdsAndRelationships(updatedIds: Map<string, string>): Promise<Task[]> {
+  assertDB(_db);
+  if (updatedIds.size === 0) return [];
+
+  // Load all affected tasks
+  const oldIds = Array.from(updatedIds.keys());
+  const [locals] = extractBatch(await taskCRUD.getTasks({ ids: oldIds }));
+
+  const remapped: Task[] = [];
+  // 1) Rewrite each task with the new ID and write it as a new record
+  for (const local of locals as Task[]) {
+    const newId = updatedIds.get(local.id)!;
+    const updated: Task = { ...local, id: newId, last_edit: new Date().toISOString() };
+    await _db.put(TASK_TABLE_NAME, updated);
+    remapped.push(updated);
+  }
+  // 2) Delete the old ID records
+  for (const local of locals as Task[]) {
+    await _db.delete(TASK_TABLE_NAME, local.id);
+  }
+  // 3) Update any references in other tasks' parents/children to point to the new IDs
+  //    We do this via relationship updates so it stays consistent with existing flow
+  const idMap = updatedIds;
+  // TODO:optimization this is an inefficient solution, when we already have relationship data in the changed tasks
+  const allUserTasks = await _getAllTasksForCurrentUser();
+  const refUpdates: UpdateTaskParams[] = [];
+  for (const task of allUserTasks) {
+    let parents = task.parents ?? [];
+    let children = task.children ?? [];
+    const newParents = parents.map(p => idMap.get(p) ?? p);
+    const newChildren = children.map(c => idMap.get(c) ?? c);
+
+    // Compute relation operations instead of raw array replacement
+    const relations: { id: string, operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[] = [];
+
+    // Parent changes
+    const addedParents = newParents.filter(p => !parents.includes(p));
+    const removedParents = parents.filter(p => !newParents.includes(p));
+    addedParents.forEach(p => relations.push({ id: p, operation: 'addParent' }));
+    removedParents.forEach(p => relations.push({ id: p, operation: 'removeParent' }));
+
+    // Child changes
+    const addedChildren = newChildren.filter(c => !children.includes(c));
+    const removedChildren = children.filter(c => !newChildren.includes(c));
+    addedChildren.forEach(c => relations.push({ id: c, operation: 'addChild' }));
+    removedChildren.forEach(c => relations.push({ id: c, operation: 'removeChild' }));
+
+    if (relations.length > 0) {
+      refUpdates.push({ id: task.id, data: {}, relations });
+    }
+  }
+  if (refUpdates.length > 0) {
+    await _updateTasksLocal(refUpdates, false);
+  }
+  // 4) Emit changes for remapped tasks: delete temps, add authoritative
+  const deleteDeltas: TaskDelta[] = (locals as Task[]).map(oldTask => ({ oldTask, newTask: null }));
+  const addDeltas: TaskDelta[] = remapped.map(newTask => ({ oldTask: null, newTask }));
+  await _emitChanges([...deleteDeltas, ...addDeltas]);
+  return remapped;
+}

@@ -103,6 +103,10 @@
 				taskById.delete(change.oldTask.id);
 			}
 		}
+		// TODO:design this is a heavy-handed solution to keep the UI in sync with the data.
+		// We must either prevent the user from laying out the graph how they please 🤮
+		// or figure out a way to allow the modification of nodes without recalculating...
+		void rebuildLayoutFromMap();
 	}
 
 	async function rebuildLayoutFromMap() {
@@ -306,7 +310,7 @@
 		if (params.nodes.length > 0) {
 			// Delete tasks from backend
 			// TODO:GraphUX Ask user whether to delete recursivly OR automatically connect children to parent on node deletion
-			await tasksAPI.deleteTasks({ deleteArgs: params.nodes.map((n) => ({ id: n.id })) });
+			await tasksAPI.deleteTasks({ ids: params.nodes.map((n) => n.id) });
 		}
 		if (params.edges.length > 0) {
 			// Convert deleted edges to relationship changes

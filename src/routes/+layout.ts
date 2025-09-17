@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
-import { processQueueInClient } from '@/API/SyncQueue';
+// import { processQueueInClient } from '@/API/SyncQueue';
 import type { LayoutLoad } from './$types';
 import { Err } from '@/Errors';
 
@@ -29,7 +29,8 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 	} 
 	*/
 
-	try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
+	// Queue processing disabled while using direct remote calls
+	// try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
 
 	// If we still don't have an active user, allow auth pages, else redirect to login
 	if (activeUser) {

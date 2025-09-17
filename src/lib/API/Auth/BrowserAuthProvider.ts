@@ -14,7 +14,7 @@ import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
 let db: LocalDB | null = null;
 let _remoteAuth: IAuth | null = null;
-let _tasks: ITasks | null = null;
+let _tasks: ILocalTasks | null = null;
 
 const BrowserAuthProvider: ILocalAuthProvider = {
   get: async function (
@@ -223,18 +223,16 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
     await db.put(AUTH_TABLE_NAME, updatedUser);
 
-    /* // TODO: This is an invalid gate. A user can't update their account info if they aren't paying for task sync??
-        if (userHasFeature(user, 'task-sync')) {
-          await queueAuthSyncCommand('updateUser', { update }, { oldUser: user }); */
     // Directly call remote auth provider if available
     if (_remoteAuth) {
-      const response = await _remoteAuth.updateUser({ update });
-      if (response.isErr()) {
-        // Undo changes locally if remote failed
-        assertDB(db);
-        await db.put(AUTH_TABLE_NAME, user);
-        return err(response.error);
-      }
+      void _remoteAuth.updateUser({ update })
+        .then(async (response) => {
+          const handlerRes = response.isErr() ? err({ oldUser: user }) : ok(undefined);
+          await auth.handleUpdateUserResponse(handlerRes as any);
+        })
+        .catch(async () => {
+          await auth.handleUpdateUserResponse(err({ oldUser: user }) as any);
+        });
     }
 
     return ok(updatedUser);
@@ -262,19 +260,16 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
       await db.delete(AUTH_TABLE_NAME, userId);
 
-      /* // TODO: This is an invalid gate. A user can't update their account info if they aren't paying for task sync??
-      if (userHasFeature(user, 'task-sync')) {
-        await queueAuthSyncCommand('deleteUser', { userId }, { oldUser: user });
-      } */
       // Directly call remote auth provider if available
       if (_remoteAuth) {
-        const response = await _remoteAuth.deleteUser({ userId });
-        if (response.isErr()) {
-          // Restore user locally if remote failed
-          assertDB(db);
-          await db.put(AUTH_TABLE_NAME, user);
-          return err(response.error);
-        }
+        void _remoteAuth.deleteUser({ userId })
+          .then(async (response) => {
+            const handlerRes = response.isErr() ? err({ oldUser: user }) : ok(undefined);
+            await auth.handleDeleteUserResponse(handlerRes as any);
+          })
+          .catch(async () => {
+            await auth.handleDeleteUserResponse(err({ oldUser: user }) as any);
+          });
       }
     }
 

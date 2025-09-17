@@ -13,8 +13,7 @@ export interface ILocalTaskProvider {
   get(wrappedTasks?: ITasks): Promise<ILocalTasks>;
 }
 export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
-export type ITaskReverter = ITaskCoreResponseHandler
-export type ILocalTasks = ITasks & ITaskExporter & {
+export type ILocalTasks = ITaskCoreLocal & ITaskExporter & ITaskRelations & ITaskAdvancedFeatures & {
   hasRemote(): boolean;
   hydrateForUser(params: { user: User }): Promise<void>;
 };
@@ -24,7 +23,7 @@ export type ILocalTasks = ITasks & ITaskExporter & {
 export type TaskDelta = { oldTask: Task | null; newTask: Task | null };
 
 
-
+// TODO:sync switch batch results to all-or-nothing transactional Result<>
 /**
  * Manages modifications to markdown files that represent tasks,
  * as well as keeping a database index in sync for rapid querying of data
@@ -35,7 +34,7 @@ export interface ITaskCore {
    * @returns The new task's generated ID
    */
   createTask(params: { createDetail: CreateTaskParams }): Promise<Result<Task>>;
-  createTasks(params: { createDetails: CreateTaskParams[] }): Promise<BatchResult<Task, ArgumentError>>;
+  createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ updatedIds: Map<string, string> }>>;
   /**
    * Fetches a task's data by its ID
    */
@@ -48,15 +47,19 @@ export interface ITaskCore {
   updateTask(params: UpdateTaskParams): Promise<Result<Task>>;
   updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task>>;
 
-  deleteTask(params: DeleteTaskParams): Promise<Result<void>>;
-  deleteTasks(params: { deleteArgs: DeleteTaskParams[] }): Promise<Result<void>>;
+  deleteTask(params: { id: string }): Promise<Result<void>>;
+  deleteTasks(params: { ids: string[] }): Promise<Result<void>>;
 
   changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<BatchResult<Task>>;
+}
+export type ITaskCoreLocal = Omit<ITaskCore, 'deleteTasks' | 'deleteTask'> & {
+  deleteTask(params: { id: string, recursive?: boolean }): Promise<Result<void>>;
+  deleteTasks(params: { ids: string[], recursive?: boolean }): Promise<Result<void>>;
 }
 
 // TODO Singular api will likely just wrap multi api for convenience, no need for more handlers
 export interface ITaskCoreResponseHandler {
-  handleCreateTasksResponse(response: Result<void, { createdIds: string[] }>): Promise<void>;
+  handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string> }, { idsToDelete: string[] }>): Promise<void>;
   handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[] }>): Promise<void>;
   handleDeleteTasksResponse(response: Result<void, { oldState: Task[] }>): Promise<void>;
   handleChangeOwnershipResponse(response: Result<void, { oldUserID: string, newUserID: string }>): Promise<void>;
@@ -140,7 +143,6 @@ export type CreateTaskParams = Partial<Task> & Omit<Task,
 export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id">
 type RelationChange = { id: string, operation: "addChild" | "removeChild" | "addParent" | "removeParent" }
 export type UpdateTaskParams = { id: string, data?: Partial<Omit<Task, "children" | "parents">>, relations?: RelationChange[] };
-export type DeleteTaskParams = { id: string, recursive?: boolean };
 
 //#endregion
 

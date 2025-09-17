@@ -12,6 +12,10 @@ export enum ErrorType {
     InputRequired = "Error - InputRequired"
 }
 
+if (dev) {
+    console.log("Err system in DEV mode");
+}
+
 const STACK_REG = /at (.*)\(https?:\/\/[a-z\-]*(?::[0-9]*|\.[a-z]*)(\/.*?)\?.=.*:([0-9]+):([0-9]+)/;
 export class Err {
     static wrap(nativeError: Error): Err {
@@ -57,7 +61,6 @@ export class Err {
      */
     constructor(private inheritanceDepth: number, public type: string, public message: string, public context?: any) {
         if (dev) {
-            console.log("Err system in DEV mode");
             this.withTrace();
         }
     }
@@ -150,8 +153,14 @@ export class InputRequiredError extends Err {
 }
 
 export class NotFoundError extends Err {
-    constructor(msg: string = "Item", key: any) {
+    constructor(msg: string = "Item not found", key: any) {
         super(1, ErrorType.NotFoundError, msg, key);
+    }
+}
+
+export class NotAuthorizedError extends Err {
+    constructor(msg: string = "Not authorized", context?: any) {
+        super(1, ErrorType.NotFoundError, msg, context);
     }
 }
 

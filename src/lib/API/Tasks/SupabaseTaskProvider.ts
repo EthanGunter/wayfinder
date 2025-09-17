@@ -1,6 +1,6 @@
 import { Err, IOError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import { err, ok } from "neverthrow";
-import type { ITasks, ITaskCore, ITaskRelations, ITaskAdvancedFeatures, CreateTaskParams, UpdateTaskParams, DeleteTaskParams } from "./types";
+import type { ITasks, ITaskCore, ITaskRelations, ITaskAdvancedFeatures, CreateTaskParams, UpdateTaskParams } from "./types";
 import { type Task, populateTaskDTO } from "./Task";
 import supabase, { TASK_TABLE_NAME } from "../SupabaseClient";
 import { okBatch, type IProvider } from "../types";
@@ -39,21 +39,75 @@ function mapTaskToInsert(dto: Partial<Task>): TablesInsert<'tasks'> {
   } as TablesInsert<'tasks'>;
 }
 
+// Fingerprint for correlating inserted rows to input details (order-independent)
+function fingerprintTaskLike(t: { title?: string | null; content?: string | null; priority?: number | null; status?: number | null; parents?: string[] | null; children?: string[] | null; todays_task?: string | null; }): string {
+  const title = t.title ?? '';
+  const content = (t.content ?? '').trim();
+  const priority = t.priority ?? 0;
+  const status = t.status ?? 0;
+  const parents = [...(t.parents ?? [])].sort();
+  const children = [...(t.children ?? [])].sort();
+  const todays = t.todays_task ?? '';
+  return JSON.stringify({ title, content, priority, status, parents, children, todays });
+}
+
 // No separate Update mapping; we use Insert shape for upsert to satisfy required fields
+
 
 const crud: ITaskCore = {
   createTask: async ({ createDetail }) => {
     const dto = populateTaskDTO(createDetail);
+    // Server is authoritative for id: force id generation by stripping any client-provided id
+    delete (dto as any).id;
     const { data, error } = await supabase.from(TASK_TABLE_NAME).insert([dto]).select('*').single();
     if (error || !data) return err(new IOError(`Failed to create ${dto.title}`, error, dto));
     return ok(data);
   },
 
   createTasks: async ({ createDetails }) => {
-    const dtos = createDetails.map(populateTaskDTO);
+    const dtos = createDetails.map((d) => {
+      const dto = populateTaskDTO(d);
+      // Server is authoritative for id: force id generation by stripping any client-provided id
+      delete (dto as any).id;
+      return dto;
+    });
+
     const { data, error } = await supabase.from(TASK_TABLE_NAME).insert(dtos).select('*');
     if (error || !data) return err(new IOError(`Failed to create ${createDetails.map(t => t.title).join(', ')}`, error, dtos));
-    return okBatch(data);
+
+    // Reorder the returned rows to align with the input details using fingerprints
+    const buckets = new Map<string, Tables<'tasks'>[]>();
+    for (const row of data as Tables<'tasks'>[]) {
+      const key = fingerprintTaskLike(row);
+      const arr = buckets.get(key) ?? [];
+      arr.push(row);
+      buckets.set(key, arr);
+    }
+    const ordered: Tables<'tasks'>[] = [];
+    for (const dto of dtos) {
+      const key = fingerprintTaskLike({
+        title: dto.title,
+        content: dto.content as any,
+        priority: dto.priority as any,
+        status: dto.status as any,
+        parents: dto.parents as any,
+        children: dto.children as any,
+        todays_task: dto.todays_task as any,
+      });
+      const arr = buckets.get(key) ?? [];
+      const row = arr.shift();
+      if (row) ordered.push(row);
+      if (arr.length > 0) buckets.set(key, arr); else buckets.delete(key);
+    }
+
+    const mapping = new Map<string, string>();
+    const orderedRows = ordered.length === dtos.length ? ordered : (data as Tables<'tasks'>[]);
+    for (let i = 0; i < createDetails.length && i < orderedRows.length; i++) {
+      const maybeOldId = (createDetails as any)[i]?.id as string | undefined;
+      if (maybeOldId) mapping.set(maybeOldId, orderedRows[i].id);
+    }
+
+    return ok({ updatedIds: mapping });
   },
 
   getTask: async ({ id }) => {
@@ -91,19 +145,28 @@ const crud: ITaskCore = {
     if (existingRes.error) return err(new IOError('Failed to read tasks for update', existingRes.error, ids));
     const idToRow = new Map((existingRes.data ?? []).map((r: any) => [r.id, r] as [string, any]));
 
-    const rowsToUpsert: TablesInsert<'tasks'>[] = updates.map(u => {
-      const current = idToRow.get(u.id);
+    const results: Task[] = [];
+    const notFounds: NotFoundError[] = [];
+
+    for (const u of updates) {
+      const current = idToRow.get(u.id) as Task | undefined;
+      if (!current) {
+        notFounds.push(new NotFoundError(u.id, 'Task'));
+        continue;
+      }
+
+      // Build the next state to compute relation array changes
       const next: Task = {
-        id: u.id,
-        user_id: (u.data?.user_id ?? current?.user_id)!,
-        title: u.data?.title ?? current?.title ?? '',
-        content: u.data?.content ?? current?.content,
-        status: u.data?.status ?? current?.status ?? 0,
-        todays_task: u.data?.todays_task ?? current?.todays_task,
-        priority: u.data?.priority ?? current?.priority ?? 0,
-        parents: [...(current?.parents ?? [])],
-        children: [...(current?.children ?? [])],
-        created: current?.created ?? new Date().toISOString(),
+        id: current.id,
+        user_id: current.user_id, // never change user_id in update path
+        title: u.data?.title ?? current.title,
+        content: u.data?.content ?? current.content,
+        status: u.data?.status ?? current.status,
+        todays_task: u.data?.todays_task ?? current.todays_task,
+        priority: u.data?.priority ?? current.priority,
+        parents: [...(current.parents ?? [])],
+        children: [...(current.children ?? [])],
+        created: current.created,
         last_edit: new Date().toISOString(),
       };
 
@@ -116,27 +179,48 @@ const crud: ITaskCore = {
         }
       }
 
-      // Ensure required arrays exist for DB types
-      if (!next.parents) next.parents = [];
-      if (!next.children) next.children = [];
-      return next;
-    });
+      // Build partial patch to avoid touching user_id and other immutable fields
+      const patch: any = { last_edit: next.last_edit };
+      if (u.data && 'title' in (u.data as any)) patch.title = next.title;
+      if (u.data && 'content' in (u.data as any)) patch.content = next.content;
+      if (u.data && 'status' in (u.data as any)) patch.status = next.status;
+      if (u.data && 'todays_task' in (u.data as any)) patch.todays_task = next.todays_task;
+      if (u.data && 'priority' in (u.data as any)) patch.priority = next.priority;
+      if ((u.relations ?? []).length > 0) {
+        patch.parents = next.parents ?? [];
+        patch.children = next.children ?? [];
+      }
 
-    const { data, error } = await supabase.from(TASK_TABLE_NAME).upsert(rowsToUpsert).select('*');
-    if (error || !data) return err(new IOError('Failed to update tasks', error, updates));
-    return okBatch(data);
+      const { data, error } = await supabase
+        .from(TASK_TABLE_NAME)
+        .update(patch)
+        .eq('id', u.id)
+        .eq('user_id', current.user_id)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        // If update failed due to RLS or other error, surface as IO error
+        return err(new IOError(`Failed to update task ${u.id}`, error, patch));
+      }
+
+      results.push(data as Task);
+    }
+
+    return okBatch(results, notFounds);
   },
 
-  deleteTask: async ({ id }: DeleteTaskParams) => {
+  deleteTask: async ({ id }) => {
     const res = await supabase.from(TASK_TABLE_NAME).delete().eq('id', id).select('*').single();
     if (res.error) return err(new IOError(`Failed to delete ${id}`, res.error));
     if (!res.data) return err(new NotFoundError(id, 'Task'));
     return ok();
   },
 
-  deleteTasks: async ({ deleteArgs }) => {
-    // TODO:tasks/crud Delete doesn't take recursion into account...
-    const ids = deleteArgs.map(d => d.id);
+  deleteTasks: async ({ ids }) => {
+    // Server-side: just delete the specific IDs provided (client handles recursion)
+    if (ids.length === 0) return ok();
+
     const res = await supabase.from(TASK_TABLE_NAME).delete().in('id', ids).select('*');
     if (res.error) return err(new IOError(`Failed to delete ${ids.join(', ')}`, res.error));
     return ok();

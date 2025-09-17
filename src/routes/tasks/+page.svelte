@@ -73,11 +73,21 @@
 	}
 
 	function handleInit(initialTasks: Task[]) {
+		// TODO:debug (eg) - init received
+		console.log('[tasks/+page] init', { count: initialTasks.length });
 		taskIndex = new Map(initialTasks.map((t) => [t.id, t]));
 		recomputeFromIndex();
 	}
 
 	function handleChanges(changes: TaskDelta[]) {
+		// TODO:debug (eg) - changes received
+		console.log(
+			'[tasks/+page] changes',
+			changes.map((c) => ({
+				newId: c.newTask?.id,
+				oldId: c.oldTask?.id
+			}))
+		);
 		for (const change of changes) {
 			if (change.newTask && change.oldTask) {
 				taskIndex.set(change.newTask.id, change.newTask);
@@ -94,6 +104,11 @@
 		if (!tasks || !user) return;
 		unsubscribe?.();
 		const id = page.url.searchParams.get('id');
+		// TODO:debug (eg) - subscribe path
+		console.log(
+			'[tasks/+page] subscribe',
+			id ? { mode: 'scoped', id } : { mode: 'user', user: user.id }
+		);
 		if (id) {
 			unsubscribe = tasks.subscribeTasks({
 				ids: [id],
@@ -103,6 +118,7 @@
 				onChange: handleChanges
 			});
 		} else {
+			// TODO:optimization only subscribe to the root tasks
 			unsubscribe = tasks.subscribeTasks({
 				userId: user.id,
 				onInitialize: handleInit,

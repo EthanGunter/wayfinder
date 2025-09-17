@@ -131,6 +131,7 @@
 			{title}
 		</span>
 	{/if}
+	<span>{task.id}</span>
 	<Button class="rounded-none bg-gray-800" onclick={() => (showContextMenu = true)}>
 		<Icon icon="ix:context-menu" />
 	</Button>
