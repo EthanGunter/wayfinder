@@ -27,11 +27,13 @@ function getDB() {
 }
 
 self.addEventListener('install', () => {
-	// keep SW lightweight; no precache yet
+	console.log("sw installed");
+	
 	self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+	console.log("sw activated");
 	event.waitUntil(self.clients.claim());
 });
 

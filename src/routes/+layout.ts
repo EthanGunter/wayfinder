@@ -8,8 +8,6 @@ export const ssr = false;
 export const prerender = true;
 
 export const load: LayoutLoad = async ({ parent, url }) => {
-	// Resolve all services
-
 	// Get the resolved services
 	const auth = await authAPIPromise;
 
@@ -34,7 +32,15 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 	try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
 
 	// If we still don't have an active user, allow auth pages, else redirect to login
-	if (!activeUser) {
+	if (activeUser) {
+		// Hydrate local data for the active user (idempotent)
+		try {
+			const tasks = await taskAPIPromise;
+			if (tasks?.hydrateForUser) {
+				await tasks.hydrateForUser({ user: activeUser });
+			}
+		} catch (e) { Err.UNHANDLED(e); }
+	} else {
 		const isAuthPage = url.pathname === '/login' || url.pathname === '/register';
 		if (isAuthPage) {
 			// Unauthenticated access allowed for auth pages

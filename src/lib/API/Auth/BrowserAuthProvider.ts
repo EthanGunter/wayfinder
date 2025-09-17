@@ -339,6 +339,14 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     // Switch to the logged in user
     await local.switchUser(remoteUser.id);
 
+    // Hydrate tasks for this user if local tasks provider is available
+    try {
+      const tasks = await BrowserTaskProvider.get();
+      if ((tasks as any).hydrateForUser) {
+        await (tasks as any).hydrateForUser({ user: remoteUser });
+      }
+    } catch {}
+
     // After login, try processing the queue so prior offline work flushes
     try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
 

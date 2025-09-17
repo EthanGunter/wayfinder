@@ -646,6 +646,38 @@ let _db: LocalDB | null;
 let _remoteTasks: ITasks | null = null;
 let _searchService: TaskSearchService | null = null;
 
+async function _hydrateForUser(user: User): Promise<void> {
+  assertDB(_db);
+  if (!_remoteTasks) return; // No remote available; nothing to hydrate
+
+  try {
+    const remoteBatch = await _remoteTasks.getAllUserTasks({ userId: user.id });
+    if (remoteBatch.isOk()) {
+      const remoteList = extractBatchAndLogErrors(remoteBatch);
+      const localList = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', user.id) as Task[];
+      const localById = new Map(localList.map(t => [t.id, t] as [string, Task]));
+
+      let changed = false;
+      for (const rt of remoteList) {
+        const lt = localById.get(rt.id);
+        const rtEdit = rt.last_edit ? new Date(rt.last_edit).getTime() : 0;
+        const ltEdit = lt?.last_edit ? new Date(lt.last_edit).getTime() : 0;
+        if (!lt || rtEdit > ltEdit) {
+          await _db.put(TASK_TABLE_NAME, rt);
+          changed = true;
+        }
+      }
+
+      if (changed && _searchService) {
+        const updatedUserTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', user.id) as Task[];
+        _searchService.reindexTasks(updatedUserTasks);
+      }
+    }
+  } catch (e) {
+    // Non-fatal: remain usable offline
+  }
+}
+
 const api: ITasks & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
 const BrowserTaskProvider: ILocalTaskProvider = {
@@ -668,39 +700,13 @@ const BrowserTaskProvider: ILocalTaskProvider = {
 
     if (remoteTasks) {
       _remoteTasks = remoteTasks;
-
-      // TODO initial hydration of tasks needs to move to the user's login (and when the app opens, if they are separate events)
-      // Initial hydration: pull remote tasks for current user and upsert newer copies locally
       if (currentUser) {
-        try {
-          const remoteBatch = await remoteTasks.getAllUserTasks({ userId: currentUser.id });
-          if (remoteBatch.isOk()) {
-            const remoteList = extractBatchAndLogErrors(remoteBatch);
-            const localList = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', currentUser.id) as Task[];
-            const localById = new Map(localList.map(t => [t.id, t] as [string, Task]));
-
-            let changed = false;
-            for (const rt of remoteList) {
-              const lt = localById.get(rt.id);
-              const rtEdit = rt.last_edit ? new Date(rt.last_edit).getTime() : 0;
-              const ltEdit = lt?.last_edit ? new Date(lt.last_edit).getTime() : 0;
-              if (!lt || rtEdit > ltEdit) {
-                await _db.put(TASK_TABLE_NAME, rt);
-                changed = true;
-              }
-            }
-
-            if (changed && _searchService) {
-              const updatedUserTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', currentUser.id) as Task[];
-              _searchService.reindexTasks(updatedUserTasks);
-            }
-          }
-        } catch (e) {
-          // Non-fatal: remain usable offline
-        }
+        await _hydrateForUser(currentUser);
       }
     }
-    return { ...api, hasRemote: () => !!_remoteTasks };
+
+
+    return { ...api, hasRemote: () => !!_remoteTasks, hydrateForUser: async ({ user }) => { await _hydrateForUser(user); } };
   },
 }
 

@@ -251,7 +251,7 @@ async function verifyConnectivity(): Promise<void> {
 
 const SupabaseTaskProvider: IProvider<ITasks> = {
   get: async () => {
-    await verifyConnectivity();
+    // await verifyConnectivity();
     return api;
   },
 };

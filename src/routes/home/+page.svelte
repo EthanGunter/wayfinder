@@ -98,7 +98,7 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		const res = await tasks!.updateTask({ id: task.id, data: { todays_task: '' } });
+		const res = await tasks!.updateTask({ id: task.id, data: { todays_task: null } });
 		res.match(
 			() => {},
 			(err) => {

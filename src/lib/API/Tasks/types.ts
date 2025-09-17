@@ -2,6 +2,7 @@
 
 import type { NotFoundError, Err, ArgumentError } from "$lib/Errors";
 import type { Task } from "./Task";
+import type { User } from "../Auth/User";
 import type { BatchResult, Result } from "../types";
 import { enqueueSyncCommand } from "../SyncQueue";
 
@@ -15,6 +16,7 @@ export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ITaskReverter = ITaskCoreResponseHandler
 export type ILocalTasks = ITasks & ITaskExporter & {
   hasRemote(): boolean;
+  hydrateForUser(params: { user: User }): Promise<void>;
 };
 /**
  * Delta describing a task change. Creation: oldTask=null. Deletion: newTask=null.
