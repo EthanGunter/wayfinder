@@ -11,7 +11,7 @@ import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
 import type { User } from '../Auth/User';
 import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
-import { queueTaskSyncCommand } from './types';
+// import { queueTaskSyncCommand } from './types';
 
 
 //#region Task CRUD
@@ -187,8 +187,13 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
     createdTasks.forEach(task => _searchService!.indexTask(task));
   }
 
-  if (updateServer) {
-    await queueTaskSyncCommand('createTasks', { createDetails: tasks }, { createdIds: createdTasks.map(t => t.id) });
+  /* if (updateServer) {
+      await queueTaskSyncCommand('createTasks', { createDetails: tasks }, { createdIds: createdTasks.map(t => t.id) }); */
+  if (updateServer && _remoteTasks) {
+    const response = await _remoteTasks.createTasks({ createDetails: tasks });
+    if (response.isErr()) {
+      await _deleteTasksLocal(createdTasks.map(t => ({ id: t.id })), false);
+    }
   }
 
   // Notify subscribers
@@ -258,9 +263,23 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   if (_searchService) {
     Array.from(updatedTasks.values()).forEach(task => _searchService!.indexTask(task));
   }
-
-  if (updateServer) {
-    await queueTaskSyncCommand('updateTasks', { updates }, { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) });
+  /*   if (updateServer) {
+      await queueTaskSyncCommand('updateTasks', { updates }, { oldState: Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task })) });
+   */
+  if (updateServer && _remoteTasks) {
+    const response = await _remoteTasks.updateTasks({ updates });
+    if (response.isErr()) {
+      // Revert local updates on failure
+      assertDB(_db);
+      for (const [oldTask, newTask] of updatedTasks) {
+        await _db.put(TASK_TABLE_NAME, oldTask);
+        if (_searchService) {
+          _searchService.indexTask(oldTask);
+        }
+      }
+      const revertDeltas: TaskDelta[] = Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask: newTask, newTask: oldTask }));
+      await _emitDeltas(revertDeltas);
+    }
   }
 
   // Notify subscribers with per-task deltas
@@ -308,9 +327,15 @@ async function _deleteTasksLocal(deleteArgs: DeleteTaskParams[], updateServer: b
     // TODO:task-sync userHasFeature('task-sync') instead of false constant
     await _updateTasksLocal(relUpdates, false);
   }
-
-  if (updateServer) {
-    await queueTaskSyncCommand('deleteTasks', { deleteArgs }, { oldState: deletedTasks });
+  /*   if (updateServer) {
+      await queueTaskSyncCommand('deleteTasks', { deleteArgs }, { oldState: deletedTasks });
+   */
+  if (updateServer && _remoteTasks) {
+    const response = await _remoteTasks.deleteTasks({ deleteArgs });
+    if (response.isErr()) {
+      // Recreate deleted tasks on failure
+      await _createTasksLocal(deletedTasks as any, false);
+    }
   }
   if (errors.length > 0) {
     return err(new IOError("Batch delete", errors));
@@ -327,9 +352,14 @@ async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updat
   for (const task of convertedTasks) {
     await _db.put('tasks', task);
   }
-
-  if (updateServer) {
-    await queueTaskSyncCommand('changeOwnership', { oldUserID, newUserID }, { oldUserID, newUserID });
+  /*   if (updateServer) {
+      await queueTaskSyncCommand('changeOwnership', { oldUserID, newUserID }, { oldUserID, newUserID });
+   */
+  if (updateServer && _remoteTasks) {
+    const response = await _remoteTasks.changeOwnership({ oldUserID, newUserID });
+    if (response.isErr()) {
+      await _changeOwnershipLocal(newUserID, oldUserID, false);
+    }
   }
 
   return okBatch(convertedTasks);

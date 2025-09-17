@@ -98,7 +98,7 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		const res = await tasks!.updateTask({ id: task.id, data: { todays_task: null } });
+		const res = await tasks!.updateTask({ id: task.id, data: { todays_task: undefined } });
 		res.match(
 			() => {},
 			(err) => {
@@ -169,7 +169,7 @@
 	let hasAnyTasks = $derived(
 		hasAnyTasksExplicit || todaysList.length > 0 || suggestedTasks.length > 0
 	);
- </script>
+</script>
 
 {#if auth && user && tasks}
 	<TutorialWelcome />
@@ -180,7 +180,7 @@
 			class="grid-area-content mx-auto flex w-full max-w-[35rem] min-w-80 flex-col overflow-hidden p-4"
 		>
 			{#if true}
-                <!-- TODO:Temp anonymous accounts disabled
+				<!-- TODO:Temp anonymous accounts disabled
                 <div
                     class="mt-12 flex flex-col gap-4 rounded-lg border border-gray-300 bg-gray-50 p-8 text-center"
                 >

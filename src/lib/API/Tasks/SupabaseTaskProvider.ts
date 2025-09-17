@@ -135,6 +135,7 @@ const crud: ITaskCore = {
   },
 
   deleteTasks: async ({ deleteArgs }) => {
+    // TODO:tasks/crud Delete doesn't take recursion into account...
     const ids = deleteArgs.map(d => d.id);
     const res = await supabase.from(TASK_TABLE_NAME).delete().in('id', ids).select('*');
     if (res.error) return err(new IOError(`Failed to delete ${ids.join(', ')}`, res.error));
