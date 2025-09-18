@@ -9,6 +9,7 @@
 	import { type LocalUser } from '@/API/Auth/User';
 	import UserAvatar from '@/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
+	import { Err } from '@/Errors';
 
 	let auth = $state<ILocalAuth>();
 	let users = $state<LocalUser[]>([]);
@@ -26,7 +27,7 @@
 
 	async function loadUsers() {
 		if (!auth) return;
-		
+
 		try {
 			const allUsers = await auth.listUsers();
 			// Sort users alphabetically by display name
@@ -68,7 +69,7 @@
 	}
 
 	async function handleRemoteLogin() {
-		if (!auth || isLoading) return;
+		if (!auth || isLoading || !email.trim() || !password.trim()) return;
 		isLoading = true;
 		errorMessage = '';
 
@@ -76,14 +77,18 @@
 			const creds: LoginCredentials = { type: 'email_password', email, password };
 			const result = await auth.login({ creds });
 			if (result.isOk()) {
+				// Clear credentials on success
+				email = '';
+				password = '';
 				await invalidateAll();
 				goto(redir);
 			} else {
-				const e: any = result.error;
+				const error = result.error;
 				// TODO:Temp anonymous accounts disabled
-				if (false/* e?.data?.requiresMigration */) {
+				if (false /* error?.data?.requiresMigration */) {
 				} else {
-					errorMessage = e?.message || 'Login failed';
+					errorMessage = 'Login failed';
+					Err.UNHANDLED(result.error);
 				}
 			}
 		} catch (e) {
@@ -94,7 +99,7 @@
 		}
 	}
 
-/* TODO:Temp Disabled anonymous migration flow
+	/* TODO:Temp Disabled anonymous migration flow
 async function confirmMigration(accept: boolean) {
 	if (!auth || !showMigrationPrompt) { showMigrationPrompt = null; return; }
 	const { anonId, remoteUserId } = showMigrationPrompt;
@@ -123,21 +128,30 @@ async function confirmMigration(accept: boolean) {
 
 <!-- Remote login -->
 <div class="mb-6 space-y-3">
-	<label class="block text-sm text-gray-600">Email</label>
-	<input type="email" bind:value={email} class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none" />
-	<label class="block text-sm text-gray-600">Password</label>
-	<input type="password" bind:value={password} class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none" />
-	<Button class="w-full" onclick={handleRemoteLogin} disabled={isLoading}>{isLoading ? 'Please wait...' : 'Sign in'}</Button>
+	<label for="email" class="block text-sm text-gray-600">Email</label>
+	<input
+		name="email"
+		type="email"
+		bind:value={email}
+		class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
+	/>
+	<label for="password" class="block text-sm text-gray-600">Password</label>
+	<input
+		name="password"
+		type="password"
+		bind:value={password}
+		class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
+	/>
+	<Button class="w-full" onclick={handleRemoteLogin} disabled={isLoading}
+		>{isLoading ? 'Please wait...' : 'Sign in'}</Button
+	>
 </div>
-
 
 {#if users.length === 0}
 	<div class="mb-4 rounded border border-gray-200 bg-gray-50 p-4 text-center text-gray-600">
 		<Icon icon="mdi:account-plus" class="mb-2 text-2xl" />
 		<p class="mb-2">No users found.</p>
-		<Button onclick={createNewUser} class="text-sm">
-			Create your first user
-		</Button>
+		<Button onclick={createNewUser} class="text-sm">Create your first user</Button>
 	</div>
 {:else}
 	<div class="mb-4">
@@ -147,7 +161,10 @@ async function confirmMigration(accept: boolean) {
 				<button
 					onclick={() => handleUserSwitch(user.id)}
 					disabled={isLoading}
-					class="flex w-full items-center gap-3 rounded border border-gray-200 bg-white p-3 text-left transition-colors hover:bg-gray-50 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 {currentUser?.id === user.id ? 'border-blue-500 bg-blue-50' : ''}"
+					class="flex w-full items-center gap-3 rounded border border-gray-200 bg-white p-3 text-left transition-colors hover:bg-gray-50 focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 {currentUser?.id ===
+					user.id
+						? 'border-blue-500 bg-blue-50'
+						: ''}"
 				>
 					<UserAvatar {user} class="h-10 w-10" />
 					<div class="flex-1">

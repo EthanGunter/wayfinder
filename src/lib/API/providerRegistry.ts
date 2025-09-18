@@ -53,14 +53,11 @@ export async function getLocalProviders(): Promise<{ auth: ILocalAuth, tasks: IL
 }
 
 // Export singletons for app-wide consumption
-const localProvidersPromise = isBrowser ? getLocalProviders() : null;
-export const taskAPIPromise = (isBrowser
-    ? (localProvidersPromise as Promise<{ auth: ILocalAuth, tasks: ILocalTasks }>).then(x => x.tasks)
-    : createUnavailablePromise<ILocalTasks>('taskAPIPromise is not available in Service Worker or non-browser contexts')
-) as Promise<ILocalTasks>;
-export const authAPIPromise = (isBrowser
-    ? (localProvidersPromise as Promise<{ auth: ILocalAuth, tasks: ILocalTasks }>).then(x => x.auth)
-    : createUnavailablePromise<ILocalAuth>('authAPIPromise is not available in Service Worker or non-browser contexts')
-) as Promise<ILocalAuth>;
+const localProvidersPromise = isBrowser 
+    ? getLocalProviders() 
+    : createUnavailablePromise<{ auth: ILocalAuth, tasks: ILocalTasks }>('Local providers are not available in Service Worker or non-browser contexts');
+
+export const taskAPIPromise: Promise<ILocalTasks> = localProvidersPromise.then(x => x.tasks);
+export const authAPIPromise: Promise<ILocalAuth> = localProvidersPromise.then(x => x.auth);
 
 

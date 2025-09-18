@@ -44,8 +44,8 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
       await _remapLocalIdsAndRelationships(updated);
     }
     else {
+      // TODO:design Consider putting local tasks in a sync-pending state, rather than deleting locally...
       const { idsToDelete } = response.error;
-      // TODO:task-sync userHasFeature('task-sync') instead of false constant
       await _deleteTasksLocal(idsToDelete, false, false);
     }
   },
@@ -117,8 +117,8 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState } = response.error;
-      // TODO:task-sync userHasFeature('task-sync') instead of false constant
-      await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false); // TODO This needs to perform the inverse relationship operations
+      // TODO This needs to perform the inverse relationship operations
+      await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false);
     }
   },
 
@@ -136,7 +136,6 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState } = response.error;
-      // TODO:task-sync userHasFeature('task-sync') instead of false constant
       await _createTasksLocal(oldState, false);
     }
   },
@@ -146,7 +145,6 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldUserID, newUserID } = response.error;
-      // TODO:task-sync userHasFeature('task-sync') instead of false constant
       await _changeOwnershipLocal(newUserID, oldUserID, false);
     }
   },
@@ -162,8 +160,6 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const currentUser = await getCurrentUser();
   if (!currentUser) {
     return err(new InvalidStateError("Cannot create tasks without an authenticated user"));
-  } else if (!userHasFeature(currentUser, 'task-sync')) {
-    return err(new InvalidStateError(`User, ${currentUser.display_name} (${currentUser.id}) does not have 'task-sync' feature flag`));
   }
 
   for (const taskDTO of tasks) {
@@ -210,6 +206,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
         if (response.isErr()) {
           await taskCRUD.handleCreateTasksResponse(err({ idsToDelete: createdTasks.map(t => t.id) }));
         } else {
+          // TODO:debt/refactor This logic should be getting handled in the `handleCreateTasksResponse()` function...
           // Remote now returns mapping directly
           await taskCRUD.handleCreateTasksResponse(ok(response.value));
           // Compute and send relationship updates using authoritative ids
@@ -281,8 +278,8 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   }
   try {
     const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
-    // TODO:task-sync userHasFeature('task-sync') instead of false constant
-    await _updateTasksLocal(relUpdates, false);
+    // TODO:?? I'm not sure if this updateServer should be propagated here, or intentionally `false`
+    await _updateTasksLocal(relUpdates, updateServer);
   } catch (e) {
     console.error("Task relationship update failed:", updatedTasks);
   }

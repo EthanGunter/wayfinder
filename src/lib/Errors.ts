@@ -5,6 +5,7 @@ export enum ErrorType {
     ArgumentError = "Error - InvalidArgument",
     InvalidState = "Error - InvalidState",
     NotFoundError = "Error - NotFound",
+    NotAuthorizedError = "Error - NotAuthorized",
     ParseError = "Error - FailedParse",
     IOError = "Error - InputOutput",
     NotImplementedError = "Error - NotImplemented",

@@ -159,8 +159,8 @@ const local: IAuthLocalFunctions = {
     assertDB(db);
     const users = await db.getAll(AUTH_TABLE_NAME);
     if (users.length === 0) {
-      // TODO:Temp anonymous accounts disabled
-      return err(new InvalidStateError("There are too many users to select a default"));
+      // TODO: Anonymous accounts disabled
+      return err(new InvalidStateError("No users available and anonymous account creation is disabled"));
       /* 
       // Only create the anonymous user the first time
       const userData: User = {
@@ -227,17 +227,20 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     if (_remoteAuth) {
       void _remoteAuth.updateUser({ update })
         .then(async (response) => {
-          const handlerRes = response.isErr() ? err({ oldUser: user }) : ok(undefined);
-          await auth.handleUpdateUserResponse(handlerRes as any);
+          if (response.isErr()) {
+            await auth.handleUpdateUserResponse(err({ oldUser: user }));
+          } else {
+            await auth.handleUpdateUserResponse(ok());
+          }
         })
-        .catch(async () => {
-          await auth.handleUpdateUserResponse(err({ oldUser: user }) as any);
+        .catch(async (error) => {
+          await auth.handleUpdateUserResponse(err({ oldUser: user }));
         });
     }
-
     return ok(updatedUser);
   },
   handleUpdateUserResponse: async function (response) {
+    // TODO:DX log error
     if (response.isErr()) {
       const { oldUser } = response.error;
       // Undo changes
@@ -263,12 +266,15 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
       // Directly call remote auth provider if available
       if (_remoteAuth) {
         void _remoteAuth.deleteUser({ userId })
-          .then(async (response) => {
-            const handlerRes = response.isErr() ? err({ oldUser: user }) : ok(undefined);
-            await auth.handleDeleteUserResponse(handlerRes as any);
+          .then((response) => {
+            if (response.isErr()) {
+              void auth.handleDeleteUserResponse(err({ oldUser: user }));
+            } else {
+              void auth.handleDeleteUserResponse(ok());
+            }
           })
-          .catch(async () => {
-            await auth.handleDeleteUserResponse(err({ oldUser: user }) as any);
+          .catch(() => {
+            void auth.handleDeleteUserResponse(err({ oldUser: user }));
           });
       }
     }
@@ -276,6 +282,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     return ok();
   },
   handleDeleteUserResponse: async function (response) {
+    // TODO:DX log error
     if (response.isErr()) {
       const { oldUser } = response.error;
       assertDB(db);
@@ -287,28 +294,6 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     assertRemoteAuth(_remoteAuth, "Cannot check registration without a provided remote auth provider");
     return _remoteAuth.getRegistrationRequirements(signUpCred);
   },
-
-  /*   handleRegisterResponse: async function (response) {
-      assertDB(db);
-  
-      if (response.isErr()) {
-        const { creds, lastLoggedIn, oldUser } = response.error;
-        // If failed, switch back to the old user
-        lastLoggedIn ?
-          await api.switchUser(lastLoggedIn) : await api.logout();
-  
-        // Revert the user info
-        await db.put(AUTH_TABLE_NAME, oldUser);
-  
-        // TODO Let the user know that registration failed
-      } else {
-        const { oldUser, registeredUser } = response.value;
-  
-        local.migrateRegisteredUser({ oldUser, registeredUser })
-      }
-  
-      Err.throw(new NotImplementedError("BrowserAuth.handleRegisterResponse"))
-    }, */
 
   login: async function ({ creds }) {
     assertDB(db);
@@ -358,7 +343,7 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
       if ((tasks as any).hydrateForUser) {
         await (tasks as any).hydrateForUser({ user: remoteUser });
       }
-    } catch {}
+    } catch { }
 
     /* // After login, try processing the queue so prior offline work flushes
     try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); } */

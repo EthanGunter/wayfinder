@@ -179,79 +179,54 @@
 		<div
 			class="grid-area-content mx-auto flex w-full max-w-[35rem] min-w-80 flex-col overflow-hidden p-4"
 		>
-			{#if true}
-				<!-- TODO:Temp anonymous accounts disabled
-                <div
-                    class="mt-12 flex flex-col gap-4 rounded-lg border border-gray-300 bg-gray-50 p-8 text-center"
-                >
-                    <h3 class="m-0 mb-2 text-2xl text-gray-800">Welcome to Wayfinder!</h3>
-                    <Button id="add-task-button" onclick={startProject}>Start a Project</Button>
-                    <p class="m-0 text-sm text-gray-500 italic">Or sign in to sync your data.</p>
-                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-center">
-                        <Button
-                            class="border border-gray-400 bg-transparent text-gray-800 transition-all duration-200 ease-in-out hover:border-gray-600 hover:bg-gray-100"
-                            onclick={() => goto(`/login?redirect=${page.url.pathname}${page.url.search}`)}
-                        >
-                            Sign In
-                        </Button>
-                        <Button
-                            class="border-blue-500 bg-blue-500 text-white transition-all duration-200 ease-in-out hover:-translate-y-1 hover:border-blue-600 hover:bg-blue-600 hover:shadow-[0_4px_12px_rgba(0,122,204,0.3)]"
-                            onclick={() => goto(`/register?redirect=${page.url.pathname}${page.url.search}`)}
-                        >
-                            Create Account
-                        </Button>
-                    </div>
-                </div>
-                -->
-				<div class="drop-zones-container">
-					<div
-						id="todays-tasks-list"
-						class="droppable-zone todays-tasks"
-						use:droppable={{
-							accepts: ['task'],
-							onDrop: handleTodaysTaskDrop
-						}}
-					>
-						<h1>Today's Tasks</h1>
-						{#if filteredSuggestedTasks.length > 0}
-							<h4>Nothing here. Drag some suggestions in!</h4>
-						{/if}
-						<div class="tasks-list">
-							{#each filteredDaysTasks as task, index (task.id)}
-								{#if index === firstCompletedIndex && firstCompletedIndex !== -1}
-									<div class="completed-separator" aria-hidden="true">Completed</div>
-								{/if}
-								<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
-							{/each}
-						</div>
-					</div>
-					<div
-						id="suggested-tasks-list"
-						class="droppable-zone suggested-tasks"
-						use:droppable={{
-							accepts: ['task'],
-							onDrop: handleSuggestedTaskDrop
-						}}
-					>
-						<h2>Suggested Tasks</h2>
-
-						{#if filteredSuggestedTasks.length === 0}
-							<div>
-								<h4>There's nothing to suggest!</h4>
-								{#if !hasAnyTasks}
-									<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
-								{/if}
-							</div>
-						{/if}
-
-						<div class="tasks-list">
-							{#each filteredSuggestedTasks as task (task.id)}
-								<TaskListItem {task} {onTaskChange} />
-							{/each}
-						</div>
+			<div class="drop-zones-container">
+				<div
+					id="todays-tasks-list"
+					class="droppable-zone todays-tasks"
+					use:droppable={{
+						accepts: ['task'],
+						onDrop: handleTodaysTaskDrop
+					}}
+				>
+					<h1>Today's Tasks</h1>
+					{#if filteredSuggestedTasks.length > 0}
+						<h4>Nothing here. Drag some suggestions in!</h4>
+					{/if}
+					<div class="tasks-list">
+						{#each filteredDaysTasks as task, index (task.id)}
+							{#if index === firstCompletedIndex && firstCompletedIndex !== -1}
+								<div class="completed-separator" aria-hidden="true">Completed</div>
+							{/if}
+							<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
+						{/each}
 					</div>
 				</div>
-			{/if}
+				<div
+					id="suggested-tasks-list"
+					class="droppable-zone suggested-tasks"
+					use:droppable={{
+						accepts: ['task'],
+						onDrop: handleSuggestedTaskDrop
+					}}
+				>
+					<h2>Suggested Tasks</h2>
+
+					{#if filteredSuggestedTasks.length === 0}
+						<div>
+							<h4>There's nothing to suggest!</h4>
+							{#if !hasAnyTasks}
+								<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
+							{/if}
+						</div>
+					{/if}
+
+					<div class="tasks-list">
+						{#each filteredSuggestedTasks as task (task.id)}
+							<TaskListItem {task} {onTaskChange} />
+						{/each}
+					</div>
+				</div>
+			</div>
 		</div>
 		<AppFooter className="grid-area-footer z-10" />
 	</div>

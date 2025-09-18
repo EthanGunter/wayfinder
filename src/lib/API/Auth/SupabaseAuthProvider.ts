@@ -7,7 +7,7 @@ import {
 } from './types';
 import { type IProvider } from '../types';
 import type { AuthError, UserAttributes } from '@supabase/auth-js';
-import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError } from '$lib/Errors';
+import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError, IOError } from '$lib/Errors';
 import { type User } from './User';
 import type { Tables, TablesInsert } from '../supabase';
 
@@ -35,7 +35,7 @@ const core: IAuth = {
         return ok(issues);
     },
 
-    register: async function ({ creds, userData: userData }) {
+    register: async function ({ creds, userData }) {
         // First, create the user in auth.users (this handles email/password)
         const authRes = await supabase.auth.signUp({
             email: creds.email,
@@ -76,9 +76,7 @@ const core: IAuth = {
             .single();
 
         if (insertError) {
-            // If we can't create the user record, we should clean up the auth user
-            // TODO: Implement cleanup of auth user if public.users insert fails
-            Err.UNHANDLED(insertError);
+            return err(new IOError("Remote failed to add user to DB", insertError, { creds, userData }));
         }
 
         const created: User = {

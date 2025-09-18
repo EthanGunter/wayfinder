@@ -108,6 +108,13 @@ async function processQueue() {
 	}
 	const batch = await takeNextBatch(50);
 	for (const entry of batch) {
+		// Skip entries that have exceeded retry limit
+		const MAX_RETRIES = 3;
+		if (entry.tryCount >= MAX_RETRIES) {
+			console.warn(`Skipping entry ${entry.id} - exceeded retry limit`);
+			continue;
+		}
+		
 		try {
 			switch (entry.channel) {
 				case AUTH_SYNC_CHANNEL: {
@@ -133,7 +140,8 @@ async function processQueue() {
 			const wrapped = toErr(e).withTrace();
 			wrapped.logError();
 			await markFailed(entry.id!, wrapped);
-			break;
+			// Don't break - continue processing other entries
+			continue;
 		}
 	}
 }

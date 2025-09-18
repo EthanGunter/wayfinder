@@ -27,6 +27,7 @@
 	onMount(async () => {
 		auth = await authAPIPromise;
 		tasks = await taskAPIPromise;
+		// TODO:auth account page doesn't actually use the +layout.ts provided user... might cause issues?
 		const active = await auth.getActiveUser();
 
 		if (!active) {

@@ -45,11 +45,13 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 		const isAuthPage = url.pathname === '/login' || url.pathname === '/register';
 		if (isAuthPage) {
 			// Unauthenticated access allowed for auth pages
-			return { user: null } as any;
+			return { user: null };
 		}
 		const redir = encodeURIComponent(url.pathname + url.search);
 		throw redirect(302, `/login?redirect=${redir}`);
 	}
 
+	// TODO:auth Nothing actually uses the user data provided by this file, they're using getActiveUser instead.
+	// Is this an antipattern?
 	return { user: activeUser };
 };
