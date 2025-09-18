@@ -5,6 +5,7 @@ import { type Task, populateTaskDTO } from "./Task";
 import supabase, { TASK_TABLE_NAME } from "../SupabaseClient";
 import { okBatch, type IProvider } from "../types";
 import type { Tables, TablesInsert } from "../supabase";
+import { getRelationshipUpdates } from "./index";
 
 // Helpers to map between DB row and app Task shape
 function mapRowToTask(row: Tables<'tasks'>): Task {
@@ -105,6 +106,30 @@ const crud: ITaskCore = {
     for (let i = 0; i < createDetails.length && i < orderedRows.length; i++) {
       const maybeOldId = (createDetails as any)[i]?.id as string | undefined;
       if (maybeOldId) mapping.set(maybeOldId, orderedRows[i].id);
+    }
+
+    // Handle inverse relationship updates with real server IDs
+    // Map created tasks to their real IDs for relationship processing
+    const tasksWithRealIds: Task[] = orderedRows.map(row => ({
+      id: row.id,
+      user_id: row.user_id,
+      title: row.title,
+      content: row.content ?? undefined,
+      status: row.status,
+      todays_task: row.todays_task,
+      priority: row.priority ?? 0,
+      parents: row.parents ?? [],
+      children: row.children ?? [],
+      created: row.created,
+      last_edit: row.last_edit,
+    }));
+
+    // Calculate inverse relationship updates using real IDs
+    const relationshipUpdates = await getRelationshipUpdates(api, tasksWithRealIds.map(newTask => ({ oldTask: null, newTask })));
+    
+    // Apply relationship updates to server using real IDs
+    if (relationshipUpdates.length > 0) {
+      await crud.updateTasks({ updates: relationshipUpdates });
     }
 
     return ok({ updatedIds: mapping });

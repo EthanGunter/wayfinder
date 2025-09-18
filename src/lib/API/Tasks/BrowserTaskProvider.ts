@@ -185,6 +185,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   // This makes descendant-scoped subscribers include newly created children immediately.
   const localRelUpdates = await getRelationshipUpdates(api, createdTasks.map(newTask => ({ oldTask: null, newTask })));
   if (localRelUpdates.length > 0) {
+    // Local-only. We don't want the server updating with temp-ids
     await _updateTasksLocal(localRelUpdates, false);
   }
 
@@ -193,8 +194,6 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
     createdTasks.forEach(task => _searchService!.indexTask(task));
   }
 
-  // TODO:debug (eg) - emit create deltas
-  console.log("[Tasks/Browser] emit create", createdTasks.map(t => t.id));
   await _emitChanges(createdTasks.map(newTask => ({ oldTask: null, newTask })) as TaskDelta[]);
 
   /* if (updateServer) {
@@ -202,18 +201,11 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   if (updateServer && _remoteTasks) {
     void _remoteTasks.createTasks({ createDetails: createdTasks })
       .then(async (response) => {
-        // TODO:sync this error handling is a stand-in for the SyncQueue
+        // TODO:sync/temp this error handling is a stand-in for the SyncQueue
         if (response.isErr()) {
           await taskCRUD.handleCreateTasksResponse(err({ idsToDelete: createdTasks.map(t => t.id) }));
         } else {
-          // TODO:debt/refactor This logic should be getting handled in the `handleCreateTasksResponse()` function...
-          // Remote now returns mapping directly
           await taskCRUD.handleCreateTasksResponse(ok(response.value));
-          // Compute and send relationship updates using authoritative ids
-          const updatedIds = response.value.updatedIds;
-          const remappedNewTasksLocal = createdTasks.map(t => ({ ...t, id: updatedIds.get(t.id) ?? t.id }));
-          const postRelUpdates = await getRelationshipUpdates(api, remappedNewTasksLocal.map(newTask => ({ oldTask: null, newTask })));
-          await _updateTasksLocal(postRelUpdates); // allow server update
         }
       })
       .catch(async () => {
@@ -301,7 +293,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
   if (updateServer && _remoteTasks) {
     void _remoteTasks.updateTasks({ updates })
       .then(async (response) => {
-        // TODO:sync this error handling is a stand-in for the SyncQueue
+        // TODO:sync/temp this error handling is a stand-in for the SyncQueue
         if (response.isErr()) {
           const oldState = Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task }));
           await taskCRUD.handleUpdateTasksResponse(err({ oldState }) as any);
@@ -921,7 +913,18 @@ async function _remapLocalIdsAndRelationships(updatedIds: Map<string, string>): 
   if (refUpdates.length > 0) {
     await _updateTasksLocal(refUpdates, false);
   }
-  // 4) Emit changes for remapped tasks: delete temps, add authoritative
+  // 4) Handle inverse relationship updates for newly remapped tasks
+  //    This ensures that when remapped tasks declare parents/children, 
+  //    those parent/child tasks also reference the remapped tasks
+  const postRelUpdates = await getRelationshipUpdates(api, remapped.map(newTask => ({ oldTask: null, newTask })));
+  // TODO:debug (eg) - track inverse relationship updates after ID remap
+  console.log("[Debug] _remapLocalIdsAndRelationships postRelUpdates:", postRelUpdates.length, postRelUpdates.map(u => ({ id: u.id, relations: u.relations })));
+  if (postRelUpdates.length > 0) {
+    // Local-only: Server already handled relationships with real IDs during creation
+    await _updateTasksLocal(postRelUpdates, false);
+  }
+  
+  // 5) Emit changes for remapped tasks: delete temps, add authoritative
   const deleteDeltas: TaskDelta[] = (locals as Task[]).map(oldTask => ({ oldTask, newTask: null }));
   const addDeltas: TaskDelta[] = remapped.map(newTask => ({ oldTask: null, newTask }));
   await _emitChanges([...deleteDeltas, ...addDeltas]);
