@@ -44,6 +44,17 @@ export interface IAuth {
     logout(): Promise<Result<void>>,
 }
 
+export interface IAuthSessionCapable {
+    /** Returns opaque session material for the currently authenticated user (e.g., refresh token) */
+    getSessionMaterial(params: { userId: string }): Promise<Result<string | null, NotImplementedError>>;
+    /** Restores/refreshes a session for a given user using previously stored material; may return rotated material */
+    restoreSession(params: { userId: string, material: string }): Promise<Result<{ rotatedMaterial?: string }, NotImplementedError>>;
+}
+
+export function isSessionCapable(auth: IAuth): auth is IAuth & IAuthSessionCapable {
+    return typeof (auth as any).getSessionMaterial === 'function' && typeof (auth as any).restoreSession === 'function';
+}
+
 export interface IAuthAPI extends IAuth {
     // Additional methods specific to the API implementation
 }

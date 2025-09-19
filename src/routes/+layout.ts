@@ -12,7 +12,9 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 	const auth = await authAPIPromise;
 
 	// Determine active user (prefer active, else default anonymous)
-	let activeUser = await auth.getActiveUser();
+    let activeUser = await auth.getActiveUser();
+    // TODO:debug [eg] trace active user at layout
+    try { console.log('[layout] activeUser', activeUser?.id); } catch {}
 
 	// TODO:Temp anonymous accounts disabled
 	/* 	
@@ -35,7 +37,7 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 	// If we still don't have an active user, allow auth pages, else redirect to login
 	if (activeUser) {
 		// Hydrate local data for the active user (idempotent)
-		try {
+        try {
 			const tasks = await taskAPIPromise;
 			if (tasks?.hydrateForUser) {
 				await tasks.hydrateForUser({ user: activeUser });

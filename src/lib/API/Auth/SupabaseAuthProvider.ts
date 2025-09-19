@@ -1,10 +1,6 @@
 import supabase from '$lib/API/SupabaseClient'
 import { err, ok } from 'neverthrow';
-import {
-    AccountIssueTarget,
-    type IAuth,
-    type MigrationRequirements,
-} from './types';
+import { AccountIssueTarget, type IAuth, type MigrationRequirements, type IAuthSessionCapable } from './types';
 import { type IProvider } from '../types';
 import type { AuthError, UserAttributes } from '@supabase/auth-js';
 import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError, IOError } from '$lib/Errors';
@@ -240,10 +236,33 @@ const core: IAuth = {
     //     return data.subscription.unsubscribe;
     // },
 }
-
+const sessionAbility: IAuthSessionCapable = {
+    async getSessionMaterial({ userId }: { userId: string }) {
+        try {
+            const { data } = await supabase.auth.getSession();
+            const sess = data.session;
+            if (!sess || sess.user?.id !== userId) return ok(null);
+            return ok(sess.refresh_token ?? null);
+        } catch {
+            return ok(null);
+        }
+    },
+    async restoreSession({ userId, material }: { userId: string, material: string }) {
+        // Use refresh token to refresh session; supabase-js will rotate tokens
+        const { data, error } = await supabase.auth.refreshSession({ refresh_token: material } as any);
+        if (error) {
+            return err(new NotImplementedError('Failed to restore session'));
+        }
+        // TODO:auth/security maybe it's a good idea to update the user from the data.user
+        // so any update that happened while the user was away gets propagated into the app
+        const newRt = data.session?.refresh_token;
+        const rotated = newRt && newRt !== material ? { rotatedMaterial: newRt } : {};
+        return ok(rotated);
+    }
+}
 
 const SupabaseAuthProvider: IProvider<IAuth> = {
-    get: async () => core,
+    get: async () => ({ ...core, ...sessionAbility }),
 }
 export default SupabaseAuthProvider;
 

@@ -148,7 +148,9 @@
 	</div>
 
 	<div class="mb-4">
-		<label for="confirmPassword" class="mb-2 block font-medium text-gray-800">Confirm Password</label>
+		<label for="confirmPassword" class="mb-2 block font-medium text-gray-800"
+			>Confirm Password</label
+		>
 		<input
 			id="confirmPassword"
 			type="password"
@@ -168,27 +170,9 @@
 	</Button>
 </form>
 
-{#if multipleAccounts}
-	<div class="mb-4 text-center">
-		<Button
-			variant="outline"
-			type="button"
-			class="cursor-pointer border-none bg-none text-sm text-blue-500 underline hover:text-blue-600"
-			onclick={() => goto(`/login?redirect=${redir}`)}
-		>
-			Already have an account? Switch Here
-		</Button>
-	</div>
-{/if}
-
-<!-- Always offer Login as an alternative -->
-<div class="mb-4 text-center">
-	<Button
-		variant="outline"
-		type="button"
-		class="cursor-pointer border-none bg-none text-sm text-blue-500 underline hover:text-blue-600"
-		onclick={() => goto(`/login?redirect=${redir}`)}
-	>
-		Already have an account? Login instead
-	</Button>
+<div class="mb-4 flex items-center justify-center text-sm">
+	<Button variant="link" onclick={() => goto(`/login?redirect=${redir}&mode=login`)}>Login</Button>
+	{#if multipleAccounts}
+		/ <Button variant="link" onclick={() => goto(`/login?redirect=${redir}&mode=switch`)}>Switch user</Button>
+	{/if}
 </div>

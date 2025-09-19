@@ -9,7 +9,7 @@
 	import { type LocalUser } from '@/API/Auth/User';
 	import UserAvatar from '@/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
-	import { Err } from '@/Errors';
+	import { Err, InputRequiredError } from '@/Errors';
 
 	let auth = $state<ILocalAuth>();
 	let users = $state<LocalUser[]>([]);
@@ -19,10 +19,16 @@
 	let isLoading = $state(false);
 	let email = $state('');
 	let password = $state('');
+	let mode = $state<'login' | 'switch'>('login');
 
 	onMount(async () => {
 		auth = await authAPIPromise;
 		await loadUsers();
+		// Determine initial mode: explicit query param wins; otherwise default to 'switch' if users exist
+		const qpMode = page.url.searchParams.get('mode');
+		const qpUser = page.url.searchParams.get('user');
+		if (users.length === 0) mode = 'login';
+		else if (qpMode === 'switch' || qpMode === 'login') mode = qpMode;
 	});
 
 	async function loadUsers() {
@@ -33,6 +39,10 @@
 			// Sort users alphabetically by display name
 			users = allUsers.sort((a, b) => a.display_name.localeCompare(b.display_name));
 			currentUser = await auth.getActiveUser();
+			// If no explicit mode yet, prefer switch when users exist
+			if (!page.url.searchParams.get('mode')) {
+				mode = users.length > 0 ? 'switch' : 'login';
+			}
 		} catch (error) {
 			errorMessage = 'Failed to load users';
 			console.error('Error loading users:', error);
@@ -52,8 +62,15 @@
 				// Switch successful, refresh and redirect
 				await invalidateAll();
 				goto(redir);
+			} else if (result.error instanceof InputRequiredError) {
+				// Require login for this account: show login form with message
+				mode = 'login';
+				const u = users.find((u) => u.id === userId);
+				errorMessage = u
+					? `Please sign in to continue as ${u.display_name}.`
+					: 'Login required to access this account.';
 			} else {
-				errorMessage = result.error.message || 'Failed to switch user';
+				Err.UNHANDLED(result.error);
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';
@@ -61,11 +78,6 @@
 		} finally {
 			isLoading = false;
 		}
-	}
-
-	async function createNewUser() {
-		// For now, just redirect to register page
-		goto(`/register?redirect=${redir}`);
 	}
 
 	async function handleRemoteLogin() {
@@ -98,62 +110,16 @@
 			isLoading = false;
 		}
 	}
-
-	/* TODO:Temp Disabled anonymous migration flow
-async function confirmMigration(accept: boolean) {
-	if (!auth || !showMigrationPrompt) { showMigrationPrompt = null; return; }
-	const { anonId, remoteUserId } = showMigrationPrompt;
-	showMigrationPrompt = null;
-	try {
-		if (!accept) {
-			await auth.deleteUser({ userId: anonId });
-		}
-		await auth.switchUser(remoteUserId);
-		await invalidateAll();
-		goto(redir);
-	} catch (e) {
-		console.error('Migration handling failed', e);
-		errorMessage = 'Migration failed';
-	}
-}
-*/
 </script>
 
-<h1 class="text-center text-gray-800">{currentUser ? 'Switch User' : 'Login'}</h1>
+<h1 class="text-center text-gray-800">{mode === 'switch' ? 'Switch User' : 'Login'}</h1>
 {#if errorMessage}
 	<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
 		{errorMessage}
 	</div>
 {/if}
 
-<!-- Remote login -->
-<div class="mb-6 space-y-3">
-	<label for="email" class="block text-sm text-gray-600">Email</label>
-	<input
-		name="email"
-		type="email"
-		bind:value={email}
-		class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-	/>
-	<label for="password" class="block text-sm text-gray-600">Password</label>
-	<input
-		name="password"
-		type="password"
-		bind:value={password}
-		class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-	/>
-	<Button class="w-full" onclick={handleRemoteLogin} disabled={isLoading}
-		>{isLoading ? 'Please wait...' : 'Sign in'}</Button
-	>
-</div>
-
-{#if users.length === 0}
-	<div class="mb-4 rounded border border-gray-200 bg-gray-50 p-4 text-center text-gray-600">
-		<Icon icon="mdi:account-plus" class="mb-2 text-2xl" />
-		<p class="mb-2">No users found.</p>
-		<Button onclick={createNewUser} class="text-sm">Create your first user</Button>
-	</div>
-{:else}
+{#if mode === 'switch'}
 	<div class="mb-4">
 		<p class="mb-3 text-sm text-gray-600">Select a user to continue:</p>
 		<div class="space-y-2">
@@ -184,15 +150,34 @@ async function confirmMigration(accept: boolean) {
 			{/each}
 		</div>
 	</div>
-
-	<div class="mb-4 text-center">
-		<Button
-			type="button"
-			variant="outline"
-			class="cursor-pointer border-none bg-none text-sm text-blue-500 underline hover:text-blue-600"
-			onclick={createNewUser}
+	<div class="mb-4 flex items-center justify-center text-sm">
+		<Button variant="link" onclick={() => goto(`/register?redirect=${redir}`)}>Register</Button> /
+		<Button variant="link" onclick={() => (mode = 'login')}>Login</Button>
+	</div>
+{:else}
+	<div class="mb-6 space-y-3">
+		<label for="email" class="block text-sm text-gray-600">Email</label>
+		<input
+			name="email"
+			type="email"
+			bind:value={email}
+			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
+		/>
+		<label for="password" class="block text-sm text-gray-600">Password</label>
+		<input
+			name="password"
+			type="password"
+			bind:value={password}
+			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
+		/>
+		<Button class="w-full" onclick={handleRemoteLogin} disabled={isLoading}
+			>{isLoading ? 'Please wait...' : 'Sign in'}</Button
 		>
-			Create a new user
-		</Button>
+	</div>
+	<div class="mb-4 flex items-center justify-center text-sm">
+		<Button variant="link" onclick={() => goto(`/register?redirect=${redir}`)}>Register</Button>
+		{#if users.length > 0}
+			/ <Button variant="link" onclick={() => (mode = 'switch')}>Switch user</Button>
+		{/if}
 	</div>
 {/if}

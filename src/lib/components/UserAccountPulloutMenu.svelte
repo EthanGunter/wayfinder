@@ -24,7 +24,10 @@
 	});
 
 	async function handleExportJson() {
-		if (!tasks || !user) return;
+		if (!tasks || !user || !auth) return;
+		// Revalidate active user to avoid exporting when signed out
+		const active = await auth.getActiveUser();
+		if (!active || active.id !== user.id) return;
 		const t = tasks as ILocalTasks;
 		const res = await t.getAllUserTasks({ userId: user!.id });
 		if (res.isErr()) return;
@@ -39,7 +42,10 @@
 	}
 
 	async function handleImportJson() {
-		if (!tasks || !user) return;
+		if (!tasks || !user || !auth) return;
+		// Revalidate active user to avoid importing when signed out
+		const active = await auth.getActiveUser();
+		if (!active || active.id !== user.id) return;
 		const t = tasks as ILocalTasks;
 		const input = document.createElement('input');
 		input.type = 'file';
@@ -83,6 +89,17 @@
 			}
 		};
 		input.click();
+	}
+
+	async function handleSignOut() {
+		if (!auth) return;
+		await auth.logout();
+		user = undefined;
+		invalidateAll();
+	}
+
+	function handleSwitchUser() {
+		goto(`/login?mode=switch&redirect=${page.url.pathname + page.url.search}`);
 	}
 </script>
 
@@ -132,6 +149,32 @@
 			<div class="text-left">
 				<div class="font-medium">Import Tasks (JSON)</div>
 				<div class="text-sm text-gray-500">Merge JSON into your task graph</div>
+			</div>
+		</Button>
+
+		<!-- Sign out -->
+		<Button
+			variant="outline"
+			class="flex h-16 items-center justify-start gap-3"
+			onclick={handleSignOut}
+		>
+			<Icon icon="material-symbols:logout" class="size-6 text-gray-600" />
+			<div class="text-left">
+				<div class="font-medium">Sign out</div>
+				<div class="text-sm text-gray-500">Sign out of this device</div>
+			</div>
+		</Button>
+
+		<!-- Switch user -->
+		<Button
+			variant="outline"
+			class="flex h-16 items-center justify-start gap-3"
+			onclick={handleSwitchUser}
+		>
+			<Icon icon="mdi:account-switch" class="size-6 text-gray-600" />
+			<div class="text-left">
+				<div class="font-medium">Switch user</div>
+				<div class="text-sm text-gray-500">Choose another local account</div>
 			</div>
 		</Button>
 	</div>

@@ -1,15 +1,14 @@
-import { v4 } from 'uuid';
-import type { IAuth, IAuthLocalFunctions, ILocalAuthProvider, IAuthResponseHandler } from './types';
-import { getDefaultUserFeatures, isAnonymous, userHasFeature, type User } from './User';
-import type { ILocalTaskProvider, ILocalTasks, ITasks } from '../Tasks';
+import { type IAuth, type IAuthLocalFunctions, type ILocalAuthProvider, type IAuthResponseHandler, type IAuthSessionCapable, isSessionCapable } from './types';
+import { isAnonymous } from './User';
+import type { ILocalTasks, ITasks } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
-import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from '$lib/Errors';
-import { extractBatchAndLogErrors } from '../types';
+import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
 // import { queueAuthSyncCommand } from './types';
 // import { processQueueInClient } from '../SyncQueue';
 import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
+import SessionVault from './SessionVault';
 
 // TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
 let db: LocalDB | null = null;
@@ -144,15 +143,48 @@ const local: IAuthLocalFunctions = {
     if (newUserId == active?.id) return ok(active);
 
     assertDB(db);
-    // Update last active time
     const user = await db.get(AUTH_TABLE_NAME, newUserId);
-    if (user) {
-      await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
-      await db.put(AUTH_TABLE_NAME, user);
-      return ok(user);
-    } else {
+    if (!user) {
       return err(new NotFoundError(newUserId, "User"));
     }
+
+    // Attempt to restore remote session using capability + SessionVault
+    if (_remoteAuth && isSessionCapable(_remoteAuth)) {
+      try {
+        let material = await SessionVault.get(newUserId);
+        if (!material) {
+          // Fallback: probe remote for current session (e.g., right after login just occurred)
+          const probe = await _remoteAuth.getSessionMaterial({ userId: newUserId });
+          if (probe.isOk() && probe.value) {
+            material = probe.value;
+            // TODO:mobile store via platform secure storage
+            await SessionVault.save(newUserId, material);
+          }
+        }
+        if (material) {
+          // TODO:debug [eg] trace restore
+          try { console.log('[auth.switchUser] restoring session for', newUserId); } catch {}
+          const res = await _remoteAuth.restoreSession({ userId: newUserId, material });
+          if (res.isErr()) {
+            return err(new InputRequiredError('Session expired. Please log in again.', { userId: newUserId }));
+          }
+          const rotated = res.value.rotatedMaterial;
+          if (rotated && rotated !== material) {
+            // TODO:mobile store via platform secure storage
+            await SessionVault.save(newUserId, rotated);
+          }
+        } else {
+          return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
+        }
+      } catch {
+        return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
+      }
+    }
+
+    // switch locally
+    await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
+    await db.put(AUTH_TABLE_NAME, user);
+    return ok(user);
   },
 
   getDefaultUser: async function () {
@@ -334,6 +366,19 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
     // Create local user with remote user data
     await db.put(AUTH_TABLE_NAME, remoteUser);
 
+    // Persist session material BEFORE switching so switchUser can restore remote session if needed
+    if (_remoteAuth && isSessionCapable(_remoteAuth)) {
+      try {
+        const materialRes = await _remoteAuth.getSessionMaterial({ userId: remoteUser.id });
+        if (materialRes.isOk() && materialRes.value) {
+          // TODO:debug [eg] trace save material
+          try { console.log('[auth.login] save material for', remoteUser.id); } catch {}
+          // TODO:mobile store via platform secure storage
+          await SessionVault.save(remoteUser.id, materialRes.value);
+        }
+      } catch { }
+    }
+
     // Switch to the logged in user
     await local.switchUser(remoteUser.id);
 
@@ -353,8 +398,16 @@ const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
 
   logout: async function () {
     assertDB(db);
+    // Capture who is being logged out before clearing active marker
+    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    try {
+      // Invalidate remote session
+      await _remoteAuth?.logout();
+    } catch { /* offline or already invalid */ }
+    if (activeId) {
+      try { await SessionVault.remove(activeId); } catch { }
+    }
     await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
-    try { await _remoteAuth?.logout(); } catch { /* offline or already invalid */ }
     invalidateAll();
     return ok();
   },

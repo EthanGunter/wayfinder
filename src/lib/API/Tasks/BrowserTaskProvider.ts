@@ -93,6 +93,11 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
 
   getAllUserTasks: async function ({ userId }) {
     assertDB(_db);
+    // Require an active user and only allow reads for that user's data
+    const currentUser = await getCurrentUser();
+    if (!currentUser || currentUser.id !== userId) {
+      return okBatch([] as Task[]);
+    }
     const userTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
     return okBatch(userTasks as Task[]);
   },
