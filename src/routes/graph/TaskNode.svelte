@@ -56,7 +56,7 @@
 		try {
 			if (!tasks) tasks = await taskAPIPromise;
 			const res = await tasks!.updateTask({ id: original.id, data: update });
-			(res as any)?.match?.(
+			res?.match?.(
 				() => {},
 				(err: any) => err?.logError?.()
 			);

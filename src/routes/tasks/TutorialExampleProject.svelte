@@ -5,9 +5,9 @@
 	import TModal from '@/tutorials/primitives/TModal.svelte';
 
 	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
-	import { taskAPIPromise, authAPIPromise } from '@/API/providerRegistry';
+	import { taskAPIPromise } from '@/API/providerRegistry';
+	import { authState } from '@/API/Auth/BrowserAuthProvider';
 	import { type ILocalTasks } from '@/API/Tasks';
-	import { type ILocalAuth } from '@/API/Auth/types';
 	import type { User } from '@/API/Auth/User';
 	import { queryOrWait } from '@/tutorials/dom';
 	import demoData from '@/tutorials/DemoData.json';
@@ -16,12 +16,11 @@
 	let active = $state(false);
 	let step = $state(0);
 	let tasks = $state<ILocalTasks>();
-	let auth = $state<ILocalAuth>();
 	let user = $state<User>();
 
 	const id = 'tasks.example-project';
 
-	onMount(async () => {
+	onMount(() => {
 		if (!tutorials.isDone('home.welcome')) {
 			goto('/home');
 			return;
@@ -31,18 +30,26 @@
 		step = tutorials.getStep(id);
 
 		// Initialize APIs
-		tasks = await taskAPIPromise;
-		auth = await authAPIPromise;
-		const activeUser = await auth.getActiveUser();
-		if (!activeUser) {
-			goto('/login');
-			return;
-		}
-		user = activeUser;
+		taskAPIPromise.then(t => {
+			tasks = t;
+			if (user) initializeExample();
+		});
+		
+		// Subscribe to auth state
+		const unsubscribeAuth = authState.subscribe((state) => {
+			if (state.status === 'signed-in' && state.user) {
+				user = state.user;
+				if (tasks) initializeExample();
+			} else if (state.status === 'signed-out') {
+				goto('/login');
+			}
+		});
 
 		active = true;
 
-		initializeExample();
+		return () => {
+			unsubscribeAuth();
+		};
 	});
 
 	function proceed() {

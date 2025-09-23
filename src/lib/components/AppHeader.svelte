@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { IAuthAPI } from '$lib/API/Auth/types';
 	import type { Task } from '$lib/API/Tasks/';
 	import { onMount, type Snippet } from 'svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
@@ -10,7 +9,8 @@
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import UserAvatar from './UserAvatar.svelte';
-	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+	import { authState, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 	import type { ILocalTasks } from '@/API/Tasks';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { tutorials } from '$lib/tutorials/store';
@@ -29,39 +29,56 @@
 		feature:
 			'https://docs.google.com/forms/d/e/1FAIpQLScP4Yz3kHHbCFVR4ogsTSB9_XJ_rVGPNuQcS71T4LsV0lSsmw/viewform?usp=sf_link'
 	};
-	let user = $state<User | null>(null);
 	let multipleUsers = $state(false);
 	let tasks = $state<ILocalTasks | null>(null);
 	let recentTasks = $state<Task[]>([]);
 
-	onMount(async () => {
-		const auth = await authAPIPromise;
-		user = await auth.getActiveUser();
-		multipleUsers = (await auth.listUsers()).length > 1;
+	onMount(() => {
+		// Subscribe to auth stores
+		const unsubscribeAuthState = authState.subscribe((state) => {
+			// Load recent tasks when user changes
+			loadRecentTasks();
+		});
+
+		const unsubscribeUsers = authUsers.subscribe((userList) => {
+			multipleUsers = userList.length > 1;
+		});
 
 		// Initialize task API for search
-		tasks = await taskAPIPromise;
+		taskAPIPromise.then((t) => {
+			tasks = t;
+			loadRecentTasks();
+		});
 
-		// Load recent tasks for default options
-		if (user) {
+		return () => {
+			unsubscribeAuthState();
+			unsubscribeUsers();
+		};
+	});
+
+	async function loadRecentTasks() {
+		if ($authState.status !== 'signed-in' || !tasks) return;
+		try {
 			const todaysTasks = await tasks.getTodaysTasks();
 			if (todaysTasks.isOk()) {
 				recentTasks = todaysTasks.value.slice(0, 5); // Show up to 5 recent tasks
 			}
+		} catch (e) {
+			console.error('Failed to load recent tasks:', e);
 		}
-	});
+	}
 
 	async function resetWalkthrough() {
-		if (!tasks || !user) return;
+		if (!tasks || $authState.status !== 'signed-in') return;
 		const confirmed = confirm(
 			'This will permanently delete all your tasks and reset all tutorials. Continue?'
 		);
 		if (!confirmed) return;
-		const all = await tasks.getAllUserTasks({ userId: user.id });
+		const all = await tasks.getAllUserTasks({ userId: $authState.user.id });
 		if (all.isOk()) {
-			const list = all.value.filter((r) => r.isOk()).map((r) => r._unsafeUnwrap());
+			const list = all.value.successes;
 			if (list.length > 0) {
-				await tasks.deleteTasks({ ids: list.map((t) => t.id) });
+				await tasks.deleteTasks({ ids: list.map((task) => task.id) });
 			}
 		}
 		try {
@@ -85,16 +102,17 @@
 	async function gotoTask(task: Task | string) {
 		if (typeof task === 'string') {
 			// Create a new task with this title
-			if (tasks && user) {
+			if (tasks && $authState.status === 'signed-in') {
 				try {
 					const result = await tasks.createTask({
 						createDetail: {
-							user_id: user.id,
+							id: crypto.randomUUID(),
+							user_id: $authState.user.id,
 							title: task
 						}
 					});
 					if (result.isOk()) {
-						goto(`/tasks/?id=${result.value.id}`);
+						goto(`/tasks/?id=${result.value.newId}`);
 					} else {
 						console.error('Failed to create task:', result.error);
 					}
@@ -226,11 +244,11 @@
 
 	{#if right}
 		{@render right()}
-	{:else if user}
+	{:else if $authState.status === "signed-in"}
 		<Sheet.Root>
 			<Sheet.Trigger>
 				<div id="account-menu-btn" class="btn flex h-12 w-12 overflow-hidden rounded-full p-0">
-					<UserAvatar {user} />
+					<UserAvatar user={$authState.user} />
 				</div>
 			</Sheet.Trigger>
 			<Sheet.Content side="right" class="w-80">

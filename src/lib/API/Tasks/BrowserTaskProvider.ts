@@ -1,16 +1,15 @@
-import { type IDBPDatabase } from 'idb';
-import { type ITaskAdvancedFeatures, type ITaskCore, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type TaskDelta, type ITaskCoreLocal } from './types';
+import { type ITaskAdvancedFeatures, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type TaskDelta, type ITaskCoreLocal } from './types';
 import { err, ok } from 'neverthrow';
-import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError } from '$lib/Errors';
-import { v4 } from 'uuid';
+import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError, ErrorType } from '$lib/Errors';
 import type { Task } from './Task';
-import { createTask, toMarkdown, isTaskCompleted, TaskStatus } from './Task';
+import { createTask, toMarkdown, isTaskCompleted } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
+import { remoteTasks as remoteTasksStore } from '$lib/stores/remoteTasks';
 import { userHasFeature, type User } from '../Auth/User';
-import { extractBatch, extractBatchAndLogErrors, okBatch, type BatchResult, type Result } from '../types';
+import { okBatch, type BatchResult } from '../types';
 // import { queueTaskSyncCommand } from './types';
 
 
@@ -22,10 +21,16 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
    */
   createTask: async function ({ createDetail: task }) {
     const res = await _createTasksLocal([task]);
-    if (res.isErr()) return err(res.error as any);
-    const [success, errors] = extractBatch(res);
+
+    if (res.isErr()) {
+      return err(res.error);
+    }
+    const { successes, errors } = res.value;
+
     if (errors.length > 0) return err(errors[0]);
-    return ok(success[0]);
+
+    // TODO:sync/tasks/refactor This should be returning void...
+    return ok({ oldId: "", newId: "" });
   },
 
   /**
@@ -34,8 +39,9 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
   */
   createTasks: async ({ createDetails }) => {
     const res = await _createTasksLocal(createDetails);
-    if (res.isErr()) return err(res.error as any);
-    // Mapping will be delivered asynchronously via remote handler
+    if (res.isErr()) return err(res.error);
+
+    // TODO:sync/tasks/refactor This should be returning void...
     return ok({ updatedIds: new Map<string, string>() });
   },
   handleCreateTasksResponse: async function (response) {
@@ -44,8 +50,14 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
       await _remapLocalIdsAndRelationships(updated);
     }
     else {
-      // TODO:design Consider putting local tasks in a sync-pending state, rather than deleting locally...
-      const { idsToDelete } = response.error;
+      const { idsToDelete, error } = response.error;
+      const user = await getCurrentUser();
+      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
+      if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
+        console.warn('[Sync] createTasks unauthorized; user lacks task-sync. Keeping local tasks', idsToDelete);
+        return;
+      }
+      new IOError('Remote createTasks failed; reverting local', response.error).logError();
       await _deleteTasksLocal(idsToDelete, false, false);
     }
   },
@@ -56,12 +68,13 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   getTask: async function ({ id }) {
-    const [success, errors] = extractBatch(await taskCRUD.getTasks({ ids: [id] }));
-    if (errors.length > 0) {
-      return err(errors[0]);
-    } else {
-      return ok(success[0]);
-    }
+    const batch = await taskCRUD.getTasks({ ids: [id] });
+    if (batch.isErr()) return err(batch.error);
+
+    const { successes, errors } = batch.value;
+    if (errors.length > 0) return err(errors[0]);
+
+    return ok(successes[0]);
   },
 
   getTasks: async function ({ ids }) {
@@ -109,19 +122,27 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   updateTask: async function (update) {
-    const [success, errors] = extractBatch(await taskCRUD.updateTasks({ updates: [update] }));
-    if (errors.length > 0) {
-      return err(errors[0]);
-    } else {
-      return ok(success[0]);
-    }
+    const batch = await taskCRUD.updateTasks({ updates: [update] });
+    if (batch.isErr()) return err(batch.error);
+
+    const { successes, errors } = batch.value;
+    if (errors.length > 0) return err(errors[0]);
+
+    return ok(successes[0]);
   },
 
   updateTasks: ({ updates }) => _updateTasksLocal(updates),
   handleUpdateTasksResponse: async function (response) {
     if (response.isErr()) {
       assertDB(_db);
-      const { oldState } = response.error;
+      const { oldState, error } = response.error;
+      const user = await getCurrentUser();
+      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
+      if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
+        // TODO:sync inform user of error (via popup?)
+        Err.UNHANDLED(error);
+      }
+      new IOError('Remote updateTasks failed; reverting local', response.error).logError();
       // TODO This needs to perform the inverse relationship operations
       await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false);
     }
@@ -140,7 +161,14 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
   handleDeleteTasksResponse: async function (response) {
     if (response.isErr()) {
       assertDB(_db);
-      const { oldState } = response.error;
+      const { oldState, error } = response.error;
+      const user = await getCurrentUser();
+      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
+      if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
+        console.warn('[Sync] deleteTasks unauthorized; user lacks task-sync. Keeping local deletions for', oldState.map(t => t.id));
+        return;
+      }
+      new IOError('Remote deleteTasks failed; restoring local deletions', response.error).logError();
       await _createTasksLocal(oldState, false);
     }
   },
@@ -149,12 +177,19 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
   handleChangeOwnershipResponse: async function (response) {
     if (response.isErr()) {
       assertDB(_db);
-      const { oldUserID, newUserID } = response.error;
+      const { oldUserID, newUserID, error } = response.error;
+      const user = await getCurrentUser();
+      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
+      if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
+        console.warn('[Sync] changeOwnership unauthorized; user lacks task-sync. Keeping local ownership change', { oldUserID, newUserID });
+        return;
+      }
+      new IOError('Remote changeOwnership failed; reverting local', response.error).logError();
       await _changeOwnershipLocal(newUserID, oldUserID, false);
     }
   },
 }
-async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolean = true) {
+async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolean = true): Promise<BatchResult<Task, ArgumentError, InvalidStateError | NotAuthorizedError>> {
   if (tasks.length === 0) return okBatch([], []);
 
   assertDB(_db);
@@ -164,7 +199,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   // Get current user to assign ownership
   const currentUser = await getCurrentUser();
   if (!currentUser) {
-    return err(new InvalidStateError("Cannot create tasks without an authenticated user"));
+    return err(new InvalidStateError("Cannot create tasks without an authenticated user account"));
   }
 
   for (const taskDTO of tasks) {
@@ -206,15 +241,23 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   if (updateServer && _remoteTasks) {
     void _remoteTasks.createTasks({ createDetails: createdTasks })
       .then(async (response) => {
-        // TODO:sync/temp this error handling is a stand-in for the SyncQueue
         if (response.isErr()) {
-          await taskCRUD.handleCreateTasksResponse(err({ idsToDelete: createdTasks.map(t => t.id) }));
+          const unauthorized = response.error.type === ErrorType.NotAuthorizedError;
+          const idsToDelete = createdTasks.map(t => t.id);
+          if (unauthorized) {
+            await taskCRUD.handleCreateTasksResponse(
+              err({ idsToDelete, error: new NotAuthorizedError('Unauthorized createTasks', idsToDelete) })
+            );
+          } else {
+            new IOError('Remote createTasks failed; reverting local', response.error).logError();
+            await _deleteTasksLocal(idsToDelete, false, false);
+          }
         } else {
           await taskCRUD.handleCreateTasksResponse(ok(response.value));
         }
       })
-      .catch(async () => {
-        await taskCRUD.handleCreateTasksResponse(err({ idsToDelete: createdTasks.map(t => t.id) }));
+      .catch(async (e) => {
+        Err.UNHANDLED(e);
       });
   }
 
@@ -291,30 +334,36 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
    */
   // Notify subscribers immediately; remote handling will revert as needed
   const deltas: TaskDelta[] = Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask }));
-  // TODO:debug (eg) - emit update deltas
-  console.log("[Tasks/Browser] emit update", deltas.map(d => ({ old: d.oldTask?.id, new: d.newTask?.id })));
   await _emitChanges(deltas);
 
   if (updateServer && _remoteTasks) {
     void _remoteTasks.updateTasks({ updates })
       .then(async (response) => {
-        // TODO:sync/temp this error handling is a stand-in for the SyncQueue
         if (response.isErr()) {
           const oldState = Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task }));
-          await taskCRUD.handleUpdateTasksResponse(err({ oldState }) as any);
+          const unauthorized = response.error.type === ErrorType.NotAuthorizedError;
+          if (unauthorized) {
+            await taskCRUD.handleUpdateTasksResponse(
+              err({ oldState, error: new NotAuthorizedError('Unauthorized updateTasks', oldState) })
+            );
+          } else {
+            new IOError('Remote updateTasks failed; reverting local', response.error).logError();
+            await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false);
+          }
         } else {
-          const [success] = extractBatch(response);
-          const successIds = new Set((success as Task[]).map(t => t.id));
+          const { successes } = response.value;
+          const successIds = new Set((successes as Task[]).map(t => t.id));
           const failedOldState = Array.from(updatedTasks)
             .filter(([oldTask]) => !successIds.has(oldTask.id))
             .map(([oldTask]) => ({ updatedId: oldTask.id, task: oldTask }));
-          const handlerRes = failedOldState.length > 0 ? err({ oldState: failedOldState }) : ok(undefined);
-          await taskCRUD.handleUpdateTasksResponse(handlerRes as any);
+          if (failedOldState.length > 0) {
+            new IOError('Remote updateTasks partially failed; reverting local for failed items', failedOldState).logError();
+            await _updateTasksLocal(failedOldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false);
+          }
         }
       })
-      .catch(async () => {
-        const oldState = Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task }));
-        await taskCRUD.handleUpdateTasksResponse(err({ oldState }) as any);
+      .catch(async (e) => {
+        Err.UNHANDLED(e);
       });
   }
 
@@ -371,11 +420,20 @@ async function _deleteTasksLocal(ids: string[], recursive: boolean, updateServer
     const idsToDelete = deletedTasks.map(task => task.id);
     void _remoteTasks.deleteTasks({ ids: idsToDelete })
       .then(async (response) => {
-        const handlerRes = response.isErr() ? err({ oldState: deletedTasks }) : ok(undefined);
-        await taskCRUD.handleDeleteTasksResponse(handlerRes as any);
+        if (response.isErr()) {
+          const unauthorized = response.error.type === ErrorType.NotAuthorizedError;
+          if (unauthorized) {
+            await taskCRUD.handleDeleteTasksResponse(
+              err({ oldState: deletedTasks, error: new NotAuthorizedError('Unauthorized deleteTasks', idsToDelete) })
+            );
+          } else {
+            new IOError('Remote deleteTasks failed; restoring local deletions', response.error).logError();
+            await _createTasksLocal(deletedTasks, false);
+          }
+        }
       })
-      .catch(async () => {
-        await taskCRUD.handleDeleteTasksResponse(err({ oldState: deletedTasks }) as any);
+      .catch(async (e) => {
+        Err.UNHANDLED(e);
       });
   }
   if (errors.length > 0) {
@@ -397,11 +455,20 @@ async function _changeOwnershipLocal(oldUserID: string, newUserID: string, updat
   if (updateServer && _remoteTasks) {
     void _remoteTasks.changeOwnership({ oldUserID, newUserID })
       .then(async (response) => {
-        const handlerRes = response.isErr() ? err({ oldUserID, newUserID }) : ok(undefined);
-        await taskCRUD.handleChangeOwnershipResponse(handlerRes as any);
+        if (response.isErr()) {
+          const unauthorized = response.error.type === ErrorType.NotAuthorizedError;
+          if (unauthorized) {
+            await taskCRUD.handleChangeOwnershipResponse(
+              err({ oldUserID, newUserID, error: new NotAuthorizedError('Unauthorized changeOwnership', { oldUserID, newUserID } as any) })
+            );
+          } else {
+            new IOError('Remote changeOwnership failed; reverting local', response.error).logError();
+            await _changeOwnershipLocal(newUserID, oldUserID, false);
+          }
+        }
       })
-      .catch(async () => {
-        await taskCRUD.handleChangeOwnershipResponse(err({ oldUserID, newUserID }) as any);
+      .catch(async (e) => {
+        Err.UNHANDLED(e);
       });
   }
 
@@ -447,8 +514,9 @@ const taskRelations: ITaskRelations = {
       const parentsBatch = await taskCRUD.getTasks({ ids: childTask.parents });
       if (parentsBatch.isErr()) return err(parentsBatch.error);
       else {
-        let parents = extractBatchAndLogErrors(parentsBatch);
-        return ok(parents);
+        const { successes, errors } = parentsBatch.value;
+        errors.forEach(e => e.logError());
+        return ok(successes);
       }
 
     } else {
@@ -527,8 +595,6 @@ async function _getAllTasksForCurrentUser(): Promise<Task[]> {
 
 async function _emitChanges(deltas: TaskDelta[]) {
   if (deltas.length === 0) return;
-  // TODO:debug (eg) - dispatch to subscriptions
-  console.log("[Tasks/Browser] dispatch", deltas.map(d => ({ n: d.newTask?.id, o: d.oldTask?.id })));
   for (const sub of _subscriptions) {
     if (sub.kind === 'user-tasks') {
       const filtered = deltas.filter(d => (d.newTask?.user_id ?? d.oldTask?.user_id) === sub.userId);
@@ -718,8 +784,9 @@ const dataExporter: ITaskExporter = {
 
 
 let _db: LocalDB | null;
-let _remoteTasks: ITasks | null = null;
 let _searchService: TaskSearchService | null = null;
+let _remoteTasks: ITasks | null = null;
+let _unsubscribeRemoteTasks: (() => void) | null = null;
 
 async function _hydrateForUser(user: User): Promise<void> {
   assertDB(_db);
@@ -728,7 +795,8 @@ async function _hydrateForUser(user: User): Promise<void> {
   try {
     const remoteBatch = await _remoteTasks.getAllUserTasks({ userId: user.id });
     if (remoteBatch.isOk()) {
-      const remoteList = extractBatchAndLogErrors(remoteBatch);
+      const { successes: remoteList, errors } = remoteBatch.value;
+      errors.forEach(e => e.logError());
       const localList = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', user.id) as Task[];
       const localById = new Map(localList.map(t => [t.id, t] as [string, Task]));
 
@@ -756,8 +824,8 @@ async function _hydrateForUser(user: User): Promise<void> {
 const api: ITaskCoreLocal & ITaskRelations & ITaskCoreResponseHandler & ITaskAdvancedFeatures & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
 const BrowserTaskProvider: ILocalTaskProvider = {
-  /** @param remoteTasks The backend task provider that this provider wraps */
-  get: async function (remoteTasks) {
+  /** Initializes the local tasks provider and subscribes to remote availability */
+  get: async function () {
     _db = await dbPromise;
 
     // Initialize search service
@@ -768,16 +836,26 @@ const BrowserTaskProvider: ILocalTaskProvider = {
     if (currentUser) {
       const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: currentUser.id });
       if (existingTasksResult.isOk()) {
-        const tasks = extractBatchAndLogErrors(existingTasksResult);
-        _searchService.reindexTasks(tasks);
+        const { successes, errors } = existingTasksResult.value;
+        errors.forEach(e => e.logError());
+        _searchService.reindexTasks(successes);
       }
     }
 
-    if (remoteTasks) {
-      _remoteTasks = remoteTasks;
-      if (currentUser) {
-        await _hydrateForUser(currentUser);
-      }
+    // Subscribe to remote tasks availability store
+    if (!_unsubscribeRemoteTasks) {
+      _unsubscribeRemoteTasks = remoteTasksStore.subscribe(async (rt) => {
+        const previous = _remoteTasks;
+        _remoteTasks = rt;
+        if (!previous && rt) {
+          // Remote just became available; hydrate for current user if present
+          // TODO:sync we need to make sure we handle CRDT collisions correctly here...
+          const user = await getCurrentUser();
+          if (user) {
+            await _hydrateForUser(user);
+          }
+        }
+      });
     }
 
 
@@ -870,7 +948,8 @@ async function _remapLocalIdsAndRelationships(updatedIds: Map<string, string>): 
 
   // Load all affected tasks
   const oldIds = Array.from(updatedIds.keys());
-  const [locals] = extractBatch(await taskCRUD.getTasks({ ids: oldIds }));
+  const localsBatch = await taskCRUD.getTasks({ ids: oldIds });
+  const locals = localsBatch.isOk() ? localsBatch.value.successes : [];
 
   const remapped: Task[] = [];
   // 1) Rewrite each task with the new ID and write it as a new record
@@ -922,13 +1001,11 @@ async function _remapLocalIdsAndRelationships(updatedIds: Map<string, string>): 
   //    This ensures that when remapped tasks declare parents/children, 
   //    those parent/child tasks also reference the remapped tasks
   const postRelUpdates = await getRelationshipUpdates(api, remapped.map(newTask => ({ oldTask: null, newTask })));
-  // TODO:debug (eg) - track inverse relationship updates after ID remap
-  console.log("[Debug] _remapLocalIdsAndRelationships postRelUpdates:", postRelUpdates.length, postRelUpdates.map(u => ({ id: u.id, relations: u.relations })));
   if (postRelUpdates.length > 0) {
     // Local-only: Server already handled relationships with real IDs during creation
     await _updateTasksLocal(postRelUpdates, false);
   }
-  
+
   // 5) Emit changes for remapped tasks: delete temps, add authoritative
   const deleteDeltas: TaskDelta[] = (locals as Task[]).map(oldTask => ({ oldTask, newTask: null }));
   const addDeltas: TaskDelta[] = remapped.map(newTask => ({ oldTask: null, newTask }));

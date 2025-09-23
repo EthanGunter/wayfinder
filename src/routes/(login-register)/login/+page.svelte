@@ -2,18 +2,17 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import type { ILocalAuth, LoginCredentials } from '$lib/API/Auth/types';
+	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
-	import { authAPIPromise } from '@/API/providerRegistry';
+	import { auth, authState, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
 	import { type LocalUser } from '@/API/Auth/User';
 	import UserAvatar from '@/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
 	import { Err, InputRequiredError } from '@/Errors';
 
-	let auth = $state<ILocalAuth>();
 	let users = $state<LocalUser[]>([]);
-	let currentUser = $state<LocalUser | null>(null);
+	let currentUser = $derived($authState.status === 'signed-in' ? $authState.user : null);
 	let redir = page.url.searchParams.get('redirect') || '/home';
 	let errorMessage = $state('');
 	let isLoading = $state(false);
@@ -21,33 +20,23 @@
 	let password = $state('');
 	let mode = $state<'login' | 'switch'>('login');
 
-	onMount(async () => {
-		auth = await authAPIPromise;
-		await loadUsers();
-		// Determine initial mode: explicit query param wins; otherwise default to 'switch' if users exist
-		const qpMode = page.url.searchParams.get('mode');
-		const qpUser = page.url.searchParams.get('user');
-		if (users.length === 0) mode = 'login';
-		else if (qpMode === 'switch' || qpMode === 'login') mode = qpMode;
-	});
-
-	async function loadUsers() {
-		if (!auth) return;
-
-		try {
-			const allUsers = await auth.listUsers();
+	onMount(() => {
+		const unsubscribeUsers = authUsers.subscribe((userList) => {
 			// Sort users alphabetically by display name
-			users = allUsers.sort((a, b) => a.display_name.localeCompare(b.display_name));
-			currentUser = await auth.getActiveUser();
-			// If no explicit mode yet, prefer switch when users exist
-			if (!page.url.searchParams.get('mode')) {
+			users = userList.sort((a, b) => a.display_name.localeCompare(b.display_name));
+			// Determine initial mode: explicit query param wins; otherwise default to 'switch' if users exist
+			const qpMode = page.url.searchParams.get('mode');
+			if (users.length === 0) mode = 'login';
+			else if (qpMode === 'switch' || qpMode === 'login') mode = qpMode;
+			else if (!page.url.searchParams.get('mode')) {
 				mode = users.length > 0 ? 'switch' : 'login';
 			}
-		} catch (error) {
-			errorMessage = 'Failed to load users';
-			console.error('Error loading users:', error);
-		}
-	}
+		});
+
+		return () => {
+			unsubscribeUsers();
+		};
+	});
 
 	async function handleUserSwitch(userId: string) {
 		if (!auth || isLoading) return;

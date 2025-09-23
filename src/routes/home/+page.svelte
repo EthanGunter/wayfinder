@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { DropEvent, droppable } from '$lib/actions/dnd';
-	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
+	import { goto } from '$app/navigation';
 
 	import TaskListItem from './TaskListItem.svelte';
 	import { onMount } from 'svelte';
@@ -9,36 +9,36 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { type User } from '$lib/API/Auth/User.js';
 	import { Button } from '@/components/ui/button';
-	import { type ILocalAuth } from '@/API/Auth/types';
-	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+	import { auth, authState } from '@/API/Auth/BrowserAuthProvider';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 	import type { ILocalTasks } from '@/API/Tasks';
 	import { page } from '$app/state';
-	import { redirect } from '@sveltejs/kit';
 	import { Err } from '@/Errors';
 	import TutorialWelcome from './TutorialWelcome.svelte';
 	import TutorialPlanner from './TutorialPlanner.svelte';
-	import { extractBatchAndLogErrors } from '$lib/API/types';
 
-	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
-	let user = $state<User>();
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
 	let hasAnyTasksExplicit = $state(false);
 
-	onMount(async () => {
-		tasks = await taskAPIPromise;
+	onMount(() => {
+		// Load tasks
+		taskAPIPromise.then((t) => (tasks = t));
 
-		auth = await authAPIPromise;
-		const active = await auth.getActiveUser();
-		if (!active) {
-			goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
-			return;
-		}
-		user = active;
+		// Subscribe to auth state
+		const unsubscribeAuth = authState.subscribe((state) => {
+			if (state.status === 'signed-in') {
+				// refreshTasks();
+			} else if (state.status === 'signed-out') {
+				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
+			}
+		});
 
-		refreshTasks();
+		return () => {
+			unsubscribeAuth();
+		};
 	});
 
 	function refreshTasks() {
@@ -64,12 +64,12 @@
 		);
 
 		// Check if the user has any tasks at all (even if none are actionable)
-		if (user) {
-			tasks!.getAllUserTasks({ userId: user.id }).then((batch) =>
+		if ($authState.status === "signed-in") {
+			tasks!.getAllUserTasks({ userId: $authState.user.id }).then((batch) =>
 				batch.match(
-					(results) => {
-						const all = extractBatchAndLogErrors(results);
-						hasAnyTasksExplicit = all.length > 0;
+					({ successes, errors }) => {
+						errors.forEach((e) => e.logError());
+						hasAnyTasksExplicit = successes.length > 0;
 					},
 					(err) => {
 						err.logError();
@@ -124,24 +124,10 @@
 	async function startProject() {
 		if (!tasks) return;
 
-		//TODO: Implement create new project logic
-		let newTaskResult = await tasks.createTask({
-			createDetail: {
-				user_id: user!.id,
-				title: 'New Project',
-				status: TaskStatus.incomplete,
-				priority: 0
-			}
-		});
-		newTaskResult.match(
-			(newTask) => {
-				goto(`/tasks/?id=${newTask.id}`);
-			},
-			(err) => {
-				err.logError();
-			}
+		// TODO:UX Navigate to /tasks/ and open the create project drawer
+		alert(
+			'Button temporarily disabled. Please click the "Browser" button at the bottom of the page instead.'
 		);
-		// alert('Start project (stub)');
 	}
 
 	// Filter completed tasks and duplicates
@@ -171,7 +157,7 @@
 	);
 </script>
 
-{#if auth && user && tasks}
+{#if $authState.status === 'signed-in' && tasks}
 	<TutorialWelcome />
 	<TutorialPlanner />
 	<div class="page page-root">

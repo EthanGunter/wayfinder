@@ -1,4 +1,4 @@
-import type { IAuth, ILocalAuth } from './Auth/types';
+import type { IAuth, IAuthLocal, ILocalAuth } from './Auth/types';
 import type { ILocalTasks, ITasks } from './Tasks/types';
 // Static imports for remote providers are safe in Service Worker contexts
 import SupabaseAuthProvider from './Auth/SupabaseAuthProvider';
@@ -36,28 +36,36 @@ export async function getRemoteProviders(): Promise<{ auth: IAuth, tasks: ITasks
 }
 
 /**
- * Returns local providers configured with their remotes.
- * Centralizes Browser/SQLite selection and remote pairing.
+ * Configures providers and sets up remote connections.
+ * Auth provider self-initializes via stores; tasks provider still uses .get() pattern.
  */
-export async function getLocalProviders(): Promise<{ auth: ILocalAuth, tasks: ILocalTasks }> {
+export async function configureProviders(): Promise<{ tasks: ILocalTasks }> {
     // Lazily import browser providers to avoid pulling them into non-window contexts
-    const [{ default: BrowserTaskProvider }, { default: BrowserAuthProvider }] = await Promise.all([
+    const [{ default: BrowserTaskProvider }, { auth: localAuth, _configureRemoteAuth }] = await Promise.all([
         import('./Tasks/BrowserTaskProvider'),
         import('./Auth/BrowserAuthProvider'),
     ]);
 
     const { auth: remoteAuth, tasks: remoteTasks } = await getRemoteProviders();
-    const tasks = await BrowserTaskProvider.get(remoteTasks);
-    const auth = await BrowserAuthProvider.get(remoteAuth, tasks);
-    return { auth, tasks };
+    
+    // Configure auth with remote provider (temporary until remoteAuth store exists)
+    _configureRemoteAuth(remoteAuth);
+    
+    const tasks = await BrowserTaskProvider.get();
+    return { tasks };
 }
 
 // Export singletons for app-wide consumption
-const localProvidersPromise = isBrowser 
-    ? getLocalProviders() 
-    : createUnavailablePromise<{ auth: ILocalAuth, tasks: ILocalTasks }>('Local providers are not available in Service Worker or non-browser contexts');
+const configuredProvidersPromise = isBrowser 
+    ? configureProviders() 
+    : createUnavailablePromise<{ tasks: ILocalTasks }>('Local providers are not available in Service Worker or non-browser contexts');
 
-export const taskAPIPromise: Promise<ILocalTasks> = localProvidersPromise.then(x => x.tasks);
-export const authAPIPromise: Promise<ILocalAuth> = localProvidersPromise.then(x => x.auth);
+export const taskAPIPromise: Promise<ILocalTasks> = configuredProvidersPromise.then(x => x.tasks);
+
+// Auth is now available directly from BrowserAuthProvider stores - no promise needed
+// Legacy export for compatibility during migration
+export const authAPIPromise: Promise<IAuthLocal> = isBrowser 
+    ? import('./Auth/BrowserAuthProvider').then(({ auth }) => auth)
+    : createUnavailablePromise<IAuthLocal>('Auth provider not available in Service Worker or non-browser contexts');
 
 

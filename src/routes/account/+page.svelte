@@ -6,55 +6,53 @@
 	import { type LocalUser, type User } from '$lib/API/Auth/User';
 	import { page } from '$app/state';
 	import { Button } from '@/components/ui/button';
-	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+	import { auth, authState } from '@/API/Auth/BrowserAuthProvider';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 	import { onMount } from 'svelte';
-	import { type ILocalAuth } from '@/API/Auth/types';
 	import AvatarEditor from '@/components/AvatarEditor.svelte';
 	import * as AlertDialog from '@/components/ui/alert-dialog';
 	import type { ILocalTasks } from '@/API/Tasks/types';
-	import { extractBatchAndLogErrors } from '@/API/types';
+import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 	import { Err } from '@/Errors';
 
 	let originalUser = $state<User>();
 	let user = $state<User>();
-	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
 
-	const debouncedUpdateUser = $derived(auth ? debounce(auth.updateUser, 200) : undefined);
+	const debouncedUpdateUser = debounce(auth.updateUser, 200);
 
-	onMount(async () => {
-		auth = await authAPIPromise;
-		tasks = await taskAPIPromise;
-		// TODO:auth account page doesn't actually use the +layout.ts provided user... might cause issues?
-		const active = await auth.getActiveUser();
+	onMount(() => {
+		// Subscribe to auth state
+		const unsubscribeAuth = authState.subscribe((state) => {
+			if (state.status === 'signed-in' && state.user) {
+				originalUser = state.user;
+				user = { ...state.user };
+				loadTaskCount();
+			} else if (state.status === 'signed-out') {
+				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
+			}
+		});
 
-		if (!active) {
-			goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
-			return;
-		}
-		// TODO:Temp anonymous accounts disabled
-		/* else if (isAnonymous(active)) {
-			goto(`/`);
-			return;
-		} */
-		user = active;
-		originalUser = { ...user };
+		// Load tasks
+		taskAPIPromise.then(t => tasks = t);
 
-		// Count user's tasks for delete warning
-		await loadTaskCount();
+		return () => {
+			unsubscribeAuth();
+		};
 	});
 
 	async function loadTaskCount() {
 		if (!tasks || !user) return;
 
 		try {
-			const result = await tasks.getAllUserTasks({ userId: user.id });
-			if (result.isOk()) {
-				const userTasks = extractBatchAndLogErrors(result);
-				taskCount = userTasks.length;
-			}
+            const result = await tasks.getAllUserTasks({ userId: user.id });
+            if (result.isOk()) {
+                const { successes, errors } = result.value;
+                errors.forEach((e) => e.logError());
+                taskCount = successes.length;
+            }
 		} catch (error) {
 			console.error('Failed to load task count:', error);
 			taskCount = 0;

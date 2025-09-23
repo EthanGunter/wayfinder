@@ -1,449 +1,362 @@
-import { type IAuth, type IAuthLocalFunctions, type ILocalAuthProvider, type IAuthResponseHandler, type IAuthSessionCapable, isSessionCapable } from './types';
-import { isAnonymous } from './User';
+import { type IAuth, type ILocalAuth, type IAuthLocal, type IAuthResponseHandler, type IAuthSessionCapable, isSessionCapable } from './types';
+import { isAnonymous, type LocalUser } from './User';
 import type { ILocalTasks, ITasks } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
-// import { queueAuthSyncCommand } from './types';
-// import { processQueueInClient } from '../SyncQueue';
 import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 import SessionVault from './SessionVault';
+import { writable, type Readable } from 'svelte/store';
 
-// TODO: Force UI to update at appropriate times. onAuthChange callback might be required rather than using invalidateAll()
+type AuthState =
+  | { status: "loading" }
+  | { status: "signed-in", user: LocalUser }
+  | { status: "signed-out", user: null }
+  | { status: "error", user?: LocalUser }
+
+// Stores
+const _authState = writable<AuthState>({ status: "loading" });
+const _users = writable<LocalUser[]>([]);
+
+export const authState: Readable<AuthState> = _authState;
+export const users: Readable<LocalUser[]> = _users;
+
+// Module state
 let db: LocalDB | null = null;
-let _remoteAuth: IAuth | null = null;
 let _tasks: ILocalTasks | null = null;
+let _remoteAuth: IAuth | null = null;
+let _unsubscribeRemoteAuth: (() => void) | null = null;
 
-const BrowserAuthProvider: ILocalAuthProvider = {
-  get: async function (
-    remoteAuth?: IAuth,
-  ) {
+// Module-load hydration
+(async () => {
+  try {
     db = await dbPromise;
 
-    // Initialize with active user or create anonymous
+    // Hydrate users list
+    const allUsers = await db.getAll(AUTH_TABLE_NAME) as LocalUser[];
+    _users.set(allUsers);
+
+    // Hydrate active user state
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    // TODO:Temp anonymous accounts disabled
-    /*
-    if (!activeUserId) {
-      const anonRes = await local.getDefaultUser();
-      if (anonRes.isOk()) {
-        await local.switchUser(anonRes.value.id);
+    if (activeUserId) {
+      const user = await db.get(AUTH_TABLE_NAME, activeUserId) as LocalUser | undefined;
+      if (user) {
+        _authState.set({ status: "signed-in", user });
+      } else {
+        _authState.set({ status: "signed-out", user: null });
       }
-    } 
-    */
-
-    if (remoteAuth) {
-      // Lazily acquire local tasks provider; used for local data detection and migration
-      try {
-        const localTasks = await BrowserTaskProvider.get();
-        _tasks = localTasks;
-      } catch {
-        _tasks = null;
-      }
-
-      _remoteAuth = remoteAuth;
-
+    } else {
+      _authState.set({ status: "signed-out", user: null });
     }
 
-    return { ...auth, ...local };
-  },
-};
+    // TODO: Subscribe to remote auth store when it's created (like remoteTasks pattern)
+    // try {
+    //   const { remoteAuth } = await import('$lib/stores/remoteAuth');
+    //   if (remoteAuth && !_unsubscribeRemoteAuth) {
+    //     _unsubscribeRemoteAuth = remoteAuth.subscribe((ra: IAuth | null) => {
+    //       _remoteAuth = ra;
+    //     });
+    //   }
+    // } catch {
+    //   // remoteAuth store doesn't exist yet; will remain null
+    // }
 
-export default BrowserAuthProvider;
-
-const local: IAuthLocalFunctions = {
-  hasRemote: () => !!_remoteAuth,
-
-  createUser: async function ({ user }) {
-    assertDB(db);
-
-    await db.put(AUTH_TABLE_NAME, user);
-    return ok(user);
-  },
-
-  register: async function ({ creds, userData }) {
-    if (isAnonymous(userData)) {
-      return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
+    // Lazily acquire local tasks provider for migration support
+    try {
+      const localTasks = await BrowserTaskProvider.get();
+      _tasks = localTasks;
+    } catch {
+      _tasks = null;
     }
+  } catch (e) {
+    _authState.set({ status: "error" });
+  }
+})();
 
-    const reqsResult = auth.getRegistrationRequirements(creds);
-    if (reqsResult.isErr()) {
-      return err(reqsResult.error);
-    } else if (reqsResult.value.length > 0) {
-      return err(new ArgumentError(creds, `Registration credentials had errors. Make sure to call getRegistrationRequirements() before register()`));
-    }
 
-    assertDB(db);
-    assertRemoteAuth(_remoteAuth, `Cannot register without remote auth provider`);
-    // We allow registration without a tasks provider, but if migration is needed later, we'll require tasks
+async function register({ creds, userData }: { creds: any; userData: LocalUser }) {
+  if (isAnonymous(userData)) {
+    return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
+  }
 
-    // Check if there's an anonymous user with local data that needs migration
-    const currentUser = await local.getActiveUser();
-    // TODO:Temp anonymous accounts disabled
-    const hasAnonymousWithData = false /* currentUser &&
-      isAnonymous(currentUser) &&
-      await _hasLocalData(currentUser.id); 
-      */
+  const reqsResult = getRegistrationRequirements(creds);
+  if (reqsResult.isErr()) {
+    return err(reqsResult.error);
+  } else if (reqsResult.value.length > 0) {
+    return err(new ArgumentError(creds, `Registration credentials had errors. Make sure to call getRegistrationRequirements() before register()`));
+  }
 
-    // Create the new account on the server
-    const registerResult = await _remoteAuth.register({ creds, userData });
-    if (registerResult.isErr()) {
-      return err(registerResult.error);
-    }
-    const registeredUser = registerResult.value;
+  assertDB(db);
+  assertRemoteAuth(_remoteAuth, `Cannot register without remote auth provider`);
 
-    // Create local user with registered user data
-    await db.put(AUTH_TABLE_NAME, registeredUser);
+  // Create the new account on the server
+  const registerResult = await _remoteAuth.register({ creds, userData });
+  if (registerResult.isErr()) {
+    return err(registerResult.error);
+  }
+  const registeredUser = registerResult.value;
 
-    // TODO:Temp anonymous accounts disabled
-    /* 
-    if (hasAnonymousWithData && currentUser) {
-      if (!_tasks) {
-        return err(new InputRequiredError(
-          "Anonymous user has local data, but migration is unavailable (no tasks remote).",
-          { requiresMigration: true, anonymousUserId: currentUser.id, canMigrate: false }
-        ));
-      }
-      const changeResult = await _tasks.changeOwnership({
-        oldUserID: currentUser.id,
-        newUserID: registeredUser.id
-      });
-      if (changeResult.isErr()) {
-        // Log the error but don't fail the registration
-        Err.UNHANDLED(changeResult.error, 'Failed to change task ownership during registration:');
-      } 
-      
-        // Remove the anonymous user since data has been migrated
-        await db.delete(AUTH_TABLE_NAME, currentUser.id);
-      }
-      */
+  // Create local user with registered user data
+  await db.put(AUTH_TABLE_NAME, registeredUser);
+  await _refreshUsers();
 
-    // Switch to the new representation of the user
-    await local.switchUser(registeredUser.id);
+  // Switch to the new user
+  await switchUser(registeredUser.id);
 
-    return ok(registeredUser);
-  },
-  removeUser: async function (userId) {
-    assertDB(db);
+  return ok(registeredUser);
+}
 
-    await db.delete(AUTH_TABLE_NAME, userId);
-  },
+async function removeCachedUser(userId: string): Promise<void> {
+  assertDB(db);
+  await db.delete(AUTH_TABLE_NAME, userId);
+  await _refreshUsers();
+}
 
-  listUsers: async function () {
-    assertDB(db);
-    const users = await db.getAll(AUTH_TABLE_NAME);
-    return users;
-  },
+async function switchUser(newUserId: string) {
+  if (!newUserId || newUserId == '') Err.throw(new ArgumentError(newUserId, "UserId required to switch user. Use signOut if you want no active user"));
 
-  switchUser: async function (newUserId) {
-    if (!newUserId || newUserId == '') Err.throw(new ArgumentError(newUserId, "UserId required to switch user. Use signOut if you want no active user"));
+  // Check if already active
+  assertDB(db);
+  const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+  if (newUserId === activeId) {
+    const user = await db.get(AUTH_TABLE_NAME, activeId) as LocalUser | undefined;
+    return user ? ok(user) : err(new NotFoundError(newUserId, "User"));
+  }
 
-    const active = await this.getActiveUser();
-    if (newUserId == active?.id) return ok(active);
+  const user = await db.get(AUTH_TABLE_NAME, newUserId) as LocalUser | undefined;
+  if (!user) {
+    return err(new NotFoundError(newUserId, "User"));
+  }
 
-    assertDB(db);
-    const user = await db.get(AUTH_TABLE_NAME, newUserId);
-    if (!user) {
-      return err(new NotFoundError(newUserId, "User"));
-    }
-
-    // Attempt to restore remote session using capability + SessionVault
-    if (_remoteAuth && isSessionCapable(_remoteAuth)) {
-      try {
-        let material = await SessionVault.get(newUserId);
-        if (!material) {
-          // Fallback: probe remote for current session (e.g., right after login just occurred)
-          const probe = await _remoteAuth.getSessionMaterial({ userId: newUserId });
-          if (probe.isOk() && probe.value) {
-            material = probe.value;
-            // TODO:mobile store via platform secure storage
-            await SessionVault.save(newUserId, material);
-          }
+  // Attempt to restore remote session using capability + SessionVault
+  if (_remoteAuth && isSessionCapable(_remoteAuth)) {
+    try {
+      let material = await SessionVault.get(newUserId);
+      if (!material) {
+        // Fallback: probe remote for current session (e.g., right after login just occurred)
+        const probe = await _remoteAuth.getSessionMaterial({ userId: newUserId });
+        if (probe.isOk() && probe.value) {
+          material = probe.value;
+          await SessionVault.save(newUserId, material);
         }
-        if (material) {
-          // TODO:debug [eg] trace restore
-          try { console.log('[auth.switchUser] restoring session for', newUserId); } catch {}
-          const res = await _remoteAuth.restoreSession({ userId: newUserId, material });
-          if (res.isErr()) {
-            return err(new InputRequiredError('Session expired. Please log in again.', { userId: newUserId }));
-          }
-          const rotated = res.value.rotatedMaterial;
-          if (rotated && rotated !== material) {
-            // TODO:mobile store via platform secure storage
-            await SessionVault.save(newUserId, rotated);
-          }
-        } else {
-          return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
+      }
+      if (material) {
+        const res = await _remoteAuth.restoreSession({ userId: newUserId, material });
+        if (res.isErr()) {
+          return err(new InputRequiredError('Session expired. Please log in again.', { userId: newUserId }));
         }
-      } catch {
+        const rotated = res.value.rotatedMaterial;
+        if (rotated && rotated !== material) {
+          await SessionVault.save(newUserId, rotated);
+        }
+      } else {
         return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
       }
+    } catch {
+      return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
+    }
+  }
+
+  // Switch locally
+  await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
+  await db.put(AUTH_TABLE_NAME, user);
+
+  // Update store
+  _authState.set({ status: "signed-in", user });
+
+  return ok(user);
+}
+
+function getRegistrationRequirements(signUpCred: any) {
+  assertRemoteAuth(_remoteAuth, "Cannot check registration without a provided remote auth provider");
+  return _remoteAuth.getRegistrationRequirements(signUpCred);
+}
+
+async function updateUser({ update }: { update: Partial<LocalUser> & { id: string } }) {
+  assertDB(db);
+
+  const user = await db.get(AUTH_TABLE_NAME, update.id) as LocalUser | undefined;
+  if (!user) {
+    Err.throw(new NotFoundError(update.id, "User"));
+  }
+
+  const updatedUser = {
+    ...user,
+    ...update,
+  };
+
+  await db.put(AUTH_TABLE_NAME, updatedUser);
+  await _refreshUsers();
+
+  // Update active user in store if this is the active user
+  const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+  if (activeId && activeId === updatedUser.id) {
+    _authState.set({ status: "signed-in", user: updatedUser });
+  }
+
+  // Call remote auth provider if available
+  if (_remoteAuth) {
+    void _remoteAuth.updateUser({ update })
+      .then(async (response) => {
+        if (response.isErr()) {
+          await responseHandlers.handleUpdateUserResponse(err({ oldUser: user }));
+        } else {
+          await responseHandlers.handleUpdateUserResponse(ok());
+        }
+      })
+      .catch(async (error) => {
+        await responseHandlers.handleUpdateUserResponse(err({ oldUser: user }));
+      });
+  }
+
+  return ok(updatedUser);
+}
+
+async function deleteUser({ userId }: { userId: string }) {
+  assertDB(db);
+
+  const user = await db.get(AUTH_TABLE_NAME, userId) as LocalUser | undefined;
+
+  if (user) {
+    const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    // Can't delete the current user
+    if (userId === activeUserId) {
+      await logout();
     }
 
-    // switch locally
-    await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
-    await db.put(AUTH_TABLE_NAME, user);
-    return ok(user);
-  },
+    await db.delete(AUTH_TABLE_NAME, userId);
+    await _refreshUsers();
 
-  getDefaultUser: async function () {
-    assertDB(db);
-    const users = await db.getAll(AUTH_TABLE_NAME);
-    if (users.length === 0) {
-      // TODO: Anonymous accounts disabled
-      return err(new InvalidStateError("No users available and anonymous account creation is disabled"));
-      /* 
-      // Only create the anonymous user the first time
-      const userData: User = {
-        id: 'anonymous',
-        display_name: 'Anonymous',
-        created_at: new Date().toISOString(),
-        status: 'active',
-        features: getDefaultUserFeatures(),
-      };
-
-
-      await db.put(AUTH_TABLE_NAME, userData);
-      return ok(userData); 
-      */
-    } else if (users.length === 1) {
-      const userData = users[0];
-      return ok(userData);
-    } else {
-      return err(new InvalidStateError("There are too many users to select a default"));
-    }
-  },
-
-  getActiveUser: async function () {
-    assertDB(db);
-    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    if (activeId) {
-      const user = await db.get(AUTH_TABLE_NAME, activeId);
-      return user ?? null;
-    } else return null;
-  },
-};
-
-
-const auth: Omit<IAuth, "register"> & IAuthResponseHandler = {
-  getUser: async function ({ id }) {
-    assertDB(db);
-    const user = await db.get(AUTH_TABLE_NAME, id);
-    if (user) {
-      return ok(user);
-    }
-    else {
-      return err(new NotFoundError(id, "User"));
-    }
-  },
-
-  updateUser: async function ({ update }) {
-    assertDB(db);
-
-    // const oldId = update.oldId ?? update.id; // TODO This should be its own local function
-
-    const user = await db.get(AUTH_TABLE_NAME, update.id);
-    if (!user) {
-      Err.throw(new NotFoundError(update.id, "User"));
-    }
-
-    const updatedUser = {
-      ...user,
-      ...update,
-    };
-
-    await db.put(AUTH_TABLE_NAME, updatedUser);
-
-    // Directly call remote auth provider if available
+    // Call remote auth provider if available
     if (_remoteAuth) {
-      void _remoteAuth.updateUser({ update })
-        .then(async (response) => {
+      void _remoteAuth.deleteUser({ userId })
+        .then((response) => {
           if (response.isErr()) {
-            await auth.handleUpdateUserResponse(err({ oldUser: user }));
+            void responseHandlers.handleDeleteUserResponse(err({ oldUser: user }));
           } else {
-            await auth.handleUpdateUserResponse(ok());
+            void responseHandlers.handleDeleteUserResponse(ok());
           }
         })
-        .catch(async (error) => {
-          await auth.handleUpdateUserResponse(err({ oldUser: user }));
+        .catch(() => {
+          void responseHandlers.handleDeleteUserResponse(err({ oldUser: user }));
         });
     }
-    return ok(updatedUser);
+  }
+
+  return ok();
+}
+
+const responseHandlers: IAuthResponseHandler = {
+  handleDeleteUserResponse: async (response: any) => {
+    if (response.isErr()) {
+      const { oldUser } = response.error;
+      assertDB(db);
+      await db.put(AUTH_TABLE_NAME, oldUser);
+      await _refreshUsers();
+    }
   },
-  handleUpdateUserResponse: async function (response) {
-    // TODO:DX log error
+  handleUpdateUserResponse: async (response: any) => {
     if (response.isErr()) {
       const { oldUser } = response.error;
       // Undo changes
       assertDB(db);
-      await db.put(AUTH_TABLE_NAME, oldUser)
-    }
-  },
+      await db.put(AUTH_TABLE_NAME, oldUser);
+      await _refreshUsers();
 
-  deleteUser: async function ({ userId }) {
-    assertDB(db);
-
-    const user = await db.get(AUTH_TABLE_NAME, userId);
-
-    if (user) {
-      const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-      // Can't delete the current user
-      if (userId === activeUserId) {
-        await this.logout();
-      }
-
-      await db.delete(AUTH_TABLE_NAME, userId);
-
-      // Directly call remote auth provider if available
-      if (_remoteAuth) {
-        void _remoteAuth.deleteUser({ userId })
-          .then((response) => {
-            if (response.isErr()) {
-              void auth.handleDeleteUserResponse(err({ oldUser: user }));
-            } else {
-              void auth.handleDeleteUserResponse(ok());
-            }
-          })
-          .catch(() => {
-            void auth.handleDeleteUserResponse(err({ oldUser: user }));
-          });
+      const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+      if (activeId && activeId === oldUser.id) {
+        _authState.set({ status: "signed-in", user: oldUser });
       }
     }
+  }
+}
 
-    return ok();
-  },
-  handleDeleteUserResponse: async function (response) {
-    // TODO:DX log error
-    if (response.isErr()) {
-      const { oldUser } = response.error;
-      assertDB(db);
-      await db.put(AUTH_TABLE_NAME, oldUser)
-    }
-  },
+async function login({ creds }: { creds: any }) {
+  assertDB(db);
+  assertRemoteAuth(_remoteAuth);
 
-  getRegistrationRequirements: function (signUpCred) {
-    assertRemoteAuth(_remoteAuth, "Cannot check registration without a provided remote auth provider");
-    return _remoteAuth.getRegistrationRequirements(signUpCred);
-  },
+  // Proceed with remote login
+  const loginResult = await _remoteAuth.login({ creds });
+  if (loginResult.isErr()) {
+    return err(loginResult.error);
+  }
 
-  login: async function ({ creds }) {
-    assertDB(db);
-    assertRemoteAuth(_remoteAuth);
+  const remoteUser = loginResult.value;
 
+  // Create local user with remote user data
+  await db.put(AUTH_TABLE_NAME, remoteUser);
+  await _refreshUsers();
 
-
-    // Proceed with remote login
-    const loginResult = await _remoteAuth.login({ creds });
-    if (loginResult.isErr()) {
-      return err(loginResult.error);
-    }
-    // Check if current user is anonymous and has local data
-    // TODO:Temp anonymous accounts disabled
-    /* 
-    const currentUser = await local.getActiveUser();
-    if (currentUser && isAnonymous(currentUser)) {
-      const hasLocalData = await _hasLocalData(currentUser.id);
-
-      if (hasLocalData) {
-        // Anonymous user has local data - need migration decision
-        // Return special result indicating migration is needed, include remote user id for UI to complete
-        return err(new InputRequiredError(
-          "Anonymous user has local data. Migration decision required before login.",
-          { requiresMigration: true, anonymousUserId: currentUser.id, remoteUserId: loginResult.value.id, canMigrate: !!_tasks }
-        ));
-      } else {
-        // Anonymous user has no local data - can proceed with login
-        // First remove the anonymous user
-        await db.delete(AUTH_TABLE_NAME, currentUser.id);
-        await db.put(APP_TABLE_NAME, undefined, ACTIVEUSER_COLUMN_NAME);
-      }
-    } 
-    */
-
-    const remoteUser = loginResult.value;
-
-    // Create local user with remote user data
-    await db.put(AUTH_TABLE_NAME, remoteUser);
-
-    // Persist session material BEFORE switching so switchUser can restore remote session if needed
-    if (_remoteAuth && isSessionCapable(_remoteAuth)) {
-      try {
-        const materialRes = await _remoteAuth.getSessionMaterial({ userId: remoteUser.id });
-        if (materialRes.isOk() && materialRes.value) {
-          // TODO:debug [eg] trace save material
-          try { console.log('[auth.login] save material for', remoteUser.id); } catch {}
-          // TODO:mobile store via platform secure storage
-          await SessionVault.save(remoteUser.id, materialRes.value);
-        }
-      } catch { }
-    }
-
-    // Switch to the logged in user
-    await local.switchUser(remoteUser.id);
-
-    // Hydrate tasks for this user if local tasks provider is available
+  // Persist session material BEFORE switching so switchUser can restore remote session if needed
+  if (_remoteAuth && isSessionCapable(_remoteAuth)) {
     try {
-      const tasks = await BrowserTaskProvider.get();
-      if ((tasks as any).hydrateForUser) {
-        await (tasks as any).hydrateForUser({ user: remoteUser });
+      const materialRes = await _remoteAuth.getSessionMaterial({ userId: remoteUser.id });
+      if (materialRes.isOk() && materialRes.value) {
+        await SessionVault.save(remoteUser.id, materialRes.value);
       }
     } catch { }
-
-    /* // After login, try processing the queue so prior offline work flushes
-    try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); } */
-
-    return ok(remoteUser);
-  },
-
-  logout: async function () {
-    assertDB(db);
-    // Capture who is being logged out before clearing active marker
-    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    try {
-      // Invalidate remote session
-      await _remoteAuth?.logout();
-    } catch { /* offline or already invalid */ }
-    if (activeId) {
-      try { await SessionVault.remove(activeId); } catch { }
-    }
-    await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
-    invalidateAll();
-    return ok();
-  },
-  ...local
-}
-
-// Helper function to check if a user has local data
-async function _hasLocalData(userId: string): Promise<boolean> {
-  // TODO:Temp anonymous accounts disabled; treat as no local data
-  return false;
-  /*
-   if (!_tasks) return false;
-
-  try {
-    const result = await _tasks.getAllUserTasks({ userId });
-    if (result.isOk()) {
-      const tasks = extractBatchAndLogErrors(result);
-      return tasks.length > 0;
-    }
-    return false;
-  } catch {
-    // If we can't get tasks, assume no local data
-    return false;
   }
- */
+
+  // Switch to the logged in user
+  await switchUser(remoteUser.id);
+
+  // Hydrate tasks for this user if local tasks provider is available
+  try {
+    const tasks = await BrowserTaskProvider.get();
+    if ((tasks as any).hydrateForUser) {
+      await (tasks as any).hydrateForUser({ user: remoteUser });
+    }
+  } catch { }
+
+  return ok(remoteUser);
 }
+
+async function logout() {
+  assertDB(db);
+  // Capture who is being logged out before clearing active marker
+  const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+  try {
+    // Invalidate remote session
+    await _remoteAuth?.logout();
+  } catch { /* offline or already invalid */ }
+  if (activeId) {
+    try { await SessionVault.remove(activeId); } catch { }
+  }
+  await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
+
+  // Update store
+  _authState.set({ status: "signed-out", user: null });
+
+  invalidateAll();
+  return ok();
+}
+
+// Temporary remote auth setup function (until remoteAuth store exists)
+export function _configureRemoteAuth(remoteAuth: IAuth): void {
+  _remoteAuth = remoteAuth;
+}
+
+// Export the ILocalAuth-compliant auth object
+export const auth: IAuthLocal = {
+  register,
+  getRegistrationRequirements,
+  switchUser,
+  updateUser,
+  deleteUser,
+  removeCachedUser,
+  login,
+  logout,
+};
+
 
 // #region UTILITIES
 
-function assert(
-  condition: unknown,
-  message?: string
-): asserts condition {
-  if (!condition) {
-    throw new Error(message ?? "Assertion failed");
-  }
+// Helper to refresh users list from DB
+async function _refreshUsers(): Promise<void> {
+  assertDB(db);
+  const allUsers = await db.getAll(AUTH_TABLE_NAME) as LocalUser[];
+  _users.set(allUsers);
 }
 
 function assertDB(db: LocalDB | null, errorMessage?: string): asserts db is LocalDB {
@@ -452,8 +365,7 @@ function assertDB(db: LocalDB | null, errorMessage?: string): asserts db is Loca
 function assertRemoteAuth(remoteAuth: IAuth | null, errorMessage?: string): asserts remoteAuth is IAuth {
   if (!remoteAuth) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote auth without a provider."));
 }
-function assertTasks(remoteTasks: ITasks | null, errorMessage?: string): asserts remoteTasks is ITasks {
-  if (!remoteTasks) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote tasks without a provider."));
-}
+
+
 // #endregion
 

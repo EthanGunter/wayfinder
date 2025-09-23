@@ -1,5 +1,7 @@
 import { redirect } from '@sveltejs/kit';
-import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+import { configureProviders, taskAPIPromise } from '@/API/providerRegistry';
+import { authState } from '@/API/Auth/BrowserAuthProvider';
+import { get } from 'svelte/store';
 // import { processQueueInClient } from '@/API/SyncQueue';
 import type { LayoutLoad } from './$types';
 import { Err } from '@/Errors';
@@ -8,52 +10,53 @@ export const ssr = false;
 export const prerender = true;
 
 export const load: LayoutLoad = async ({ parent, url }) => {
-	// Get the resolved services
-	const auth = await authAPIPromise;
+	// TODO:temp Configure providers (auth self-initializes, tasks still needs setup)
+	await configureProviders();
 
-	// Determine active user (prefer active, else default anonymous)
-    let activeUser = await auth.getActiveUser();
-    // TODO:debug [eg] trace active user at layout
-    try { console.log('[layout] activeUser', activeUser?.id); } catch {}
+	// Get current auth state from store
+	const currentAuthState = get(authState);
 
-	// TODO:Temp anonymous accounts disabled
-	/* 	
-	if (!activeUser) {
-		const anonRes = await auth.getDefaultUser();
-		if (anonRes.isOk()) {
-			activeUser = anonRes.value;
-		} else {
-			const users = await auth.listUsers();
-			if (users && users.length > 0) {
-				activeUser = users[0];
-			}
-		}
-	} 
-	*/
+	// Wait for auth to finish loading if still in loading state
+	if (currentAuthState.status === 'loading') {
+		// Wait for auth to initialize to either signed-in or signed-out
+		await new Promise(resolve => {
+			const unsubscribe = authState.subscribe(state => {
+				if (state.status !== 'loading') {
+					unsubscribe();
+					resolve(undefined);
+				}
+			});
+		});
+	}
+
+	const finalAuthState = get(authState);
 
 	// Queue processing disabled while using direct remote calls
 	// try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
 
-	// If we still don't have an active user, allow auth pages, else redirect to login
-	if (activeUser) {
-		// Hydrate local data for the active user (idempotent)
-        try {
+	// Route based on auth status
+	if (finalAuthState.status === "signed-in") {
+		// User is authenticated - hydrate their data and allow access to app
+		try {
 			const tasks = await taskAPIPromise;
 			if (tasks?.hydrateForUser) {
-				await tasks.hydrateForUser({ user: activeUser });
+				await tasks.hydrateForUser({ user: finalAuthState.user });
 			}
 		} catch (e) { Err.UNHANDLED(e); }
+	} else if (finalAuthState.status === "signed-out") {
+		// User is not authenticated
+		const isAuthPage = url.pathname === '/login' || url.pathname === '/register';
+		if (!isAuthPage) {
+			// Don't redirect to the same page to avoid infinite loops
+			const redir = encodeURIComponent(url.pathname + url.search);
+			throw redirect(302, `/login?redirect=${redir}`);
+		}
 	} else {
+		// Auth in error state - treat as signed out
 		const isAuthPage = url.pathname === '/login' || url.pathname === '/register';
 		if (isAuthPage) {
-			// Unauthenticated access allowed for auth pages
-			return { user: null };
+			return {};
 		}
-		const redir = encodeURIComponent(url.pathname + url.search);
-		throw redirect(302, `/login?redirect=${redir}`);
+		throw redirect(302, '/login');
 	}
-
-	// TODO:auth Nothing actually uses the user data provided by this file, they're using getActiveUser instead.
-	// Is this an antipattern?
-	return { user: activeUser };
 };

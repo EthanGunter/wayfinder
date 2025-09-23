@@ -2,17 +2,17 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import type { ILocalAuth, LoginCredentials } from '$lib/API/Auth/types';
+	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
-	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+	import { auth, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { isAnonymous, type User } from '@/API/Auth/User';
 	import Icon from '@iconify/svelte';
 	import { v4 } from 'uuid';
 	import { type ILocalTasks } from '@/API/Tasks';
 
-	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/home';
@@ -33,14 +33,21 @@
 	let errorMessage = $state('');
 	let isLoading = $state(false);
 
-	onMount(async () => {
-		tasks = await taskAPIPromise;
-		auth = await authAPIPromise;
-		multipleAccounts = (await auth.listUsers()).length > 1;
+	onMount(() => {
+		// Load tasks
+		taskAPIPromise.then(t => tasks = t);
+		
+		// Subscribe to users for multiple accounts check
+		const unsubscribeUsers = authUsers.subscribe((userList) => {
+			multipleAccounts = userList.length > 1;
+		});
+
+		return () => {
+			unsubscribeUsers();
+		};
 	});
 
 	async function handleRegister() {
-		if (!auth) return;
 		// Validation
 		if (password !== confirmPassword) {
 			errorMessage = 'Passwords do not match';

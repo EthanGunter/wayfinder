@@ -9,9 +9,9 @@
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
 	import Button from '@/components/ui/button/button.svelte';
-	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+	import { authState } from '@/API/Auth/BrowserAuthProvider';
+import { taskAPIPromise } from '@/API/providerRegistry';
 	import { onMount } from 'svelte';
-	import { type ILocalAuth } from '@/API/Auth/types';
 	import { type ILocalTasks } from '@/API/Tasks';
 	import type { User } from '@/API/Auth/User';
 	import TaskListItem from './TaskListItem.svelte';
@@ -19,7 +19,6 @@
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 	import TutorialExampleProject from './TutorialExampleProject.svelte';
 
-	let auth = $state<ILocalAuth>();
 	let tasks = $state<ILocalTasks>();
 	let user = $state<User>();
 
@@ -37,16 +36,22 @@
 		return (b.priority ?? 0) - (a.priority ?? 0);
 	}
 
-	onMount(async () => {
-		tasks = await taskAPIPromise;
+	onMount(() => {
+		// Load tasks asynchronously
+		taskAPIPromise.then(t => tasks = t);
 
-		auth = await authAPIPromise;
-		const active = await auth.getActiveUser();
-		if (!active) {
-			goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
-			return;
-		}
-		user = active;
+		// Subscribe to auth state
+		const unsubscribeAuth = authState.subscribe((state) => {
+			if (state.status === 'signed-in' && state.user) {
+				user = state.user;
+			} else if (state.status === 'signed-out') {
+				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
+			}
+		});
+
+		return () => {
+			unsubscribeAuth();
+		};
 	});
 
 	let unsubscribe: (() => void) | null = null;
@@ -73,21 +78,11 @@
 	}
 
 	function handleInit(initialTasks: Task[]) {
-		// TODO:debug (eg) - init received
-		console.log('[tasks/+page] init', { count: initialTasks.length });
 		taskIndex = new Map(initialTasks.map((t) => [t.id, t]));
 		recomputeFromIndex();
 	}
 
 	function handleChanges(changes: TaskDelta[]) {
-		// TODO:debug (eg) - changes received
-		console.log(
-			'[tasks/+page] changes',
-			changes.map((c) => ({
-				newId: c.newTask?.id,
-				oldId: c.oldTask?.id
-			}))
-		);
 		for (const change of changes) {
 			if (change.newTask && change.oldTask) {
 				taskIndex.set(change.newTask.id, change.newTask);
@@ -104,11 +99,6 @@
 		if (!tasks || !user) return;
 		unsubscribe?.();
 		const id = page.url.searchParams.get('id');
-		// TODO:debug (eg) - subscribe path
-		console.log(
-			'[tasks/+page] subscribe',
-			id ? { mode: 'scoped', id } : { mode: 'user', user: user.id }
-		);
 		if (id) {
 			unsubscribe = tasks.subscribeTasks({
 				ids: [id],

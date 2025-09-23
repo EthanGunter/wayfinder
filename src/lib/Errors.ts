@@ -1,16 +1,17 @@
 import { dev } from "$app/environment";
 
 export enum ErrorType {
-    PlaceholderError = "Error - PlaceholderError",
-    ArgumentError = "Error - InvalidArgument",
-    InvalidState = "Error - InvalidState",
-    NotFoundError = "Error - NotFound",
-    NotAuthorizedError = "Error - NotAuthorized",
-    ParseError = "Error - FailedParse",
-    IOError = "Error - InputOutput",
-    NotImplementedError = "Error - NotImplemented",
-    NotHandledError = "Error - NotHandled",
-    InputRequired = "Error - InputRequired"
+    PlaceholderError = "PlaceholderError",
+    ArgumentError = "InvalidArgument",
+    InvalidState = "InvalidState",
+    NotFoundError = "NotFound",
+    NotAuthorizedError = "NotAuthorized",
+    ParseError = "FailedParse",
+    IOError = "InputOutput",
+    NotImplementedError = "NotImplemented",
+    NotHandledError = "NotHandled",
+    InputRequired = "InputRequired",
+    Unknown = "Unknown"
 }
 
 if (dev) {
@@ -20,12 +21,12 @@ if (dev) {
 const STACK_REG = /at (.*)\(https?:\/\/[a-z\-]*(?::[0-9]*|\.[a-z]*)(\/.*?)\?.=.*:([0-9]+):([0-9]+)/;
 export class Err {
     static wrap(nativeError: Error): Err {
-        return new Err(1, nativeError.name ?? "unknown", nativeError.message, JSON.stringify(nativeError, undefined, 2));
+        return new Err(1, (nativeError.name as ErrorType) ?? ErrorType.Unknown, nativeError.message, JSON.stringify(nativeError, undefined, 2));
     }
     static UNHANDLED(error: Err | any, message?: string): never {
         // TODO: link to bug report system. Unhandled errors shouldn't happen
         if (!(error instanceof Err)) {
-            error = new Err(1, "Unknown", message ?? "", error);
+            error = new Err(1, ErrorType.Unknown, message ?? "", error);
         }
         error.inheritanceDepth++;
         error.withTrace();
@@ -40,7 +41,7 @@ export class Err {
     static throw(error: Err | any, message?: string): never {
         // TODO: link to bug report system. Unhandled errors shouldn't happen  
         if (!(error instanceof Err)) {
-            error = new Err(1, "Unknown", message ?? "", JSON.stringify(error, undefined, 2));
+            error = new Err(1, ErrorType.Unknown, message ?? "", JSON.stringify(error, undefined, 2));
         }
         error.inheritanceDepth++;
         error.withTrace();
@@ -60,7 +61,7 @@ export class Err {
     /**
      * @param inheritanceDepth helps keep the stacktrace clean. -1 doesn't generate a stacktrace
      */
-    constructor(private inheritanceDepth: number, public type: string, public message: string, public context?: any) {
+    constructor(private inheritanceDepth: number, public type: ErrorType, public message: string, public context?: any) {
         if (dev) {
             this.withTrace();
         }
@@ -100,28 +101,28 @@ export class Err {
         // TODO: Import ReportingService and call reportError() here when ready
         if (this.context) {
             if (this.stack)
-                console.error(this.type + ": " + this.message, this.context, this.stack);
+                console.error("Error - "+this.type + ": " + this.message, this.context, this.stack);
             else
-                console.error(this.type + ": " + this.message, this.context);
+                console.error("Error - "+this.type + ": " + this.message, this.context);
         }
         else {
             if (this.stack)
-                console.error(this.type + ": " + this.message, this.stack);
+                console.error("Error - "+this.type + ": " + this.message, this.stack);
             else
-                console.error(this.type + ": " + this.message);
+                console.error("Error - "+this.type + ": " + this.message);
         }
     }
     logWarning() {
         // TODO: link to bug report system. Unhandled warnings shouldn't happen
         // TODO: Import ReportingService and call reportError() here when ready
         if (this.context)
-            console.warn(this.type + ": " + this.message, this.context);
+            console.warn("Error - "+this.type + ": " + this.message, this.context);
         else
-            console.warn(this.type + ": " + this.message);
+            console.warn("Error - "+this.type + ": " + this.message);
     }
 
     toString() {
-        return this.type + ": " + this.message
+        return "Error - "+this.type + ": " + this.message
     }
 
     private prepForConsole() {

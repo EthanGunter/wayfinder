@@ -1,4 +1,4 @@
-import { Err, IOError, NotFoundError, NotImplementedError } from "$lib/Errors";
+import { Err, IOError, NotAuthorizedError, NotFoundError, NotImplementedError } from "$lib/Errors";
 import { err, ok } from "neverthrow";
 import type { ITasks, ITaskCore, ITaskRelations, ITaskAdvancedFeatures, CreateTaskParams, UpdateTaskParams } from "./types";
 import { type Task, populateTaskDTO } from "./Task";
@@ -7,40 +7,8 @@ import { okBatch, type IProvider } from "../types";
 import type { Tables, TablesInsert } from "../supabase";
 import { getRelationshipUpdates } from "./index";
 
-// Helpers to map between DB row and app Task shape
-function mapRowToTask(row: Tables<'tasks'>): Task {
-  return {
-    id: row.id,
-    user_id: row.user_id,
-    title: row.title,
-    content: row.content ?? undefined,
-    status: row.status,
-    todays_task: row.todays_task,
-    priority: row.priority ?? 0,
-    parents: row.parents ?? [],
-    children: row.children ?? [],
-    created: row.created,
-    last_edit: row.last_edit,
-  };
-}
-
-function mapTaskToInsert(dto: Partial<Task>): TablesInsert<'tasks'> {
-  return {
-    id: dto.id,
-    user_id: dto.user_id,
-    title: dto.title!,
-    content: dto.content,
-    status: dto.status,
-    todays_task: dto.todays_task,
-    priority: dto.priority,
-    parents: dto.parents ?? [],
-    children: dto.children ?? [],
-    created: dto.created,
-    last_edit: dto.last_edit,
-  } as TablesInsert<'tasks'>;
-}
-
 // Fingerprint for correlating inserted rows to input details (order-independent)
+// TODO:refactor This is ai-overkill for finding tasks that match between the client's optimistic creation, and the server's authoritative validation
 function fingerprintTaskLike(t: { title?: string | null; content?: string | null; priority?: number | null; status?: number | null; parents?: string[] | null; children?: string[] | null; todays_task?: string | null; }): string {
   const title = t.title ?? '';
   const content = (t.content ?? '').trim();
@@ -52,7 +20,6 @@ function fingerprintTaskLike(t: { title?: string | null; content?: string | null
   return JSON.stringify({ title, content, priority, status, parents, children, todays });
 }
 
-// No separate Update mapping; we use Insert shape for upsert to satisfy required fields
 
 
 const crud: ITaskCore = {
@@ -60,9 +27,13 @@ const crud: ITaskCore = {
     const dto = populateTaskDTO(createDetail);
     // Server is authoritative for id: force id generation by stripping any client-provided id
     delete (dto as any).id;
+
     const { data, error } = await supabase.from(TASK_TABLE_NAME).insert([dto]).select('*').single();
-    if (error || !data) return err(new IOError(`Failed to create ${dto.title}`, error, dto));
-    return ok(data);
+    if (error || !data) {
+      return err(new IOError(`Failed to create ${dto.title}`, error, dto));
+    }
+
+    return ok({ oldId: createDetail.id, newId: data.id });
   },
 
   createTasks: async ({ createDetails }) => {
@@ -74,7 +45,13 @@ const crud: ITaskCore = {
     });
 
     const { data, error } = await supabase.from(TASK_TABLE_NAME).insert(dtos).select('*');
-    if (error || !data) return err(new IOError(`Failed to create ${createDetails.map(t => t.title).join(', ')}`, error, dtos));
+    if (error) {
+      if (error.code === "42501") {
+        return err(new NotAuthorizedError(`RLS policy failed for create task attempt: ${createDetails.map(t => t.title).join(', ')}`, error));
+      } else {
+        Err.UNHANDLED(error);
+      }
+    }
 
     // Reorder the returned rows to align with the input details using fingerprints
     const buckets = new Map<string, Tables<'tasks'>[]>();
@@ -126,7 +103,7 @@ const crud: ITaskCore = {
 
     // Calculate inverse relationship updates using real IDs
     const relationshipUpdates = await getRelationshipUpdates(api, tasksWithRealIds.map(newTask => ({ oldTask: null, newTask })));
-    
+
     // Apply relationship updates to server using real IDs
     if (relationshipUpdates.length > 0) {
       await crud.updateTasks({ updates: relationshipUpdates });
@@ -137,13 +114,17 @@ const crud: ITaskCore = {
 
   getTask: async ({ id }) => {
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').eq('id', id).single();
-    if (error || !data) return err(new NotFoundError(id, 'Task'));
+    if (error || !data) {
+      return err(new NotFoundError(id, 'Task'));
+    }
     return ok(data);
   },
 
   getTasks: async ({ ids }) => {
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').in('id', ids);
-    if (error) return err(new IOError(`Failed to read tasks (${ids.join(', ')})`, error));
+    if (error) {
+      return err(new IOError(`Failed to read tasks (${ids.join(', ')})`, error));
+    }
     const foundIds = new Set((data ?? []).map((r: any) => r.id));
     const missing = ids.filter(id => !foundIds.has(id)).map(id => new NotFoundError(id, 'Task'));
     return okBatch((data ?? []), missing);
@@ -151,23 +132,35 @@ const crud: ITaskCore = {
 
   getAllUserTasks: async ({ userId }) => {
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').eq('user_id', userId);
-    if (error) return err(new IOError(`Failed to read tasks for user`, error, userId));
+    if (error) {
+      return err(new IOError(`Failed to read tasks for user`, error, userId));
+    }
     return okBatch((data ?? []));
   },
 
   updateTask: async (update: UpdateTaskParams) => {
     const batch = await crud.updateTasks({ updates: [update] });
-    if (batch.isErr()) return err(batch.error);
-    const [items, errors] = [batch.value[0], batch.value[1]] as any; // BatchResult tuple
-    if (errors && errors.length) return err(errors[0]);
-    return ok(items[0]);
+    if (batch.isErr()) {
+      return err(batch.error);
+    }
+
+    const { successes, errors } = batch.value;
+    if (errors.length === 1) {
+      return err(errors[0]);
+    }
+
+    return ok(successes[0]);
   },
 
   updateTasks: async ({ updates }) => {
     if (updates.length === 0) return okBatch([], []);
     const ids = updates.map(u => u.id);
+
     const existingRes = await supabase.from(TASK_TABLE_NAME).select('*').in('id', ids);
-    if (existingRes.error) return err(new IOError('Failed to read tasks for update', existingRes.error, ids));
+    if (existingRes.error) {
+      return err(new IOError('Failed to read tasks for update', existingRes.error, ids));
+    }
+
     const idToRow = new Map((existingRes.data ?? []).map((r: any) => [r.id, r] as [string, any]));
 
     const results: Task[] = [];
@@ -237,8 +230,12 @@ const crud: ITaskCore = {
 
   deleteTask: async ({ id }) => {
     const res = await supabase.from(TASK_TABLE_NAME).delete().eq('id', id).select('*').single();
-    if (res.error) return err(new IOError(`Failed to delete ${id}`, res.error));
-    if (!res.data) return err(new NotFoundError(id, 'Task'));
+    if (res.error) {
+      return err(new IOError(`Failed to delete ${id}`, res.error));
+    }
+    if (!res.data) {
+      return err(new NotFoundError(id, 'Task'));
+    }
     return ok();
   },
 
@@ -247,20 +244,26 @@ const crud: ITaskCore = {
     if (ids.length === 0) return ok();
 
     const res = await supabase.from(TASK_TABLE_NAME).delete().in('id', ids).select('*');
-    if (res.error) return err(new IOError(`Failed to delete ${ids.join(', ')}`, res.error));
+    if (res.error) {
+      return err(new IOError(`Failed to delete ${ids.join(', ')}`, res.error));
+    }
     return ok();
   },
 
   changeOwnership: async ({ oldUserID, newUserID }) => {
     const { data: toChange, error: readErr } = await supabase.from(TASK_TABLE_NAME).select('*').eq('user_id', oldUserID);
-    if (readErr) return err(new IOError('Failed to read tasks for ownership change', readErr, oldUserID));
+    if (readErr) {
+      return err(new IOError('Failed to read tasks for ownership change', readErr, oldUserID));
+    }
     if (!toChange || toChange.length === 0) return okBatch([]);
     const { data, error } = await supabase
       .from(TASK_TABLE_NAME)
       .update({ user_id: newUserID, last_edit: new Date().toISOString() })
       .eq('user_id', oldUserID)
       .select('*');
-    if (error || !data) return err(new IOError('Failed to change ownership', error));
+    if (error || !data) {
+      return err(new IOError('Failed to change ownership', error));
+    }
     return okBatch(data);
   },
 };
@@ -268,25 +271,36 @@ const crud: ITaskCore = {
 const relations: ITaskRelations = {
   getChildrenOf: async ({ id }) => {
     const parent = await crud.getTask({ id });
-    if (parent.isErr()) return err(parent.error);
+    if (parent.isErr()) {
+      return err(parent.error);
+    }
     const childIds = parent.value.children ?? [];
     if (childIds.length === 0) return ok([]);
+
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').in('id', childIds);
-    if (error) return err(new IOError(`Failed to find children for ${parent.value.title}`, error, childIds));
+    if (error) {
+      return err(new IOError(`Failed to find children for ${parent.value.title}`, error, childIds));
+    }
     return ok(data ?? []);
   },
   getParentsOf: async ({ id }) => {
     const child = await crud.getTask({ id });
-    if (child.isErr()) return err(child.error);
+    if (child.isErr()) {
+      return err(child.error);
+    }
     const parentIds = child.value.parents ?? [];
     if (parentIds.length === 0) return ok([]);
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').in('id', parentIds);
-    if (error) return err(new IOError(`Failed to find parents for ${child.value.title}`, error, parentIds));
+    if (error) {
+      return err(new IOError(`Failed to find parents for ${child.value.title}`, error, parentIds));
+    }
     return ok(data ?? []);
   },
   getRootTasks: async () => {
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').or('parents.is.null,parents.eq.{}');
-    if (error) return err(new IOError('Failed to fetch roots', error));
+    if (error) {
+      return err(new IOError('Failed to fetch roots', error));
+    }
     return ok(data ?? []);
   },
 };
@@ -310,12 +324,16 @@ const advanced: ITaskAdvancedFeatures = {
       .eq('user_id', userId)
       .gte('todays_task', start)
       .lt('todays_task', next);
-    if (error) return err(new IOError(`Failed to fetch today's tasks`, error));
+    if (error) {
+      return err(new IOError(`Failed to fetch today's tasks`, error));
+    }
     return ok((data ?? []));
   },
   getPrioritizedTasks: async (limit: number) => {
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*');
-    if (error) return err(new IOError('Failed to fetch tasks for prioritization', error));
+    if (error) {
+      return err(new IOError('Failed to fetch tasks for prioritization', error));
+    }
     const tasks = (data ?? []);
     const roots = tasks.filter(t => (t.parents?.length ?? 0) === 0);
     const tasksMap = new Map(tasks.map(t => [t.id, t] as [string, Task]));
@@ -339,10 +357,9 @@ const advanced: ITaskAdvancedFeatures = {
   searchTasks: async () => {
     Err.throw(new NotImplementedError('SupabaseTaskProvider.searchTasks'));
   },
+  // TODO:sync/tasks/refactor Another example of remote-local API drift...
   subscribeTasks: function () {
-    // Remote subscribe not supported in Option A
     Err.UNHANDLED(new NotImplementedError('SupabaseTaskProvider.subscribeTasks'));
-    return () => { };
   },
 };
 

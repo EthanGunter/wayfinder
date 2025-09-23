@@ -3,35 +3,36 @@
 	import { page } from '$app/state';
 	import { type User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
-	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+	import { auth, authState, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 	import { onMount } from 'svelte';
-	import { type ILocalAuth } from '@/API/Auth/types';
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import type { ILocalTasks } from '$lib/API/Tasks';
 	import type { Task } from '$lib/API/Tasks/Task';
 
-	let auth = $state<ILocalAuth>();
-	let user = $state<User>();
 	let multipleUsers = $state(false);
 	let tasks = $state<ILocalTasks>();
 
-	onMount(async () => {
-		auth = await authAPIPromise;
-		user = (await auth.getActiveUser()) ?? undefined;
-		multipleUsers = (await auth.listUsers()).length > 1;
-		tasks = await taskAPIPromise;
+	onMount(() => {
+		const unsubscribeUsers = authUsers.subscribe((userList) => {
+			multipleUsers = userList.length > 1;
+		});
+
+		// Load tasks asynchronously
+		taskAPIPromise.then((t) => (tasks = t));
+
+		return () => {
+			unsubscribeUsers();
+		};
 	});
 
 	async function handleExportJson() {
-		if (!tasks || !user || !auth) return;
-		// Revalidate active user to avoid exporting when signed out
-		const active = await auth.getActiveUser();
-		if (!active || active.id !== user.id) return;
+		if (!tasks || $authState.status !== 'signed-in') return;
 		const t = tasks as ILocalTasks;
-		const res = await t.getAllUserTasks({ userId: user!.id });
+		const res = await t.getAllUserTasks({ userId: $authState.user.id });
 		if (res.isErr()) return;
-		const taskList = res.value.filter((r) => r.isOk()).map((r) => r._unsafeUnwrap());
+		const taskList = res.value.successes;
 		const exportBlob = new Blob([JSON.stringify(taskList, null, 2)], { type: 'application/json' });
 		const url = URL.createObjectURL(exportBlob);
 		const a = document.createElement('a');
@@ -42,10 +43,7 @@
 	}
 
 	async function handleImportJson() {
-		if (!tasks || !user || !auth) return;
-		// Revalidate active user to avoid importing when signed out
-		const active = await auth.getActiveUser();
-		if (!active || active.id !== user.id) return;
+		if (!tasks || $authState.status !== 'signed-in') return;
 		const t = tasks as ILocalTasks;
 		const input = document.createElement('input');
 		input.type = 'file';
@@ -61,15 +59,13 @@
 				const existing = await t.getTasks({ ids });
 				let existingIds = new Set<string>();
 				if (existing.isOk()) {
-					existingIds = new Set(
-						existing.value.filter((r) => r.isOk()).map((r) => r._unsafeUnwrap().id)
-					);
+					existingIds = new Set(existing.value.successes.map((task) => task.id));
 				}
 				const createDetails = data
 					.filter((t) => !existingIds.has(t.id))
 					.map((t) => ({
 						id: t.id,
-						user_id: user!.id,
+						user_id: $authState.user.id,
 						title: t.title,
 						content: t.content,
 						status: t.status,
@@ -92,9 +88,7 @@
 	}
 
 	async function handleSignOut() {
-		if (!auth) return;
 		await auth.logout();
-		user = undefined;
 		invalidateAll();
 	}
 
@@ -103,16 +97,16 @@
 	}
 </script>
 
-{#if auth && user}
+{#if $authState.status === 'signed-in'}
 	<Sheet.Header>
 		<Sheet.Title>Account</Sheet.Title>
 		<Sheet.Description>
-			{user.display_name}
+			{$authState.user.display_name}
 		</Sheet.Description>
 	</Sheet.Header>
 
 	<div class="mt-6 flex flex-col gap-4">
-		{#if user}
+		{#if $authState.status === 'signed-in'}
 			<Button
 				variant="outline"
 				class="flex h-16 items-center justify-start gap-3"

@@ -11,7 +11,8 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { type Task } from '$lib/API/Tasks/Task';
-	import { authAPIPromise, taskAPIPromise } from '@/API/providerRegistry';
+	import { authState } from '@/API/Auth/BrowserAuthProvider';
+	import { taskAPIPromise } from '@/API/providerRegistry';
 	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import AppHeader from '@/components/AppHeader.svelte';
 	import AppFooter from '@/components/AppFooter.svelte';
@@ -34,10 +35,10 @@
 	import { tutorials } from '@/tutorials/store';
 	import { goto } from '$app/navigation';
 
-	let user: User | null = $state(null);
 	let taskById = new SvelteMap<string, Task>();
 	let tasksAPI: ILocalTasks | null = $state(null);
-	let unsubscribe: (() => void) | null = null;
+	let unsubscribeTasks: (() => void) | null = null;
+	let unsubscribeAuth: (() => void) | null = null;
 
 	let nodes = $state<Node[]>([]);
 	let edges = $state<Edge[]>([]);
@@ -71,20 +72,24 @@
 			return;
 		}
 		tasksAPI = await taskAPIPromise;
-		const authAPI = await authAPIPromise;
-		user = await authAPI.getActiveUser();
-		if (!user) return;
+		// Subscribe to auth state
+		unsubscribeAuth = authState.subscribe((state) => {
+			if (state.status === 'signed-in') {
+				setupSubscription();
+			}
+		});
 		setupSubscription();
 	});
 	onDestroy(() => {
-		unsubscribe?.();
+		unsubscribeTasks?.();
+		unsubscribeAuth?.();
 	});
 
 	function setupSubscription() {
-		if (!tasksAPI || !user) return;
-		unsubscribe?.();
-		unsubscribe = tasksAPI.subscribeTasks({
-			userId: user.id,
+		if (!tasksAPI || $authState.status !== 'signed-in') return;
+		unsubscribeTasks?.();
+		unsubscribeTasks = tasksAPI.subscribeTasks({
+			userId: $authState.user.id,
 			onInitialize: async (tasks) => {
 				taskById = new SvelteMap(tasks.map((t) => [t.id, t]));
 				await rebuildLayoutFromMap();
@@ -413,13 +418,13 @@
 	<AppFooter />
 </div>
 
-{#if tasksAPI && user}
+{#if tasksAPI && $authState.status === 'signed-in'}
 	<TaskCreationDrawer
 		open={drawerOpen}
 		onOpenChange={(o) => (drawerOpen = o)}
 		onTaskCreated={handleTaskCreated}
 		tasks={tasksAPI}
-		{user}
+		user={$authState.user}
 		relation={triggerTaskForNew}
 	/>
 {/if}

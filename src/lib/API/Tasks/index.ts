@@ -1,5 +1,4 @@
 import { Err } from '$lib/Errors';
-import { extractBatch, extractBatchAndLogErrors } from '../types';
 import { type Task } from './Task';
 import type { ITasks, ITaskCoreLocal, UpdateTaskParams } from './types';
 
@@ -110,7 +109,7 @@ async function getParentUpdates(provider: ITasks | ITaskCoreLocal, parentAdditio
     const uniqueChildIds = [...new Set(allChildIds)];
 
     const childrenResult = await provider.getTasks({ ids: uniqueChildIds });
-    const children = extractBatchAndLogErrors(childrenResult);
+    const children = childrenResult.isOk() ? (childrenResult.value.errors.forEach(e => e.logError()), childrenResult.value.successes) : [];
 
     const updates = children.flatMap(child => {
         // Find all parents that should be added to this child
@@ -146,9 +145,10 @@ async function processParentRemovals(provider: ITasks | ITaskCoreLocal, parentRe
     return await childrenResult.match(
         async (childResults) => {
             // TODO not found errors will be returned during recursive delete. I'm not sure why exactly, and I don't know if it matters...
-            const [children, errors] = extractBatch(childResults);
+            const { successes: children, errors } = childResults as any;
+            errors.forEach((e: any) => e.logError());
 
-            const updates = children.flatMap(child => {
+            const updates = (children as Task[]).flatMap(child => {
                 // Find all parents that should be removed from this child
                 const parentsToRemove: string[] = [];
                 parentRemovals.forEach((childIds, parentId) => {
@@ -186,8 +186,9 @@ async function processChildAdditions(provider: ITasks | ITaskCoreLocal, childAdd
     const parentsResult = await provider.getTasks({ ids: uniqueParentIds });
     return await parentsResult.match(
         async (parentResults) => {
-            const parents = extractBatchAndLogErrors(parentResults);
-            const updates = parents.flatMap(parent => {
+            const { successes: parents, errors } = parentResults as any;
+            errors.forEach((e: any) => e.logError());
+            const updates = (parents as Task[]).flatMap(parent => {
                 // Find all children that should be added to this parent
                 const childrenToAdd: string[] = [];
                 childAdditions.forEach((parentIds, childId) => {
@@ -224,8 +225,9 @@ async function processChildRemovals(provider: ITasks | ITaskCoreLocal, childRemo
     const parentsResult = await provider.getTasks({ ids: uniqueParentIds });
     return await parentsResult.match(
         async (parentResults) => {
-            const parents = extractBatchAndLogErrors(parentResults);
-            const updates = parents.flatMap(parent => {
+            const { successes: parents, errors } = parentResults as any;
+            errors.forEach((e: any) => e.logError());
+            const updates = (parents as Task[]).flatMap(parent => {
                 // Find all children that should be removed from this parent
                 const childrenToRemove: string[] = [];
                 childRemovals.forEach((parentIds, childId) => {

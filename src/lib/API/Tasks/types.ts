@@ -1,6 +1,6 @@
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
-import type { NotFoundError, Err, ArgumentError } from "$lib/Errors";
+import type { NotFoundError, Err, ArgumentError, NotAuthorizedError, InvalidStateError } from "$lib/Errors";
 import type { Task } from "./Task";
 import type { User } from "../Auth/User";
 import type { BatchResult, Result } from "../types";
@@ -10,7 +10,7 @@ import { enqueueSyncCommand } from "../SyncQueue";
 
 
 export interface ILocalTaskProvider {
-  get(wrappedTasks?: ITasks): Promise<ILocalTasks>;
+  get(): Promise<ILocalTasks>;
 }
 export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ILocalTasks = ITaskCoreLocal & ITaskExporter & ITaskRelations & ITaskAdvancedFeatures & {
@@ -23,7 +23,6 @@ export type ILocalTasks = ITaskCoreLocal & ITaskExporter & ITaskRelations & ITas
 export type TaskDelta = { oldTask: Task | null; newTask: Task | null };
 
 
-// TODO:sync switch batch results to all-or-nothing transactional Result<>
 /**
  * Manages modifications to markdown files that represent tasks,
  * as well as keeping a database index in sync for rapid querying of data
@@ -33,24 +32,26 @@ export interface ITaskCore {
    * Creates a new task with the given data
    * @returns The new task's generated ID
    */
-  createTask(params: { createDetail: CreateTaskParams }): Promise<Result<Task>>;
-  createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ updatedIds: Map<string, string> }>>;
+  /* TODO:sync/tasks/refactor An example of divergence between the client-side and remote side APIs. The server should return id updates, 
+  the client should frankly return void, since we're using a subscription-based data model */
+  createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ oldId: string, newId: string }, NotAuthorizedError | InvalidStateError>>;
+  createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ updatedIds: Map<string, string> }, NotAuthorizedError>>;
   /**
    * Fetches a task's data by its ID
    */
-  getTask(params: { id: string }): Promise<Result<Task, NotFoundError>>;
-  getTasks(params: { ids: string[] }): Promise<BatchResult<Task, NotFoundError>>;
-  getAllUserTasks(params: { userId: string }): Promise<BatchResult<Task, NotFoundError>>;
+  getTask(params: { id: string }): Promise<Result<Task, NotFoundError | NotAuthorizedError>>;
+  getTasks(params: { ids: string[] }): Promise<BatchResult<Task, NotFoundError | NotAuthorizedError>>;
+  getAllUserTasks(params: { userId: string }): Promise<BatchResult<Task, NotFoundError | NotAuthorizedError>>;
   /**
    * @param task can be passed as an id
    */
-  updateTask(params: UpdateTaskParams): Promise<Result<Task>>;
-  updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task>>;
+  updateTask(params: UpdateTaskParams): Promise<Result<Task, NotAuthorizedError>>;
+  updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task, NotAuthorizedError>>;
 
-  deleteTask(params: { id: string }): Promise<Result<void>>;
-  deleteTasks(params: { ids: string[] }): Promise<Result<void>>;
+  deleteTask(params: { id: string }): Promise<Result<void, NotAuthorizedError>>;
+  deleteTasks(params: { ids: string[] }): Promise<Result<void, NotAuthorizedError>>;
 
-  changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<BatchResult<Task>>;
+  changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<BatchResult<Task, NotAuthorizedError>>;
 }
 export type ITaskCoreLocal = Omit<ITaskCore, 'deleteTasks' | 'deleteTask'> & {
   deleteTask(params: { id: string, recursive?: boolean }): Promise<Result<void>>;
@@ -59,10 +60,10 @@ export type ITaskCoreLocal = Omit<ITaskCore, 'deleteTasks' | 'deleteTask'> & {
 
 // TODO Singular api will likely just wrap multi api for convenience, no need for more handlers
 export interface ITaskCoreResponseHandler {
-  handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string> }, { idsToDelete: string[] }>): Promise<void>;
-  handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[] }>): Promise<void>;
-  handleDeleteTasksResponse(response: Result<void, { oldState: Task[] }>): Promise<void>;
-  handleChangeOwnershipResponse(response: Result<void, { oldUserID: string, newUserID: string }>): Promise<void>;
+  handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string> }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
+  handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;
+  handleDeleteTasksResponse(response: Result<void, { oldState: Task[], error: NotAuthorizedError }>): Promise<void>;
+  handleChangeOwnershipResponse(response: Result<void, { oldUserID: string, newUserID: string, error: NotAuthorizedError }>): Promise<void>;
 }
 
 export interface ITaskRelations {
@@ -131,7 +132,7 @@ export interface ITaskExporter {
 
 // All fields in the Omit<> become optional
 export type CreateTaskParams = Partial<Task> & Omit<Task,
-  | "id"
+  // | "id"
   | "created"
   | "last_edit"
   | "todays_task"
