@@ -117,8 +117,6 @@
 	}
 
 	async function startProject() {
-		if (!tasksAPI) return;
-
 		// TODO:UX Navigate to /tasks/ and open the create project drawer
 		alert(
 			'Button temporarily disabled. Please click the "Browser" button at the bottom of the page instead.'
@@ -152,7 +150,7 @@
 	);
 </script>
 
-{#if $authState.status === 'signed-in' && tasksAPI}
+{#if $authState.status === 'signed-in'}
 	<TutorialWelcome />
 	<TutorialPlanner />
 	<div class="page page-root">

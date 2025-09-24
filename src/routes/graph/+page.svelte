@@ -12,7 +12,7 @@
 	import '@xyflow/svelte/dist/style.css';
 	import { type Task } from '$lib/API/Tasks/Task';
 	import { authState } from '@/API/Auth';
-	import { tasksAPI as tasksAPIFacade } from '@/API/Tasks';
+	import { tasksAPI } from '@/API/Tasks';
 	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import AppHeader from '@/components/AppHeader.svelte';
 	import AppFooter from '@/components/AppFooter.svelte';
@@ -36,7 +36,6 @@
 	import { goto } from '$app/navigation';
 
 	let taskById = new SvelteMap<string, Task>();
-	let tasksAPI: ILocalTasks | null = $state(null);
 	let unsubscribeTasks: (() => void) | null = null;
 	let unsubscribeAuth: (() => void) | null = null;
 
@@ -71,22 +70,22 @@
 			goto('/home');
 			return;
 		}
-		tasksAPI = tasksAPIFacade;
+
 		// Subscribe to auth state
 		unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in') {
-				setupSubscription();
+				setupTaskSubscription();
 			}
 		});
-		setupSubscription();
 	});
 	onDestroy(() => {
 		unsubscribeTasks?.();
 		unsubscribeAuth?.();
 	});
 
-	function setupSubscription() {
-		if (!tasksAPI || $authState.status !== 'signed-in') return;
+	function setupTaskSubscription() {
+		if ($authState.status !== 'signed-in') return;
+
 		unsubscribeTasks?.();
 		unsubscribeTasks = tasksAPI.subscribeTasks({
 			userId: $authState.user.id,
@@ -175,7 +174,6 @@
 		console.log('handleConnect');
 		connectionState.successful = true;
 		try {
-			if (!tasksAPI) return;
 			const parentId: string | undefined = connection?.source;
 			const childId: string | undefined = connection?.target;
 			if (!parentId || !childId || parentId === childId) return;
@@ -205,7 +203,6 @@
 		console.log('handleReconnect');
 		reconnectionState.successful = true;
 		try {
-			if (!tasksAPI) return;
 			const oldSource = String(oldEdge.source);
 			const oldTarget = String(oldEdge.target);
 			const newSource = String(newConnection?.source ?? oldSource);
@@ -277,7 +274,6 @@
 	) {
 		console.log('handleReconnectEnd');
 		try {
-			if (!tasksAPI) return;
 			// If not successful, only delete when truly dropped on the pane (no target handle)
 			if (!reconnectionState.successful) {
 				const droppedOnHandle = (event as any)?.target?.closest?.('.svelte-flow__handle');
@@ -309,8 +305,6 @@
 
 	async function handleDelete(params: { nodes: Node[]; edges: Edge[] }): Promise<void> {
 		console.log('handleDelete');
-
-		if (!tasksAPI) return;
 
 		if (params.nodes.length > 0) {
 			// Delete tasks from backend
@@ -418,15 +412,8 @@
 	<AppFooter />
 </div>
 
-{#if tasksAPI && $authState.status === 'signed-in'}
-	<TaskCreationDrawer
-		open={drawerOpen}
-		onOpenChange={(o) => (drawerOpen = o)}
-		onTaskCreated={handleTaskCreated}
-		tasks={tasksAPI}
-		user={$authState.user}
-		relation={triggerTaskForNew}
-	/>
+{#if $authState.status === 'signed-in'}
+	<TaskCreationDrawer bind:open={drawerOpen} relation={triggerTaskForNew} />
 {/if}
 
 <style>

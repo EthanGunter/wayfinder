@@ -82,7 +82,7 @@ export async function requestBackgroundSync(): Promise<void> {
             try { navigator.serviceWorker.controller?.postMessage({ type: 'process-sync-queue' }); } catch {}
         }
     } else {
-        console.log("serviceWorker no in navigator...");
+        console.log("serviceWorker not in navigator...");
     }
 }
 

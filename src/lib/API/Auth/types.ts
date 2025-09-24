@@ -1,5 +1,4 @@
-import { enqueueSyncCommand } from "../SyncQueue";
-import type { ArgumentError, NotFoundError, NotImplementedError } from "$lib/Errors";
+import type { ArgumentError, Err, NotFoundError, NotImplementedError } from "$lib/Errors";
 import type { Result } from "../types";
 import type { User, LocalUser } from "./User";
 
@@ -26,10 +25,10 @@ export enum AccountIssueTarget {
 //#region Local Auth
 
 export type AuthState =
-	| { status: "loading" }
-	| { status: "signed-in", user: LocalUser }
-	| { status: "signed-out", user: null }
-	| { status: "error", user?: LocalUser }
+    | { status: "loading" }
+    | { status: "signed-in", user: LocalUser }
+    | { status: "signed-out", user: null }
+    | { status: "error", error: Err }
 
 export type ILocalAuth = IAuthLocal & IAuthResponseHandler;
 
@@ -55,7 +54,7 @@ export interface IAuthLocal {
      */
     deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
     /** Removes a cached user account from the local machine. It still be logged into remotely */
-    removeCachedUser(userId: string): Promise<void>
+    removeCachedUser(userId: string): Promise<void>,
     login(params: { creds: LoginCredentials }): Promise<Result<User, NotFoundError | ArgumentError | NotImplementedError>>,
     logout(): Promise<Result<void>>,
 }

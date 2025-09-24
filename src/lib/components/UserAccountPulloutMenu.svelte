@@ -3,8 +3,8 @@
 	import { page } from '$app/state';
 	import { type User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
-    import { authAPI, authState, cachedUsers as authUsers } from '@/API/Auth';
-    import { tasksAPI } from '@/API/Tasks';
+	import { authAPI, authState, cachedUsers as authUsers } from '@/API/Auth';
+	import { tasksAPI } from '@/API/Tasks';
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
@@ -24,9 +24,8 @@
 	});
 
 	async function handleExportJson() {
-		if (!tasksAPI || $authState.status !== 'signed-in') return;
-		const t = tasksAPI as ILocalTasks;
-		const res = await t.getAllUserTasks({ userId: $authState.user.id });
+		if ($authState.status !== 'signed-in') return;
+		const res = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
 		if (res.isErr()) return;
 		const taskList = res.value.successes;
 		const exportBlob = new Blob([JSON.stringify(taskList, null, 2)], { type: 'application/json' });
@@ -39,7 +38,7 @@
 	}
 
 	async function handleImportJson() {
-		if (!tasksAPI || $authState.status !== 'signed-in') return;
+		if ($authState.status !== 'signed-in') return;
 		const t = tasksAPI as ILocalTasks;
 		const input = document.createElement('input');
 		input.type = 'file';
@@ -102,19 +101,17 @@
 	</Sheet.Header>
 
 	<div class="mt-6 flex flex-col gap-4">
-		{#if $authState.status === 'signed-in'}
-			<Button
-				variant="outline"
-				class="flex h-16 items-center justify-start gap-3"
-				onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}
-			>
-				<Icon icon="material-symbols:settings" class="size-6 text-gray-600" />
-				<div class="text-left">
-					<div class="font-medium">User Settings</div>
-					<div class="text-sm text-gray-500">Manage your preferences</div>
-				</div>
-			</Button>
-		{/if}
+		<Button
+			variant="outline"
+			class="flex h-16 items-center justify-start gap-3"
+			onclick={() => goto(`/account?redirect=${page.url.pathname + page.url.search}`)}
+		>
+			<Icon icon="material-symbols:settings" class="size-6 text-gray-600" />
+			<div class="text-left">
+				<div class="font-medium">User Settings</div>
+				<div class="text-sm text-gray-500">Manage your preferences</div>
+			</div>
+		</Button>
 
 		<!-- Export JSON -->
 		<Button

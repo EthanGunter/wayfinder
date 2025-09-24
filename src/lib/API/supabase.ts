@@ -2,10 +2,9 @@ export type Json =
   | string
   | number
   | boolean
-  | undefined
-  | { [key: string]: Json | undefined }
+  | null
+  | { [key: string]: Json | null }
   | Json[]
-
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)

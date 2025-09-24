@@ -1,10 +1,11 @@
+import { Err } from '@/Errors';
 import { dbPromise, APP_TABLE_NAME } from '../localDB';
 
 // TODO:mobile Use platform secure storage (Keychain/SecureStorage) for vault key and entries
 
+// TODO:auth:security consider adding a refresh endpoint on the server (that will exist one day)
 const VAULT_PREFIX = 'session:'; // Stored under APP table
 const KEY_STORAGE = 'wf.vault.key.v1'; // localStorage key for JWK
-const ALGO: AesGcmParams = { name: 'AES-GCM', iv: new Uint8Array(12) } as any; // iv set per encryption
 
 async function ensureKey(): Promise<CryptoKey> {
   // Web-only guard
@@ -21,7 +22,7 @@ async function ensureKey(): Promise<CryptoKey> {
   const exported = await crypto.subtle.exportKey('jwk', key);
   try {
     localStorage.setItem(KEY_STORAGE, JSON.stringify(exported));
-  } catch {}
+  } catch (e) { Err.UNHANDLED(e) }
   return key;
 }
 
@@ -30,11 +31,11 @@ function toB64(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
-function fromB64(b64: string): Uint8Array {
+function fromB64(b64: string): ArrayBuffer {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  return bytes.buffer;
 }
 
 async function encrypt(text: string): Promise<string> {

@@ -21,7 +21,11 @@ if (dev) {
 const STACK_REG = /at (.*)\(https?:\/\/[a-z\-]*(?::[0-9]*|\.[a-z]*)(\/.*?)\?.=.*:([0-9]+):([0-9]+)/;
 export class Err {
     static wrap(nativeError: Error): Err {
-        return new Err(1, (nativeError.name as ErrorType) ?? ErrorType.Unknown, nativeError.message, JSON.stringify(nativeError, undefined, 2));
+        return new Err(1,
+            (nativeError.name as ErrorType) ?? ErrorType.Unknown, // Force type to accept any string
+            nativeError.message,
+            JSON.stringify(nativeError, undefined, 2)
+        );
     }
     static UNHANDLED(error: Err | any, message?: string): never {
         // TODO: link to bug report system. Unhandled errors shouldn't happen
@@ -101,28 +105,28 @@ export class Err {
         // TODO: Import ReportingService and call reportError() here when ready
         if (this.context) {
             if (this.stack)
-                console.error("Error - "+this.type + ": " + this.message, this.context, this.stack);
+                console.error("Error - " + this.type + ": " + this.message, this.context, this.stack);
             else
-                console.error("Error - "+this.type + ": " + this.message, this.context);
+                console.error("Error - " + this.type + ": " + this.message, this.context);
         }
         else {
             if (this.stack)
-                console.error("Error - "+this.type + ": " + this.message, this.stack);
+                console.error("Error - " + this.type + ": " + this.message, this.stack);
             else
-                console.error("Error - "+this.type + ": " + this.message);
+                console.error("Error - " + this.type + ": " + this.message);
         }
     }
     logWarning() {
         // TODO: link to bug report system. Unhandled warnings shouldn't happen
         // TODO: Import ReportingService and call reportError() here when ready
         if (this.context)
-            console.warn("Error - "+this.type + ": " + this.message, this.context);
+            console.warn("Error - " + this.type + ": " + this.message, this.context);
         else
-            console.warn("Error - "+this.type + ": " + this.message);
+            console.warn("Error - " + this.type + ": " + this.message);
     }
 
     toString() {
-        return "Error - "+this.type + ": " + this.message
+        return "Error - " + this.type + ": " + this.message
     }
 
     private prepForConsole() {
@@ -162,7 +166,7 @@ export class NotFoundError extends Err {
 
 export class NotAuthorizedError extends Err {
     constructor(msg: string = "Not authorized", context?: any) {
-        super(1, ErrorType.NotFoundError, msg, context);
+        super(1, ErrorType.NotAuthorizedError, msg, context);
     }
 }
 

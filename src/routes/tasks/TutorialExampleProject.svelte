@@ -1,13 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto, invalidate, invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { tutorials } from '@/tutorials/store';
 	import TModal from '@/tutorials/primitives/TModal.svelte';
 
 	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
 	import { authState } from '@/API/Auth';
-	import { type ILocalTasks } from '@/API/Tasks';
-	import type { User } from '@/API/Auth/User';
 	import { tasksAPI } from '@/API/Tasks';
 	import { queryOrWait } from '@/tutorials/dom';
 	import demoData from '@/tutorials/DemoData.json';

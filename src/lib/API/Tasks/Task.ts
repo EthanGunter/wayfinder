@@ -38,7 +38,7 @@ export function isTask(value: any): value is Task {
         && typeof value.title === 'string'
         && typeof value.created === 'string'
         && typeof value.last_edit === 'string'
-        && typeof value.todays_task === 'string'
+        && (value.todays_task === undefined || typeof value.todays_task === 'string')
         && typeof value.parents === 'object'
         && typeof value.children === 'object'
         ;
@@ -92,7 +92,7 @@ export function taskEquals(a: Task, b: Task, ignoreId: boolean = false): boolean
 
 export function populateTaskDTO(dto: CreateTaskParams): PopulatedTaskDTO {
     const populated = {
-        id: dto.id,
+        id: dto.id ?? v4(),
         user_id: dto.user_id,
         priority: dto.priority ?? 0,
         title: dto.title,

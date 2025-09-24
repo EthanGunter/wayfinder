@@ -8,9 +8,10 @@ import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
 import { remoteTasks as remoteTasksStore } from '$lib/stores/remoteTasks';
-import { readable, type Readable } from 'svelte/store';
-import { userHasFeature, type User } from '../Auth/User';
+import { get, readable, type Readable } from 'svelte/store';
+import { userHasFeature, type User, type UserFeature } from '../Auth/User';
 import { okBatch, type BatchResult } from '../types';
+import { authState } from '../Auth';
 // import { queueTaskSyncCommand } from './types';
 
 
@@ -52,8 +53,10 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
     }
     else {
       const { idsToDelete, error } = response.error;
-      const user = await getCurrentUser();
-      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
+      // TODO:debt The next two lines should be able to be greatly simplified...
+      const auth = get(authState);
+      const hasSync = auth.status === 'signed-in' ? userHasFeature(auth.user, 'task-sync') : false;
+
       if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
         console.warn('[Sync] createTasks unauthorized; user lacks task-sync. Keeping local tasks', idsToDelete);
         return;
@@ -108,8 +111,9 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
   getAllUserTasks: async function ({ userId }) {
     assertDB(_db);
     // Require an active user and only allow reads for that user's data
-    const currentUser = await getCurrentUser();
-    if (!currentUser || currentUser.id !== userId) {
+    // TODO:debt Should we be subscribing to the store, rather than using get(authState) everywhere?
+    const auth = get(authState);
+    if (auth.status === 'signed-in' && auth.user.id !== userId) {
       return okBatch([] as Task[]);
     }
     const userTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
@@ -137,9 +141,8 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState, error } = response.error;
-      const user = await getCurrentUser();
-      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
-      if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
+
+      if (error.type === ErrorType.NotAuthorizedError && !userAndHasFeature('task-sync')) {
         // TODO:sync inform user of error (via popup?)
         Err.UNHANDLED(error);
       }
@@ -163,9 +166,7 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState, error } = response.error;
-      const user = await getCurrentUser();
-      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
-      if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
+      if (error.type === ErrorType.NotAuthorizedError && !userAndHasFeature('task-sync')) {
         console.warn('[Sync] deleteTasks unauthorized; user lacks task-sync. Keeping local deletions for', oldState.map(t => t.id));
         return;
       }
@@ -179,9 +180,7 @@ const taskCRUD: ITaskCoreLocal & ITaskCoreResponseHandler = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldUserID, newUserID, error } = response.error;
-      const user = await getCurrentUser();
-      const hasSync = user ? userHasFeature(user, 'task-sync') : false;
-      if (error.type === ErrorType.NotAuthorizedError && !hasSync) {
+      if (error.type === ErrorType.NotAuthorizedError && !userAndHasFeature('task-sync')) {
         console.warn('[Sync] changeOwnership unauthorized; user lacks task-sync. Keeping local ownership change', { oldUserID, newUserID });
         return;
       }
@@ -198,8 +197,8 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   const errors: ArgumentError[] = [];
 
   // Get current user to assign ownership
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
+  const auth = get(authState);
+  if (auth.status !== 'signed-in') {
     return err(new InvalidStateError("Cannot create tasks without an authenticated user account"));
   }
 
@@ -213,7 +212,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
     }
 
     // Ensure the task is owned by the current user
-    const taskWithOwnership = { ...taskDTO, user_id: currentUser.id };
+    const taskWithOwnership = { ...taskDTO, user_id: auth.user.id };
     const preparedTask = createTask(taskWithOwnership);
     preparedTask.created = new Date().toISOString();
 
@@ -264,6 +263,8 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
 
   return okBatch(createdTasks, errors);
 };
+
+// TODO:critical Add infinite recursion guards
 async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: boolean = true) {
   if (updates.length === 0) return okBatch([], []);
 
@@ -392,6 +393,7 @@ async function _deleteTasksLocal(ids: string[], recursive: boolean, updateServer
     }
 
     if (recursive && task.children.length > 0) {
+      // TODO:critical Add infinite recursion guards
       // Recursively delete children first to avoid transient dangling refs
       await _deleteTasksLocal(task.children, recursive, false);
     }
@@ -527,14 +529,14 @@ const taskRelations: ITaskRelations = {
 
   getRootTasks: async function () {
     assertDB(_db);
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
+    const auth = get(authState);
+    if (auth.status !== 'signed-in') {
       return ok([]); // No authenticated user, return empty array
     }
 
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
     const rootTasks = (allTasks as Task[]).filter(task =>
-      task.parents.length === 0 && task.user_id === currentUser.id);
+      task.parents.length === 0 && task.user_id === auth.user.id);
     return ok(rootTasks);
   }
 }
@@ -617,13 +619,13 @@ async function _emitChanges(deltas: TaskDelta[]) {
 const advancedFeatures: ITaskAdvancedFeatures = {
   getTodaysTasks: async function () {
     assertDB(_db);
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
+    const auth = get(authState);
+    if (auth.status !== 'signed-in') {
       return ok([]); // No authenticated user, return empty array
     }
 
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const userTasks = (allTasks as Task[]).filter(t => t.user_id === currentUser.id);
+    const userTasks = (allTasks as Task[]).filter(t => t.user_id === auth.user.id);
     const today = new Date().toISOString().split('T')[0];
     const todays = userTasks.filter(t => t.todays_task && t.todays_task.startsWith(today));
     return ok(todays);
@@ -631,13 +633,13 @@ const advancedFeatures: ITaskAdvancedFeatures = {
 
   getPrioritizedTasks: async function (limit: number) {
     assertDB(_db);
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
+    const auth = get(authState);
+    if (auth.status !== 'signed-in') {
       return ok([]); // No authenticated user, return empty array
     }
 
     let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME) as Task[])
-      .filter(t => t.user_id === currentUser.id);
+      .filter(t => t.user_id === auth.user.id);
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -747,14 +749,14 @@ const advancedFeatures: ITaskAdvancedFeatures = {
 const dataExporter: ITaskExporter = {
   exportData: async function ({ simplify }) {
     assertDB(_db);
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
+    const auth = get(authState);
+    if (auth.status !== 'signed-in') {
       throw new InvalidStateError("Cannot export data without an authenticated user");
     }
 
     // Only export tasks owned by the current user
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const taskData = (allTasks as Task[]).filter(task => task.user_id === currentUser.id);
+    const taskData = (allTasks as Task[]).filter(task => task.user_id === auth.user.id);
     const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
 
     // 1. Create a new zip
@@ -803,9 +805,9 @@ let _unsubscribeRemoteTasks: (() => void) | null = null;
     _searchService = new TaskSearchService();
 
     // Reindex search for current user
-    const currentUser = await getCurrentUser();
-    if (currentUser) {
-      const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: currentUser.id });
+    const auth = get(authState);
+    if (auth.status === 'signed-in') {
+      const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: auth.user.id });
       if (existingTasksResult.isOk()) {
         const { successes, errors } = existingTasksResult.value;
         errors.forEach(e => e.logError());
@@ -820,9 +822,9 @@ let _unsubscribeRemoteTasks: (() => void) | null = null;
         _remoteTasks = rt;
         if (!previous && rt) {
           // Remote just became available; hydrate for current user if present
-          const user = await getCurrentUser();
-          if (user) {
-            await _hydrateForUser(user);
+          const auth = get(authState);
+          if (auth.status === 'signed-in') {
+            await _hydrateForUser(auth.user);
           }
         }
       });
@@ -917,38 +919,37 @@ export function taskScopeStore(params: { ids: string[]; ancestorDepth: number; d
   });
 }
 
- 
+
 
 //#region Utilities
 
+function userAndHasFeature(feature: UserFeature): boolean {
+  const auth = get(authState);
+  if (auth.status !== 'signed-in') {
+    return false;
+  }
+  return userHasFeature(auth.user, feature);
+}
 function assertDB(db: LocalDB | null): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection."));
 }
 
-async function getCurrentUser(): Promise<User | null> {
-  assertDB(_db);
-  const activeUserId = await _db.get(APP_TABLE_NAME, ACTIVEUSER_NAME) as string | undefined;
-  if (activeUserId) {
-    const user = await _db.get(AUTH_TABLE_NAME, activeUserId);
-    return user ?? null;
-  }
-  return null;
-}
-
 async function validateTaskOwnership(task: Task): Promise<boolean> {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
+  // TODO:debt/performance This is incredibly inefficient since this path is called quite often.
+  // prefer module-level auth value.
+  const auth = get(authState);
+  if (auth.status !== 'signed-in') {
     return false; // No authenticated user
   }
-  return task.user_id === currentUser.id;
+  return task.user_id === auth.user.id;
 }
 
 async function validateTasksOwnership(tasks: Task[]): Promise<Task[]> {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
+  const auth = get(authState);
+  if (auth.status !== 'signed-in') {
     return []; // No authenticated user
   }
-  return tasks.filter(task => task.user_id === currentUser.id);
+  return tasks.filter(task => task.user_id === auth.user.id);
 }
 
 /** This function manages writing the markdown file, then updating the index */

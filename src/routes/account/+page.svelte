@@ -23,7 +23,7 @@
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in' && state.user) {
-				originalUser = state.user;
+				debouncedUpdateUser({ update: state.user });
 				loadTaskCount();
 			} else if (state.status === 'signed-out') {
 				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
@@ -36,7 +36,7 @@
 	});
 
 	async function loadTaskCount() {
-		if (!tasksAPI || $authState.status !== 'signed-in') return;
+		if ($authState.status !== 'signed-in') return;
 
 		try {
 			const result = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
@@ -68,15 +68,14 @@
 
 		// Only update if there are actual changes
 		if ($authState.status === 'signed-in' && changes && Object.keys(changes).length > 0) {
-			await debouncedUpdateUser!({
+			await debouncedUpdateUser({
 				update: {
 					id: $authState.user.id,
 					...changes
 				}
 			});
-			await authAPI!.updateUser({ update: { ...changes, id: $authState.user.id } });
 			originalUser = $authState.user;
-			await invalidateAll();
+			await invalidateAll(); // TODO:?? This may do nothing...
 		}
 	}
 
@@ -89,10 +88,10 @@
 
 		isDeleting = true;
 		try {
-			const rootRes = await tasksAPI!.getRootTasks();
+			const rootRes = await tasksAPI.getRootTasks();
 			if (rootRes.isErr()) Err.UNHANDLED(rootRes.error);
 
-			await tasksAPI!.deleteTasks({
+			await tasksAPI.deleteTasks({
 				ids: rootRes.value.map((r) => r.id),
 				recursive: true
 			});
@@ -141,6 +140,7 @@
 			class="grid-area-content mx-auto flex w-full max-w-[25rem] min-w-80 flex-col items-center justify-center gap-4 overflow-y-scroll p-4"
 		>
 			<div class="grid min-w-[70%] gap-4">
+				<!-- TODO:UX avatar only seems to update after navigation or refresh... -->
 				<AvatarEditor user={$authState.user} class="m-auto max-h-[50vh] max-w-[50vw]" />
 				<span class="flex flex-col">
 					<label for="input_display_name" class="mb-2 font-medium text-gray-800">Name</label>
@@ -170,7 +170,9 @@
 						</select>
 						</section> -->
 			</div>
-			<Button onclick={saveUserChanges} disabled={equals($authState.user, originalUser!)}>Save Changes</Button>
+			<!-- <Button onclick={saveUserChanges} disabled={equals($authState.user, originalUser!)}
+				>Save Changes</Button
+			> -->
 
 			<!-- Delete Account Dialog -->
 			<AlertDialog.Root>

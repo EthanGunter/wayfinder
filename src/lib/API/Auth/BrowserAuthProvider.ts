@@ -32,9 +32,9 @@ let _unsubscribeRemoteAuth: (() => void) | null = null;
     // Hydrate active user state
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     if (activeUserId) {
-      const user = await db.get(AUTH_TABLE_NAME, activeUserId) as LocalUser | undefined;
-      if (user) {
-        _authState.set({ status: "signed-in", user });
+      const activeUser = await db.get(AUTH_TABLE_NAME, activeUserId) as LocalUser | undefined;
+      if (activeUser) {
+        _authState.set({ status: "signed-in", user: activeUser });
       } else {
         _authState.set({ status: "signed-out", user: null });
       }
@@ -53,8 +53,8 @@ let _unsubscribeRemoteAuth: (() => void) | null = null;
     // } catch {
     //   // remoteAuth store doesn't exist yet; will remain null
     // }
-  } catch (e) {
-    _authState.set({ status: "error" });
+  } catch (e: any) {
+    _authState.set({ status: "error", error: Err.wrap(e) });
   }
 })();
 
@@ -162,7 +162,7 @@ async function updateUser({ update }: { update: Partial<LocalUser> & { id: strin
 
   const user = await db.get(AUTH_TABLE_NAME, update.id) as LocalUser | undefined;
   if (!user) {
-    Err.throw(new NotFoundError(update.id, "User"));
+    return err(new NotFoundError(update.id, "User"));
   }
 
   const updatedUser = {
@@ -285,7 +285,7 @@ async function login({ creds }: { creds: any }) {
   // Switch to the logged in user
   await switchUser(remoteUser.id);
 
-  // Hydrate tasks for this user if local tasks provider is available
+  // Hydrate tasks for this user
   await tasksAPI.hydrateForUser({ user: remoteUser });
 
   return ok(remoteUser);

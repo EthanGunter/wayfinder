@@ -1,22 +1,18 @@
 <script lang="ts">
 	import * as Sheet from '$lib/components/ui/sheet';
 	import Button from '$lib/components/ui/button/button.svelte';
-	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import Icon from '@iconify/svelte';
 	import { type Task, TaskStatus } from '$lib/API/Tasks/Task';
-	import { type CreateTaskParams, type ILocalTasks } from '$lib/API/Tasks';
-	import type { User } from '$lib/API/Auth/User';
+	import { tasksAPI, type CreateTaskParams } from '$lib/API/Tasks';
+	import { authState } from '@/API/Auth';
+	import { v4 } from 'uuid';
 
 	interface Props {
 		open: boolean;
-		onOpenChange: (open: boolean) => void;
-		onTaskCreated: (task: Task) => void;
-		tasks: ILocalTasks;
-		user: User;
 		relation?: { task: Task; mode: 'child' | 'parent' } | null;
 	}
 
-	let { open = $bindable(), onOpenChange, onTaskCreated, tasks, user, relation }: Props = $props();
+	let { open = $bindable(), relation }: Props = $props();
 
 	// Form state
 	let formData = $state({
@@ -38,10 +34,11 @@
 
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
-		if (!formData.title.trim()) return;
+		if (!formData.title.trim() || $authState.status !== 'signed-in') return;
 
 		const createDetail: CreateTaskParams = {
-			user_id: user.id,
+			id: v4(),
+			user_id: $authState.user.id,
 			title: formData.title.trim()
 		};
 
@@ -64,12 +61,11 @@
 			}
 		}
 
-		const result = await tasks.createTask({ createDetail });
+		const result = await tasksAPI.createTask({ createDetail });
 
 		result.match(
 			(newTask) => {
-				onTaskCreated(newTask);
-				onOpenChange(false);
+				open = false;
 			},
 			(err) => {
 				err.logError();
@@ -77,14 +73,10 @@
 		);
 	}
 
-	function handleCancel() {
-		onOpenChange(false);
-	}
-
 	const isValid = $derived(formData.title.trim().length > 0);
 </script>
 
-<Sheet.Root bind:open {onOpenChange}>
+<Sheet.Root bind:open>
 	<Sheet.Content
 		side="bottom"
 		id="drawer-task-creation"
@@ -133,7 +125,9 @@
 							type="button"
 							variant="outline"
 							class="flex-1"
-							onclick={handleCancel}
+							onclick={() => {
+								open = false;
+							}}
 						>
 							Cancel
 						</Button>

@@ -7,6 +7,7 @@
 	import * as Dialog from '../../lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';
 	import { Checkbox } from '@/components/ui/checkbox';
+	import { dev } from '$app/environment';
 
 	const {
 		task = $bindable(),
@@ -131,7 +132,9 @@
 			{title}
 		</span>
 	{/if}
-	<span>{task.id}</span>
+	{#if dev}
+		<span>{task.id}</span>
+	{/if}
 	<Button class="rounded-none bg-gray-800" onclick={() => (showContextMenu = true)}>
 		<Icon icon="ix:context-menu" />
 	</Button>

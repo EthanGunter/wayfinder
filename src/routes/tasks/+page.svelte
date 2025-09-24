@@ -11,9 +11,6 @@
 	import Button from '@/components/ui/button/button.svelte';
 	import { authState } from '@/API/Auth';
 	import { tasksAPI } from '@/API/Tasks';
-	import { onMount } from 'svelte';
-	import { type ILocalTasks } from '@/API/Tasks';
-	import type { User } from '@/API/Auth/User';
 	import TaskListItem from './TaskListItem.svelte';
 	import Icon from '@iconify/svelte';
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
@@ -33,19 +30,6 @@
 		return (b.priority ?? 0) - (a.priority ?? 0);
 	}
 
-	// TODO:remove I think this is handled by src/routes/+layout.ts
-	/* onMount(() => {
-		// Subscribe to auth state
-		const unsubscribeAuth = authState.subscribe((state) => {
-			if (state.status === 'signed-out') {
-				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
-			}
-		});
-
-		return () => {
-			unsubscribeAuth();
-		};
-	}); */
 
 	let unsubscribe: (() => void) | null = null;
 	let taskIndex = new Map<string, Task>();
@@ -118,17 +102,8 @@
 		showTaskCreationDrawer = true;
 	}
 
-	function handleTaskCreated(newTask: Task) {
-		// Subscription will deliver the new task; no manual fetch needed
-		showTaskCreationDrawer = false;
-	}
-
-	function handleDrawerOpenChange(open: boolean) {
-		showTaskCreationDrawer = open;
-	}
-
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		const res = await tasksAPI!.updateTask({ id: original.id, data: update });
+		const res = await tasksAPI.updateTask({ id: original.id, data: update });
 		res.match(
 			() => {},
 			(err) => {
@@ -141,18 +116,18 @@
 		await Promise.all(
 			items.map((item, idx, arr) => {
 				const newPriority = arr.length - idx;
-				return tasksAPI!.updateTask({ id: item.id, data: { priority: newPriority } });
+				return tasksAPI.updateTask({ id: item.id, data: { priority: newPriority } });
 			})
 		);
 	}
 
 	async function onDelete(task: Task, recursive: boolean) {
-		await tasksAPI!.deleteTask({ id: task.id, recursive });
+		await tasksAPI.deleteTask({ id: task.id, recursive });
 	}
 
 	async function onDeleteCurrentTask(task: Task, recursive: boolean) {
 		// Always delete recursively to maintain graph integrity
-		const deleteResult = await tasksAPI!.deleteTask({ id: task.id, recursive: true });
+		const deleteResult = await tasksAPI.deleteTask({ id: task.id, recursive: true });
 
 		if (deleteResult.isOk()) {
 			// Navigate back to parent or root after deleting current task
@@ -277,10 +252,6 @@
 	{#if $authState.user}
 		<TaskCreationDrawer
 			bind:open={showTaskCreationDrawer}
-			onOpenChange={handleDrawerOpenChange}
-			onTaskCreated={handleTaskCreated}
-			tasks={tasksAPI}
-			user={$authState.user}
 			relation={currentTask ? { task: currentTask, mode: 'parent' } : null}
 		/>
 	{/if}

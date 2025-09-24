@@ -49,7 +49,7 @@ const crud: ITaskCore = {
       if (error.code === "42501") {
         return err(new NotAuthorizedError(`RLS policy failed for create task attempt: ${createDetails.map(t => t.title).join(', ')}`, error));
       } else {
-        Err.UNHANDLED(error);
+        Err.UNHANDLED(error, `Failed to create tasks: ${createDetails.map(t => t.title).join(', ')}`);
       }
     }
 
@@ -78,6 +78,8 @@ const crud: ITaskCore = {
       if (arr.length > 0) buckets.set(key, arr); else buckets.delete(key);
     }
 
+    /// TODO:DX:logging When fingerprint-based reordering fails (line 82), the code silently falls back to unordered data,
+    // which could lead to incorrect ID mappings. Consider adding a warning log to help debug issues.
     const mapping = new Map<string, string>();
     const orderedRows = ordered.length === dtos.length ? ordered : (data as Tables<'tasks'>[]);
     for (let i = 0; i < createDetails.length && i < orderedRows.length; i++) {

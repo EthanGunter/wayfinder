@@ -33,11 +33,9 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 	// try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
 
 	// Route based on auth status
-    if (finalAuthState.status === "signed-in") {
+	if (finalAuthState.status === "signed-in") {
 		// User is authenticated - hydrate their data and allow access to app
-		try {
-            await tasksAPI.hydrateForUser({ user: finalAuthState.user });
-		} catch (e) { Err.UNHANDLED(e); }
+		await tasksAPI.hydrateForUser({ user: finalAuthState.user });
 	} else if (finalAuthState.status === "signed-out") {
 		// User is not authenticated
 		const isAuthPage = url.pathname === '/login' || url.pathname === '/register';
@@ -46,12 +44,9 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 			const redir = encodeURIComponent(url.pathname + url.search);
 			throw redirect(302, `/login?redirect=${redir}`);
 		}
-	} else {
-		// Auth in error state - treat as signed out
-		const isAuthPage = url.pathname === '/login' || url.pathname === '/register';
-		if (isAuthPage) {
-			return {};
-		}
-		throw redirect(302, '/login');
+	} else if (finalAuthState.status === 'error') {
+		// TODO:UX Add error page
+		finalAuthState.error.logError();
+		throw redirect(302, `/login`);
 	}
 };

@@ -1,5 +1,5 @@
 export type UserStatus = "active" | "deleted";
-export type UserFeatures =
+export type UserFeature =
   | 'task-sync';
 
 // Base user interface
@@ -21,7 +21,7 @@ export interface LocalUser extends User {
 /**
  * Check if the user has a specific feature
  */
-export function userHasFeature(user: User, feature: UserFeatures): boolean {
+export function userHasFeature(user: User, feature: UserFeature): boolean {
   return user.features.includes(feature);
 }
 
@@ -35,6 +35,6 @@ export function isAnonymous(user: User): boolean {
 /**
  * Get default features for anonymous users
  */
-export function getDefaultUserFeatures(): UserFeatures[] {
+export function getDefaultUserFeatures(): UserFeature[] {
   return [];
 }

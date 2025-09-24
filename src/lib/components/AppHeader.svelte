@@ -9,11 +9,12 @@
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import UserAvatar from './UserAvatar.svelte';
-    import { authState, cachedUsers as authUsers } from '@/API/Auth';
-    import { tasksAPI } from '@/API/Tasks';
-    import type { ILocalTasks } from '@/API/Tasks';
+	import { authState, cachedUsers as authUsers } from '@/API/Auth';
+	import { tasksAPI } from '@/API/Tasks';
+	import type { ILocalTasks } from '@/API/Tasks';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { tutorials } from '$lib/tutorials/store';
+	import { v4 } from 'uuid';
 
 	interface Props {
 		left?: Snippet;
@@ -30,7 +31,6 @@
 			'https://docs.google.com/forms/d/e/1FAIpQLScP4Yz3kHHbCFVR4ogsTSB9_XJ_rVGPNuQcS71T4LsV0lSsmw/viewform?usp=sf_link'
 	};
 	let multipleUsers = $state(false);
-	let tasks = $state<ILocalTasks | null>(null);
 	let recentTasks = $state<Task[]>([]);
 
 	onMount(() => {
@@ -44,9 +44,7 @@
 			multipleUsers = userList.length > 1;
 		});
 
-        // Initialize task API for search
-        tasks = tasksAPI;
-        loadRecentTasks();
+		loadRecentTasks();
 
 		return () => {
 			unsubscribeAuthState();
@@ -55,9 +53,9 @@
 	});
 
 	async function loadRecentTasks() {
-		if ($authState.status !== 'signed-in' || !tasks) return;
+		if ($authState.status !== 'signed-in') return;
 		try {
-			const todaysTasks = await tasks.getTodaysTasks();
+			const todaysTasks = await tasksAPI.getTodaysTasks();
 			if (todaysTasks.isOk()) {
 				recentTasks = todaysTasks.value.slice(0, 5); // Show up to 5 recent tasks
 			}
@@ -67,16 +65,16 @@
 	}
 
 	async function resetWalkthrough() {
-		if (!tasks || $authState.status !== 'signed-in') return;
+		if ($authState.status !== 'signed-in') return;
 		const confirmed = confirm(
 			'This will permanently delete all your tasks and reset all tutorials. Continue?'
 		);
 		if (!confirmed) return;
-		const all = await tasks.getAllUserTasks({ userId: $authState.user.id });
+		const all = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
 		if (all.isOk()) {
 			const list = all.value.successes;
 			if (list.length > 0) {
-				await tasks.deleteTasks({ ids: list.map((task) => task.id) });
+				await tasksAPI.deleteTasks({ ids: list.map((task) => task.id) });
 			}
 		}
 		try {
@@ -87,10 +85,10 @@
 
 	async function search(query: string): Promise<Task[]> {
 		try {
-			if (!tasks || !query.trim()) {
+			if (!query.trim()) {
 				return [];
 			}
-			return await tasks.searchTasks(query.trim());
+			return await tasksAPI.searchTasks(query.trim());
 		} catch (error) {
 			console.error('Error searching tasks:', error);
 			return [];
@@ -100,11 +98,11 @@
 	async function gotoTask(task: Task | string) {
 		if (typeof task === 'string') {
 			// Create a new task with this title
-			if (tasks && $authState.status === 'signed-in') {
+			if ($authState.status === 'signed-in') {
 				try {
-					const result = await tasks.createTask({
+					const result = await tasksAPI.createTask({
 						createDetail: {
-							id: crypto.randomUUID(),
+							id: v4(),
 							user_id: $authState.user.id,
 							title: task
 						}
@@ -242,7 +240,7 @@
 
 	{#if right}
 		{@render right()}
-	{:else if $authState.status === "signed-in"}
+	{:else if $authState.status === 'signed-in'}
 		<Sheet.Root>
 			<Sheet.Trigger>
 				<div id="account-menu-btn" class="btn flex h-12 w-12 overflow-hidden rounded-full p-0">
