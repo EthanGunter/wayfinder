@@ -4,17 +4,9 @@ import type { NotFoundError, Err, ArgumentError, NotAuthorizedError, InvalidStat
 import type { Task } from "./Task";
 import type { User } from "../Auth/User";
 import type { BatchResult, Result } from "../types";
-import { enqueueSyncCommand } from "../SyncQueue";
-
-
-
-
-export interface ILocalTaskProvider {
-  get(): Promise<ILocalTasks>;
-}
+ 
 export type ITasks = ITaskCore & ITaskRelations & ITaskAdvancedFeatures
 export type ILocalTasks = ITaskCoreLocal & ITaskExporter & ITaskRelations & ITaskAdvancedFeatures & {
-  hasRemote(): boolean;
   hydrateForUser(params: { user: User }): Promise<void>;
 };
 /**
@@ -118,7 +110,6 @@ export interface ITaskAdvancedFeatures {
         onChange: (changes: TaskDelta[]) => void;
       }
   ): () => void;
-
 }
 
 
@@ -147,27 +138,4 @@ export type UpdateTaskParams = { id: string, data?: Partial<Omit<Task, "children
 
 //#endregion
 
-// #region Command surface typing and enqueue helper
-type ParamsOf<T> = T extends (arg: infer P) => any ? P : never;
-export type TaskRemoteMap = Omit<ITasks,
-  | "getAllUserTasks"
-  | "getChildrenOf"
-  | "getParentsOf"
-  | "getPrioritizedTasks"
-  | "getRootTasks"
-  | "getTask"
-  | "getTasks"
-  | "getTodaysTasks"
-  | "searchTasks"
-  | "subscribeTasks"
->;
-
-export const TASKS_SYNC_CHANNEL = 'tasks';
-export async function queueTaskSyncCommand<K extends keyof TaskRemoteMap>(
-  fnName: K,
-  args: ParamsOf<TaskRemoteMap[K]>,
-  revertArgs?: any
-): Promise<void> {
-  return enqueueSyncCommand(TASKS_SYNC_CHANNEL, String(fnName), args, undefined, revertArgs);
-}
-// #endregion
+ 

@@ -9,8 +9,8 @@
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
 	import Button from '@/components/ui/button/button.svelte';
-	import { authState } from '@/API/Auth/BrowserAuthProvider';
-import { taskAPIPromise } from '@/API/providerRegistry';
+	import { authState } from '@/API/Auth';
+	import { tasksAPI } from '@/API/Tasks';
 	import { onMount } from 'svelte';
 	import { type ILocalTasks } from '@/API/Tasks';
 	import type { User } from '@/API/Auth/User';
@@ -19,9 +19,6 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 	import TutorialExampleProject from './TutorialExampleProject.svelte';
 
-	let tasks = $state<ILocalTasks>();
-	let user = $state<User>();
-
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
 	let parents = $state<Task[]>([]);
@@ -29,22 +26,18 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 	// Task creation drawer state
 	let showTaskCreationDrawer = $state(false);
 
-	let debouncedUpdate = $derived(tasks ? debounce(tasks?.updateTask, 500) : undefined);
+	let debouncedUpdate = $derived(debounce(tasksAPI.updateTask, 500));
 
 	// Sort tasks by priority (higher priority first)
 	function sortTasksByPriority(a: Task, b: Task): number {
 		return (b.priority ?? 0) - (a.priority ?? 0);
 	}
 
-	onMount(() => {
-		// Load tasks asynchronously
-		taskAPIPromise.then(t => tasks = t);
-
+	// TODO:remove I think this is handled by src/routes/+layout.ts
+	/* onMount(() => {
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
-			if (state.status === 'signed-in' && state.user) {
-				user = state.user;
-			} else if (state.status === 'signed-out') {
+			if (state.status === 'signed-out') {
 				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
 			}
 		});
@@ -52,7 +45,7 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 		return () => {
 			unsubscribeAuth();
 		};
-	});
+	}); */
 
 	let unsubscribe: (() => void) | null = null;
 	let taskIndex = new Map<string, Task>();
@@ -96,11 +89,11 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 	}
 
 	$effect(() => {
-		if (!tasks || !user) return;
+		if ($authState.status !== 'signed-in') return;
 		unsubscribe?.();
 		const id = page.url.searchParams.get('id');
 		if (id) {
-			unsubscribe = tasks.subscribeTasks({
+			unsubscribe = tasksAPI.subscribeTasks({
 				ids: [id],
 				ancestorDepth: 1,
 				descendantDepth: 1,
@@ -109,8 +102,8 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 			});
 		} else {
 			// TODO:optimization only subscribe to the root tasks
-			unsubscribe = tasks.subscribeTasks({
-				userId: user.id,
+			unsubscribe = tasksAPI.subscribeTasks({
+				userId: $authState.user.id,
 				onInitialize: handleInit,
 				onChange: handleChanges
 			});
@@ -135,7 +128,7 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		const res = await tasks!.updateTask({ id: original.id, data: update });
+		const res = await tasksAPI!.updateTask({ id: original.id, data: update });
 		res.match(
 			() => {},
 			(err) => {
@@ -148,18 +141,18 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 		await Promise.all(
 			items.map((item, idx, arr) => {
 				const newPriority = arr.length - idx;
-				return tasks!.updateTask({ id: item.id, data: { priority: newPriority } });
+				return tasksAPI!.updateTask({ id: item.id, data: { priority: newPriority } });
 			})
 		);
 	}
 
 	async function onDelete(task: Task, recursive: boolean) {
-		await tasks!.deleteTask({ id: task.id, recursive });
+		await tasksAPI!.deleteTask({ id: task.id, recursive });
 	}
 
 	async function onDeleteCurrentTask(task: Task, recursive: boolean) {
 		// Always delete recursively to maintain graph integrity
-		const deleteResult = await tasks!.deleteTask({ id: task.id, recursive: true });
+		const deleteResult = await tasksAPI!.deleteTask({ id: task.id, recursive: true });
 
 		if (deleteResult.isOk()) {
 			// Navigate back to parent or root after deleting current task
@@ -173,7 +166,7 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 	}
 </script>
 
-{#if user && tasks}
+{#if $authState.status === 'signed-in'}
 	<TutorialExampleProject />
 	<div class="page page-root">
 		<AppHeader class="z-10 h-16" />
@@ -281,13 +274,13 @@ import { taskAPIPromise } from '@/API/providerRegistry';
 	</div>
 
 	<!-- Task Creation Drawer -->
-	{#if tasks && user}
+	{#if $authState.user}
 		<TaskCreationDrawer
 			bind:open={showTaskCreationDrawer}
 			onOpenChange={handleDrawerOpenChange}
 			onTaskCreated={handleTaskCreated}
-			{tasks}
-			{user}
+			tasks={tasksAPI}
+			user={$authState.user}
 			relation={currentTask ? { task: currentTask, mode: 'parent' } : null}
 		/>
 	{/if}

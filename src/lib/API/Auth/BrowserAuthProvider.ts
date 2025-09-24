@@ -1,30 +1,22 @@
-import { type IAuth, type ILocalAuth, type IAuthLocal, type IAuthResponseHandler, type IAuthSessionCapable, isSessionCapable } from './types';
+import { type IAuth, type ILocalAuth, type IAuthLocal, type IAuthResponseHandler, type IAuthSessionCapable, isSessionCapable, type AuthState } from './types';
 import { isAnonymous, type LocalUser } from './User';
-import type { ILocalTasks, ITasks } from '../Tasks';
+import { tasksAPI } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
-import BrowserTaskProvider from '../Tasks/BrowserTaskProvider';
 import SessionVault from './SessionVault';
 import { writable, type Readable } from 'svelte/store';
-
-type AuthState =
-  | { status: "loading" }
-  | { status: "signed-in", user: LocalUser }
-  | { status: "signed-out", user: null }
-  | { status: "error", user?: LocalUser }
 
 // Stores
 const _authState = writable<AuthState>({ status: "loading" });
 const _users = writable<LocalUser[]>([]);
 
-export const authState: Readable<AuthState> = _authState;
-export const users: Readable<LocalUser[]> = _users;
+export const browserAuthState: Readable<AuthState> = _authState;
+export const browserCachedUsers: Readable<LocalUser[]> = _users;
 
 // Module state
 let db: LocalDB | null = null;
-let _tasks: ILocalTasks | null = null;
 let _remoteAuth: IAuth | null = null;
 let _unsubscribeRemoteAuth: (() => void) | null = null;
 
@@ -61,14 +53,6 @@ let _unsubscribeRemoteAuth: (() => void) | null = null;
     // } catch {
     //   // remoteAuth store doesn't exist yet; will remain null
     // }
-
-    // Lazily acquire local tasks provider for migration support
-    try {
-      const localTasks = await BrowserTaskProvider.get();
-      _tasks = localTasks;
-    } catch {
-      _tasks = null;
-    }
   } catch (e) {
     _authState.set({ status: "error" });
   }
@@ -302,12 +286,7 @@ async function login({ creds }: { creds: any }) {
   await switchUser(remoteUser.id);
 
   // Hydrate tasks for this user if local tasks provider is available
-  try {
-    const tasks = await BrowserTaskProvider.get();
-    if ((tasks as any).hydrateForUser) {
-      await (tasks as any).hydrateForUser({ user: remoteUser });
-    }
-  } catch { }
+  await tasksAPI.hydrateForUser({ user: remoteUser });
 
   return ok(remoteUser);
 }
@@ -332,13 +311,8 @@ async function logout() {
   return ok();
 }
 
-// Temporary remote auth setup function (until remoteAuth store exists)
-export function _configureRemoteAuth(remoteAuth: IAuth): void {
-  _remoteAuth = remoteAuth;
-}
-
 // Export the ILocalAuth-compliant auth object
-export const auth: IAuthLocal = {
+export const browserAuthAPI: IAuthLocal = {
   register,
   getRegistrationRequirements,
   switchUser,

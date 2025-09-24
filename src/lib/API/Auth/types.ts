@@ -25,6 +25,12 @@ export enum AccountIssueTarget {
 
 //#region Local Auth
 
+export type AuthState =
+	| { status: "loading" }
+	| { status: "signed-in", user: LocalUser }
+	| { status: "signed-out", user: null }
+	| { status: "error", user?: LocalUser }
+
 export type ILocalAuth = IAuthLocal & IAuthResponseHandler;
 
 export interface IAuthLocal {

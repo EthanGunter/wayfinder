@@ -6,37 +6,29 @@
 	import { type LocalUser, type User } from '$lib/API/Auth/User';
 	import { page } from '$app/state';
 	import { Button } from '@/components/ui/button';
-	import { auth, authState } from '@/API/Auth/BrowserAuthProvider';
-	import { taskAPIPromise } from '@/API/providerRegistry';
+	import { authAPI, authState } from '@/API/Auth';
+	import { tasksAPI } from '@/API/Tasks';
 	import { onMount } from 'svelte';
 	import AvatarEditor from '@/components/AvatarEditor.svelte';
 	import * as AlertDialog from '@/components/ui/alert-dialog';
-	import type { ILocalTasks } from '@/API/Tasks/types';
-import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 	import { Err } from '@/Errors';
 
 	let originalUser = $state<User>();
-	let user = $state<User>();
-	let tasks = $state<ILocalTasks>();
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
 
-	const debouncedUpdateUser = debounce(auth.updateUser, 200);
+	const debouncedUpdateUser = debounce(authAPI.updateUser, 200);
 
 	onMount(() => {
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in' && state.user) {
 				originalUser = state.user;
-				user = { ...state.user };
 				loadTaskCount();
 			} else if (state.status === 'signed-out') {
 				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
 			}
 		});
-
-		// Load tasks
-		taskAPIPromise.then(t => tasks = t);
 
 		return () => {
 			unsubscribeAuth();
@@ -44,15 +36,15 @@ import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 	});
 
 	async function loadTaskCount() {
-		if (!tasks || !user) return;
+		if (!tasksAPI || $authState.status !== 'signed-in') return;
 
 		try {
-            const result = await tasks.getAllUserTasks({ userId: user.id });
-            if (result.isOk()) {
-                const { successes, errors } = result.value;
-                errors.forEach((e) => e.logError());
-                taskCount = successes.length;
-            }
+			const result = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
+			if (result.isOk()) {
+				const { successes, errors } = result.value;
+				errors.forEach((e) => e.logError());
+				taskCount = successes.length;
+			}
 		} catch (error) {
 			console.error('Failed to load task count:', error);
 			taskCount = 0;
@@ -64,49 +56,49 @@ import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 	}
 
 	async function saveUserChanges() {
-		if (!user || !originalUser) return;
+		if ($authState.status !== 'signed-in' || !originalUser) return;
 
 		const changes: Partial<User> = {};
-		if (originalUser.display_name != user.display_name) {
-			changes.display_name = user.display_name;
+		if (originalUser.display_name != $authState.user.display_name) {
+			changes.display_name = $authState.user.display_name;
 		}
-		if (originalUser.avatar_url != user.avatar_url) {
-			changes.avatar_url = user.avatar_url;
+		if (originalUser.avatar_url != $authState.user.avatar_url) {
+			changes.avatar_url = $authState.user.avatar_url;
 		}
 
 		// Only update if there are actual changes
-		if (user && changes && Object.keys(changes).length > 0) {
+		if ($authState.status === 'signed-in' && changes && Object.keys(changes).length > 0) {
 			await debouncedUpdateUser!({
 				update: {
-					id: user!.id,
+					id: $authState.user.id,
 					...changes
 				}
 			});
-			await auth!.updateUser({ update: { ...changes, id: user.id } });
-			originalUser = user;
+			await authAPI!.updateUser({ update: { ...changes, id: $authState.user.id } });
+			originalUser = $authState.user;
 			await invalidateAll();
 		}
 	}
 
 	function handleNameInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
 		event.preventDefault();
-		// if (event.currentTarget.value === '') user.display_name = data.user.display_name;
+		// if (event.currentTarget.value === '')$authState.user.display_name = data.user.display_name;
 	}
 	async function handleDeleteUser() {
-		if (!auth || !user || isDeleting) return;
+		if ($authState.status !== 'signed-in' || isDeleting) return;
 
 		isDeleting = true;
 		try {
-			const rootRes = await tasks!.getRootTasks();
+			const rootRes = await tasksAPI!.getRootTasks();
 			if (rootRes.isErr()) Err.UNHANDLED(rootRes.error);
 
-			await tasks!.deleteTasks({
+			await tasksAPI!.deleteTasks({
 				ids: rootRes.value.map((r) => r.id),
 				recursive: true
 			});
 
 			// Delete the user account
-			const deleteRes = await auth.deleteUser({ userId: user.id });
+			const deleteRes = await authAPI.deleteUser({ userId: $authState.user.id });
 			if (deleteRes.isErr()) Err.UNHANDLED(deleteRes.error);
 
 			// TODO:Temp anonymous accounts disabled
@@ -133,7 +125,7 @@ import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 	}
 </script>
 
-{#if auth && user}
+{#if $authState.status === 'signed-in'}
 	<div
 		id="account-page"
 		class=" grid-areas-[header_content_footer] relative grid h-full w-full grid-rows-[auto_1fr_auto] bg-gray-200"
@@ -149,13 +141,13 @@ import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 			class="grid-area-content mx-auto flex w-full max-w-[25rem] min-w-80 flex-col items-center justify-center gap-4 overflow-y-scroll p-4"
 		>
 			<div class="grid min-w-[70%] gap-4">
-				<AvatarEditor {user} class="m-auto max-h-[50vh] max-w-[50vw]" />
+				<AvatarEditor user={$authState.user} class="m-auto max-h-[50vh] max-w-[50vw]" />
 				<span class="flex flex-col">
 					<label for="input_display_name" class="mb-2 font-medium text-gray-800">Name</label>
 					<input
 						id="input_display_name"
 						type="text"
-						bind:value={user.display_name}
+						bind:value={$authState.user.display_name}
 						oninput={handleNameInput}
 						placeholder="Really cool username"
 						class="rounded border border-gray-300 p-2"
@@ -178,7 +170,7 @@ import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 						</select>
 						</section> -->
 			</div>
-			<Button onclick={saveUserChanges} disabled={equals(user, originalUser!)}>Save Changes</Button>
+			<Button onclick={saveUserChanges} disabled={equals($authState.user, originalUser!)}>Save Changes</Button>
 
 			<!-- Delete Account Dialog -->
 			<AlertDialog.Root>
@@ -234,7 +226,7 @@ import type { NotAuthorizedError, NotFoundError } from '@/Errors';
 					</Button>
 				</div>
 			{/if} -->
-			<Button class="alert" onclick={auth.logout}>Sign out</Button>
+			<Button class="alert" onclick={authAPI.logout}>Sign out</Button>
 		</div>
 		<AppFooter />
 	</div>

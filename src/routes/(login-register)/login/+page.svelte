@@ -5,7 +5,7 @@
 	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
-	import { auth, authState, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
+	import { authAPI, authState, cachedUsers as authUsers } from '@/API/Auth';
 	import { type LocalUser } from '@/API/Auth/User';
 	import UserAvatar from '@/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
@@ -39,13 +39,13 @@
 	});
 
 	async function handleUserSwitch(userId: string) {
-		if (!auth || isLoading) return;
+		if (!authAPI || isLoading) return;
 
 		isLoading = true;
 		errorMessage = '';
 
 		try {
-			const result = await auth.switchUser(userId);
+			const result = await authAPI.switchUser(userId);
 
 			if (result.isOk()) {
 				// Switch successful, refresh and redirect
@@ -70,13 +70,13 @@
 	}
 
 	async function handleRemoteLogin() {
-		if (!auth || isLoading || !email.trim() || !password.trim()) return;
+		if (!authAPI || isLoading || !email.trim() || !password.trim()) return;
 		isLoading = true;
 		errorMessage = '';
 
 		try {
 			const creds: LoginCredentials = { type: 'email_password', email, password };
-			const result = await auth.login({ creds });
+			const result = await authAPI.login({ creds });
 			if (result.isOk()) {
 				// Clear credentials on success
 				email = '';

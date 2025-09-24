@@ -5,8 +5,7 @@
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from '../tasks/TaskEditor.svelte';
-	import { taskAPIPromise } from '@/API/providerRegistry';
-	import type { ILocalTasks } from '$lib/API/Tasks/types';
+	import { tasksAPI } from '@/API/Tasks';
 
 	let { data }: { data: Task } = $props();
 
@@ -18,12 +17,6 @@
 	let downTime = 0;
 	const TAP_MAX_MOVEMENT = 6;
 	const TAP_MAX_DURATION_MS = 250;
-
-	let tasks: ILocalTasks | null = $state(null);
-
-	onMount(async () => {
-		tasks = await taskAPIPromise;
-	});
 
 	function onPointerDown(event: PointerEvent) {
 		pressing = true;
@@ -54,8 +47,7 @@
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
 		try {
-			if (!tasks) tasks = await taskAPIPromise;
-			const res = await tasks!.updateTask({ id: original.id, data: update });
+			const res = await tasksAPI.updateTask({ id: original.id, data: update });
 			res?.match?.(
 				() => {},
 				(err: any) => err?.logError?.()
@@ -67,8 +59,7 @@
 
 	async function onDelete(task: Task, recursive: boolean) {
 		try {
-			if (!tasks) tasks = await taskAPIPromise;
-			await tasks!.deleteTask({ id: task.id, recursive });
+			await tasksAPI.deleteTask({ id: task.id, recursive });
 			// Close editor after deletion
 			editorOpen = false;
 		} catch (e) {

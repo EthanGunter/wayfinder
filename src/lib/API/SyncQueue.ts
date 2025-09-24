@@ -145,15 +145,15 @@ export async function processQueueInClient(): Promise<void> {
     if (processing) return;
     processing = true;
     try {
-        // Lazy-load to avoid circular deps between registry -> browser providers -> sync queue
-        const { getRemoteProviders } = await import('./providerRegistry');
-        const { auth, tasks } = await getRemoteProviders();
+        // Lazy-load facades to avoid circular deps
+        const { authAPI } = await import('./Auth');
+        const { tasksAPI } = await import('./Tasks');
         const batch = await takeNextBatch(50);
         for (const entry of batch) {
             try {
                 switch (entry.channel) {
                     case 'auth': {
-                        const fn = (auth as any)[entry.fnName];
+                        const fn = (authAPI as any)[entry.fnName];
                         if (typeof fn !== 'function') throw new Error(`Auth function not found: ${entry.fnName}`);
                         const res = await fn(entry.args);
                         if (res?.isErr?.()) throw res.error;
@@ -161,7 +161,7 @@ export async function processQueueInClient(): Promise<void> {
                         break;
                     }
                     case 'tasks': {
-                        const fn = (tasks as any)[entry.fnName];
+                        const fn = (tasksAPI as any)[entry.fnName];
                         if (typeof fn !== 'function') throw new Error(`Tasks function not found: ${entry.fnName}`);
                         const res = await fn(entry.args);
                         if (res?.isErr?.()) throw res.error;

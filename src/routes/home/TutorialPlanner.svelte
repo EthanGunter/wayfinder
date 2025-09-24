@@ -5,8 +5,6 @@
 	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
 	import Icon from '@iconify/svelte';
 	import TGate from '@/tutorials/primitives/TGate.svelte';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { taskAPIPromise } from '@/API/providerRegistry';
 
 	let active = $state(false);
 	let step = $state(0);
@@ -79,7 +77,7 @@
 	}
 
 	async function markDone() {
-		// const tasks = await taskAPIPromise;
+		// const tasks = tasksAPI;
 		// await tasks.deleteTask({ id: 'DEMO-1', recursive: true });
 		tutorials.complete(id);
 		active = false;

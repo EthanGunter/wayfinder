@@ -20,7 +20,7 @@ const updateRemoteTasks = async (user: LocalUser | null) => {
 // Dynamically import authState to avoid initialization order issues
 (async () => {
   try {
-    const { authState } = await import('$lib/API/Auth/BrowserAuthProvider');
+    const { authState } = await import('$lib/API/Auth');
     authState.subscribe((state) => {
       if (state.status === 'signed-in' && state.user) {
         updateRemoteTasks(state.user);

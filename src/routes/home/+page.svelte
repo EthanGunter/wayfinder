@@ -9,24 +9,19 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { type User } from '$lib/API/Auth/User.js';
 	import { Button } from '@/components/ui/button';
-	import { auth, authState } from '@/API/Auth/BrowserAuthProvider';
-	import { taskAPIPromise } from '@/API/providerRegistry';
+	import { authAPI, authState } from '@/API/Auth';
+	import { tasksAPI } from '@/API/Tasks';
 	import type { ILocalTasks } from '@/API/Tasks';
 	import { page } from '$app/state';
 	import { Err } from '@/Errors';
 	import TutorialWelcome from './TutorialWelcome.svelte';
 	import TutorialPlanner from './TutorialPlanner.svelte';
 
-	let tasks = $state<ILocalTasks>();
-
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
 	let hasAnyTasksExplicit = $state(false);
 
 	onMount(() => {
-		// Load tasks
-		taskAPIPromise.then((t) => (tasks = t));
-
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in') {
@@ -42,7 +37,7 @@
 	});
 
 	function refreshTasks() {
-		tasks!.getTodaysTasks().then((tasks) =>
+		tasksAPI!.getTodaysTasks().then((tasks) =>
 			tasks.match(
 				(data) => {
 					todaysList = data;
@@ -52,7 +47,7 @@
 				}
 			)
 		);
-		tasks!.getPrioritizedTasks(15).then((result) =>
+		tasksAPI!.getPrioritizedTasks(15).then((result) =>
 			result.match(
 				(tasks) => {
 					suggestedTasks = tasks;
@@ -64,8 +59,8 @@
 		);
 
 		// Check if the user has any tasks at all (even if none are actionable)
-		if ($authState.status === "signed-in") {
-			tasks!.getAllUserTasks({ userId: $authState.user.id }).then((batch) =>
+		if ($authState.status === 'signed-in') {
+			tasksAPI!.getAllUserTasks({ userId: $authState.user.id }).then((batch) =>
 				batch.match(
 					({ successes, errors }) => {
 						errors.forEach((e) => e.logError());
@@ -85,7 +80,7 @@
 
 		if (!todaysList.includes(task)) {
 			todaysList = [...todaysList, task];
-			await tasks!.updateTask({
+			await tasksAPI!.updateTask({
 				id: task.id,
 				data: { todays_task: new Date().toISOString() }
 			});
@@ -98,7 +93,7 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		const res = await tasks!.updateTask({ id: task.id, data: { todays_task: undefined } });
+		const res = await tasksAPI!.updateTask({ id: task.id, data: { todays_task: undefined } });
 		res.match(
 			() => {},
 			(err) => {
@@ -111,7 +106,7 @@
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
 		if (changes.children || changes.parents) Err.UNHANDLED('Relational updates not handled');
 
-		const result = await tasks!.updateTask({ id: task.id, data: changes });
+		const result = await tasksAPI!.updateTask({ id: task.id, data: changes });
 		result.match(
 			() => {},
 			(err) => {
@@ -122,7 +117,7 @@
 	}
 
 	async function startProject() {
-		if (!tasks) return;
+		if (!tasksAPI) return;
 
 		// TODO:UX Navigate to /tasks/ and open the create project drawer
 		alert(
@@ -157,7 +152,7 @@
 	);
 </script>
 
-{#if $authState.status === 'signed-in' && tasks}
+{#if $authState.status === 'signed-in' && tasksAPI}
 	<TutorialWelcome />
 	<TutorialPlanner />
 	<div class="page page-root">

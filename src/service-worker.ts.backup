@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 // SyncEngine (service worker)
 import { openDB, type IDBPDatabase } from 'idb';
-import { getRemoteProviders } from './lib/API/providerRegistry';
+import { authAPI } from './lib/API/Auth';
+import { tasksAPI } from './lib/API/Tasks';
 import { Err } from './lib/Errors';
 
 declare let self: ServiceWorkerGlobalScope;
@@ -98,10 +99,11 @@ function toErr(error: unknown): Err {
 async function processQueue() {
 	console.log("SW processing queue");
 
-	let auth: any, tasks: any;
-	try {
-		({ auth, tasks } = await getRemoteProviders());
-	} catch (e) {
+    let auth: any, tasks: any;
+    try {
+        auth = authAPI;
+        tasks = tasksAPI;
+    } catch (e) {
 		const wrapped = toErr(e).withTrace();
 		wrapped.logError();
 		return;

@@ -1,4 +1,4 @@
-import { type ITaskAdvancedFeatures, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskCoreResponseHandler, type ILocalTaskProvider, type CreateTaskParams, type UpdateTaskParams, type TaskDelta, type ITaskCoreLocal } from './types';
+import { type ITaskAdvancedFeatures, type ITaskExporter, type ITasks, type ITaskRelations, type ITaskCoreResponseHandler, type CreateTaskParams, type UpdateTaskParams, type TaskDelta, type ITaskCoreLocal, type ILocalTasks } from './types';
 import { err, ok } from 'neverthrow';
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError, ErrorType } from '$lib/Errors';
 import type { Task } from './Task';
@@ -8,6 +8,7 @@ import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
 import { remoteTasks as remoteTasksStore } from '$lib/stores/remoteTasks';
+import { readable, type Readable } from 'svelte/store';
 import { userHasFeature, type User } from '../Auth/User';
 import { okBatch, type BatchResult } from '../types';
 // import { queueTaskSyncCommand } from './types';
@@ -725,11 +726,16 @@ const advancedFeatures: ITaskAdvancedFeatures = {
       _subscriptions.push(sub);
       // Initialize
       (async () => {
-        const tasks = await _getAllTasksForCurrentUser();
         const included = await _computeIncludedIds(sub.ids, sub.ancestorDepth, sub.descendantDepth);
         sub.includedIds = included;
-        const init = tasks.filter(t => included.has(t.id));
-        sub.onInitialize(init);
+        const batch = await taskCRUD.getTasks({ ids: Array.from(included) });
+        if (batch.isOk()) {
+          const { successes, errors } = batch.value;
+          errors.forEach(e => e.logError());
+          sub.onInitialize(successes);
+        } else {
+          sub.onInitialize([]);
+        }
       })();
       return () => {
         _subscriptions = _subscriptions.filter(s => s !== sub);
@@ -788,6 +794,44 @@ let _searchService: TaskSearchService | null = null;
 let _remoteTasks: ITasks | null = null;
 let _unsubscribeRemoteTasks: (() => void) | null = null;
 
+// Module-load hydration: initialize DB, search index, and remote subscription
+(async () => {
+  try {
+    _db = await dbPromise;
+
+    // Initialize search service
+    _searchService = new TaskSearchService();
+
+    // Reindex search for current user
+    const currentUser = await getCurrentUser();
+    if (currentUser) {
+      const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: currentUser.id });
+      if (existingTasksResult.isOk()) {
+        const { successes, errors } = existingTasksResult.value;
+        errors.forEach(e => e.logError());
+        _searchService.reindexTasks(successes);
+      }
+    }
+
+    // Subscribe to remote tasks availability store
+    if (!_unsubscribeRemoteTasks) {
+      _unsubscribeRemoteTasks = remoteTasksStore.subscribe(async (rt) => {
+        const previous = _remoteTasks;
+        _remoteTasks = rt;
+        if (!previous && rt) {
+          // Remote just became available; hydrate for current user if present
+          const user = await getCurrentUser();
+          if (user) {
+            await _hydrateForUser(user);
+          }
+        }
+      });
+    }
+  } catch {
+    // remain usable offline; methods will assertDB as needed
+  }
+})();
+
 async function _hydrateForUser(user: User): Promise<void> {
   assertDB(_db);
   if (!_remoteTasks) return; // No remote available; nothing to hydrate
@@ -823,53 +867,62 @@ async function _hydrateForUser(user: User): Promise<void> {
 
 const api: ITaskCoreLocal & ITaskRelations & ITaskCoreResponseHandler & ITaskAdvancedFeatures & ITaskExporter = { ...taskCRUD, ...taskRelations, ...advancedFeatures, ...dataExporter };
 
-const BrowserTaskProvider: ILocalTaskProvider = {
-  /** Initializes the local tasks provider and subscribes to remote availability */
-  get: async function () {
-    _db = await dbPromise;
+// Public utility surface (mirrors auth pattern): usable without calling get()
+export const browserTasksAPI: ILocalTasks = {
+  ...api,
+  hydrateForUser: async ({ user }) => { await _hydrateForUser(user); },
+};
 
-    // Initialize search service
-    _searchService = new TaskSearchService();
-
-    // Reindex search for current user
-    const currentUser = await getCurrentUser();
-    if (currentUser) {
-      const existingTasksResult = await taskCRUD.getAllUserTasks({ userId: currentUser.id });
-      if (existingTasksResult.isOk()) {
-        const { successes, errors } = existingTasksResult.value;
-        errors.forEach(e => e.logError());
-        _searchService.reindexTasks(successes);
-      }
-    }
-
-    // Subscribe to remote tasks availability store
-    if (!_unsubscribeRemoteTasks) {
-      _unsubscribeRemoteTasks = remoteTasksStore.subscribe(async (rt) => {
-        const previous = _remoteTasks;
-        _remoteTasks = rt;
-        if (!previous && rt) {
-          // Remote just became available; hydrate for current user if present
-          // TODO:sync we need to make sure we handle CRDT collisions correctly here...
-          const user = await getCurrentUser();
-          if (user) {
-            await _hydrateForUser(user);
-          }
+// Contextual store: all tasks for a given userId (does not load all app tasks)
+export function userTasksStore({ userId }: { userId: string }): Readable<Task[]> {
+  return readable<Task[]>([], (set) => {
+    // Initialize from provider subscription (pushes initial slice)
+    const unsubscribe = api.subscribeTasks({
+      userId,
+      onInitialize: (tasks: Task[]) => set(tasks),
+      onChange: async () => {
+        try {
+          assertDB(_db);
+          const list = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId) as Task[];
+          set(list);
+        } catch {
+          // ignore transient failures; store remains last-known-good
         }
-      });
-    }
-
-
-    return { ...api, hasRemote: () => !!_remoteTasks, hydrateForUser: async ({ user }) => { await _hydrateForUser(user); } };
-  },
+      },
+    });
+    return () => unsubscribe();
+  });
 }
 
+// Contextual store: scoped to ids with ancestor/descendant depth
+export function taskScopeStore(params: { ids: string[]; ancestorDepth: number; descendantDepth: number; }): Readable<Task[]> {
+  const { ids, ancestorDepth, descendantDepth } = params;
+  return readable<Task[]>([], (set) => {
+    const unsubscribe = api.subscribeTasks({
+      ids,
+      ancestorDepth,
+      descendantDepth,
+      onInitialize: (tasks: Task[]) => set(tasks),
+      onChange: async () => {
+        try {
+          const tasks = await _getAllTasksForCurrentUser();
+          const included = await _computeIncludedIds(ids, ancestorDepth, descendantDepth);
+          set(tasks.filter(t => included.has(t.id)));
+        } catch {
+          // ignore transient failures; store remains last-known-good
+        }
+      },
+    });
+    return () => unsubscribe();
+  });
+}
 
-export default BrowserTaskProvider;
+ 
 
 //#region Utilities
 
 function assertDB(db: LocalDB | null): asserts db is LocalDB {
-  if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection. Make sure to call .get()"));
+  if (!db) Err.throw(new InvalidStateError("Attempted to use BrowserTaskProvider without a db connection."));
 }
 
 async function getCurrentUser(): Promise<User | null> {

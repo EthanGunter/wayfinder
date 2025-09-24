@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { configureProviders, taskAPIPromise } from '@/API/providerRegistry';
-import { authState } from '@/API/Auth/BrowserAuthProvider';
+import { tasksAPI } from '@/API/Tasks';
+import { authState } from '@/API/Auth';
 import { get } from 'svelte/store';
 // import { processQueueInClient } from '@/API/SyncQueue';
 import type { LayoutLoad } from './$types';
@@ -10,8 +10,6 @@ export const ssr = false;
 export const prerender = true;
 
 export const load: LayoutLoad = async ({ parent, url }) => {
-	// TODO:temp Configure providers (auth self-initializes, tasks still needs setup)
-	await configureProviders();
 
 	// Get current auth state from store
 	const currentAuthState = get(authState);
@@ -35,13 +33,10 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 	// try { await processQueueInClient(); } catch (e) { Err.UNHANDLED(e); }
 
 	// Route based on auth status
-	if (finalAuthState.status === "signed-in") {
+    if (finalAuthState.status === "signed-in") {
 		// User is authenticated - hydrate their data and allow access to app
 		try {
-			const tasks = await taskAPIPromise;
-			if (tasks?.hydrateForUser) {
-				await tasks.hydrateForUser({ user: finalAuthState.user });
-			}
+            await tasksAPI.hydrateForUser({ user: finalAuthState.user });
 		} catch (e) { Err.UNHANDLED(e); }
 	} else if (finalAuthState.status === "signed-out") {
 		// User is not authenticated

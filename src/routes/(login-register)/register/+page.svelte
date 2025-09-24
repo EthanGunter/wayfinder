@@ -5,15 +5,14 @@
 	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
-	import { auth, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
-	import { taskAPIPromise } from '@/API/providerRegistry';
+	import { authAPI, cachedUsers as authUsers } from '@/API/Auth';
+	import { tasksAPI } from '@/API/Tasks';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { isAnonymous, type User } from '@/API/Auth/User';
 	import Icon from '@iconify/svelte';
 	import { v4 } from 'uuid';
 	import { type ILocalTasks } from '@/API/Tasks';
 
-	let tasks = $state<ILocalTasks>();
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/home';
 
@@ -34,9 +33,6 @@
 	let isLoading = $state(false);
 
 	onMount(() => {
-		// Load tasks
-		taskAPIPromise.then(t => tasks = t);
-		
 		// Subscribe to users for multiple accounts check
 		const unsubscribeUsers = authUsers.subscribe((userList) => {
 			multipleAccounts = userList.length > 1;
@@ -69,7 +65,7 @@
 				features: [...(tempUser.features || [])]
 			};
 			const creds: LoginCredentials = { type: 'email_password', email, password };
-			const reqsResult = auth.getRegistrationRequirements(creds);
+			const reqsResult = authAPI.getRegistrationRequirements(creds);
 			if (reqsResult.isErr()) {
 				errorMessage = 'Invalid registration data';
 				return;
@@ -77,7 +73,7 @@
 				errorMessage = reqsResult.value.map((r: any) => r.message).join(', ');
 				return;
 			}
-			const result = await auth.register({ creds, userData });
+			const result = await authAPI.register({ creds, userData });
 			if (result.isOk()) {
 				await invalidateAll();
 				goto(redir);
@@ -180,6 +176,8 @@
 <div class="mb-4 flex items-center justify-center text-sm">
 	<Button variant="link" onclick={() => goto(`/login?redirect=${redir}&mode=login`)}>Login</Button>
 	{#if multipleAccounts}
-		/ <Button variant="link" onclick={() => goto(`/login?redirect=${redir}&mode=switch`)}>Switch user</Button>
+		/ <Button variant="link" onclick={() => goto(`/login?redirect=${redir}&mode=switch`)}
+			>Switch user</Button
+		>
 	{/if}
 </div>

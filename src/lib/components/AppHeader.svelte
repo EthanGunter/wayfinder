@@ -9,9 +9,9 @@
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import UserAvatar from './UserAvatar.svelte';
-	import { authState, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
-	import { taskAPIPromise } from '@/API/providerRegistry';
-	import type { ILocalTasks } from '@/API/Tasks';
+    import { authState, cachedUsers as authUsers } from '@/API/Auth';
+    import { tasksAPI } from '@/API/Tasks';
+    import type { ILocalTasks } from '@/API/Tasks';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { tutorials } from '$lib/tutorials/store';
 
@@ -44,11 +44,9 @@
 			multipleUsers = userList.length > 1;
 		});
 
-		// Initialize task API for search
-		taskAPIPromise.then((t) => {
-			tasks = t;
-			loadRecentTasks();
-		});
+        // Initialize task API for search
+        tasks = tasksAPI;
+        loadRecentTasks();
 
 		return () => {
 			unsubscribeAuthState();

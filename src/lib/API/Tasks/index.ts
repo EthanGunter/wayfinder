@@ -1,10 +1,25 @@
-import { Err } from '$lib/Errors';
+import { browserTasksAPI } from './BrowserTaskProvider';
+import type { ILocalTasks, ITasks, ITaskCoreLocal, UpdateTaskParams } from './types';
 import { type Task } from './Task';
-import type { ITasks, ITaskCoreLocal, UpdateTaskParams } from './types';
+import { Err } from '$lib/Errors';
 
 export * from './types';
 export * from './Task'
 
+let tasksAPI: ILocalTasks;
+
+
+if (true /* browser */) {
+    tasksAPI = browserTasksAPI;
+} else {
+    throw new Error('Mobile task provider not implemented');
+}
+
+export { tasksAPI };
+
+
+//#region 
+// TODO:refactor extract to SharedUtilities.ts
 export interface RelationshipUpdate {
     oldTask: Task | null;
     newTask: Task | null;
@@ -172,6 +187,7 @@ async function processParentRemovals(provider: ITasks | ITaskCoreLocal, parentRe
         },
         (err) => {
             Err.UNHANDLED(err);
+            return [] as UpdateTaskParams[];
         }
     );
 }
@@ -211,6 +227,7 @@ async function processChildAdditions(provider: ITasks | ITaskCoreLocal, childAdd
         },
         (err) => {
             Err.UNHANDLED(err);
+            return [] as UpdateTaskParams[];
         }
     );
 }
@@ -250,6 +267,8 @@ async function processChildRemovals(provider: ITasks | ITaskCoreLocal, childRemo
         },
         (err) => {
             Err.UNHANDLED(err);
+            return [] as UpdateTaskParams[];
         }
     );
 }
+//#endregion

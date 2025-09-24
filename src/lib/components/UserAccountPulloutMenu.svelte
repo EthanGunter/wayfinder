@@ -3,8 +3,8 @@
 	import { page } from '$app/state';
 	import { type User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
-	import { auth, authState, users as authUsers } from '@/API/Auth/BrowserAuthProvider';
-	import { taskAPIPromise } from '@/API/providerRegistry';
+    import { authAPI, authState, cachedUsers as authUsers } from '@/API/Auth';
+    import { tasksAPI } from '@/API/Tasks';
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
@@ -12,15 +12,11 @@
 	import type { Task } from '$lib/API/Tasks/Task';
 
 	let multipleUsers = $state(false);
-	let tasks = $state<ILocalTasks>();
 
 	onMount(() => {
 		const unsubscribeUsers = authUsers.subscribe((userList) => {
 			multipleUsers = userList.length > 1;
 		});
-
-		// Load tasks asynchronously
-		taskAPIPromise.then((t) => (tasks = t));
 
 		return () => {
 			unsubscribeUsers();
@@ -28,8 +24,8 @@
 	});
 
 	async function handleExportJson() {
-		if (!tasks || $authState.status !== 'signed-in') return;
-		const t = tasks as ILocalTasks;
+		if (!tasksAPI || $authState.status !== 'signed-in') return;
+		const t = tasksAPI as ILocalTasks;
 		const res = await t.getAllUserTasks({ userId: $authState.user.id });
 		if (res.isErr()) return;
 		const taskList = res.value.successes;
@@ -43,8 +39,8 @@
 	}
 
 	async function handleImportJson() {
-		if (!tasks || $authState.status !== 'signed-in') return;
-		const t = tasks as ILocalTasks;
+		if (!tasksAPI || $authState.status !== 'signed-in') return;
+		const t = tasksAPI as ILocalTasks;
 		const input = document.createElement('input');
 		input.type = 'file';
 		input.accept = 'application/json';
@@ -88,7 +84,7 @@
 	}
 
 	async function handleSignOut() {
-		await auth.logout();
+		await authAPI.logout();
 		invalidateAll();
 	}
 

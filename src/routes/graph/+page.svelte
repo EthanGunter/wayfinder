@@ -11,8 +11,8 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { type Task } from '$lib/API/Tasks/Task';
-	import { authState } from '@/API/Auth/BrowserAuthProvider';
-	import { taskAPIPromise } from '@/API/providerRegistry';
+	import { authState } from '@/API/Auth';
+	import { tasksAPI as tasksAPIFacade } from '@/API/Tasks';
 	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import AppHeader from '@/components/AppHeader.svelte';
 	import AppFooter from '@/components/AppFooter.svelte';
@@ -71,7 +71,7 @@
 			goto('/home');
 			return;
 		}
-		tasksAPI = await taskAPIPromise;
+		tasksAPI = tasksAPIFacade;
 		// Subscribe to auth state
 		unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in') {

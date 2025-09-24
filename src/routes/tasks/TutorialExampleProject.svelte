@@ -5,18 +5,16 @@
 	import TModal from '@/tutorials/primitives/TModal.svelte';
 
 	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
-	import { taskAPIPromise } from '@/API/providerRegistry';
-	import { authState } from '@/API/Auth/BrowserAuthProvider';
+	import { authState } from '@/API/Auth';
 	import { type ILocalTasks } from '@/API/Tasks';
 	import type { User } from '@/API/Auth/User';
+	import { tasksAPI } from '@/API/Tasks';
 	import { queryOrWait } from '@/tutorials/dom';
 	import demoData from '@/tutorials/DemoData.json';
 	import { TaskStatus } from '@/API/Tasks/Task';
 
 	let active = $state(false);
 	let step = $state(0);
-	let tasks = $state<ILocalTasks>();
-	let user = $state<User>();
 
 	const id = 'tasks.example-project';
 
@@ -29,27 +27,9 @@
 		else tutorials.reset(id);
 		step = tutorials.getStep(id);
 
-		// Initialize APIs
-		taskAPIPromise.then(t => {
-			tasks = t;
-			if (user) initializeExample();
-		});
-		
-		// Subscribe to auth state
-		const unsubscribeAuth = authState.subscribe((state) => {
-			if (state.status === 'signed-in' && state.user) {
-				user = state.user;
-				if (tasks) initializeExample();
-			} else if (state.status === 'signed-out') {
-				goto('/login');
-			}
-		});
+		initializeExample();
 
 		active = true;
-
-		return () => {
-			unsubscribeAuth();
-		};
 	});
 
 	function proceed() {
@@ -70,13 +50,13 @@
 	}
 
 	async function initializeExample() {
-		if (!tasks || !user) return;
-		await tasks.deleteTask({ id: 'DEMO-1', recursive: true });
+		if ($authState.status !== 'signed-in') return;
+		await tasksAPI.deleteTask({ id: 'DEMO-1', recursive: true });
 
-		const result = await tasks.createTask({
+		const result = await tasksAPI.createTask({
 			createDetail: {
 				id: 'DEMO-1',
-				user_id: user.id,
+				user_id: $authState.user.id,
 				title: 'Go to the ball 💃🕺'
 			}
 		});
@@ -87,12 +67,12 @@
 	async function createDressClothesTask(e: Event) {
 		e.preventDefault();
 		e.stopImmediatePropagation();
-		if (!tasks || !user) return;
+		if ($authState.status !== 'signed-in') return;
 
-		const result = await tasks.createTask({
+		const result = await tasksAPI.createTask({
 			createDetail: {
 				id: 'DEMO-2',
-				user_id: user.id,
+				user_id: $authState.user.id,
 				title: 'Get dress clothes 🥿👗👔👞',
 				parents: ['DEMO-1']
 			}
@@ -132,7 +112,7 @@
 	}
 
 	async function createDemoTasks() {
-		if (!tasks || !user) return;
+		if ($authState.status !== 'signed-in') return;
 
 		type DemoItem = {
 			id: string;
@@ -161,7 +141,7 @@
 		});
 
 		if (createDetails.length > 0) {
-			await tasks.createTasks({ createDetails });
+			await tasksAPI.createTasks({ createDetails });
 			invalidateAll();
 		}
 	}
@@ -259,8 +239,8 @@
 		<EventHandler selector="#sec-task-list" type="dnd-drop" onEvent={proceed} />
 		<TModal selector="#sec-task-list" placement="top">
 			{#snippet title()}Prioritize your subtasks{/snippet}
-			Drag and drop items within the list to reorder. Higher items get higher priority
-			and will surface sooner in the planner.
+			Drag and drop items within the list to reorder. Higher items get higher priority and will surface
+			sooner in the planner.
 		</TModal>
 	{:else if step === 9}
 		<EventHandler selector="#btn-nav-planner" type="click" onEvent={markDone} />
