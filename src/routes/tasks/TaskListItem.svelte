@@ -115,7 +115,7 @@
 		/>
 	{:else}
 		<span
-			class="align-content-center h-full w-full cursor-text overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap"
+			class="align-content-center h-full w-full cursor-pointer overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap"
 			role="button"
 			tabindex={0}
 			onclick={handleTitleClick}

@@ -4,7 +4,7 @@
 	import type { Task } from '$lib/API/Tasks/Task';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import TaskNodeEditor from '../tasks/TaskEditor.svelte';
+	import TaskNodeEditor from './TaskEditor.svelte';
 	import { tasksAPI } from '@/API/Tasks';
 
 	let { data }: { data: Task } = $props();
