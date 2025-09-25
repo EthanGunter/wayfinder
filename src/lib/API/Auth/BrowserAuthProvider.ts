@@ -159,10 +159,18 @@ function getRegistrationRequirements(signUpCred: any) {
 
 async function updateUser({ update }: { update: Partial<LocalUser> & { id: string } }) {
   assertDB(db);
+  console.log("Update user", update);
 
   const user = await db.get(AUTH_TABLE_NAME, update.id) as LocalUser | undefined;
   if (!user) {
     return err(new NotFoundError(update.id, "User"));
+  }
+
+  // Skip if no real change (avoid redundant store writes/loops)
+  const keys = Object.keys(update) as (keyof LocalUser)[];
+  const noChange = keys.length === 0 || keys.every((k) => update[k] === user[k]);
+  if (noChange) {
+    return ok(user);
   }
 
   const updatedUser = {

@@ -13,9 +13,9 @@
 	import * as AlertDialog from '@/components/ui/alert-dialog';
 	import { Err } from '@/Errors';
 
-	let originalUser = $state<User>();
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
+	let draftName = $state<string>('');
 
 	const debouncedUpdateUser = debounce(authAPI.updateUser, 200);
 
@@ -23,7 +23,8 @@
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in' && state.user) {
-				debouncedUpdateUser({ update: state.user });
+				// keep draft in sync with store (but do not write back)
+				if (draftName !== state.user.display_name) draftName = state.user.display_name;
 				loadTaskCount();
 			} else if (state.status === 'signed-out') {
 				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
@@ -51,38 +52,6 @@
 		}
 	}
 
-	function equals(a: LocalUser, b: LocalUser) {
-		return JSON.stringify(a) === JSON.stringify(b);
-	}
-
-	async function saveUserChanges() {
-		if ($authState.status !== 'signed-in' || !originalUser) return;
-
-		const changes: Partial<User> = {};
-		if (originalUser.display_name != $authState.user.display_name) {
-			changes.display_name = $authState.user.display_name;
-		}
-		if (originalUser.avatar_url != $authState.user.avatar_url) {
-			changes.avatar_url = $authState.user.avatar_url;
-		}
-
-		// Only update if there are actual changes
-		if ($authState.status === 'signed-in' && changes && Object.keys(changes).length > 0) {
-			await debouncedUpdateUser({
-				update: {
-					id: $authState.user.id,
-					...changes
-				}
-			});
-			originalUser = $authState.user;
-			await invalidateAll(); // TODO:?? This may do nothing...
-		}
-	}
-
-	function handleNameInput(event: Event & { currentTarget: EventTarget & HTMLInputElement }) {
-		event.preventDefault();
-		// if (event.currentTarget.value === '')$authState.user.display_name = data.user.display_name;
-	}
 	async function handleDeleteUser() {
 		if ($authState.status !== 'signed-in' || isDeleting) return;
 
@@ -141,14 +110,31 @@
 		>
 			<div class="grid min-w-[70%] gap-4">
 				<!-- TODO:UX avatar only seems to update after navigation or refresh... -->
-				<AvatarEditor user={$authState.user} class="m-auto max-h-[50vh] max-w-[50vw]" />
+				<AvatarEditor
+					user={structuredClone($authState.user)}
+					onAvatarChange={(avatar_url) => {
+						if ($authState.status !== 'signed-in') return;
+						if (avatar_url !== $authState.user.avatar_url) {
+							void debouncedUpdateUser({ update: { id: $authState.user.id, avatar_url } });
+						}
+					}}
+					class="m-auto max-h-[50vh] max-w-[50vw]"
+				/>
 				<span class="flex flex-col">
 					<label for="input_display_name" class="mb-2 font-medium text-gray-800">Name</label>
 					<input
 						id="input_display_name"
 						type="text"
-						bind:value={$authState.user.display_name}
-						oninput={handleNameInput}
+						bind:value={draftName}
+						oninput={(event) => {
+							event.preventDefault();
+							if ($authState.status !== 'signed-in') return;
+							if (event.currentTarget.value !== $authState.user.display_name) {
+								void debouncedUpdateUser({
+									update: { id: $authState.user.id, display_name: event.currentTarget.value }
+								});
+							}
+						}}
 						placeholder="Really cool username"
 						class="rounded border border-gray-300 p-2"
 					/>
@@ -170,9 +156,8 @@
 						</select>
 						</section> -->
 			</div>
-			<!-- <Button onclick={saveUserChanges} disabled={equals($authState.user, originalUser!)}
-				>Save Changes</Button
-			> -->
+
+			<Button class="alert" onclick={authAPI.logout}>Sign out</Button>
 
 			<!-- Delete Account Dialog -->
 			<AlertDialog.Root>
@@ -228,7 +213,6 @@
 					</Button>
 				</div>
 			{/if} -->
-			<Button class="alert" onclick={authAPI.logout}>Sign out</Button>
 		</div>
 		<AppFooter />
 	</div>
