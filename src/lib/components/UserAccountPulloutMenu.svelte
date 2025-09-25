@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { type User } from '$lib/API/Auth/User';
+	import { userHasFeature, type User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
 	import { authAPI, authState, cachedUsers as authUsers } from '@/API/Auth';
 	import { tasksAPI } from '@/API/Tasks';
@@ -12,6 +12,11 @@
 	import type { Task } from '$lib/API/Tasks/Task';
 
 	let multipleUsers = $state(false);
+	let hasSync = $derived(
+		$authState.status === 'signed-in' && userHasFeature($authState.user, 'task-sync')
+	);
+	console.log(hasSync);
+	
 
 	onMount(() => {
 		const unsubscribeUsers = authUsers.subscribe((userList) => {
@@ -113,32 +118,6 @@
 			</div>
 		</Button>
 
-		<!-- Export JSON -->
-		<Button
-			variant="outline"
-			class="flex h-16 items-center justify-start gap-3"
-			onclick={handleExportJson}
-		>
-			<Icon icon="mdi:export-variant" class="size-6 text-gray-600" />
-			<div class="text-left">
-				<div class="font-medium">Export Tasks (JSON)</div>
-				<div class="text-sm text-gray-500">Download your current task graph</div>
-			</div>
-		</Button>
-
-		<!-- Import JSON -->
-		<Button
-			variant="outline"
-			class="flex h-16 items-center justify-start gap-3"
-			onclick={handleImportJson}
-		>
-			<Icon icon="mdi:import" class="size-6 text-gray-600" />
-			<div class="text-left">
-				<div class="font-medium">Import Tasks (JSON)</div>
-				<div class="text-sm text-gray-500">Merge JSON into your task graph</div>
-			</div>
-		</Button>
-
 		<!-- Sign out -->
 		<Button
 			variant="outline"
@@ -164,5 +143,81 @@
 				<div class="text-sm text-gray-500">Choose another local account</div>
 			</div>
 		</Button>
+
+		<hr />
+		<h2>Backup</h2>
+		<h3>Local Disk</h3>
+		<span class="flew-row flex justify-around">
+			<!-- Export JSON -->
+			<Button
+				variant="outline"
+				class="flex h-10 items-center justify-start"
+				onclick={handleExportJson}
+				title="Download data as json file"
+			>
+				<Icon icon="mdi:export-variant" class="size-6 text-gray-600" />
+				<div class="text-left">
+					Export
+					<!-- <div class="text-sm text-gray-500">Download your current task graph</div> -->
+				</div>
+			</Button>
+
+			<!-- Import JSON -->
+			<Button
+				variant="outline"
+				class="flex h-10 items-center justify-start"
+				onclick={handleImportJson}
+				title="Add json data to your task-list"
+			>
+				<Icon icon="mdi:import" class="size-6 text-gray-600" />
+				<div class="text-left">
+					Import
+					<!-- <div class="text-sm text-gray-500">Merge JSON into your task graph</div> -->
+				</div>
+			</Button>
+		</span>
+
+		<h3>Server</h3>
+		<span class="flew-row flex justify-around">
+			<!-- Fetch from server -->
+			<span
+				title={hasSync
+					? "Replace local data with the server's"
+					: 'Cannot fetch from server without sync-enabled account'}
+			>
+				<Button
+					variant="outline"
+					class="flex h-10 items-center justify-start"
+					onclick={handleImportJson}
+					disabled={!hasSync}
+				>
+					<Icon icon="mdi:import" class="size-6 text-gray-600" />
+					<div class="text-left">
+						Fetch
+						<!-- <div class="text-sm text-gray-500">Merge JSON into your task graph</div> -->
+					</div>
+				</Button>
+			</span>
+
+			<!-- Force push to server -->
+			<span
+				title={hasSync
+					? "Overwrite the server's data with what's here"
+					: 'Cannot force-push from server without sync-enabled account'}
+			>
+				<Button
+					variant="outline"
+					class="flex h-10 items-center justify-start"
+					onclick={handleExportJson}
+					disabled={!hasSync}
+				>
+					<Icon icon="mdi:export-variant" class="size-6 text-gray-600" />
+					<div class="text-left">
+						Push
+						<!-- <div class="text-sm text-gray-500">Download your current task graph</div> -->
+					</div>
+				</Button>
+			</span>
+		</span>
 	</div>
 {/if}

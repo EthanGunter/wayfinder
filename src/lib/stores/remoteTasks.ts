@@ -3,6 +3,7 @@ import type { ITasks } from '$lib/API/Tasks';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
 
+// TODO:refactor Move this code to /Tasks/index.ts
 // Canonical source for whether remote task operations are available.
 // null => remote disabled/unavailable; non-null => remote enabled and usable.
 export const remoteTasks = writable<ITasks | null>(null);

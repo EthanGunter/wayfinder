@@ -6,7 +6,8 @@ import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
 import { invalidateAll } from '$app/navigation';
 import SessionVault from './SessionVault';
-import { writable, type Readable } from 'svelte/store';
+import { writable, type Readable, get } from 'svelte/store';
+import { remoteAuth } from '$lib/stores/remoteAuth';
 
 // Stores
 const _authState = writable<AuthState>({ status: "loading" });
@@ -42,17 +43,17 @@ let _unsubscribeRemoteAuth: (() => void) | null = null;
       _authState.set({ status: "signed-out", user: null });
     }
 
-    // TODO: Subscribe to remote auth store when it's created (like remoteTasks pattern)
-    // try {
-    //   const { remoteAuth } = await import('$lib/stores/remoteAuth');
-    //   if (remoteAuth && !_unsubscribeRemoteAuth) {
-    //     _unsubscribeRemoteAuth = remoteAuth.subscribe((ra: IAuth | null) => {
-    //       _remoteAuth = ra;
-    //     });
-    //   }
-    // } catch {
-    //   // remoteAuth store doesn't exist yet; will remain null
-    // }
+    // Subscribe to remote auth store when it's created (like remoteTasks pattern)
+    try {
+      _remoteAuth = get(remoteAuth);
+      const state = get(_authState);
+      if (state.status === 'signed-in') {
+        const merged = await _fetchAndPersistLatestUser(state.user);
+        _authState.set({ status: 'signed-in', user: merged });
+      }
+    } catch {
+      // remoteAuth store doesn't exist yet; will remain null
+    }
   } catch (e: any) {
     _authState.set({ status: "error", error: Err.wrap(e) });
   }
@@ -108,7 +109,7 @@ async function switchUser(newUserId: string) {
     return user ? ok(user) : err(new NotFoundError(newUserId, "User"));
   }
 
-  const user = await db.get(AUTH_TABLE_NAME, newUserId) as LocalUser | undefined;
+  let user = await db.get(AUTH_TABLE_NAME, newUserId) as LocalUser | undefined;
   if (!user) {
     return err(new NotFoundError(newUserId, "User"));
   }
@@ -140,6 +141,11 @@ async function switchUser(newUserId: string) {
     } catch {
       return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
     }
+  }
+
+  // Before switching locally, try to refresh from remote to pick up new features/status/etc
+  if (_remoteAuth) {
+    user = await _fetchAndPersistLatestUser(user);
   }
 
   // Switch locally
@@ -184,6 +190,10 @@ async function updateUser({ update }: { update: Partial<LocalUser> & { id: strin
   // Update active user in store if this is the active user
   const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
   if (activeId && activeId === updatedUser.id) {
+    // TODO:?? I'm not sure it's a good idea to fetch the user EVERY update
+    // // Ensure we reflect any server-side merges (e.g., sanitation, feature changes by admin)
+    // const merged = _remoteAuth ? await _fetchAndPersistLatestUser(updatedUser as LocalUser) : (updatedUser as LocalUser);
+
     _authState.set({ status: "signed-in", user: updatedUser });
   }
 
@@ -333,6 +343,25 @@ export const browserAuthAPI: IAuthLocal = {
 
 
 // #region UTILITIES
+
+// Fetch the latest remote user row and persist/merge into local DB
+async function _fetchAndPersistLatestUser(current: LocalUser): Promise<LocalUser> {
+  assertDB(db);
+  if (!_remoteAuth) {
+    return current;
+  }
+  const res = await _remoteAuth.getUser({ id: current.id });
+  if (res.isErr()) {
+    Err.UNHANDLED(res.error);
+    return current;
+  }
+
+  const remoteUser = res.value;
+  const merged: LocalUser = { ...current, ...remoteUser };
+  await db.put(AUTH_TABLE_NAME, merged);
+  await _refreshUsers();
+  return merged;
+}
 
 // Helper to refresh users list from DB
 async function _refreshUsers(): Promise<void> {

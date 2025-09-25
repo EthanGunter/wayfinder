@@ -6,7 +6,7 @@ import { createTask, toMarkdown, isTaskCompleted } from './Task';
 import { getRelationshipUpdates } from '.';
 import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
-import { dbPromise, TASK_TABLE_NAME, AUTH_TABLE_NAME, APP_TABLE_NAME, ACTIVEUSER_NAME, type LocalDB } from '../localDB';
+import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
 import { remoteTasks as remoteTasksStore } from '$lib/stores/remoteTasks';
 import { get, readable, type Readable } from 'svelte/store';
 import { userHasFeature, type User, type UserFeature } from '../Auth/User';

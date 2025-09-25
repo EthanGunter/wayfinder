@@ -7,7 +7,7 @@ export * from './types';
 export * from './Task'
 
 let tasksAPI: ILocalTasks;
-
+let remoteTasks: ITasks;
 
 if (true /* browser */) {
     tasksAPI = browserTasksAPI;
