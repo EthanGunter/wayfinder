@@ -365,7 +365,10 @@
 		<Button
 			variant="outline"
 			class="fixed right-7 bottom-24 rounded-full border-2"
-			onclick={() => (drawerOpen = true)}
+			onclick={() => {
+				triggerTaskForNew = null;
+				drawerOpen = true;
+			}}
 		>
 			+
 		</Button>

@@ -57,7 +57,7 @@ const api: ITasksLocal = {
       // TODO:sync Unknown errors should not destroy the local version, but queue for a retry...
       // Don't forget to log for the developer's sake, however
       new IOError('[SERVER/SYNC] Remote createTasks failed; reverting local', response.error).logError();
-      await _deleteTasksLocal(idsToDelete, false, false);
+      await _deleteTasksLocal(idsToDelete, false);
     }
   },
 
@@ -150,10 +150,10 @@ const api: ITasksLocal = {
    * @param recursive NOT IMPLEMENTED
    * @error {@link IOError} if IndexedDB.delete() fails
    */
-  deleteTask: async function ({ id, recursive }) {
-    return await api.deleteTasks({ ids: [id], recursive });
+  deleteTask: async function ({ id }) {
+    return await api.deleteTasks({ ids: [id] });
   },
-  deleteTasks: ({ ids, recursive }) => _deleteTasksLocal(ids, recursive ?? false),
+  deleteTasks: ({ ids }) => _deleteTasksLocal(ids ?? false),
   handleDeleteTasksResponse: async function (response) {
     if (response.isErr()) {
       assertDB(_db);
@@ -494,7 +494,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
             );
           } else {
             new IOError('[SERVER/SYNC] Remote createTasks failed; reverting local', response.error).logError();
-            await _deleteTasksLocal(idsToDelete, false, false);
+            await _deleteTasksLocal(idsToDelete, false);
           }
         } else {
           await api.handleCreateTasksResponse(ok(response.value));
@@ -529,8 +529,8 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
     }
 
     // Apply relationship changes
-    let updatedChildren = new Set(task.children || []);
-    let updatedParents = new Set(task.parents || []);
+    let updatedChildren = new Set(changes.children || task.children || []);
+    let updatedParents = new Set(changes.parents || task.parents || []);
 
     for (const relation of relations) {
       switch (relation.operation) {
@@ -562,14 +562,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
     // We can use the updates id since id can't be changed via update
     updatedTasks.set(task, updated);
   }
-  try {
-    const relUpdates = await getRelationshipUpdates(api, Array.from(updatedTasks).map(([oldTask, newTask]) => ({ oldTask, newTask })));
-    // TODO:?? I'm not sure if this updateServer should be propagated here, or intentionally `false`
-    await _updateTasksLocal(relUpdates, updateServer);
-  } catch (e) {
-    console.error("Task relationship update failed:", updatedTasks);
-  }
-
+  
   // Update search index for updated tasks
   if (_searchService) {
     // TODO:optimization this should probably be removing old data as well...
@@ -615,7 +608,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
 
   return okBatch(updatedTasks.values().toArray(), errors);
 };
-async function _deleteTasksLocal(ids: string[], recursive: boolean, updateServer: boolean = true) {
+async function _deleteTasksLocal(ids: string[], updateServer: boolean = true) {
   if (ids.length === 0) return ok();
 
   assertDB(_db);
@@ -636,11 +629,11 @@ async function _deleteTasksLocal(ids: string[], recursive: boolean, updateServer
       continue;
     }
 
-    if (recursive && task.children.length > 0) {
+/*     if (recursive && task.children.length > 0) {
       // TODO:critical Add infinite recursion guards
       // Recursively delete children first to avoid transient dangling refs
       await _deleteTasksLocal(task.children, recursive, false);
-    }
+    } */
 
     deletedTasks.push(task);
     await _db.delete(TASK_TABLE_NAME, task.id);

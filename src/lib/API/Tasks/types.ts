@@ -79,8 +79,8 @@ export interface ITasksLocal {
   updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task, NotAuthorizedError>>;
   handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;
 
-  deleteTask(params: { id: string, recursive?: boolean }): Promise<Result<void>>;
-  deleteTasks(params: { ids: string[], recursive?: boolean }): Promise<Result<void>>;
+  deleteTask(params: { id: string }): Promise<Result<void>>;
+  deleteTasks(params: { ids: string[] }): Promise<Result<void>>;
   handleDeleteTasksResponse(response: Result<void, { oldState: Task[], error: NotAuthorizedError }>): Promise<void>;
 
   handleMigrateResponse(response: Result<void, { oldUserID: string, newUserID: string, error: NotAuthorizedError }>): Promise<void>;
@@ -164,7 +164,7 @@ export type CreateTaskParams = Partial<Task> & Omit<Task,
 >
 export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id">
 type RelationChange = { id: string, operation: "addChild" | "removeChild" | "addParent" | "removeParent" }
-export type UpdateTaskParams = { id: string, data?: Partial<Omit<Task, "children" | "parents">>, relations?: RelationChange[] };
+export type UpdateTaskParams = { id: string, data?: Partial<Task>, relations?: RelationChange[] };
 
 //#endregion
 

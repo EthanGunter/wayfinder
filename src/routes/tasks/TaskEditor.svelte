@@ -113,13 +113,10 @@
 		</Dialog.Header>
 		<div class="p-4">
 			<p class="mb-4">Are you sure you want to delete <strong>{task.title}</strong>?</p>
-			<p class="text-sm text-gray-600">
-				This will permanently delete the task and all of its subtasks.
-			</p>
 		</div>
 		<Dialog.Footer class="flex gap-2">
 			<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Cancel</Button>
-			<Button variant="destructive" onclick={handleDelete}>Delete Task & Subtasks</Button>
+			<Button variant="destructive" onclick={handleDelete}>Delete Task</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

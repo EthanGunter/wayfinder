@@ -10,7 +10,7 @@
 	interface Props {
 		task: Task;
 		onTaskChange: (original: Task, update: Partial<Task>) => void;
-		onDelete: (task: Task, recursive: boolean) => void;
+		onDelete: (task: Task) => void;
 		children?: Snippet;
 	}
 	let { task = $bindable(), onTaskChange, onDelete, children }: Props = $props();
@@ -44,7 +44,7 @@
 	}
 
 	function handleDelete() {
-		onDelete?.(task, true); // Always delete recursively to maintain graph integrity
+		onDelete?.(task);
 		showDeleteDialog = false;
 	}
 </script>
@@ -124,13 +124,10 @@
 		</Dialog.Header>
 		<div class="p-4">
 			<p class="mb-4">Are you sure you want to delete <strong>{task.title}</strong>?</p>
-			<p class="text-sm text-gray-600">
-				This will permanently delete the task and all of its subtasks.
-			</p>
 		</div>
 		<Dialog.Footer class="flex gap-2">
 			<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Cancel</Button>
-			<Button variant="destructive" onclick={handleDelete}>Delete Task & Subtasks</Button>
+			<Button variant="destructive" onclick={handleDelete}>Delete Task</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

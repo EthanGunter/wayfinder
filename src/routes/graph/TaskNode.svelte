@@ -6,6 +6,8 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from './TaskEditor.svelte';
 	import { tasksAPI } from '@/API/Tasks';
+	import { dev } from '$app/environment';
+	import DialogClose from '@/components/ui/dialog/dialog-close.svelte';
 
 	let { data }: { data: Task } = $props();
 
@@ -57,9 +59,9 @@
 		}
 	}
 
-	async function onDelete(task: Task, recursive: boolean) {
+	async function onDelete(task: Task) {
 		try {
-			await tasksAPI.deleteTask({ id: task.id, recursive });
+			await tasksAPI.deleteTask({ id: task.id });
 			// Close editor after deletion
 			editorOpen = false;
 		} catch (e) {
@@ -84,6 +86,25 @@
 				{#if data?.content}
 					<div class="mt-0.5 line-clamp-2 text-xs text-gray-600" title={data?.content}>
 						{data?.content}
+					</div>
+				{/if}
+				{#if dev}
+					<div class="text-[7px]">
+						<span>id: {data.id.substring(0, 4)}</span>
+						{#if data.parents.length > 0}
+							<h6>Parents</h6>
+						{/if}
+						{#each data.parents as parent}
+							<span>- {parent.substring(0, 4)}</span>
+							<br />
+						{/each}
+						{#if data.children.length > 0}
+							<h6>Children</h6>
+						{/if}
+						{#each data.children as child}
+							<span>- {child.substring(0, 4)}</span>
+							<br />
+						{/each}
 					</div>
 				{/if}
 			</div>
