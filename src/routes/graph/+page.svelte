@@ -7,7 +7,10 @@
 		Position,
 		type Node,
 		type Edge,
-		useSvelteFlow
+		useSvelteFlow,
+		type OnConnectEnd,
+		type OnReconnectEnd,
+		type Connection
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { type Task } from '$lib/API/Tasks/Task';
@@ -32,6 +35,7 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import { tutorials } from '@/tutorials/store';
 	import { goto } from '$app/navigation';
+	import Button from '@/components/ui/button/button.svelte';
 
 	let taskById = new SvelteMap<string, Task>();
 	let unsubscribeTasks: (() => void) | null = null;
@@ -72,7 +76,17 @@
 		// Subscribe to auth state
 		unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in') {
-				setupTaskSubscription();
+				unsubscribeTasks?.();
+				unsubscribeTasks = tasksAPI.subscribeTasks({
+					userId: state.user.id,
+					onInitialize: async (tasks) => {
+						taskById = new SvelteMap(tasks.map((t) => [t.id, t]));
+						await rebuildLayoutFromMap();
+					},
+					onChange: async (changes) => {
+						applyDeltas(changes);
+					}
+				});
 			}
 		});
 	});
@@ -80,22 +94,6 @@
 		unsubscribeTasks?.();
 		unsubscribeAuth?.();
 	});
-
-	function setupTaskSubscription() {
-		if ($authState.status !== 'signed-in') return;
-
-		unsubscribeTasks?.();
-		unsubscribeTasks = tasksAPI.subscribeTasks({
-			userId: $authState.user.id,
-			onInitialize: async (tasks) => {
-				taskById = new SvelteMap(tasks.map((t) => [t.id, t]));
-				await rebuildLayoutFromMap();
-			},
-			onChange: async (changes) => {
-				applyDeltas(changes);
-			}
-		});
-	}
 
 	function applyDeltas(changes: TaskDelta[]) {
 		for (const change of changes) {
@@ -168,7 +166,7 @@
 		reconnectionState.inProgress = true;
 	}
 
-	async function handleConnect(connection: any) {
+	async function handleConnect(connection: Connection) {
 		console.log('handleConnect');
 		connectionState.successful = true;
 		try {
@@ -228,7 +226,7 @@
 		}
 	}
 
-	function handleConnectEnd(event: MouseEvent | TouchEvent, connectState: any) {
+	const handleConnectEnd: OnConnectEnd = (event, connectState) => {
 		if (reconnectionState.inProgress) {
 			console.log('handleConnectEnd (suppressed)');
 			connectionState.sourceNodeId = null;
@@ -236,17 +234,14 @@
 			connectionState.successful = false;
 			return;
 		}
-		console.log('handleConnectEnd');
-		const droppedOnHandle = (event as any)?.target?.closest?.('.svelte-flow__handle');
 
 		if (!connectionState.successful && connectionState.sourceNodeId) {
 			// If user dropped onto a handle but the connection was invalid, do NOT open create drawer
-			if (droppedOnHandle) {
+			if (connectState.toHandle || connectState.toNode) {
 				// no-op; just cancel
 			} else {
 				// Open task creation drawer
-				const dropPos =
-					getFlowPointFromEvent(event, screenToFlowPosition) || connectState?.to || null;
+				const dropPos = getFlowPointFromEvent(event, screenToFlowPosition) || null;
 				connectionState.dropPosition = dropPos;
 
 				const triggerTask = taskById.get(connectionState.sourceNodeId) || null;
@@ -263,19 +258,15 @@
 		connectionState.sourceNodeId = null;
 		connectionState.handleType = null;
 		connectionState.successful = false;
-	}
-	async function handleReconnectEnd(
-		event: MouseEvent | TouchEvent,
-		edge: Edge,
-		_handleType?: 'source' | 'target',
-		connectState?: any
-	) {
+	};
+	const handleReconnectEnd: OnReconnectEnd = async (event, edge, _handleType, connectState) => {
 		console.log('handleReconnectEnd');
 		try {
 			// If not successful, only delete when truly dropped on the pane (no target handle)
 			if (!reconnectionState.successful) {
-				const droppedOnHandle = (event as any)?.target?.closest?.('.svelte-flow__handle');
-				const hasTarget = Boolean(connectState?.to?.nodeId || connectState?.to?.handleId);
+				const droppedOnHandle =
+					(event as Event)?.target && (event.target as Element).closest?.('.svelte-flow__handle');
+				const hasTarget = Boolean(connectState?.toNode || connectState?.toHandle);
 
 				if (!droppedOnHandle && !hasTarget) {
 					// Delete the relationship when dropped on empty space
@@ -297,7 +288,7 @@
 			reconnectionState.oldEdge = null;
 			reconnectionState.inProgress = false;
 		}
-	}
+	};
 
 	//#endregion
 
@@ -345,41 +336,6 @@
 	}
 
 	//#endregion
-
-	function handleTaskCreated(newTask: Task) {
-		// Update local maps and render without re-layout
-		taskById.set(newTask.id, newTask);
-		const dropPoint = connectionState.dropPosition;
-
-		if (dropPoint) {
-			nodes = [
-				...nodes,
-				{
-					id: newTask.id,
-					type: 'task',
-					data: newTask as unknown as Record<string, unknown>,
-					position: { x: dropPoint.x, y: dropPoint.y },
-					sourcePosition: Position.Bottom,
-					targetPosition: Position.Top
-				}
-			];
-
-			if (triggerTaskForNew) {
-				const { task, mode } = triggerTaskForNew;
-				const newEdge = {
-					id: mode === 'parent' ? `e-${task.id}-${newTask.id}` : `e-${newTask.id}-${task.id}`,
-					source: mode === 'parent' ? task.id : newTask.id,
-					target: mode === 'parent' ? newTask.id : task.id,
-					type: 'task'
-				};
-				edges = [...edges, newEdge];
-			}
-		}
-
-		// Reset connection state
-		connectionState.dropPosition = null;
-		drawerOpen = false;
-	}
 </script>
 
 <div class="graph-root page page-root">
@@ -406,13 +362,18 @@
 		>
 			<Background />
 		</SvelteFlow>
+		<Button
+			variant="outline"
+			class="fixed right-7 bottom-24 rounded-full border-2"
+			onclick={() => (drawerOpen = true)}
+		>
+			+
+		</Button>
 	</SvelteFlowProvider>
 	<AppFooter />
 </div>
 
-{#if $authState.status === 'signed-in'}
-	<TaskCreationDrawer bind:open={drawerOpen} relation={triggerTaskForNew} />
-{/if}
+<TaskCreationDrawer bind:open={drawerOpen} relation={triggerTaskForNew} />
 
 <style>
 	:global(.svelte-flow__attribution) {
