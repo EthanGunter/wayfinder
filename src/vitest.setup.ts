@@ -1,6 +1,5 @@
 // resultMatchers.ts
-import type { Result } from '$lib/API/types';
-import { Err } from '$lib/Errors';
+import { Err, type Result } from '$lib/Errors';
 import { expect } from 'vitest';
 
 

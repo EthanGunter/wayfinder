@@ -11,8 +11,7 @@ export const remoteTasks = writable<ITasks | null>(null);
 // Subscribe to auth state changes and set/clear the remote tasks provider.
 const updateRemoteTasks = async (user: LocalUser | null) => {
   if (user && userHasFeature(user, 'task-sync')) {
-    const remote = await SupabaseTaskProvider.get();
-    remoteTasks.set(remote);
+    remoteTasks.set(SupabaseTaskProvider);
   } else {
     remoteTasks.set(null);
   }

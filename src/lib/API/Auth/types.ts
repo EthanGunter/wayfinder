@@ -1,5 +1,4 @@
-import type { ArgumentError, Err, NotFoundError, NotImplementedError } from "$lib/Errors";
-import type { Result } from "../types";
+import type { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError, Result } from "$lib/Errors";
 import type { User, LocalUser } from "./User";
 
 export type LoginCredentials =
@@ -30,7 +29,6 @@ export type AuthState =
     | { status: "signed-out", user: null }
     | { status: "error", error: Err }
 
-export type ILocalAuth = IAuthLocal & IAuthResponseHandler;
 
 export interface IAuthLocal {
     /* TODO:temp Anonymous accounts disableds
@@ -44,25 +42,26 @@ export interface IAuthLocal {
 
     /** Registers a remote user account and creates local user simultaneously */
     register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+    
     /** Defines the requirements and availability for different Authentication methods */
     getRegistrationRequirements(signUpCred: LoginCredentials): Result<MigrationRequirements[], NotImplementedError>,
+    
     /** Sets the active user for this device */
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
     updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
+    handleUpdateUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
+
     /** Marks a user account as deleted in the server's database
      * There is currently no method of reactivating deleted accounts
      */
     deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
+    handleDeleteUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
+    
     /** Removes a cached user account from the local machine. It still be logged into remotely */
     removeCachedUser(userId: string): Promise<void>,
     login(params: { creds: LoginCredentials }): Promise<Result<User, NotFoundError | ArgumentError | NotImplementedError>>,
     logout(): Promise<Result<void>>,
-}
 
-// Result<SuccessData, FailureData>
-export interface IAuthResponseHandler {
-    handleUpdateUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
-    handleDeleteUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
 }
 
 //#endregion
@@ -75,7 +74,7 @@ export interface IAuth {
     /** Defines the requirements and availability for different Authentication methods */
     getRegistrationRequirements(signUpCred: LoginCredentials): Result<MigrationRequirements[], NotImplementedError>,
     /** Responsible for creating a new user account with the given credentials */
-    register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
+    register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError | InvalidStateError>>,
     getUser(params: { id: string }): Promise<Result<User, NotFoundError>>,
     updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
     deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,

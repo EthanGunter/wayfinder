@@ -1,12 +1,12 @@
-import { browserTasksAPI } from './BrowserTaskProvider';
-import type { ILocalTasks, ITasks, ITaskCoreLocal, UpdateTaskParams } from './types';
+import browserTasksAPI from './BrowserTaskProvider';
+import type { ITasksLocal, ITasks, UpdateTaskParams } from './types';
 import { type Task } from './Task';
 import { Err } from '$lib/Errors';
 
 export * from './types';
 export * from './Task'
 
-let tasksAPI: ILocalTasks;
+let tasksAPI: ITasksLocal;
 let remoteTasks: ITasks;
 
 if (true /* browser */) {
@@ -25,7 +25,7 @@ export interface RelationshipUpdate {
     newTask: Task | null;
 }
 
-export async function getRelationshipUpdates(provider: ITasks | ITaskCoreLocal, updates: RelationshipUpdate | RelationshipUpdate[]): Promise<UpdateTaskParams[]> {
+export async function getRelationshipUpdates(provider: ITasks | ITasksLocal, updates: RelationshipUpdate | RelationshipUpdate[]): Promise<UpdateTaskParams[]> {
     // Normalize to array for consistent handling
     const updateArray = Array.isArray(updates) ? updates : [updates];
 
@@ -116,7 +116,7 @@ function collectChildRemovals(map: Map<string, Set<string>>, childId: string, pa
 }
 
 // Process batch updates
-async function getParentUpdates(provider: ITasks | ITaskCoreLocal, parentAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function getParentUpdates(provider: ITasks | ITasksLocal, parentAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (parentAdditions.size === 0) return [];
 
     // Get all child IDs that need updating
@@ -149,7 +149,7 @@ async function getParentUpdates(provider: ITasks | ITaskCoreLocal, parentAdditio
 
 }
 
-async function processParentRemovals(provider: ITasks | ITaskCoreLocal, parentRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function processParentRemovals(provider: ITasks | ITasksLocal, parentRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (parentRemovals.size === 0) return [];
 
     // Get all child IDs that need updating
@@ -192,7 +192,7 @@ async function processParentRemovals(provider: ITasks | ITaskCoreLocal, parentRe
     );
 }
 
-async function processChildAdditions(provider: ITasks | ITaskCoreLocal, childAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function processChildAdditions(provider: ITasks | ITasksLocal, childAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (childAdditions.size === 0) return [];
 
     // Get all parent IDs that need updating
@@ -232,7 +232,7 @@ async function processChildAdditions(provider: ITasks | ITaskCoreLocal, childAdd
     );
 }
 
-async function processChildRemovals(provider: ITasks | ITaskCoreLocal, childRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
+async function processChildRemovals(provider: ITasks | ITasksLocal, childRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
     if (childRemovals.size === 0) return [];
 
     // Get all parent IDs that need updating

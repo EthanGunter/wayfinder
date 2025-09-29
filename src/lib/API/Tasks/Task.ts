@@ -1,8 +1,7 @@
-import { ParseError } from "$lib/Errors";
+import { ParseError, type Result } from "$lib/Errors";
 import { err, ok } from "neverthrow";
 import yaml from 'js-yaml'
 import type { CreateTaskParams, PopulatedTaskDTO } from "./types";
-import type { Result } from "../types";
 import { v4 } from "uuid";
 
 export interface Task {
@@ -64,8 +63,8 @@ export function createTask(params: CreateTaskParams): Task {
     } = params;
     return {
         id: id ?? v4(),
-        user_id: user_id!,
-        title: title!,
+        user_id: user_id,
+        title: title,
         content,
         status,
         todays_task,

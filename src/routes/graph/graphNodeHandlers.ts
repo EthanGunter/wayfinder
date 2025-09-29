@@ -1,12 +1,12 @@
 import type { Node, Edge } from '@xyflow/svelte';
 import type { Task } from '$lib/API/Tasks/Task';
-import type { ILocalTasks } from '$lib/API/Tasks/types';
+import type { ITasksLocal } from '@/API/Tasks';
 
 /**
  * Updates parent/child relationships between tasks
  */
 export async function updateTaskRelationship(
-	tasksAPI: ILocalTasks,
+	tasksAPI: ITasksLocal,
 	taskById: Map<string, Task>,
 	parentId: string,
 	childId: string,
@@ -21,13 +21,13 @@ export async function updateTaskRelationship(
 
 	await tasksAPI.updateTasks({
 		updates: [
-			{ 
-				id: parentId, 
-				relations: [{ id: childId, operation: parentOperation }] 
+			{
+				id: parentId,
+				relations: [{ id: childId, operation: parentOperation }]
 			},
-			{ 
-				id: childId, 
-				relations: [{ id: parentId, operation: childOperation }] 
+			{
+				id: childId,
+				relations: [{ id: parentId, operation: childOperation }]
 			}
 		]
 	});

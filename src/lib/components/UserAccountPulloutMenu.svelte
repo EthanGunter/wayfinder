@@ -8,15 +8,12 @@
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
-	import type { ILocalTasks } from '$lib/API/Tasks';
 	import type { Task } from '$lib/API/Tasks/Task';
 
 	let multipleUsers = $state(false);
 	let hasSync = $derived(
 		$authState.status === 'signed-in' && userHasFeature($authState.user, 'task-sync')
 	);
-	console.log(hasSync);
-	
 
 	onMount(() => {
 		const unsubscribeUsers = authUsers.subscribe((userList) => {
@@ -31,20 +28,26 @@
 	async function handleExportJson() {
 		if ($authState.status !== 'signed-in') return;
 		const res = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
-		if (res.isErr()) return;
-		const taskList = res.value.successes;
+		if (res.isErr()) {
+			res.error.logError();
+			return;
+		}
+		const taskList = res.value.successes; /*.map((t: any) => {
+			delete t.user_id;
+			return t;
+		}); */
 		const exportBlob = new Blob([JSON.stringify(taskList, null, 2)], { type: 'application/json' });
 		const url = URL.createObjectURL(exportBlob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = 'wayfinder-tasks.json';
+		a.download = `wayfinder-${$authState.user.display_name.replaceAll(' ', '_')}-${new Date().toISOString().split('T')[0]}.json`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
 
 	async function handleImportJson() {
 		if ($authState.status !== 'signed-in') return;
-		const t = tasksAPI as ILocalTasks;
+		const t = tasksAPI;
 		const input = document.createElement('input');
 		input.type = 'file';
 		input.accept = 'application/json';

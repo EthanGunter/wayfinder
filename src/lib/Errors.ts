@@ -1,7 +1,12 @@
 import { dev } from "$app/environment";
+import { Result as _Result, Err as _Err, err, ok, Ok } from "neverthrow";
 
+export type Result<T, E = UnknownError> = _Result<T, E>
+export type BatchResult<T, TE extends Err = UnknownError, E extends Err = UnknownError> = Result<{ successes: T[]; errors: TE[] }, E>
+export function okBatch<T, TE extends Err = UnknownError>(successes: T[], failures?: TE[]) {
+  return ok({ successes, errors: failures ?? [] });
+}
 export enum ErrorType {
-    PlaceholderError = "PlaceholderError",
     ArgumentError = "InvalidArgument",
     InvalidState = "InvalidState",
     NotFoundError = "NotFound",
@@ -41,6 +46,9 @@ export class Err {
         else
             console.error("HANDLER NOT IMPLEMENTED for: ", error.type + ": " + error.msg);
         throw error.stack;
+    }
+    static NotImplemented(location: string): never {
+        Err.throw(new NotImplementedError(location));
     }
     static throw(error: Err | any, message?: string): never {
         // TODO: link to bug report system. Unhandled errors shouldn't happen  

@@ -1,13 +1,12 @@
 import supabase from '$lib/API/SupabaseClient'
 import { err, ok } from 'neverthrow';
 import { AccountIssueTarget, type IAuth, type MigrationRequirements, type IAuthSessionCapable } from './types';
-import { type IProvider } from '../types';
 import type { AuthError, UserAttributes } from '@supabase/auth-js';
 import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError, IOError } from '$lib/Errors';
 import { type User } from './User';
 import type { Tables, TablesInsert } from '../supabase';
 
-const core: IAuth = {
+const api: IAuth = {
     getRegistrationRequirements: function (cred) {
         const issues: MigrationRequirements[] = [];
 
@@ -42,8 +41,9 @@ const core: IAuth = {
             console.log(authRes.error);
 
             switch (authRes.error.code) {
-                case 'invalid_credentials':
                 case 'user_already_exists':
+                    return err(new InvalidStateError("[Supabase] Failed to register",authRes.error.code));
+                case 'invalid_credentials':
                     return err(new SupabaseAuthError(authRes.error));
 
                 default:
@@ -236,6 +236,8 @@ const core: IAuth = {
     //     return data.subscription.unsubscribe;
     // },
 }
+export default api;
+
 const sessionAbility: IAuthSessionCapable = {
     async getSessionMaterial({ userId }: { userId: string }) {
         try {
@@ -260,12 +262,6 @@ const sessionAbility: IAuthSessionCapable = {
         return ok(rotated);
     }
 }
-
-const SupabaseAuthProvider: IProvider<IAuth> = {
-    get: async () => ({ ...core, ...sessionAbility }),
-}
-export default SupabaseAuthProvider;
-
 
 export class SupabaseAuthError extends Err {
     code: AuthError['code'];

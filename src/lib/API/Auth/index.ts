@@ -3,8 +3,8 @@ import type { LocalUser } from './User';
 import type { Readable } from 'svelte/store';
 import { Err, NotImplementedError } from '@/Errors';
 
-import {
-	browserAuthAPI,
+import browserAuthAPI, 
+{
 	browserAuthState,
 	browserCachedUsers,
 } from './BrowserAuthProvider';

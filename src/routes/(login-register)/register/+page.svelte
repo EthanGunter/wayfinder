@@ -6,12 +6,9 @@
 	import { Button } from '@/components/ui/button';
 	import { onMount } from 'svelte';
 	import { authAPI, cachedUsers as authUsers } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
-	import { isAnonymous, type User } from '@/API/Auth/User';
-	import Icon from '@iconify/svelte';
+	import { type User } from '@/API/Auth/User';
 	import { v4 } from 'uuid';
-	import { type ILocalTasks } from '@/API/Tasks';
 
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/home';

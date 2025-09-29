@@ -8,8 +8,7 @@ export const remoteAuth = writable<IAuth | null>(null);
 
 (async () => {
   try {
-    const provider = await SupabaseAuthProvider.get();
-    remoteAuth.set(provider);
+    remoteAuth.set(SupabaseAuthProvider);
   } catch (e) {
     console.error('Failed to initialize remoteAuth provider:', e);
     remoteAuth.set(null);

@@ -17,8 +17,6 @@
 	import AppHeader from '@/components/AppHeader.svelte';
 	import AppFooter from '@/components/AppFooter.svelte';
 	import TaskCreationDrawer from '../tasks/TaskCreationDrawer.svelte';
-	import type { ILocalTasks } from '$lib/API/Tasks/types';
-	import type { User } from '$lib/API/Auth/User';
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
 	import { layoutTasksWithElk } from './layoutEngine';
