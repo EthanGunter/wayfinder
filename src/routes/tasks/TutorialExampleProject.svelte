@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { tutorials } from '@/tutorials/store';
 	import TModal from '@/tutorials/primitives/TModal.svelte';
 
@@ -49,15 +49,15 @@
 
 	async function initializeExample() {
 		if ($authState.status !== 'signed-in') return;
-		await tasksAPI.deleteTask({ id: 'DEMO-1', recursive: true });
+		await tasksAPI.deleteTask({ id: 'DEMO-1' });
 
-		const result = await tasksAPI.createTask({
+		void (await tasksAPI.createTask({
 			createDetail: {
 				id: 'DEMO-1',
 				user_id: $authState.user.id,
 				title: 'Go to the ball 💃🕺'
 			}
-		});
+		}));
 
 		goto(`tasks?id=DEMO-1`);
 	}
@@ -79,7 +79,6 @@
 		result.match(
 			(newTask) => {
 				proceed();
-				invalidateAll();
 			},
 			(err) => {
 				err.logError();
@@ -140,7 +139,6 @@
 
 		if (createDetails.length > 0) {
 			await tasksAPI.createTasks({ createDetails });
-			invalidateAll();
 		}
 	}
 </script>

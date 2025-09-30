@@ -72,7 +72,7 @@
 			}
 			const result = await authAPI.register({ creds, userData });
 			if (result.isOk()) {
-				await invalidateAll();
+				// await invalidateAll();
 				goto(redir);
 			} else {
 				errorMessage = result.error.message || 'Registration failed';

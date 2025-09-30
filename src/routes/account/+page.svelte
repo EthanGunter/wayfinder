@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
-	import { type LocalUser, type User } from '$lib/API/Auth/User';
 	import { page } from '$app/state';
 	import { Button } from '@/components/ui/button';
 	import { authAPI, authState } from '@/API/Auth';
@@ -61,8 +60,7 @@
 			if (rootRes.isErr()) Err.UNHANDLED(rootRes.error);
 
 			await tasksAPI.deleteTasks({
-				ids: rootRes.value.map((r) => r.id),
-				recursive: true
+				ids: rootRes.value.map((r) => r.id)
 			});
 
 			// Delete the user account

@@ -4,7 +4,6 @@ import { tasksAPI } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
-import { invalidateAll } from '$app/navigation';
 import SessionVault from './SessionVault';
 import { writable, type Readable, get } from 'svelte/store';
 import { remoteAuth } from '$lib/stores/remoteAuth';
@@ -326,8 +325,6 @@ const api: IAuthLocal = {
 
     // Update store
     _authState.set({ status: "signed-out", user: null });
-
-    invalidateAll();
     return ok();
   }
 }

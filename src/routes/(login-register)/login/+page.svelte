@@ -49,7 +49,7 @@
 
 			if (result.isOk()) {
 				// Switch successful, refresh and redirect
-				await invalidateAll();
+				// await invalidateAll();
 				goto(redir);
 			} else if (result.error instanceof InputRequiredError) {
 				// Require login for this account: show login form with message
@@ -81,7 +81,7 @@
 				// Clear credentials on success
 				email = '';
 				password = '';
-				await invalidateAll();
+				// await invalidateAll();
 				goto(redir);
 			} else {
 				const error = result.error;

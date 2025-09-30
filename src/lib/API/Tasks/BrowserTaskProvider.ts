@@ -2,7 +2,7 @@ import type { ITasks, ITasksLocal, CreateTaskParams, UpdateTaskParams, TaskDelta
 import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError, ErrorType, okBatch, type BatchResult } from '$lib/Errors';
 import type { Task } from './Task';
 import { createTask, toMarkdown, isTaskCompleted } from './Task';
-import { getRelationshipUpdates } from '.';
+import { getRelationshipUpdates, tasksAPI } from '.';
 import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
@@ -11,6 +11,7 @@ import { get, readable, type Readable } from 'svelte/store';
 import { userHasFeature, type UserFeature } from '../Auth/User';
 import { authState } from '../Auth';
 import { err, ok } from 'neverthrow';
+import { v4 } from 'uuid';
 // import { queueTaskSyncCommand } from './types';
 
 //#region API Definition
@@ -358,7 +359,7 @@ const api: ITasksLocal = {
     }
   },
 
-  exportData: async function ({ simplify }) {
+  exportData: async function () {
     assertDB(_db);
     const auth = get(authState);
     if (auth.status !== 'signed-in') {
@@ -366,37 +367,63 @@ const api: ITasksLocal = {
     }
 
     // Only export tasks owned by the current user
-    const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const taskData = (allTasks as Task[]).filter(task => task.user_id === auth.user.id);
-    const nameConflicts = new Set(taskData.filter(task => !taskData.find(other => task.title == other.title)).map(t => t.title));
+    const userTasks = await _db.getAllFromIndex('tasks', "by-user", auth.user.id);
 
-    // 1. Create a new zip
-    const zip = new JSZip();
-
-    // 2. Add files
-    for (const task of taskData) {
-      // TODO replace with task.filepath
-      let filename;
-      if (nameConflicts.has(task.title))
-        filename = `${task.title} (${task.id.substring(0, 4)}).md`
-      else
-        filename = `${task.title}.md`
-
-      zip.file(filename, toMarkdown(task));
-    }
-
-    // 3. Generate the zip and trigger download
-    zip.generateAsync({ type: 'blob' }).then((content) => {
-      const url = URL.createObjectURL(content);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'wayfinder-export.zip';
-      a.click();
-      URL.revokeObjectURL(url);
-    });
+    const data: ExportData = { version: 1, data: userTasks };
+    return JSON.stringify(data, undefined, 2);
   },
-  importData: function ({ data }) {
-    Err.throw(new NotImplementedError('BrowserTaskProvider.importData'));
+  importData: async function ({ data, mode = "add" }) {
+    const parsed = JSON.parse(data) as ExportData;
+    switch (parsed.version) {
+      case 1:
+      default:
+        const auth = get(authState);
+        if (auth.status !== 'signed-in') {
+          throw new InvalidStateError("Cannot import data without an authenticated user");
+        }
+
+        const incoming: Task[] = parsed.data;
+        assertDB(_db);
+        switch (mode) {
+          case 'replace':
+            // Delete all data, the fall through to the add logic
+            const allTasksRes = await tasksAPI.getAllUserTasks({ userId: auth.user.id });
+            if (allTasksRes.isErr()) {
+              Err.UNHANDLED(allTasksRes.error);
+            } else if (allTasksRes.value.errors.length > 0) {
+              Err.UNHANDLED(allTasksRes.value.errors);
+            }
+
+            const allIds = allTasksRes.value.successes.map(t => t.id);
+            await tasksAPI.deleteTasks({ ids: allIds });
+
+          case "add":
+          default:
+            // Import all as new data
+            // Generate and remap all relationship ids
+            const oldIdSet = new Set(incoming.map(t => t.id));
+            const idMap = new Map<string, string>();
+            incoming.forEach(t => idMap.set(t.id, v4()));
+
+            const remap = (ids?: string[]) => (ids ?? [])
+              .filter(id => oldIdSet.has(id))
+              .map(id => idMap.get(id) as string);
+
+            const createDetails: CreateTaskParams[] = incoming.map(t => ({
+              ...t,
+              id: idMap.get(t.id) as string,
+              parents: remap(t.parents),
+              children: remap(t.children),
+            }));
+
+            const res = await _createTasksLocal(createDetails, true);
+            if (res.isErr()) {
+              throw res.error;
+            }
+            return res.value.successes.length;
+
+        }
+    }
   },
 
   hydrateForUser: async function ({ user }) {
@@ -432,6 +459,7 @@ const api: ITasksLocal = {
     }
   }
 }
+type ExportData = { version: number, data: any }
 export default api;
 
 async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolean = true): Promise<BatchResult<Task, ArgumentError, InvalidStateError | NotAuthorizedError>> {
@@ -562,7 +590,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
     // We can use the updates id since id can't be changed via update
     updatedTasks.set(task, updated);
   }
-  
+
   // Update search index for updated tasks
   if (_searchService) {
     // TODO:optimization this should probably be removing old data as well...
@@ -629,11 +657,11 @@ async function _deleteTasksLocal(ids: string[], updateServer: boolean = true) {
       continue;
     }
 
-/*     if (recursive && task.children.length > 0) {
-      // TODO:critical Add infinite recursion guards
-      // Recursively delete children first to avoid transient dangling refs
-      await _deleteTasksLocal(task.children, recursive, false);
-    } */
+    /*     if (recursive && task.children.length > 0) {
+          // TODO:critical Add infinite recursion guards
+          // Recursively delete children first to avoid transient dangling refs
+          await _deleteTasksLocal(task.children, recursive, false);
+        } */
 
     deletedTasks.push(task);
     await _db.delete(TASK_TABLE_NAME, task.id);

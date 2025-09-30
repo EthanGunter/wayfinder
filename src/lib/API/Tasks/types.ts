@@ -59,7 +59,6 @@ export interface ITasks {
   searchTasks(searchTerm: string): Promise<Task[]>;
 };
 
-
 export interface ITasksLocal {
   createTask(params: { createDetail: CreateTaskParams }): Promise<Result<void, InvalidStateError>>;
   createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<void, InvalidStateError | ArgumentError>>;
@@ -137,8 +136,8 @@ export interface ITasksLocal {
       }
   ): () => void;
 
-  exportData(params: { simplify?: boolean }): Promise<void>;
-  importData(params: { data: string }): Promise<number>;
+  exportData(): Promise<string>;
+  importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<number>;
 
   hydrateForUser(params: { user: User }): Promise<void>;
 };

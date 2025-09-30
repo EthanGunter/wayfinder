@@ -17,7 +17,7 @@
 		// SvelteKit SPA navigation
 		if (page.url.pathname.includes(path)) {
 			// Refresh the current page data instead of reloading
-			invalidateAll();
+			invalidateAll(); // TODO I don't think this does what I thought it did...
 		} else {
 			goto(path);
 		}
