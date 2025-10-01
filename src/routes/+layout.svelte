@@ -8,8 +8,6 @@
 	// as well as state change handlers for when the app gets focused/goes into the backgroud
 </script>
 
-<!-- <TooltipProvider> -->
-	<div class="absolute top-0 left-0 h-screen w-screen">
-		{@render children?.()}
-	</div>
-<!-- </TooltipProvider> -->
+<div class="absolute top-0 left-0 h-screen w-screen">
+	{@render children?.()}
+</div>

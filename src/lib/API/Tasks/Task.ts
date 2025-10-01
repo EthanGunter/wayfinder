@@ -104,8 +104,6 @@ export function populateTaskDTO(dto: CreateTaskParams): PopulatedTaskDTO {
         parents: dto.parents ?? [],
         children: dto.children ?? [],
     };
-    if (!populated.id)
-        delete (populated as any).id;
     return populated;
 }
 

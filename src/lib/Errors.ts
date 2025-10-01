@@ -39,7 +39,7 @@ export class Err {
         }
         error.inheritanceDepth++;
         error.withTrace();
-
+        
         // TODO: Import ReportingService and call reportError() here when ready
         if (error.context)
             console.error("HANDLER NOT IMPLEMENTED for: ", error.type + ": " + error.msg, error.context);
@@ -57,7 +57,7 @@ export class Err {
         }
         error.inheritanceDepth++;
         error.withTrace();
-
+        
         // TODO: Import ReportingService and call reportError() here when ready
         if (error.context)
             console.error(error.type + ": " + error.msg, error.context);

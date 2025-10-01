@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { userHasFeature } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';

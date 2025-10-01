@@ -11,7 +11,6 @@
 	import UserAvatar from './UserAvatar.svelte';
 	import { authState, cachedUsers as authUsers } from '@/API/Auth';
 	import { tasksAPI } from '@/API/Tasks';
-	import type { ILocalTasks } from '@/API/Tasks';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { tutorials } from '$lib/tutorials/store';
 	import { v4 } from 'uuid';
