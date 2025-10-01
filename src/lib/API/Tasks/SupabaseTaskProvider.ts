@@ -4,6 +4,7 @@ import type { ITasks, UpdateTaskParams } from "./types";
 import { type Task, populateTaskDTO } from "./Task";
 import { getRelationshipUpdates } from "./index";
 import { TASK_TABLE_NAME } from "../localDB";
+import supabase from "../SupabaseClient";
 
 // TODO:bulk This provider uses sequential inserts to guarantee deterministic id mapping without fingerprints.
 // For very large imports this is inefficient (O(N) round-trips).

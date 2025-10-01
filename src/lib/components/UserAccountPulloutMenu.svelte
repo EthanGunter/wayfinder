@@ -11,6 +11,11 @@
 	import * as Dialog from './ui/dialog';
 	import { Err } from '@/Errors';
 
+	interface Props {
+		onClose?: () => void;
+	}
+	const { onClose }: Props = $props();
+
 	let multipleUsers = $state(false);
 	let hasSync = $derived(
 		$authState.status === 'signed-in' && userHasFeature($authState.user, 'task-sync')
@@ -39,6 +44,7 @@
 		a.download = `wayfinder-${$authState.user.display_name.replaceAll(' ', '_')}-${new Date().toISOString().split('T')[0]}.json`;
 		a.click();
 		URL.revokeObjectURL(url);
+		onClose?.();
 	}
 
 	function handleImport() {
@@ -60,6 +66,7 @@
 		};
 
 		input.click();
+		onClose?.();
 	}
 
 	async function handleSignOut() {
@@ -206,24 +213,24 @@
 		</Dialog.Header>
 
 		<!-- <div class="flex flex-col gap-3"> -->
-			<Button
-				variant="outline"
-				class="flex h-auto flex-col items-start gap-1 p-4"
-				onclick={() => executeImport('add')}
-			>
-				<div class="font-semibold">Add</div>
-				<div class="text-sm text-gray-500">Import data as new nodes</div>
-			</Button>
+		<Button
+			variant="outline"
+			class="flex h-auto flex-col items-start gap-1 p-4"
+			onclick={() => executeImport('add')}
+		>
+			<div class="font-semibold">Add</div>
+			<div class="text-sm text-gray-500">Import data as new nodes</div>
+		</Button>
 
-			<Button
-				variant="outline"
-				class="flex h-auto flex-col items-start gap-1 p-4"
-				onclick={() => executeImport('replace')}
-			>
-				<div class="font-semibold text-destructive">Replace</div>
-				<div class="text-sm text-gray-500">Delete everything, then import</div>
-				<div class="text-sm text-red-500 italic">Warning: this is irreversible!</div>
-			</Button>
+		<Button
+			variant="outline"
+			class="flex h-auto flex-col items-start gap-1 p-4"
+			onclick={() => executeImport('replace')}
+		>
+			<div class="font-semibold text-destructive">Replace</div>
+			<div class="text-sm text-gray-500">Delete everything, then import</div>
+			<div class="text-sm text-red-500 italic">Warning: this is irreversible!</div>
+		</Button>
 		<!-- </div> -->
 
 		<Button onclick={() => (importDialogOpen = false)}>Cancel</Button>

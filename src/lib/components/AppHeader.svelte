@@ -3,7 +3,6 @@
 	import type { Task } from '$lib/API/Tasks/';
 	import { onMount, type Snippet } from 'svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
-	import type { LocalUser, User } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
 	import SearchBar from './SearchBar.svelte';
 	import Icon from '@iconify/svelte';
@@ -11,9 +10,7 @@
 	import UserAvatar from './UserAvatar.svelte';
 	import { authState, cachedUsers as authUsers } from '@/API/Auth';
 	import { tasksAPI } from '@/API/Tasks';
-	import type { ILocalTasks } from '@/API/Tasks';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
-	import { tutorials } from '$lib/tutorials/store';
 	import { v4 } from 'uuid';
 
 	interface Props {
@@ -33,9 +30,11 @@
 	let multipleUsers = $state(false);
 	let recentTasks = $state<Task[]>([]);
 
+	let authSheetOpen = $state(false);
+
 	onMount(() => {
 		// Subscribe to auth stores
-		const unsubscribeAuthState = authState.subscribe((state) => {
+		const unsubscribeAuthState = authState.subscribe(() => {
 			// Load recent tasks when user changes
 			loadRecentTasks();
 		});
@@ -108,7 +107,7 @@
 						}
 					});
 					if (result.isOk()) {
-						goto(`/tasks/?id=${result.value.newId}`);
+						goto(`/tasks/?id=${result.value}`);
 					} else {
 						console.error('Failed to create task:', result.error);
 					}
@@ -241,14 +240,14 @@
 	{#if right}
 		{@render right()}
 	{:else if $authState.status === 'signed-in'}
-		<Sheet.Root>
+		<Sheet.Root bind:open={authSheetOpen}>
 			<Sheet.Trigger>
 				<div id="account-menu-btn" class="btn flex h-12 w-12 overflow-hidden rounded-full p-0">
 					<UserAvatar user={$authState.user} />
 				</div>
 			</Sheet.Trigger>
 			<Sheet.Content side="right" class="w-80">
-				<UserAccountMenu />
+				<UserAccountMenu onClose={() => (authSheetOpen = false)} />
 			</Sheet.Content>
 		</Sheet.Root>
 	{/if}

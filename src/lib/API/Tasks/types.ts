@@ -60,8 +60,8 @@ export interface ITasks {
 };
 
 export interface ITasksLocal {
-  createTask(params: { createDetail: CreateTaskParams }): Promise<Result<void, InvalidStateError>>;
-  createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<void, InvalidStateError | ArgumentError>>;
+  createTask(params: { createDetail: CreateTaskParams }): Promise<Result<string, InvalidStateError>>;
+  createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<string[], InvalidStateError | ArgumentError>>;
   handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string>, affectedTasks: Task[] }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
 
   /**

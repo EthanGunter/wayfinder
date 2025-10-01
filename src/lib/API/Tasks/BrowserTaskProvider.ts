@@ -31,7 +31,7 @@ const api: ITasksLocal = {
 
     if (errors.length > 0) return err(errors[0]);
 
-    return ok();
+    return ok(successes[0].id);
   },
   /**
   * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
@@ -41,7 +41,7 @@ const api: ITasksLocal = {
     const res = await _createTasksLocal(createDetails);
     if (res.isErr()) return err(res.error);
 
-    return ok();
+    return ok(res.value.successes.map(t => t.id));
   },
   handleCreateTasksResponse: async function (response) {
     if (response.isOk()) {
