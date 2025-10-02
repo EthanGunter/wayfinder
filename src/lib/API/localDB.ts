@@ -2,7 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Task } from "./Tasks";
 import type { LocalUser } from "./Auth/User";
 
-export const AUTH_TABLE_NAME = 'users';
+export const USER_TABLE_NAME = 'users';
 interface AuthDB extends DBSchema {
     users: {
         key: string;
@@ -40,8 +40,8 @@ interface AppDB extends DBSchema {
 
 export const dbPromise = openDB<AppDB & AuthDB & TaskDB>('wayfinder', 1, {
     upgrade(db, oldVer) {
-        if (!db.objectStoreNames.contains(AUTH_TABLE_NAME)) {
-            const store = db.createObjectStore(AUTH_TABLE_NAME, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(USER_TABLE_NAME)) {
+            const store = db.createObjectStore(USER_TABLE_NAME, { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains(TASK_TABLE_NAME)) {
             const store = db.createObjectStore(TASK_TABLE_NAME, { keyPath: 'id' });

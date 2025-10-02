@@ -4,22 +4,15 @@
 	import UserSettings from '@/user-settings/UserSettings.svelte';
 	import { settings } from '@/user-settings/config';
 
-	const envVars = settings.dev.overrides.envVars;
-	const envVarOverrides = settings.dev.overrides.envVars.asMap();
+	const secretCode = settings.dev.overrides.envVars.get('a');
 </script>
 
 <div class="graph-root page page-root">
 	<AppHeader />
-	{#if $envVarOverrides.get('a') === 'b'}
+	{#if $secretCode === 'b'}
 		<h1>Congratulations, you found the secret code!</h1>
 	{:else}
 		<UserSettings />
 	{/if}
 	<AppFooter />
-	{JSON.stringify($envVars)}
-	{JSON.stringify(
-		Array.from($envVarOverrides).map(([k, v]) => ({
-			[k]: v
-		}))
-	)}
 </div>

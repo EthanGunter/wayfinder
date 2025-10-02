@@ -17,6 +17,8 @@
 	import '@xyflow/svelte/dist/style.css';
 	import { settings } from '@/user-settings/config';
 
+	const secretCode = settings.dev.overrides.envVars.get('a');
+
 	let shouldlog = $state(false);
 	let isLayingOut = $state(false);
 	let elkOptions = $state<ElkLayoutOptions>({

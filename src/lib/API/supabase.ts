@@ -87,6 +87,7 @@ export type Database = {
           display_name: string
           features: string[]
           id: string
+          setting_overrides?: Json
           status?: Database["public"]["Enums"]["user_status"]
         }
         Insert: {
@@ -95,6 +96,7 @@ export type Database = {
           display_name: string
           features: string[]
           id: string
+          setting_overrides?: Json
           status?: Database["public"]["Enums"]["user_status"]
         }
         Update: {
@@ -103,6 +105,7 @@ export type Database = {
           display_name?: string
           features?: string[]
           id?: string
+          setting_overrides?: Json
           status?: Database["public"]["Enums"]["user_status"]
         }
         Relationships: []

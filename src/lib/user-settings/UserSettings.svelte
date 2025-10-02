@@ -2,7 +2,7 @@
 	import { settings } from './config';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import DictionaryEditor from './DictionaryEditor.svelte';
-	import { DictSetting } from './settings';
+	import { DictSetting } from './types';
 
 	const tabs = Object.entries(settings).map(([tabId, tab]) => ({ tabId, tab }));
 	const sectionEntries = (tab: Record<string, unknown>) => Object.entries(tab).filter(([k]) => !k.startsWith('$')) as [string, any][];

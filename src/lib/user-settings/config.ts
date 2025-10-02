@@ -1,4 +1,4 @@
-import { DictSetting, assignPaths, type SettingsTree } from './settings';
+import { DictSetting, assignPaths, type SettingsTree } from './types';
 
 export const settings = {
 	dev: {
@@ -16,5 +16,3 @@ export const settings = {
 export type AppSettings = typeof settings;
 
 assignPaths(settings);
-
-

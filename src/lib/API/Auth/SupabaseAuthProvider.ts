@@ -42,7 +42,7 @@ const api: IAuth = {
 
             switch (authRes.error.code) {
                 case 'user_already_exists':
-                    return err(new InvalidStateError("[Supabase] Failed to register",authRes.error.code));
+                    return err(new InvalidStateError("[Supabase] Failed to register", authRes.error.code));
                 case 'invalid_credentials':
                     return err(new SupabaseAuthError(authRes.error));
 
@@ -138,6 +138,7 @@ const api: IAuth = {
                 avatar_url: update.avatar_url,
                 // features: update.features, // Should not be allowed to update their own features, right?
                 status: update.status,
+                setting_overrides: update.setting_overrides as any
             })
             .eq('id', update.id)
             .select('*')

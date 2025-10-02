@@ -1,7 +1,7 @@
 import { type IAuth, type IAuthLocal, isSessionCapable, type AuthState } from './types';
-import { isAnonymous, type LocalUser } from './User';
+import { isAnonymous, type LocalUser, type User } from './User';
 import { tasksAPI } from '../Tasks';
-import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, AUTH_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
+import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, USER_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
 import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
 import SessionVault from './SessionVault';
@@ -25,13 +25,13 @@ let _remoteAuth: IAuth | null = null;
     db = await dbPromise;
 
     // Hydrate users list
-    const allUsers = await db.getAll(AUTH_TABLE_NAME) as LocalUser[];
+    const allUsers = await db.getAll(USER_TABLE_NAME) as LocalUser[];
     _users.set(allUsers);
 
     // Hydrate active user state
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     if (activeUserId) {
-      const activeUser = await db.get(AUTH_TABLE_NAME, activeUserId) as LocalUser | undefined;
+      const activeUser = await db.get(USER_TABLE_NAME, activeUserId) as LocalUser | undefined;
       if (activeUser) {
         _authState.set({ status: "signed-in", user: activeUser });
       } else {
@@ -87,7 +87,7 @@ const api: IAuthLocal = {
     const registeredUser = registerResult.value;
 
     // Create local user with registered user data
-    await db.put(AUTH_TABLE_NAME, registeredUser);
+    await db.put(USER_TABLE_NAME, registeredUser);
     await _refreshUsers();
 
     // Switch to the new user
@@ -98,8 +98,21 @@ const api: IAuthLocal = {
 
   removeCachedUser: async (userId: string): Promise<void> => {
     assertDB(db);
-    await db.delete(AUTH_TABLE_NAME, userId);
+    await db.delete(USER_TABLE_NAME, userId);
     await _refreshUsers();
+  },
+
+  getUser: async () => {
+    assertDB(db);
+    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    if (activeId) {
+      const activeUser = await db.get(USER_TABLE_NAME, activeId);
+      if (activeUser) {
+        return ok(activeUser);
+      }
+    }
+
+    return err(new InvalidStateError("No active user"));
   },
 
   switchUser: async (newUserId: string) => {
@@ -109,11 +122,11 @@ const api: IAuthLocal = {
     assertDB(db);
     const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     if (newUserId === activeId) {
-      const user = await db.get(AUTH_TABLE_NAME, activeId) as LocalUser | undefined;
+      const user = await db.get(USER_TABLE_NAME, activeId) as LocalUser | undefined;
       return user ? ok(user) : err(new NotFoundError(newUserId, "User"));
     }
 
-    let user = await db.get(AUTH_TABLE_NAME, newUserId) as LocalUser | undefined;
+    let user = await db.get(USER_TABLE_NAME, newUserId) as LocalUser | undefined;
     if (!user) {
       return err(new NotFoundError(newUserId, "User"));
     }
@@ -154,7 +167,7 @@ const api: IAuthLocal = {
 
     // Switch locally
     await db.put(APP_TABLE_NAME, newUserId, ACTIVEUSER_COLUMN_NAME);
-    await db.put(AUTH_TABLE_NAME, user);
+    await db.put(USER_TABLE_NAME, user);
 
     // Update store
     _authState.set({ status: "signed-in", user });
@@ -170,7 +183,16 @@ const api: IAuthLocal = {
   updateUser: async ({ update }) => {
     assertDB(db);
 
-    const user = await db.get(AUTH_TABLE_NAME, update.id) as LocalUser | undefined;
+    let userId;
+    if (update.id) {
+      userId = update.id;
+    } else {
+      const activeUserRes = await api.getUser();
+      if (activeUserRes.isErr()) return err(activeUserRes.error);
+      userId = activeUserRes.value.id;
+    }
+
+    const user = await db.get(USER_TABLE_NAME, userId) as LocalUser | undefined;
     if (!user) {
       return err(new NotFoundError(update.id, "User"));
     }
@@ -187,7 +209,7 @@ const api: IAuthLocal = {
       ...update,
     };
 
-    await db.put(AUTH_TABLE_NAME, updatedUser);
+    await db.put(USER_TABLE_NAME, updatedUser);
     await _refreshUsers();
 
     // Update active user in store if this is the active user
@@ -202,7 +224,8 @@ const api: IAuthLocal = {
 
     // Call remote auth provider if available
     if (_remoteAuth) {
-      void _remoteAuth.updateUser({ update })
+      let updateWithId: Partial<User> & { id: string } = { ...update, id: userId };
+      void _remoteAuth.updateUser({ update: updateWithId })
         .then(async (response) => {
           if (response.isErr()) {
             await api.handleUpdateUserResponse(err({ oldUser: user }));
@@ -221,7 +244,7 @@ const api: IAuthLocal = {
   deleteUser: async ({ userId }) => {
     assertDB(db);
 
-    const user = await db.get(AUTH_TABLE_NAME, userId) as LocalUser | undefined;
+    const user = await db.get(USER_TABLE_NAME, userId) as LocalUser | undefined;
 
     if (user) {
       const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
@@ -230,7 +253,7 @@ const api: IAuthLocal = {
         await api.logout();
       }
 
-      await db.delete(AUTH_TABLE_NAME, userId);
+      await db.delete(USER_TABLE_NAME, userId);
       await _refreshUsers();
 
       // Call remote auth provider if available
@@ -256,7 +279,7 @@ const api: IAuthLocal = {
     if (response.isErr()) {
       const { oldUser } = response.error;
       assertDB(db);
-      await db.put(AUTH_TABLE_NAME, oldUser);
+      await db.put(USER_TABLE_NAME, oldUser);
       await _refreshUsers();
     }
   },
@@ -265,7 +288,7 @@ const api: IAuthLocal = {
       const { oldUser } = response.error;
       // Undo changes
       assertDB(db);
-      await db.put(AUTH_TABLE_NAME, oldUser);
+      await db.put(USER_TABLE_NAME, oldUser);
       await _refreshUsers();
 
       const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
@@ -288,7 +311,7 @@ const api: IAuthLocal = {
     const remoteUser = loginResult.value;
 
     // Create local user with remote user data
-    await db.put(AUTH_TABLE_NAME, remoteUser);
+    await db.put(USER_TABLE_NAME, remoteUser);
     await _refreshUsers();
 
     // Persist session material BEFORE switching so switchUser can restore remote session if needed
@@ -346,7 +369,7 @@ async function _fetchAndPersistLatestUser(current: LocalUser): Promise<LocalUser
 
   const remoteUser = res.value;
   const merged: LocalUser = { ...current, ...remoteUser };
-  await db.put(AUTH_TABLE_NAME, merged);
+  await db.put(USER_TABLE_NAME, merged);
   await _refreshUsers();
   return merged;
 }
@@ -354,7 +377,7 @@ async function _fetchAndPersistLatestUser(current: LocalUser): Promise<LocalUser
 // Helper to refresh users list from DB
 async function _refreshUsers(): Promise<void> {
   assertDB(db);
-  const allUsers = await db.getAll(AUTH_TABLE_NAME) as LocalUser[];
+  const allUsers = await db.getAll(USER_TABLE_NAME) as LocalUser[];
   _users.set(allUsers);
 }
 
