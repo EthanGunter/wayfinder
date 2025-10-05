@@ -84,8 +84,10 @@ export class BoolSetting extends BaseSetting<boolean> {
 }
 
 export class StringSetting extends BaseSetting<string> {
-  constructor(args: { label: string; defaultValue: string; desc?: string; hint?: string; }) {
-    super({ ...args, kind: 'string' });
+  placeholder?: string;
+  constructor(args: { label: string; defaultValue?: string; desc?: string; hint?: string; placeholder?: string }) {
+    super({ ...args, defaultValue: args.defaultValue ?? "", kind: 'string' });
+    this.placeholder = args.placeholder ?? args.label;
   }
 }
 

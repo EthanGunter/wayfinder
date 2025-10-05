@@ -237,7 +237,6 @@ const api: IAuth = {
     //     return data.subscription.unsubscribe;
     // },
 }
-export default api;
 
 const sessionAbility: IAuthSessionCapable = {
     async getSessionMaterial({ userId }: { userId: string }) {
@@ -263,6 +262,7 @@ const sessionAbility: IAuthSessionCapable = {
         return ok(rotated);
     }
 }
+export default { ...api, ...sessionAbility };
 
 export class SupabaseAuthError extends Err {
     code: AuthError['code'];
@@ -271,4 +271,4 @@ export class SupabaseAuthError extends Err {
         super(1, ErrorType.ArgumentError, error.message, { error, context });
         this.code = error.code;
     }
-}
+} 

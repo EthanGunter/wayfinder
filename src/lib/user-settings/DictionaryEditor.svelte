@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DictSetting } from './settings';
+	import type { DictSetting } from './types';
 	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 
