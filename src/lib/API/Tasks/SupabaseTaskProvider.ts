@@ -19,7 +19,7 @@ import { TASK_TABLE_NAME } from "../DBConstants";
 
 //#region Supabase Connection
 
-await deviceSettingsReady;
+// await deviceSettingsReady;
 
 const urlOverride = get(settings.dev.overrides.supabaseTaskUrl);
 const keyOverride = get(settings.dev.overrides.supabaseTaskKey);

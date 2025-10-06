@@ -12,7 +12,7 @@ import { get } from 'svelte/store';
 
 //#region Supabase Connection
 
-await deviceSettingsReady;
+// await deviceSettingsReady;
 
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
