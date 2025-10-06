@@ -1,6 +1,9 @@
+import type { AppSettings } from "@/user-settings";
+
 export type UserStatus = "active" | "deleted";
 export type UserFeature =
-  | 'task-sync';
+  | 'task-sync'
+  | 'dev'
 
 // Base user interface
 export interface User {
@@ -10,9 +13,10 @@ export interface User {
   created_at: string;
   status: UserStatus;
   features: string[];
+  setting_overrides?: AppSettings;
 }
 
-// Local user interface extends base user with local avatar
+// Local user interface extends base user with local avatar and settings
 export interface LocalUser extends User {
   avatar?: Blob;
 }

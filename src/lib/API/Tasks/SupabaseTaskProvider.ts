@@ -3,8 +3,11 @@ import { err, ok } from "neverthrow";
 import type { ITasks, UpdateTaskParams } from "./types";
 import { type Task, populateTaskDTO } from "./Task";
 import { getRelationshipUpdates } from "./index";
-import { TASK_TABLE_NAME } from "../localDB";
-import supabase from "../SupabaseClient";
+import { settings, deviceSettingsReady } from "@/user-settings";
+import { createClient } from "@supabase/supabase-js";
+import { get } from "svelte/store";
+import type { Database } from "../supabase";
+import { TASK_TABLE_NAME } from "../DBConstants";
 
 // TODO:bulk This provider uses sequential inserts to guarantee deterministic id mapping without fingerprints.
 // For very large imports this is inefficient (O(N) round-trips).
@@ -13,21 +16,27 @@ import supabase from "../SupabaseClient";
 //  - Option C: a Postgres RPC that accepts jsonb[] with client_ref and returns pairs
 // Either alternative preserves authoritative ids while reducing network chatter.
 
-function toTask(row: any): Task {
-  return {
-    id: row.id,
-    user_id: row.user_id,
-    title: row.title,
-    content: row.content ?? undefined,
-    status: row.status,
-    todays_task: row.todays_task,
-    priority: row.priority ?? 0,
-    parents: row.parents ?? [],
-    children: row.children ?? [],
-    created: row.created,
-    last_edit: row.last_edit,
-  };
+
+//#region Supabase Connection
+
+// await deviceSettingsReady;
+
+const urlOverride = get(settings.dev.overrides.supabaseTaskUrl);
+const keyOverride = get(settings.dev.overrides.supabaseTaskKey);
+const supabaseUrl = urlOverride || import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = keyOverride || import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  const missing = [];
+  if (!supabaseUrl) missing.push('SUPABASE_URL');
+  if (!supabaseKey) missing.push('SUPABASE_API_KEY');
+  throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
 }
+
+const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+
+//#endregion
+
 
 const api: ITasks = {
   // TODO:test There's currently nothing that calls the remote's singular createTask, so I don't know if it works...
@@ -394,3 +403,24 @@ const api: ITasks = {
   },
 }
 export default api;
+
+
+//#region Utilities
+
+function toTask(row: any): Task {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title,
+    content: row.content ?? undefined,
+    status: row.status,
+    todays_task: row.todays_task,
+    priority: row.priority ?? 0,
+    parents: row.parents ?? [],
+    children: row.children ?? [],
+    created: row.created,
+    last_edit: row.last_edit,
+  };
+}
+
+//#endregion

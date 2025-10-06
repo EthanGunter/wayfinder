@@ -1,8 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Task } from "./Tasks";
 import type { LocalUser } from "./Auth/User";
+import { TASK_TABLE_NAME, USER_TABLE_NAME } from "./DBConstants";
 
-export const AUTH_TABLE_NAME = 'users';
 interface AuthDB extends DBSchema {
     users: {
         key: string;
@@ -10,7 +10,6 @@ interface AuthDB extends DBSchema {
     };
 }
 
-export const TASK_TABLE_NAME = 'tasks';
 interface TaskDB extends DBSchema {
     // files: {
     //   key: string;
@@ -40,8 +39,8 @@ interface AppDB extends DBSchema {
 
 export const dbPromise = openDB<AppDB & AuthDB & TaskDB>('wayfinder', 1, {
     upgrade(db, oldVer) {
-        if (!db.objectStoreNames.contains(AUTH_TABLE_NAME)) {
-            const store = db.createObjectStore(AUTH_TABLE_NAME, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(USER_TABLE_NAME)) {
+            const store = db.createObjectStore(USER_TABLE_NAME, { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains(TASK_TABLE_NAME)) {
             const store = db.createObjectStore(TASK_TABLE_NAME, { keyPath: 'id' });
@@ -58,6 +57,3 @@ export const dbPromise = openDB<AppDB & AuthDB & TaskDB>('wayfinder', 1, {
 }) as unknown as Promise<LocalDB>;
 
 export type LocalDB = IDBPDatabase<AppDB & AuthDB & TaskDB>;
-// export const DBPromise = dbPromise as unknown as Promise<LocalDB>;
-// export const authDBPromise = dbPromise as unknown as Promise<IDBPDatabase<AppDB & AuthDB>>;
-// export const tasksDBPromise = dbPromise as unknown as Promise<IDBPDatabase<TaskDB>>;

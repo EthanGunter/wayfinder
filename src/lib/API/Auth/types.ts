@@ -35,20 +35,24 @@ export interface IAuthLocal {
     /** Creates a local user account */
     // createUser(params: { user: LocalUser }): Promise<Result<LocalUser>>
     /** 
-     * Gets either an anonymous account, or the solo-user account
-     * @error InvalidStateError when there is more than one user
+     * Gets either the active user, or a default anonymous account
+     * @error No user is signed in
+     * @note anonymous accounts currently disabled
      */
-    // getDefaultUser(): Promise<Result<LocalUser, InvalidStateError>>,
+    getUser(): Promise<Result<LocalUser, InvalidStateError>>,
 
     /** Registers a remote user account and creates local user simultaneously */
     register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
-    
+
     /** Defines the requirements and availability for different Authentication methods */
     getRegistrationRequirements(signUpCred: LoginCredentials): Result<MigrationRequirements[], NotImplementedError>,
-    
+
     /** Sets the active user for this device */
     switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
-    updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
+    /**
+     * Updates the active user, unless a specific id is provided
+     */
+    updateUser(params: { update: Partial<User> }): Promise<Result<User, NotFoundError>>,
     handleUpdateUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
 
     /** Marks a user account as deleted in the server's database
@@ -56,7 +60,7 @@ export interface IAuthLocal {
      */
     deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
     handleDeleteUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
-    
+
     /** Removes a cached user account from the local machine. It still be logged into remotely */
     removeCachedUser(userId: string): Promise<void>,
     login(params: { creds: LoginCredentials }): Promise<Result<User, NotFoundError | ArgumentError | NotImplementedError>>,

@@ -10,11 +10,12 @@
 		useSvelteFlow,
 		BackgroundVariant
 	} from '@xyflow/svelte';
-	import '@xyflow/svelte/dist/style.css';
-	import AppHeader from '@/components/AppHeader.svelte';
-	import AppFooter from '@/components/AppFooter.svelte';
 	import { Checkbox } from '@/components/ui/checkbox';
 	import { runElkLayout, type ElkLayoutOptions } from './ELKlayout';
+	import AppHeader from '@/components/AppHeader.svelte';
+	import AppFooter from '@/components/AppFooter.svelte';
+	import '@xyflow/svelte/dist/style.css';
+	import { settings } from '@/user-settings/schema';
 
 	let shouldlog = $state(false);
 	let isLayingOut = $state(false);
@@ -105,6 +106,7 @@
 
 <div class="graph-root page page-root">
 	<AppHeader />
+
 	<SvelteFlowProvider>
 		<SvelteFlow
 			bind:nodes
@@ -157,7 +159,7 @@
 			nodeOrigin={[0.5, 0.5]}
 		>
 			<div
-				class="absolute top-5 left-5 z-19 flex items-center justify-center gap-2 rounded border-1 bg-white p-2 flex-wrap w-min"
+				class="absolute top-5 left-5 z-19 flex w-min flex-wrap items-center justify-center gap-2 rounded border-1 bg-white p-2"
 			>
 				<div class="flex items-center gap-1">
 					<label for="dev-log-events" class="text-xs">Log events</label>
@@ -202,14 +204,22 @@
 				</div>
 				<div class="flex items-center gap-1">
 					<label for="elk-cycleBreaking" class="text-xs">Cycle breaking</label>
-					<select id="elk-cycleBreaking" class="border px-1 py-0.5 text-xs" bind:value={elkOptions['elk.layered.cycleBreaking.strategy']}>
+					<select
+						id="elk-cycleBreaking"
+						class="border px-1 py-0.5 text-xs"
+						bind:value={elkOptions['elk.layered.cycleBreaking.strategy']}
+					>
 						<option value="GREEDY">GREEDY</option>
 						<option value="INTERACTIVE">INTERACTIVE</option>
 					</select>
 				</div>
 				<div class="flex items-center gap-1">
 					<label for="elk-considerOrder" class="text-xs">Respect input order</label>
-					<select id="elk-considerOrder" class="border px-1 py-0.5 text-xs" bind:value={elkOptions['elk.layered.considerModelOrder']}>
+					<select
+						id="elk-considerOrder"
+						class="border px-1 py-0.5 text-xs"
+						bind:value={elkOptions['elk.layered.considerModelOrder']}
+					>
 						<option value={false}>false</option>
 						<option value={true}>true</option>
 					</select>
@@ -279,14 +289,22 @@
 				</div>
 				<div class="flex items-center gap-1">
 					<label for="elk-mergeEdges" class="text-xs">Merge edges</label>
-					<select id="elk-mergeEdges" class="border px-1 py-0.5 text-xs" bind:value={elkOptions['elk.layered.mergeEdges']}>
+					<select
+						id="elk-mergeEdges"
+						class="border px-1 py-0.5 text-xs"
+						bind:value={elkOptions['elk.layered.mergeEdges']}
+					>
 						<option value={false}>false</option>
 						<option value={true}>true</option>
 					</select>
 				</div>
 				<div class="flex items-center gap-1">
 					<label for="elk-feedbackEdges" class="text-xs">Mark feedback edges</label>
-					<select id="elk-feedbackEdges" class="border px-1 py-0.5 text-xs" bind:value={elkOptions['elk.layered.feedbackEdges']}>
+					<select
+						id="elk-feedbackEdges"
+						class="border px-1 py-0.5 text-xs"
+						bind:value={elkOptions['elk.layered.feedbackEdges']}
+					>
 						<option value={false}>false</option>
 						<option value={true}>true</option>
 					</select>
@@ -368,10 +386,11 @@
 				</button>
 			</div>
 			<!-- nodeTypes={{ task: CustomNode }}
-			edgeTypes={{ task: CustomEdge }} -->
+		edgeTypes={{ task: CustomEdge }} -->
 			<Background variant={BackgroundVariant.Lines} />
 		</SvelteFlow>
 	</SvelteFlowProvider>
+
 	<AppFooter />
 </div>
 

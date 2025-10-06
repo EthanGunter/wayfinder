@@ -5,13 +5,14 @@ import { createTask, toMarkdown, isTaskCompleted } from './Task';
 import { getRelationshipUpdates, tasksAPI } from '.';
 import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
-import { dbPromise, TASK_TABLE_NAME, type LocalDB } from '../localDB';
+import { dbPromise, type LocalDB } from '../localDB';
 import { remoteTasks as remoteTasksStore } from '$lib/stores/remoteTasks';
 import { get, readable, type Readable } from 'svelte/store';
 import { userHasFeature, type UserFeature } from '../Auth/User';
 import { authState } from '../Auth';
 import { err, ok } from 'neverthrow';
 import { v4 } from 'uuid';
+import { TASK_TABLE_NAME } from '../DBConstants';
 // import { queueTaskSyncCommand } from './types';
 
 //#region API Definition
