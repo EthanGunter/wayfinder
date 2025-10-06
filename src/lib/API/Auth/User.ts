@@ -2,7 +2,8 @@ import type { AppSettings } from "@/user-settings";
 
 export type UserStatus = "active" | "deleted";
 export type UserFeature =
-  | 'task-sync';
+  | 'task-sync'
+  | 'dev'
 
 // Base user interface
 export interface User {

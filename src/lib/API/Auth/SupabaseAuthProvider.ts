@@ -14,10 +14,8 @@ import { get } from 'svelte/store';
 
 await deviceSettingsReady;
 
-const urlOverride = get(settings.dev.overrides.supabaseAuthUrl);
-const keyOverride = get(settings.dev.overrides.supabaseAuthKey);
-const supabaseUrl = urlOverride || import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = keyOverride || import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
     const missing = [];

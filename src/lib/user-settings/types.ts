@@ -2,24 +2,36 @@ import { Err, InvalidStateError } from '@/Errors';
 import { writable, derived, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
 import { dbPromise, APP_TABLE_NAME } from '@/API/localDB';
 import type { SvelteComponent } from 'svelte';
+import type { UserFeature } from '@/API/Auth/User';
 
 export type SettingScope = 'user' | 'device';
+
+interface BaseSettingArgs<T> {
+  label: string;
+  defaultValue: T;
+  desc?: string;
+  hint?: string | (new (...args: any) => SvelteComponent);
+  scope?: SettingScope;
+  onChange?: (oldVal: T, newVal: T) => void;
+}
 
 export abstract class BaseSetting<T> implements Writable<T> {
   readonly label: string;
   readonly desc?: string;
   readonly hint?: string | (new (...args: any) => SvelteComponent);
+  readonly onChange?: (oldVal: T, newVal: T) => void;
   readonly scope: SettingScope;
   protected readonly store: Writable<T>;
   private _id: string;
 
-  constructor(args: { label: string; defaultValue: T; desc?: string; hint?: string | (new (...args: any) => SvelteComponent); scope?: SettingScope; }) {
+  constructor(args: BaseSettingArgs<T>) {
     this.label = args.label;
     this.desc = args.desc;
     this.hint = args.hint;
     this.scope = args.scope ?? 'user';
     this.store = writable(args.defaultValue);
     this._id = "NOT_CALCULATED";
+    this.onChange = this.onChange;
 
     this.subscribe = this.store.subscribe;
   }
@@ -101,7 +113,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
 }
 
 export class BoolSetting extends BaseSetting<boolean> {
-  constructor(args: { label: string; defaultValue: boolean; desc?: string; hint?: string; scope?: SettingScope; }) {
+  constructor(args: BaseSettingArgs<boolean>) {
     super(args);
   }
 }
@@ -110,7 +122,7 @@ export class StringSetting extends BaseSetting<string> {
   readonly placeholder?: string;
   readonly manualSave: boolean;
   errorMessage?: string
-  constructor(args: { label: string; manualSave?: boolean; defaultValue?: string; desc?: string; hint?: string; placeholder?: string; scope?: SettingScope; }) {
+  constructor(args: Omit<BaseSettingArgs<string>, "defaultValue"> & { manualSave?: boolean; placeholder?: string; defaultValue?: string }) {
     super({ ...args, defaultValue: args.defaultValue ?? "" });
     this.placeholder = args.placeholder ?? args.label;
     this.manualSave = args.manualSave ?? false;
@@ -121,7 +133,7 @@ export class NumberSetting extends BaseSetting<number> {
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
-  constructor(args: { label: string; defaultValue: number; min?: number; max?: number; step?: number; desc?: string; hint?: string; scope?: SettingScope; }) {
+  constructor(args: BaseSettingArgs<number> & { min?: number; max?: number; step?: number; }) {
     super({ ...args });
     this.min = args.min;
     this.max = args.max;
@@ -133,7 +145,7 @@ export class RangeSetting extends BaseSetting<[number, number]> {
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
-  constructor(args: { label: string; defaultValue: [number, number]; min?: number; max?: number; step?: number; desc?: string; hint?: string; scope?: SettingScope; }) {
+  constructor(args: BaseSettingArgs<[number, number]> & { min?: number; max?: number; step?: number; }) {
     super({ ...args });
     this.min = args.min;
     this.max = args.max;
@@ -144,8 +156,8 @@ export class RangeSetting extends BaseSetting<[number, number]> {
 export class EnumSetting<T extends string | number> extends BaseSetting<T> {
   readonly options: { value: T; label: string }[];
 
-  constructor(args: { label: string; defaultValue: T; options?: readonly T[] | Record<string, string | number>; desc?: string; hint?: string | (new (...args: any) => SvelteComponent); scope?: SettingScope; }) {
-    const { options, ...rest } = args as any;
+  constructor(args: BaseSettingArgs<T> & { options?: readonly T[] | Record<string, string | number>; }) {
+    const { options, ...rest } = args;
 
     super({ ...rest, defaultValue: args.defaultValue });
     if (Array.isArray(options)) {
@@ -170,8 +182,8 @@ export class EnumSetting<T extends string | number> extends BaseSetting<T> {
 
 export class DictSetting extends BaseSetting<Record<string, string>> {
   readonly keyLabel?: string;
-  constructor(args: { label: string; defaultValue?: Record<string, string>; keyLabel?: string; description?: string; hint?: string; scope?: SettingScope; }) {
-    super({ label: args.label, defaultValue: args.defaultValue ?? {}, desc: args.description, hint: args.hint });
+  constructor(args: BaseSettingArgs<Record<string, string>> & { keyLabel?: string; }) {
+    super({ ...args, defaultValue: args.defaultValue ?? {} });
     this.keyLabel = args.keyLabel;
   }
 
@@ -187,15 +199,15 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
   /* 	keys(): Readable<string[]> {
       return derived(this, (obj) => Object.keys(obj));
     }
-	
+  	
     values(): Readable<string[]> {
       return derived(this, (obj) => Object.values(obj));
     }
-	
+  	
     entries(): Readable<[string, string][]> {
       return derived(this, (obj) => Object.entries(obj));
     }
-	
+  	
     size(): Readable<number> {
       return derived(this, (obj) => Object.keys(obj).length);
     } */
@@ -206,8 +218,8 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
 export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting;
 
 // New shape using $label and direct nesting: tab -> sections -> settings
-export type SettingsSection = { $label: string;[key: string]: AnySetting | string };
-export type SettingsTab = { $label: string;[key: string]: SettingsSection | string };
+export type SettingsSection = { $label: string; $userFeature?: UserFeature } & { [key: string]: AnySetting | string };
+export type SettingsTab = { $label: string; $userFeature?: UserFeature } & { [key: string]: SettingsSection | string };
 export type SettingsTree = Record<string, SettingsTab>;
 
 function isSection(val: unknown): val is SettingsSection {
