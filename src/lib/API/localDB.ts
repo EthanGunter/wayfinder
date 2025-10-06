@@ -1,8 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Task } from "./Tasks";
 import type { LocalUser } from "./Auth/User";
+import { TASK_TABLE_NAME, USER_TABLE_NAME } from "./DBConstants";
 
-export const USER_TABLE_NAME = 'users';
 interface AuthDB extends DBSchema {
     users: {
         key: string;
@@ -10,7 +10,6 @@ interface AuthDB extends DBSchema {
     };
 }
 
-export const TASK_TABLE_NAME = 'tasks';
 interface TaskDB extends DBSchema {
     // files: {
     //   key: string;
@@ -58,6 +57,3 @@ export const dbPromise = openDB<AppDB & AuthDB & TaskDB>('wayfinder', 1, {
 }) as unknown as Promise<LocalDB>;
 
 export type LocalDB = IDBPDatabase<AppDB & AuthDB & TaskDB>;
-// export const DBPromise = dbPromise as unknown as Promise<LocalDB>;
-// export const authDBPromise = dbPromise as unknown as Promise<IDBPDatabase<AppDB & AuthDB>>;
-// export const tasksDBPromise = dbPromise as unknown as Promise<IDBPDatabase<TaskDB>>;

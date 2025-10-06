@@ -1,20 +1,23 @@
 import { Err, InvalidStateError } from '@/Errors';
 import { writable, derived, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
-import { authAPI } from '@/API/Auth';
+import { dbPromise, APP_TABLE_NAME } from '@/API/localDB';
+import type { SvelteComponent } from 'svelte';
+
+export type SettingScope = 'user' | 'device';
 
 export abstract class BaseSetting<T> implements Writable<T> {
-  readonly kind: string;
   readonly label: string;
   readonly desc?: string;
-  readonly hint?: string;
+  readonly hint?: string | (new (...args: any) => SvelteComponent);
+  readonly scope: SettingScope;
   protected readonly store: Writable<T>;
   private _id: string;
 
-  constructor(args: { kind: string; label: string; defaultValue: T; desc?: string; hint?: string; }) {
-    this.kind = args.kind;
+  constructor(args: { label: string; defaultValue: T; desc?: string; hint?: string | (new (...args: any) => SvelteComponent); scope?: SettingScope; }) {
     this.label = args.label;
     this.desc = args.desc;
     this.hint = args.hint;
+    this.scope = args.scope ?? 'user';
     this.store = writable(args.defaultValue);
     this._id = "NOT_CALCULATED";
 
@@ -34,7 +37,11 @@ export abstract class BaseSetting<T> implements Writable<T> {
   set = (value: T): void => {
     this.store.set(value);
     if (this._id) {
-      void this.persistToUser(this._id, value);
+      if (this.scope === 'device') {
+        void this.persistToDevice(this._id, value as unknown as any);
+      } else {
+        void this.persistToUser(this._id, value);
+      }
     } else {
       Err.throw(new InvalidStateError("Attempted to write setting value before it was assigned an id"));
     }
@@ -44,7 +51,11 @@ export abstract class BaseSetting<T> implements Writable<T> {
     this.store.update((prev) => {
       const next = updater(prev);
       if (this._id) {
-        void this.persistToUser(this._id, next as unknown);
+        if (this.scope === 'device') {
+          void this.persistToDevice(this._id, next as unknown as any);
+        } else {
+          void this.persistToUser(this._id, next as unknown);
+        }
       } else {
         Err.throw(new InvalidStateError("Attempted to write setting value before it was assigned an id"));
       }
@@ -59,6 +70,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
 
   private async persistToUser(key: string, value: any): Promise<void> {
     try {
+      const { authAPI } = await import('@/API/Auth');
       const userResult = await authAPI.getUser();
       if (userResult.isErr()) {
         console.warn('Cannot persist setting: no user available');
@@ -75,19 +87,33 @@ export abstract class BaseSetting<T> implements Writable<T> {
       console.warn('Failed to persist setting', e);
     }
   }
+
+  private async persistToDevice(key: string, value: any): Promise<void> {
+    try {
+      const db = await dbPromise;
+      // Store JSON string to allow arbitrary types; parse on load
+      const serialized = JSON.stringify(value);
+      await db.put(APP_TABLE_NAME, serialized, `settings:${key}`);
+    } catch (e) {
+      console.warn('Failed to persist device setting', e);
+    }
+  }
 }
 
 export class BoolSetting extends BaseSetting<boolean> {
-  constructor(args: { label: string; defaultValue: boolean; desc?: string; hint?: string; }) {
-    super({ ...args, kind: 'bool' });
+  constructor(args: { label: string; defaultValue: boolean; desc?: string; hint?: string; scope?: SettingScope; }) {
+    super(args);
   }
 }
 
 export class StringSetting extends BaseSetting<string> {
-  placeholder?: string;
-  constructor(args: { label: string; defaultValue?: string; desc?: string; hint?: string; placeholder?: string }) {
-    super({ ...args, defaultValue: args.defaultValue ?? "", kind: 'string' });
+  readonly placeholder?: string;
+  readonly manualSave: boolean;
+  errorMessage?: string
+  constructor(args: { label: string; manualSave?: boolean; defaultValue?: string; desc?: string; hint?: string; placeholder?: string; scope?: SettingScope; }) {
+    super({ ...args, defaultValue: args.defaultValue ?? "" });
     this.placeholder = args.placeholder ?? args.label;
+    this.manualSave = args.manualSave ?? false;
   }
 }
 
@@ -95,26 +121,57 @@ export class NumberSetting extends BaseSetting<number> {
   readonly min?: number;
   readonly max?: number;
   readonly step?: number;
-  constructor(args: { label: string; defaultValue: number; min?: number; max?: number; step?: number; desc?: string; hint?: string; }) {
-    super({ ...args, kind: 'number' });
+  constructor(args: { label: string; defaultValue: number; min?: number; max?: number; step?: number; desc?: string; hint?: string; scope?: SettingScope; }) {
+    super({ ...args });
     this.min = args.min;
     this.max = args.max;
     this.step = args.step;
   }
 }
 
-export class EnumSetting<T extends string> extends BaseSetting<T> {
-  readonly options: readonly T[];
-  constructor(args: { label: string; defaultValue: T; options: readonly T[]; desc?: string; hint?: string; }) {
-    super({ ...args, kind: 'enum' });
-    this.options = args.options;
+export class RangeSetting extends BaseSetting<[number, number]> {
+  readonly min?: number;
+  readonly max?: number;
+  readonly step?: number;
+  constructor(args: { label: string; defaultValue: [number, number]; min?: number; max?: number; step?: number; desc?: string; hint?: string; scope?: SettingScope; }) {
+    super({ ...args });
+    this.min = args.min;
+    this.max = args.max;
+    this.step = args.step;
+  }
+}
+
+export class EnumSetting<T extends string | number> extends BaseSetting<T> {
+  readonly options: { value: T; label: string }[];
+
+  constructor(args: { label: string; defaultValue: T; options?: readonly T[] | Record<string, string | number>; desc?: string; hint?: string | (new (...args: any) => SvelteComponent); scope?: SettingScope; }) {
+    const { options, ...rest } = args as any;
+
+    super({ ...rest, defaultValue: args.defaultValue });
+    if (Array.isArray(options)) {
+      this.options = (options as readonly T[]).map((v) => ({ value: v as T, label: String(v) }));
+    } else if (options && typeof options === 'object') {
+      const vals = Object.values(options);
+      const hasNumber = vals.some((v) => typeof v === 'number');
+      if (hasNumber) {
+        // numeric enum: keys are names, values are numbers; Object.values includes reverse map strings too
+        const pairs = Object.entries(options).filter(([, v]) => typeof v === 'number') as [string, number][];
+        this.options = pairs.map(([k, v]) => ({ value: v as T, label: k }));
+      } else {
+        // string enum: keys are names, values are strings
+        const pairs = Object.entries(options).filter(([, v]) => typeof v === 'string') as [string, string][];
+        this.options = pairs.map(([k, v]) => ({ value: v as T, label: k }));
+      }
+    } else {
+      this.options = [] as const;
+    }
   }
 }
 
 export class DictSetting extends BaseSetting<Record<string, string>> {
   readonly keyLabel?: string;
-  constructor(args: { label: string; defaultValue?: Record<string, string>; keyLabel?: string; description?: string; hint?: string; }) {
-    super({ kind: 'dict', label: args.label, defaultValue: args.defaultValue ?? {}, desc: args.description, hint: args.hint });
+  constructor(args: { label: string; defaultValue?: Record<string, string>; keyLabel?: string; description?: string; hint?: string; scope?: SettingScope; }) {
+    super({ label: args.label, defaultValue: args.defaultValue ?? {}, desc: args.description, hint: args.hint });
     this.keyLabel = args.keyLabel;
   }
 
@@ -146,7 +203,7 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
   asMap(): Readable<Map<string, string>> { return derived(this, obj => new Map(Object.entries(obj))) }
 }
 
-export type AnySetting = BoolSetting | StringSetting | NumberSetting | EnumSetting<string> | DictSetting;
+export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting;
 
 // New shape using $label and direct nesting: tab -> sections -> settings
 export type SettingsSection = { $label: string;[key: string]: AnySetting | string };
@@ -174,5 +231,3 @@ export function assignPaths(tree: SettingsTree): void {
     }
   }
 }
-
-

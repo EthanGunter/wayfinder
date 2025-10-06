@@ -15,9 +15,7 @@
 	import AppHeader from '@/components/AppHeader.svelte';
 	import AppFooter from '@/components/AppFooter.svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import { settings } from '@/user-settings/config';
-
-	const secretCode = settings.dev.overrides.envVars.get('a');
+	import { settings } from '@/user-settings/schema';
 
 	let shouldlog = $state(false);
 	let isLayingOut = $state(false);

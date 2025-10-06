@@ -1,27 +1,33 @@
 <script lang="ts">
+	import type { FormEventHandler } from 'svelte/elements';
 	import type { StringSetting } from './types';
-	import { Button } from '$lib/components/ui/button';
-	import { onMount } from 'svelte';
+	import Button from '@/components/ui/button/button.svelte';
 
 	interface Props {
-		label: string;
 		store: StringSetting;
 	}
 
-	const { label, store }: Props = $props();
+	const { store }: Props = $props();
+	let value = $state($store);
+
+	const oninput: FormEventHandler<HTMLInputElement> = (e) => {
+		if (store.manualSave) return;
+		$store = value;
+	};
 </script>
 
-<div class="w-full gap-2 bg-[#fff7] p-3">
-	<div class="flex align-middle">
-		<h2 class="content-center font-medium">{label}:</h2>
-
-		<input
-			class="flex-[2] rounded border px-2 py-1"
-			type="text"
-			value={$store}
-			placeholder={store.placeholder}
-			oninput={(e) => ($store = e.currentTarget.value)}
-		/>
-	</div>
-	<p class="text-sm opacity-60 italic pl-3">{store.desc}</p>
+<div class="flex w-full items-center gap-2">
+	<input
+		class="flex-1 rounded border px-2 py-1 {store.errorMessage ? 'bg-red-300' : ''}"
+		type="text"
+		bind:value
+		placeholder={store.placeholder}
+		{oninput}
+	/>
+	{#if store.manualSave && $store != value}
+		<Button variant="outline" onclick={() => ($store = value)}>✔️</Button>
+	{/if}
 </div>
+{#if store.errorMessage}
+	<p class="text-red-600">{store.errorMessage}</p>
+{/if}

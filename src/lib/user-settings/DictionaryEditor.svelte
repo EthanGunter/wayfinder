@@ -4,11 +4,10 @@
 	import { onMount } from 'svelte';
 
 	interface Props {
-		label: string;
 		store: DictSetting;
 	}
 
-	const { label, store }: Props = $props();
+	const { store }: Props = $props();
 
 	type Row = { id: string; key: string; value: string; conflict?: boolean };
 	let rows = $state<Row[]>([]);
@@ -75,18 +74,15 @@
 	}
 </script>
 
-<div class="w-full">
-	<div class="flex items-center justify-between p-5">
-		<h2 class="text-sm font-medium">{label}</h2>
+<div class="flex w-full flex-col gap-2">
+	<div class="flex items-center justify-end">
 		<Button size="sm" onclick={addRow}>+</Button>
 	</div>
-	<div class="flex flex-col gap-2 bg-[#0001] p-3">
+	<div class="flex flex-col gap-2">
 		{#each rows as r (r.id)}
 			<div class="flex items-center gap-2">
 				<input
-					class="flex-1 rounded border px-2 py-1 text-sm {r.conflict
-						? 'border-red-500 bg-red-50'
-						: ''}"
+					class="flex-1 rounded border px-2 py-1 text-sm {r.conflict ? 'border-red-500 bg-red-50' : ''}"
 					type="text"
 					value={r.key}
 					oninput={(e) => updateKeyById(r.id, (e.target as HTMLInputElement).value)}

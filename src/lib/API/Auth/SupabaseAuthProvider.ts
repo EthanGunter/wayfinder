@@ -1,10 +1,35 @@
-import supabase from '$lib/API/SupabaseClient'
 import { err, ok } from 'neverthrow';
 import { AccountIssueTarget, type IAuth, type MigrationRequirements, type IAuthSessionCapable } from './types';
-import type { AuthError, UserAttributes } from '@supabase/auth-js';
+import type { AuthError } from '@supabase/auth-js';
 import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError, IOError } from '$lib/Errors';
 import { type User } from './User';
-import type { Tables, TablesInsert } from '../supabase';
+import type { Database, TablesInsert } from '../supabase';
+import { createClient } from '@supabase/supabase-js';
+import { USER_TABLE_NAME } from '../DBConstants';
+import { settings, deviceSettingsReady } from '@/user-settings';
+import { get } from 'svelte/store';
+
+
+//#region Supabase Connection
+
+await deviceSettingsReady;
+
+const urlOverride = get(settings.dev.overrides.supabaseAuthUrl);
+const keyOverride = get(settings.dev.overrides.supabaseAuthKey);
+const supabaseUrl = urlOverride || import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const supabaseKey = keyOverride || import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+    const missing = [];
+    if (!supabaseUrl) missing.push('SUPABASE_URL');
+    if (!supabaseKey) missing.push('SUPABASE_API_KEY');
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+}
+
+const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+
+//#endregion
+
 
 const api: IAuth = {
     getRegistrationRequirements: function (cred) {
@@ -66,7 +91,7 @@ const api: IAuth = {
         };
 
         const { data: inserted, error: insertError } = await supabase
-            .from('users')
+            .from(USER_TABLE_NAME)
             .insert(userInsert)
             .select('*')
             .single();
@@ -88,7 +113,7 @@ const api: IAuth = {
 
     getUser: async function ({ id }) {
         const { data: userData, error: userError } = await supabase
-            .from('users')
+            .from(USER_TABLE_NAME)
             .select('*')
             .eq('id', id)
             .single();
@@ -116,7 +141,7 @@ const api: IAuth = {
     updateUser: async function ({ update }) {
         // First, get the current user to check their status
         const { data: currentUser, error: currentUserError } = await supabase
-            .from('users')
+            .from(USER_TABLE_NAME)
             .select('*')
             .eq('id', update.id)
             .single();
@@ -132,7 +157,7 @@ const api: IAuth = {
 
         // Update the user in our public.users table
         const { data: updatedUser, error: updateError } = await supabase
-            .from('users')
+            .from(USER_TABLE_NAME)
             .update({
                 display_name: update.display_name,
                 avatar_url: update.avatar_url,
@@ -193,7 +218,7 @@ const api: IAuth = {
 
                     // Get user data from our public.users table
                     const { data: userData, error: userError } = await supabase
-                        .from('users')
+                        .from(USER_TABLE_NAME)
                         .select('*')
                         .eq('id', user.id)
                         .single();
@@ -264,6 +289,9 @@ const sessionAbility: IAuthSessionCapable = {
 }
 export default { ...api, ...sessionAbility };
 
+
+//#region Utilities
+
 export class SupabaseAuthError extends Err {
     code: AuthError['code'];
 
@@ -271,4 +299,6 @@ export class SupabaseAuthError extends Err {
         super(1, ErrorType.ArgumentError, error.message, { error, context });
         this.code = error.code;
     }
-} 
+}
+
+//#endregion
