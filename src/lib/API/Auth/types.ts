@@ -1,8 +1,14 @@
-import type { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError, Result } from "$lib/Errors";
+import { Err, type ArgumentError, type InvalidStateError, type NotFoundError, type NotImplementedError, type Result } from "$lib/Errors";
 import type { User, LocalUser } from "./User";
 
 export type LoginCredentials =
     | { type: 'email_password'; email: string; password: string }
+
+export class IncorrectPasswordError extends Err {
+    constructor(message: string, ctx?: any) {
+        super(1, "IncorrectPasswordError", message, ctx);
+    }
+}
 
 export type SignOutOptions = {
     signOutSelf: boolean,

@@ -9,7 +9,7 @@
 	import { type LocalUser } from '@/API/Auth/User';
 	import UserAvatar from '@/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
-	import { Err, InputRequiredError } from '@/Errors';
+	import { ArgumentError, Err, InputRequiredError } from '@/Errors';
 
 	let users = $state<LocalUser[]>([]);
 	let currentUser = $derived($authState.status === 'signed-in' ? $authState.user : null);
@@ -74,17 +74,20 @@
 		isLoading = true;
 		errorMessage = '';
 
-		try {
-			const creds: LoginCredentials = { type: 'email_password', email, password };
-			const result = await authAPI.login({ creds });
-			if (result.isOk()) {
-				// Clear credentials on success
-				email = '';
-				password = '';
-				// await invalidateAll();
-				goto(redir);
+		const creds: LoginCredentials = { type: 'email_password', email, password };
+		const result = await authAPI.login({ creds });
+		if (result.isOk()) {
+			// Clear credentials on success
+			email = '';
+			password = '';
+			// await invalidateAll();
+			goto(redir);
+		} else {
+			const error = result.error;
+			if (error instanceof ArgumentError) {
+				errorMessage = error.message;
+				result.error.logError();
 			} else {
-				const error = result.error;
 				// TODO:Temp anonymous accounts disabled
 				if (false /* error?.data?.requiresMigration */) {
 				} else {
@@ -92,12 +95,8 @@
 					Err.UNHANDLED(result.error);
 				}
 			}
-		} catch (e) {
-			errorMessage = 'An unexpected error occurred';
-			console.error('Remote login error:', e);
-		} finally {
-			isLoading = false;
 		}
+		isLoading = false;
 	}
 </script>
 
@@ -144,7 +143,7 @@
 		<Button variant="link" onclick={() => (mode = 'login')}>Login</Button>
 	</div>
 {:else}
-	<div class="mb-6 space-y-3">
+	<form class="mb-6 space-y-3" onsubmit={handleRemoteLogin}>
 		<label for="email" class="block text-sm text-gray-600">Email</label>
 		<input
 			name="email"
@@ -159,10 +158,10 @@
 			bind:value={password}
 			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
 		/>
-		<Button class="w-full" onclick={handleRemoteLogin} disabled={isLoading}
-			>{isLoading ? 'Please wait...' : 'Sign in'}</Button
-		>
-	</div>
+		<Button class="w-full" type="submit" disabled={isLoading}>
+			{isLoading ? 'Please wait...' : 'Sign in'}
+		</Button>
+	</form>
 	<div class="mb-4 flex items-center justify-center text-sm">
 		<Button variant="link" onclick={() => goto(`/register?redirect=${redir}`)}>Register</Button>
 		{#if users.length > 0}

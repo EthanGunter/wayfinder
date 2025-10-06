@@ -3,11 +3,12 @@ import { isAnonymous, type LocalUser, type User } from './User';
 import { tasksAPI } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { err, ok } from 'neverthrow';
-import { ArgumentError, Err, ErrorType, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
+import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
 import SessionVault from './SessionVault';
 import { writable, type Readable, get } from 'svelte/store';
 import { remoteAuth } from '$lib/stores/remoteAuth';
 import { USER_TABLE_NAME } from '../DBConstants';
+import { authState } from '.';
 
 // Stores
 const _authState = writable<AuthState>({ status: "loading" });
@@ -77,7 +78,7 @@ const api: IAuthLocal = {
     // Create the new account on the server
     const registerResult = await _remoteAuth.register({ creds, userData });
     if (registerResult.isErr()) {
-      if (registerResult.error.type === ErrorType.InvalidState) {
+      if (registerResult.error instanceof ArgumentError) {
         // TODO:DX Invalid state doesn't clearly guarantee the user is already registered...
         // Attempt to log the user in with the account
         const logRes = await api.login({ creds });
@@ -306,6 +307,8 @@ const api: IAuthLocal = {
     // Proceed with remote login
     const loginResult = await _remoteAuth.login({ creds });
     if (loginResult.isErr()) {
+      console.log(loginResult.error);
+      ;
       return err(loginResult.error);
     }
 
@@ -338,14 +341,17 @@ const api: IAuthLocal = {
     assertDB(db);
     // Capture who is being logged out before clearing active marker
     const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    try {
-      // Invalidate remote session
-      await _remoteAuth?.logout();
-    } catch { /* offline or already invalid */ }
+    await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
+
+    // Invalidate remote session
+    void await _remoteAuth?.logout();
+
+    // Remove the refresh token and local data for switching
     if (activeId) {
       await SessionVault.remove(activeId);
+      const users = get(_users);
+      _users.set(users.filter(u => u.id != activeId))
     }
-    await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
 
     // Update store
     _authState.set({ status: "signed-out", user: null });

@@ -1,5 +1,5 @@
 import type { ITasks, ITasksLocal, CreateTaskParams, UpdateTaskParams, TaskDelta } from './types';
-import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError, ErrorType, okBatch, type BatchResult } from '$lib/Errors';
+import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError, okBatch, type BatchResult } from '$lib/Errors';
 import type { Task } from './Task';
 import { createTask, toMarkdown, isTaskCompleted } from './Task';
 import { getRelationshipUpdates, tasksAPI } from '.';
@@ -50,7 +50,7 @@ const api: ITasksLocal = {
       await _remapLocalIdsAndRelationships(updatedIds, affectedTasks);
     } else {
       const { idsToDelete, error } = response.error;
-      if (error.type === ErrorType.NotAuthorizedError && !currentUserHasFeature('task-sync')) {
+      if (error instanceof NotAuthorizedError && !currentUserHasFeature('task-sync')) {
         // We don't want to revert local tasks if the user isn't paying for sync
         // otherwise they won't be able to use the app at all
         return;
@@ -136,7 +136,7 @@ const api: ITasksLocal = {
       assertDB(_db);
       const { oldState, error } = response.error;
 
-      if (error.type === ErrorType.NotAuthorizedError && !currentUserHasFeature('task-sync')) {
+      if (error instanceof NotAuthorizedError && !currentUserHasFeature('task-sync')) {
         // We don't want to revert local tasks if the user isn't paying for sync
         // otherwise they won't be able to use the app at all
         return;
@@ -160,7 +160,7 @@ const api: ITasksLocal = {
     if (response.isErr()) {
       assertDB(_db);
       const { oldState, error } = response.error;
-      if (error.type === ErrorType.NotAuthorizedError && !currentUserHasFeature('task-sync')) {
+      if (error instanceof NotAuthorizedError && !currentUserHasFeature('task-sync')) {
         // We don't want to revert local tasks if the user isn't paying for sync
         // otherwise they won't be able to use the app at all
         return;
@@ -517,7 +517,7 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
       .then(async (response) => {
         if (response.isErr()) {
           const idsToDelete = createdTasks.map(t => t.id);
-          if (response.error.type === ErrorType.NotAuthorizedError) {
+          if (response.error instanceof NotAuthorizedError) {
             await api.handleCreateTasksResponse(
               err({ idsToDelete, error: new NotAuthorizedError('Unauthorized createTasks', idsToDelete) })
             );
@@ -609,7 +609,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
       .then(async (response) => {
         if (response.isErr()) {
           const oldState = Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task }));
-          const unauthorized = response.error.type === ErrorType.NotAuthorizedError;
+          const unauthorized = response.error instanceof NotAuthorizedError;
           if (unauthorized) {
             await api.handleUpdateTasksResponse(
               err({ oldState, error: new NotAuthorizedError('Unauthorized updateTasks', oldState) })
@@ -690,7 +690,7 @@ async function _deleteTasksLocal(ids: string[], updateServer: boolean = true) {
     void _remoteTasks.deleteTasks({ ids: idsToDelete })
       .then(async (response) => {
         if (response.isErr()) {
-          const unauthorized = response.error.type === ErrorType.NotAuthorizedError;
+          const unauthorized = response.error instanceof NotAuthorizedError;
           if (unauthorized) {
             await api.handleDeleteTasksResponse(
               err({ oldState: deletedTasks, error: new NotAuthorizedError('Unauthorized deleteTasks', idsToDelete) })

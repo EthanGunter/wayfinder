@@ -4,19 +4,7 @@ import { Result as _Result, Err as _Err, err, ok, Ok } from "neverthrow";
 export type Result<T, E = UnknownError> = _Result<T, E>
 export type BatchResult<T, TE extends Err = UnknownError, E extends Err = UnknownError> = Result<{ successes: T[]; errors: TE[] }, E>
 export function okBatch<T, TE extends Err = UnknownError>(successes: T[], failures?: TE[]) {
-  return ok({ successes, errors: failures ?? [] });
-}
-export enum ErrorType {
-    ArgumentError = "InvalidArgument",
-    InvalidState = "InvalidState",
-    NotFoundError = "NotFound",
-    NotAuthorizedError = "NotAuthorized",
-    ParseError = "FailedParse",
-    IOError = "InputOutput",
-    NotImplementedError = "NotImplemented",
-    NotHandledError = "NotHandled",
-    InputRequired = "InputRequired",
-    Unknown = "Unknown"
+    return ok({ successes, errors: failures ?? [] });
 }
 
 if (dev) {
@@ -27,7 +15,7 @@ const STACK_REG = /at (.*)\(https?:\/\/[a-z\-]*(?::[0-9]*|\.[a-z]*)(\/.*?)\?.=.*
 export class Err {
     static wrap(nativeError: Error): Err {
         return new Err(1,
-            (nativeError.name as ErrorType) ?? ErrorType.Unknown, // Force type to accept any string
+            nativeError.name ?? "Unknown", // Force type to accept any string
             nativeError.message,
             JSON.stringify(nativeError, undefined, 2)
         );
@@ -35,7 +23,7 @@ export class Err {
     static UNHANDLED(error: Err | any, message?: string): never {
         // TODO: link to bug report system. Unhandled errors shouldn't happen
         if (!(error instanceof Err)) {
-            error = new Err(1, ErrorType.Unknown, message ?? "", error);
+            error = new Err(1, "Unknown", message ?? "", error);
         }
         error.inheritanceDepth++;
         error.withTrace();
@@ -53,7 +41,7 @@ export class Err {
     static throw(error: Err | any, message?: string): never {
         // TODO: link to bug report system. Unhandled errors shouldn't happen  
         if (!(error instanceof Err)) {
-            error = new Err(1, ErrorType.Unknown, message ?? "", JSON.stringify(error, undefined, 2));
+            error = new Err(1, "Unknown", message ?? "", JSON.stringify(error, undefined, 2));
         }
         error.inheritanceDepth++;
         error.withTrace();
@@ -73,7 +61,7 @@ export class Err {
     /**
      * @param inheritanceDepth helps keep the stacktrace clean. -1 doesn't generate a stacktrace
      */
-    constructor(private inheritanceDepth: number, public type: ErrorType, public message: string, public context?: any) {
+    constructor(private inheritanceDepth: number, public type: string, public message: string, public context?: any) {
         if (dev) {
             this.withTrace();
         }
@@ -152,35 +140,35 @@ export type UnknownError = Err;
 
 export class InvalidStateError extends Err {
     constructor(message: string, context?: any) {
-        super(1, ErrorType.InvalidState, message, context);
+        super(1, "InvalidState", message, context);
     }
 }
 export class ArgumentError extends Err {
     constructor(argument: any, reason: string, context?: any) {
-        super(1, ErrorType.ArgumentError, reason, { argument, context });
+        super(1, "ArgumentError", reason, { argument, context });
     }
 }
 export class InputRequiredError extends Err {
     constructor(message: string, context?: any) {
-        super(1, ErrorType.InputRequired, message, context);
+        super(1, "InputRequired", message, context);
     }
 }
 
 export class NotFoundError extends Err {
     constructor(msg: string = "Item not found", key: any) {
-        super(1, ErrorType.NotFoundError, msg, key);
+        super(1, "NotFoundError", msg, key);
     }
 }
 
 export class NotAuthorizedError extends Err {
     constructor(msg: string = "Not authorized", context?: any) {
-        super(1, ErrorType.NotAuthorizedError, msg, context);
+        super(1, "NotAuthorizedError", msg, context);
     }
 }
 
 export class ParseError extends Err {
     constructor(content: any, targetType: string) {
-        super(1, ErrorType.ParseError, `Failed to parse content to ${targetType}`, content);
+        super(1, "ParseError", `Failed to parse content to ${targetType}`, content);
     }
 }
 
@@ -197,7 +185,7 @@ export class IOError extends Err {
         }
         super(
             1,
-            ErrorType.IOError,
+            "IOError",
             message,
             { internalError: internal, dataToWrite: context }
         );
@@ -206,6 +194,6 @@ export class IOError extends Err {
 
 export class NotImplementedError extends Err {
     constructor(methodName: string) {
-        super(1, ErrorType.NotImplementedError, `${methodName}`);
+        super(1, "NotImplementedError", `${methodName}`);
     }
 }

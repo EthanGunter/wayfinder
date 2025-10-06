@@ -1,7 +1,7 @@
 import { err, ok } from 'neverthrow';
 import { AccountIssueTarget, type IAuth, type MigrationRequirements, type IAuthSessionCapable } from './types';
 import type { AuthError } from '@supabase/auth-js';
-import { NotFoundError, Err, NotImplementedError, ArgumentError, ErrorType, InvalidStateError, IOError } from '$lib/Errors';
+import { NotFoundError, Err, NotImplementedError, ArgumentError, InvalidStateError, IOError } from '$lib/Errors';
 import { type User } from './User';
 import type { Database, TablesInsert } from '../supabase';
 import { createClient } from '@supabase/supabase-js';
@@ -65,10 +65,7 @@ const api: IAuth = {
 
             switch (authRes.error.code) {
                 case 'user_already_exists':
-                    return err(new InvalidStateError("[Supabase] Failed to register", authRes.error.code));
-                case 'invalid_credentials':
-                    return err(new SupabaseAuthError(authRes.error));
-
+                    return err(new ArgumentError("[Supabase] User already registered", authRes.error.code));
                 default:
                     Err.UNHANDLED(authRes.error);
             }
@@ -207,7 +204,7 @@ const api: IAuth = {
                     switch (res.error.code) {
                         case 'invalid_credentials':
                         case 'user_not_found':
-                            return err(new ArgumentError(creds, res.error.message));
+                            return err(new ArgumentError(creds, res.error.message, res.error));
                         default:
                             Err.throw(res.error);
                     }
@@ -286,17 +283,3 @@ const sessionAbility: IAuthSessionCapable = {
     }
 }
 export default { ...api, ...sessionAbility };
-
-
-//#region Utilities
-
-export class SupabaseAuthError extends Err {
-    code: AuthError['code'];
-
-    constructor(error: AuthError, context?: any) {
-        super(1, ErrorType.ArgumentError, error.message, { error, context });
-        this.code = error.code;
-    }
-}
-
-//#endregion
