@@ -5,7 +5,7 @@
 		user: LocalUser;
 		class?: string;
 	}
-	const { user, class: className }: Props = $props();
+	let { user, class: className }: Props = $props();
 </script>
 
 <div class="relative aspect-square overflow-hidden rounded-full bg-gray-100 {className}">

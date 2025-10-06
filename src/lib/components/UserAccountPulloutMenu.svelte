@@ -99,19 +99,6 @@
 			</div>
 		</Button>
 
-		<!-- Sign out -->
-		<Button
-			variant="outline"
-			class="flex h-16 items-center justify-start gap-3"
-			onclick={handleSignOut}
-		>
-			<Icon icon="material-symbols:logout" class="size-6 text-gray-600" />
-			<div class="text-left">
-				<div class="font-medium">Sign out</div>
-				<div class="text-sm text-gray-500">Sign out of this device</div>
-			</div>
-		</Button>
-
 		<!-- Switch user -->
 		<Button
 			variant="outline"
@@ -122,6 +109,19 @@
 			<div class="text-left">
 				<div class="font-medium">Switch user</div>
 				<div class="text-sm text-gray-500">Choose another local account</div>
+			</div>
+		</Button>
+
+		<!-- Sign out -->
+		<Button
+			variant="outline"
+			class="flex h-16 items-center justify-start gap-3"
+			onclick={handleSignOut}
+		>
+			<Icon icon="material-symbols:logout" class="size-6 text-gray-600" />
+			<div class="text-left">
+				<div class="font-medium">Sign out</div>
+				<div class="text-sm text-gray-500">Sign out of this device</div>
 			</div>
 		</Button>
 

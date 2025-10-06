@@ -107,9 +107,15 @@
 			<div class="grid gap-4">
 				<!-- TODO:UX avatar only seems to update after navigation or refresh... -->
 				<AvatarEditor
-					user={structuredClone($authState.user)}
+					user={$authState.user}
 					onAvatarChange={(avatar_url) => {
 						if ($authState.status !== 'signed-in') return;
+						console.log(
+							avatar_url,
+							$authState.user.avatar_url,
+							avatar_url !== $authState.user.avatar_url
+						);
+
 						if (avatar_url !== $authState.user.avatar_url) {
 							void debouncedUpdateUser({ update: { id: $authState.user.id, avatar_url } });
 						}
