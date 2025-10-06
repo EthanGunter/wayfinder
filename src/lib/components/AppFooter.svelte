@@ -27,7 +27,7 @@
 </script>
 
 <div
-	class="flex items-center justify-between gap-1 border-t border-gray-200/50 bg-white/80 shadow-sm backdrop-blur-sm {className}"
+	class="page-footer flex items-center justify-between gap-1 border-t border-gray-200/50 bg-white/80 shadow-sm backdrop-blur-sm {className}"
 >
 	{#if children}
 		{@render children()}

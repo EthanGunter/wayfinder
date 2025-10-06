@@ -131,17 +131,34 @@
   .page-root {
     grid-template-areas: "header" "content" "footer";
     grid-template-rows: auto 1fr 4rem;
+    @apply relative grid h-full w-full bg-gray-200 overflow-hidden;
+  }
+
+  .page-header {
+    grid-area: header;
+  }
+
+  .page-content {
+    grid-area: content;
+
+    overflow-y: scroll;
+    overflow-x: hidden;
+
+    >* {
+      max-width: 50rem;
+    }
+  }
+
+  .page-footer {
+    grid-area: footer;
   }
 }
 
 @layer components {
-  .page {
-    @apply relative grid h-full w-full bg-gray-200;
-  }
-
   .task-list-item {
     @apply flex min-h-min min-w-64 items-center justify-between gap-1 overflow-hidden rounded-xl border border-gray-400 bg-white text-ellipsis
   }
+
   .task-list-item.completed {
     background-color: rgb(201, 255, 201);
   }

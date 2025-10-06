@@ -11,6 +11,7 @@
 	import AvatarEditor from '@/components/AvatarEditor.svelte';
 	import * as AlertDialog from '@/components/ui/alert-dialog';
 	import { Err } from '@/Errors';
+	import UserSettings from '@/user-settings/UserSettings.svelte';
 
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
@@ -92,10 +93,7 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<div
-		id="account-page"
-		class=" grid-areas-[header_content_footer] relative grid h-full w-full grid-rows-[auto_1fr_auto] bg-gray-200"
-	>
+	<div id="account-page" class="page-root relative h-full w-full bg-gray-200">
 		<AppHeader>
 			{#snippet left()}
 				<Button onclick={goBack}>Back</Button>
@@ -104,9 +102,9 @@
 			{#snippet right()}{/snippet}
 		</AppHeader>
 		<div
-			class="grid-area-content mx-auto flex w-full max-w-[25rem] min-w-80 flex-col items-center justify-center gap-4 overflow-y-scroll p-4"
+			class="page-content mx-auto flex w-full min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
 		>
-			<div class="grid min-w-[70%] gap-4">
+			<div class="grid gap-4">
 				<!-- TODO:UX avatar only seems to update after navigation or refresh... -->
 				<AvatarEditor
 					user={structuredClone($authState.user)}
@@ -211,6 +209,9 @@
 					</Button>
 				</div>
 			{/if} -->
+			<div class="m-2 border-t border-gray-300 p-2">
+				<UserSettings />
+			</div>
 		</div>
 		<AppFooter />
 	</div>
