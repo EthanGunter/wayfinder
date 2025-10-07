@@ -20,7 +20,7 @@
 	import RangeEditor from './RangeEditor.svelte';
 	import SettingRow from './SettingRow.svelte';
 	import { authState } from '$lib/API/Auth';
-	import { userHasFeature, type UserFeature } from '$lib/API/Auth/User';
+	import { userHasFeature, type UserFeature } from '$domain/models/user';
 
 	// track expanded state per item
 	// TODO convert to single item
@@ -51,11 +51,14 @@
 				// Disable unauthorized sections
 				.filter(([label, data]) => !label.startsWith('$') && userHasAccess(data as SettingsSection))
 				// Parse individual settings
-				.map(([label, sec]: [string, SettingsSection]) => ({
+				.map(([label, sec]) => ({
 					label,
-					data: Object.entries(sec)
+					data: Object.entries(sec as SettingsSection)
 						.filter(([label]) => !label.startsWith('$'))
-						.map(([label, setting]) => ({ id: label, setting: setting as AnySetting }))
+						.map(([label, setting]) => ({
+							id: label,
+							setting: setting as AnySetting
+						}))
 				}))
 		}));
 </script>

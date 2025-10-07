@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
-import type { ITasks } from '$lib/API/Tasks';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
-import { userHasFeature, type LocalUser } from '$lib/API/Auth/User';
+import type { ITasks } from '$domain/models/task';
+import { userHasFeature, type LocalUser } from '$domain/models/user';
 
 // TODO:refactor Move this code to /Tasks/index.ts
 // Canonical source for whether remote task operations are available.

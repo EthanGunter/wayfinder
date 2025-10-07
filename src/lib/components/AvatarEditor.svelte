@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { type User } from '$lib/API/Auth/User';
+	import type { User } from '$domain/models/user';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';

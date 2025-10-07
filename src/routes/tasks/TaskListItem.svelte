@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
-	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Sheet from '../../lib/components/ui/sheet';
 	import { Button } from '../../lib/components/ui/button';
 	import * as Dialog from '../../lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { dev } from '$app/environment';
+	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
 
 	const {
 		task = $bindable(),

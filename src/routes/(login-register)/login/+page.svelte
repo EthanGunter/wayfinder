@@ -2,14 +2,13 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 	import { authAPI, authState, cachedUsers as authUsers } from '$lib/API/Auth';
-	import { type LocalUser } from '$lib/API/Auth/User';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
 	import { ArgumentError, Err, InputRequiredError } from '$domain/errors';
+	import type { LocalUser, LoginCredentials } from '$domain/models/user';
 
 	let users = $state<LocalUser[]>([]);
 	let currentUser = $derived($authState.status === 'signed-in' ? $authState.user : null);

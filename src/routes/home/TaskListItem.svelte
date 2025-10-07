@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
 	import { draggable, dragGroup } from '$lib/actions/dnd';
-	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Icon from '@iconify/svelte';

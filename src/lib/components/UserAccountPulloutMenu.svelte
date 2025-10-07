@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { userHasFeature } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
 	import { authAPI, authState, cachedUsers as authUsers } from '$lib/API/Auth';
 	import { tasksAPI } from '$lib/API/Tasks';
@@ -10,6 +9,7 @@
 	import * as Sheet from './ui/sheet';
 	import * as Dialog from './ui/dialog';
 	import { Err } from '$domain/errors';
+	import { userHasFeature } from '$domain/models/user';
 
 	interface Props {
 		onClose?: () => void;

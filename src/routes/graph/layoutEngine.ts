@@ -1,7 +1,6 @@
+import { isTaskCompleted, type Task } from '$domain/models/task';
 import type { Node, Edge } from '@xyflow/svelte';
 import { Position } from '@xyflow/svelte';
-import type { Task } from '$lib/API/Tasks/Task';
-import { isTaskCompleted } from '$lib/API/Tasks/Task';
 
 // Import ELK (bundled build works reliably with Vite)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment

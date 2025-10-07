@@ -1,13 +1,13 @@
-import type { AuthState, IAuthLocal } from './types';
-import type { LocalUser } from './User';
+import type { AuthState, IAuthLocal, LocalUser } from '$domain/models/user';
 import type { Readable } from 'svelte/store';
 import { Err, NotImplementedError } from '$domain/errors';
 
-import browserAuthAPI, 
+import browserAuthAPI,
 {
 	browserAuthState,
 	browserCachedUsers,
 } from './BrowserAuthProvider';
+
 
 let authAPI: IAuthLocal,
 	authState: Readable<AuthState>,

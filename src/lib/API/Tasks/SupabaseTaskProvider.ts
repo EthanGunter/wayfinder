@@ -1,7 +1,6 @@
 import { Err, IOError, NotAuthorizedError, NotFoundError, NotImplementedError } from "$domain/errors";
 import { err, ok } from "$domain/result";
-import type { ITasks, UpdateTaskParams } from "./types";
-import { type Task, populateTaskDTO } from "./Task";
+import { type ITasks, type Task, type UpdateTaskParams, populateTaskDTO } from "$domain/models/task";
 import { getRelationshipUpdates } from "./index";
 import { settings, deviceSettingsReady } from "$lib/user-settings";
 import { createClient } from "@supabase/supabase-js";

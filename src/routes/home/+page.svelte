@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { DropEvent, droppable } from '$lib/actions/dnd';
-	import { type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { goto } from '$app/navigation';
-
 	import TaskListItem from './TaskListItem.svelte';
 	import { onMount } from 'svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
@@ -14,6 +12,7 @@
 	import { Err } from '$domain/errors';
 	import TutorialWelcome from './TutorialWelcome.svelte';
 	import TutorialPlanner from './TutorialPlanner.svelte';
+	import { isTaskCompleted, type Task } from '$domain/models/task';
 
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);

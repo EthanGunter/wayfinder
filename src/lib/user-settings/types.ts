@@ -2,7 +2,7 @@ import { Err, InvalidStateError } from '$domain/errors';
 import { writable, derived, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
 import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import type { SvelteComponent } from 'svelte';
-import type { UserFeature } from '$lib/API/Auth/User';
+import type { UserFeature } from '$domain/models/user';
 
 export type SettingScope = 'user' | 'device';
 

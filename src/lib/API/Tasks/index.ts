@@ -1,11 +1,6 @@
 import browserTasksAPI from './BrowserTaskProvider';
-import type { ITasksLocal, ITasks, UpdateTaskParams } from './types';
-import { type Task } from './Task';
+import { type ITasks, type ITasksLocal, type Task, type UpdateTaskParams } from '$domain/models/task';
 import { Err } from '$domain/errors';
-import { ok } from '$domain/result';
-
-export * from './types';
-export * from './Task'
 
 let tasksAPI: ITasksLocal;
 let remoteTasks: ITasks;

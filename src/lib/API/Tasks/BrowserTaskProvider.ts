@@ -1,17 +1,15 @@
-import type { ITasks, ITasksLocal, CreateTaskParams, UpdateTaskParams, TaskDelta } from './types';
-import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError } from '$domain/errors';
+import { NotFoundError, Err, ParseError, IOError, InvalidStateError, ArgumentError, NotAuthorizedError } from '$domain/errors';
 import { err, ok, type Result } from '$domain/result';
-import type { Task } from './Task';
-import { createTask, toMarkdown, isTaskCompleted } from './Task';
+import { type ITasksLocal, type Task, type CreateTaskParams, type UpdateTaskParams, type TaskDelta, isTaskCompleted, createTask, type ITasks } from '$domain/models/task';
 import { getRelationshipUpdates, tasksAPI } from '.';
 import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, type LocalDB } from '../localDB';
 import { remoteTasks as remoteTasksStore } from '$lib/stores/remoteTasks';
 import { get, readable, type Readable } from 'svelte/store';
-import { userHasFeature, type UserFeature } from '../Auth/User';
 import { authState } from '../Auth';
 import { v4 } from 'uuid';
 import { TASK_TABLE_NAME } from '../DBConstants';
+import { userHasFeature, type UserFeature } from '$domain/models/user';
 // import { queueTaskSyncCommand } from './types';
 
 //#region API Definition

@@ -19,7 +19,6 @@ const config = {
     alias: {
       "$lib": "./src/lib",
       "$domain": "./src/domain",
-
     },
     prerender: {
       // Reinforced: This ensures your SvelteKit app produces static HTML files.

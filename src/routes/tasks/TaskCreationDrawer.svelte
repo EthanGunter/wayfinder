@@ -2,11 +2,11 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import Icon from '@iconify/svelte';
-	import { type Task, TaskStatus } from '$lib/API/Tasks/Task';
-	import { tasksAPI, type CreateTaskParams } from '$lib/API/Tasks';
 	import { authState } from '$lib/API/Auth';
 	import { v4 } from 'uuid';
 	import { Err } from '$domain/errors';
+	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
+	import { tasksAPI } from '$lib/API/Tasks';
 
 	interface Props {
 		open: boolean;

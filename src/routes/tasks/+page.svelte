@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { type Task } from '$lib/API/Tasks/Task';
-	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import { page } from '$app/state';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskEditor from './TaskEditor.svelte';
@@ -16,6 +14,7 @@
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 	import TutorialExampleProject from './TutorialExampleProject.svelte';
 	import { Err } from '$domain/errors';
+	import type { Task, TaskDelta } from '$domain/models/task';
 
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
@@ -128,7 +127,7 @@
 		if (error) {
 			Err.UNHANDLED(error);
 		}
-		
+
 		if (deletedId) {
 			// Navigate back to parent or root after deleting current task
 			if (parents.length > 0) {

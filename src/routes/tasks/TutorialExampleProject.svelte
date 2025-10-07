@@ -9,7 +9,7 @@
 	import { tasksAPI } from '$lib/API/Tasks';
 	import { queryOrWait } from '$lib/tutorials/dom';
 	import demoData from '$lib/tutorials/DemoData.json';
-	import { TaskStatus } from '$lib/API/Tasks/Task';
+	import { TaskStatus } from '$domain/models/task';
 
 	let active = $state(false);
 	let step = $state(0);

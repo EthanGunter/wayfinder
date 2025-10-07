@@ -13,10 +13,8 @@
 		type Connection
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import { type Task } from '$lib/API/Tasks/Task';
 	import { authState } from '$lib/API/Auth';
 	import { tasksAPI } from '$lib/API/Tasks';
-	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import TaskCreationDrawer from '../tasks/TaskCreationDrawer.svelte';
@@ -36,6 +34,7 @@
 	import { tutorials } from '$lib/tutorials/store';
 	import { goto } from '$app/navigation';
 	import Button from '$lib/components/ui/button/button.svelte';
+	import type { Task, TaskDelta } from '$domain/models/task';
 
 	let taskById = new SvelteMap<string, Task>();
 	let unsubscribeTasks: (() => void) | null = null;

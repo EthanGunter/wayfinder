@@ -1,6 +1,6 @@
 import { Index } from 'flexsearch';
-import type { Task } from './Task';
-import { isTaskCompleted } from './Task';
+import type { Task } from '../../../domain/models/task';
+import { isTaskCompleted } from '../../../domain/models/task';
 
 export interface TaskSearchResult {
 	task: Task;

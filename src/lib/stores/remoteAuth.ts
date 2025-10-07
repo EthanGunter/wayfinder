@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
-import type { IAuth } from '$lib/API/Auth/types';
 import SupabaseAuthProvider from '$lib/API/Auth/SupabaseAuthProvider';
+import type { IAuth } from '$domain/models/user';
 
 // Canonical source for whether remote auth operations are available.
 // null => remote unavailable; non-null => remote enabled and usable.

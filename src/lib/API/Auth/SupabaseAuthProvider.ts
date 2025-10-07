@@ -1,18 +1,13 @@
-import { AccountIssueTarget, type IAuth, type MigrationRequirements, type IAuthSessionCapable } from './types';
-import type { AuthError } from '@supabase/auth-js';
 import { NotFoundError, Err, NotImplementedError, ArgumentError, InvalidStateError, IOError } from '$domain/errors';
-import { type User } from './User';
+import { err, ok } from '$domain/result';
+import { type IAuth, type MigrationRequirements, AccountIssueTarget, type IAuthSessionCapable, type User } from '$domain/models/user';
 import type { Database, TablesInsert } from '../supabase';
 import { createClient } from '@supabase/supabase-js';
 import { USER_TABLE_NAME } from '../DBConstants';
-// import { settings, deviceSettingsReady } from '$lib/user-settings';
-import { get } from 'svelte/store';
-import { err, ok } from '$domain/result';
 
 
 //#region Supabase Connection
 
-// await deviceSettingsReady;
 
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseKey = import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;

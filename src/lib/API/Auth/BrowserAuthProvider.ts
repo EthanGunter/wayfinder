@@ -1,5 +1,3 @@
-import { type IAuth, type IAuthLocal, isSessionCapable, type AuthState } from './types';
-import { isAnonymous, type LocalUser, type User } from './User';
 import { tasksAPI } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$domain/errors';
@@ -9,6 +7,7 @@ import { remoteAuth } from '$lib/stores/remoteAuth';
 import { USER_TABLE_NAME } from '../DBConstants';
 import { authState } from '.';
 import { err, ok } from '$domain/result';
+import { type AuthState, type LocalUser, type IAuth, type IAuthLocal, isAnonymous, isSessionCapable, type User } from '$domain/models/user';
 
 // Stores
 const _authState = writable<AuthState>({ status: "loading" });

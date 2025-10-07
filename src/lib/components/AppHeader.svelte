@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { Task } from '$lib/API/Tasks/';
 	import { onMount, type Snippet } from 'svelte';
 	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
 	import { Button } from './ui/button';
@@ -10,9 +9,9 @@
 	import UserAvatar from './UserAvatar.svelte';
 	import { authState, cachedUsers as authUsers } from '$lib/API/Auth';
 	import { tasksAPI } from '$lib/API/Tasks';
-	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { v4 } from 'uuid';
 	import { Err } from '$domain/errors';
+	import { isTaskCompleted, type Task } from '$domain/models/task';
 
 	interface Props {
 		left?: Snippet;

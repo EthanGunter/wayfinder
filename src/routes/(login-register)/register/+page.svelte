@@ -2,13 +2,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import type { LoginCredentials } from '$lib/API/Auth/types';
 	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 	import { authAPI, cachedUsers as authUsers } from '$lib/API/Auth';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
-	import { type User } from '$lib/API/Auth/User';
 	import { v4 } from 'uuid';
+	import type { LoginCredentials, User } from '$domain/models/user';
 
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/home';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { LocalUser } from '$lib/API/Auth/User';
+	import type { LocalUser } from '$domain/models/user';
 
 	interface Props {
 		user: LocalUser;

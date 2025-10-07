@@ -111,7 +111,7 @@ async function markDone(id: number): Promise<void> {
 function formatErrorForLog(error: unknown): string {
     try {
         if (error instanceof Err) {
-            return `${error.type}: ${error.message}`;
+            return `${error.name}: ${error.message}`;
         }
         if (error instanceof Error) {
             return `${error.name}: ${error.message}`;

@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { Handle, Position } from '@xyflow/svelte';
-	import type { Task } from '$lib/API/Tasks/Task';
-	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from './TaskEditor.svelte';
 	import { tasksAPI } from '$lib/API/Tasks';
 	import { dev } from '$app/environment';
 	import DialogClose from '$lib/components/ui/dialog/dialog-close.svelte';
+	import { Err } from '$domain/errors';
+	import { isTaskCompleted, type Task } from '$domain/models/task';
 
 	let { data }: { data: Task } = $props();
 
@@ -48,15 +48,8 @@
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		try {
-			const res = await tasksAPI.updateTask({ id: original.id, data: update });
-			res?.match?.(
-				() => {},
-				(err: any) => err?.logError?.()
-			);
-		} catch (e) {
-			console.error('Failed to update task', e);
-		}
+		const [_, error] = await tasksAPI.updateTask({ id: original.id, data: update });
+		if (error) Err.UNHANDLED(error);
 	}
 
 	async function onDelete(task: Task) {
