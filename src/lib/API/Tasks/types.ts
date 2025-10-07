@@ -1,8 +1,9 @@
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
-import type { NotFoundError, Err, ArgumentError, NotAuthorizedError, InvalidStateError, Result, BatchResult } from "$lib/Errors";
+import type { NotFoundError, Err, ArgumentError, NotAuthorizedError, InvalidStateError } from "$domain/errors";
 import type { Task } from "./Task";
 import type { User } from "../Auth/User";
+import type { Result } from "$domain/result";
 
 // Remote vs Local interfaces are distinct; do not blend contracts
 export interface ITasks {
@@ -18,19 +19,19 @@ export interface ITasks {
    * Fetches a task's data by its ID
    */
   getTask(params: { id: string }): Promise<Result<Task, NotFoundError | NotAuthorizedError>>;
-  getTasks(params: { ids: string[] }): Promise<BatchResult<Task, NotFoundError | NotAuthorizedError>>;
-  getAllUserTasks(params: { userId: string }): Promise<BatchResult<Task, NotFoundError | NotAuthorizedError>>;
+  getTasks(params: { ids: string[] }): Promise<Result<Task[], NotFoundError | NotAuthorizedError>>;
+  getAllUserTasks(params: { userId: string }): Promise<Result<Task[], NotFoundError | NotAuthorizedError>>;
   /**
    * @param task can be passed as an id
    */
   updateTask(params: UpdateTaskParams): Promise<Result<Task, NotAuthorizedError>>;
-  updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task, NotAuthorizedError>>;
+  updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<Task[], NotAuthorizedError>>;
 
   deleteTask(params: { id: string }): Promise<Result<void, NotAuthorizedError>>;
   deleteTasks(params: { ids: string[] }): Promise<Result<void, NotAuthorizedError>>;
 
   // TODO:sync migrate un-synced user data
-  // changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<BatchResult<Task, NotAuthorizedError>>;
+  // changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<Result<Task[], NotAuthorizedError>>;
 
   /**
    * Finds all tasks that must be completed before `id`
@@ -68,14 +69,14 @@ export interface ITasksLocal {
    * Fetches a task's data by its ID
    */
   getTask(params: { id: string }): Promise<Result<Task, NotFoundError | NotAuthorizedError>>;
-  getTasks(params: { ids: string[] }): Promise<BatchResult<Task, NotFoundError | NotAuthorizedError>>;
-  getAllUserTasks(params: { userId: string }): Promise<BatchResult<Task, NotFoundError | NotAuthorizedError>>;
+  getTasks(params: { ids: string[] }): Promise<Result<Task[], NotFoundError | NotAuthorizedError>>;
+  getAllUserTasks(params: { userId: string }): Promise<Result<Task[], NotFoundError | NotAuthorizedError>>;
 
   /**
    * @param task can be passed as an id
    */
   updateTask(params: UpdateTaskParams): Promise<Result<Task, NotAuthorizedError>>;
-  updateTasks(params: { updates: UpdateTaskParams[] }): Promise<BatchResult<Task, NotAuthorizedError>>;
+  updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<Task[], NotAuthorizedError>>;
   handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;
 
   deleteTask(params: { id: string }): Promise<Result<void>>;

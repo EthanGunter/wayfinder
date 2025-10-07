@@ -3,11 +3,11 @@
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import type { LoginCredentials } from '$lib/API/Auth/types';
-	import { Button } from '@/components/ui/button';
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
-	import { authAPI, cachedUsers as authUsers } from '@/API/Auth';
+	import { authAPI, cachedUsers as authUsers } from '$lib/API/Auth';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
-	import { type User } from '@/API/Auth/User';
+	import { type User } from '$lib/API/Auth/User';
 	import { v4 } from 'uuid';
 
 	let multipleAccounts = $state(false);
@@ -62,20 +62,20 @@
 				features: [...(tempUser.features || [])]
 			};
 			const creds: LoginCredentials = { type: 'email_password', email, password };
-			const reqsResult = authAPI.getRegistrationRequirements(creds);
-			if (reqsResult.isErr()) {
+			const [reqs, reqError] = authAPI.getRegistrationRequirements(creds);
+			if (reqError) {
 				errorMessage = 'Invalid registration data';
 				return;
-			} else if (reqsResult.value.length > 0) {
-				errorMessage = reqsResult.value.map((r: any) => r.message).join(', ');
+			} else if (reqs.length > 0) {
+				errorMessage = reqs.map((r: any) => r.message).join(', ');
 				return;
 			}
-			const result = await authAPI.register({ creds, userData });
-			if (result.isOk()) {
+			const [user, registerError] = await authAPI.register({ creds, userData });
+			if (user) {
 				// await invalidateAll();
 				goto(redir);
 			} else {
-				errorMessage = result.error.message || 'Registration failed';
+				errorMessage = registerError.message || 'Registration failed';
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';

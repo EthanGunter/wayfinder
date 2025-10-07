@@ -14,11 +14,11 @@
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import { type Task } from '$lib/API/Tasks/Task';
-	import { authState } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
+	import { authState } from '$lib/API/Auth';
+	import { tasksAPI } from '$lib/API/Tasks';
 	import type { TaskDelta } from '$lib/API/Tasks/types';
-	import AppHeader from '@/components/AppHeader.svelte';
-	import AppFooter from '@/components/AppFooter.svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppFooter from '$lib/components/AppFooter.svelte';
 	import TaskCreationDrawer from '../tasks/TaskCreationDrawer.svelte';
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
@@ -33,9 +33,9 @@
 		getFlowPointFromEvent
 	} from './graphNodeHandlers';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { tutorials } from '@/tutorials/store';
+	import { tutorials } from '$lib/tutorials/store';
 	import { goto } from '$app/navigation';
-	import Button from '@/components/ui/button/button.svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
 
 	let taskById = new SvelteMap<string, Task>();
 	let unsubscribeTasks: (() => void) | null = null;

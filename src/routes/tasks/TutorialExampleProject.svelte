@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { tutorials } from '@/tutorials/store';
-	import TModal from '@/tutorials/primitives/TModal.svelte';
+	import { tutorials } from '$lib/tutorials/store';
+	import TModal from '$lib/tutorials/primitives/TModal.svelte';
 
-	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
-	import { authState } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
-	import { queryOrWait } from '@/tutorials/dom';
-	import demoData from '@/tutorials/DemoData.json';
-	import { TaskStatus } from '@/API/Tasks/Task';
+	import EventHandler from '$lib/tutorials/primitives/EventHandler.svelte';
+	import { authState } from '$lib/API/Auth';
+	import { tasksAPI } from '$lib/API/Tasks';
+	import { queryOrWait } from '$lib/tutorials/dom';
+	import demoData from '$lib/tutorials/DemoData.json';
+	import { TaskStatus } from '$lib/API/Tasks/Task';
 
 	let active = $state(false);
 	let step = $state(0);
@@ -67,7 +67,7 @@
 		e.stopImmediatePropagation();
 		if ($authState.status !== 'signed-in') return;
 
-		const result = await tasksAPI.createTask({
+		const [task, error] = await tasksAPI.createTask({
 			createDetail: {
 				id: 'DEMO-2',
 				user_id: $authState.user.id,
@@ -76,14 +76,7 @@
 			}
 		});
 
-		result.match(
-			(newTask) => {
-				proceed();
-			},
-			(err) => {
-				err.logError();
-			}
-		);
+		if (task) proceed();
 	}
 
 	async function openGenieDrawer(e: Event) {

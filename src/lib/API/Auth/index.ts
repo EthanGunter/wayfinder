@@ -1,7 +1,7 @@
 import type { AuthState, IAuthLocal } from './types';
 import type { LocalUser } from './User';
 import type { Readable } from 'svelte/store';
-import { Err, NotImplementedError } from '@/Errors';
+import { Err, NotImplementedError } from '$domain/errors';
 
 import browserAuthAPI, 
 {

@@ -1,7 +1,7 @@
 <script>
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Button } from '@/components/ui/button';
+	import { Button } from '$lib/components/ui/button';
 	import Icon from '@iconify/svelte';
 
 	function goBack() {

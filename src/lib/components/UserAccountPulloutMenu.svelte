@@ -3,13 +3,13 @@
 	import { page } from '$app/state';
 	import { userHasFeature } from '$lib/API/Auth/User';
 	import { Button } from './ui/button';
-	import { authAPI, authState, cachedUsers as authUsers } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
+	import { authAPI, authState, cachedUsers as authUsers } from '$lib/API/Auth';
+	import { tasksAPI } from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import * as Dialog from './ui/dialog';
-	import { Err } from '@/Errors';
+	import { Err } from '$domain/errors';
 
 	interface Props {
 		onClose?: () => void;

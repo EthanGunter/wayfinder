@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
-import { Err } from '$lib/Errors';
+import { Err } from '$domain/errors';
 
 export type SyncQueueEntry = {
     id?: number;

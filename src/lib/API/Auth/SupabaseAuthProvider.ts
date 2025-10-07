@@ -1,13 +1,13 @@
-import { err, ok } from 'neverthrow';
 import { AccountIssueTarget, type IAuth, type MigrationRequirements, type IAuthSessionCapable } from './types';
 import type { AuthError } from '@supabase/auth-js';
-import { NotFoundError, Err, NotImplementedError, ArgumentError, InvalidStateError, IOError } from '$lib/Errors';
+import { NotFoundError, Err, NotImplementedError, ArgumentError, InvalidStateError, IOError } from '$domain/errors';
 import { type User } from './User';
 import type { Database, TablesInsert } from '../supabase';
 import { createClient } from '@supabase/supabase-js';
 import { USER_TABLE_NAME } from '../DBConstants';
-import { settings, deviceSettingsReady } from '@/user-settings';
+// import { settings, deviceSettingsReady } from '$lib/user-settings';
 import { get } from 'svelte/store';
+import { err, ok } from '$domain/result';
 
 
 //#region Supabase Connection
@@ -182,15 +182,14 @@ const api: IAuth = {
     // TODO Need to update all access to check for deleted users
     deleteUser: async function ({ userId }) {
         // First, mark for deletion in our public.users table
-        const updateResult = await this.updateUser({ update: { id: userId, status: "deleted" } });
-
-        if (updateResult.isErr()) {
-            return err(updateResult.error);
+        const [_, updateErr] = await this.updateUser({ update: { id: userId, status: "deleted" } });
+        if (updateErr) {
+            return err(updateErr);
         }
 
         // The official deletion will be managed by admin on the backend
 
-        return ok();
+        return ok(undefined);
     },
 
     login: async function ({ creds }) {
@@ -204,7 +203,7 @@ const api: IAuth = {
                     switch (res.error.code) {
                         case 'invalid_credentials':
                         case 'user_not_found':
-                            return err(new ArgumentError(creds, res.error.message, res.error));
+                            return err(new ArgumentError(res.error.message, creds, res.error));
                         default:
                             Err.throw(res.error);
                     }
@@ -249,7 +248,7 @@ const api: IAuth = {
         if (error.error) {
             Err.throw(error.error);
         }
-        return ok();
+        return ok(undefined);
     },
 
     // onAuthStateChanged: (callback: any): UnsubscribeFn => {

@@ -1,4 +1,5 @@
-import { Err, type ArgumentError, type InvalidStateError, type NotFoundError, type NotImplementedError, type Result } from "$lib/Errors";
+import { Err, type ArgumentError, type InvalidStateError, type NotFoundError, type NotImplementedError } from "$domain/errors";
+import type { Result } from "$domain/result";
 import type { User, LocalUser } from "./User";
 
 export type LoginCredentials =

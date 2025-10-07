@@ -3,13 +3,13 @@
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import type { LoginCredentials } from '$lib/API/Auth/types';
-	import { Button } from '@/components/ui/button';
+	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
-	import { authAPI, authState, cachedUsers as authUsers } from '@/API/Auth';
-	import { type LocalUser } from '@/API/Auth/User';
-	import UserAvatar from '@/components/UserAvatar.svelte';
+	import { authAPI, authState, cachedUsers as authUsers } from '$lib/API/Auth';
+	import { type LocalUser } from '$lib/API/Auth/User';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
-	import { ArgumentError, Err, InputRequiredError } from '@/Errors';
+	import { ArgumentError, Err, InputRequiredError } from '$domain/errors';
 
 	let users = $state<LocalUser[]>([]);
 	let currentUser = $derived($authState.status === 'signed-in' ? $authState.user : null);
@@ -45,13 +45,13 @@
 		errorMessage = '';
 
 		try {
-			const result = await authAPI.switchUser(userId);
+			const [newUser, error] = await authAPI.switchUser(userId);
 
-			if (result.isOk()) {
+			if (newUser) {
 				// Switch successful, refresh and redirect
 				// await invalidateAll();
 				goto(redir);
-			} else if (result.error instanceof InputRequiredError) {
+			} else if (error instanceof InputRequiredError) {
 				// Require login for this account: show login form with message
 				mode = 'login';
 				const u = users.find((u) => u.id === userId);
@@ -59,7 +59,7 @@
 					? `Please sign in to continue as ${u.display_name}.`
 					: 'Login required to access this account.';
 			} else {
-				Err.UNHANDLED(result.error);
+				Err.UNHANDLED(error);
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';
@@ -75,24 +75,24 @@
 		errorMessage = '';
 
 		const creds: LoginCredentials = { type: 'email_password', email, password };
-		const result = await authAPI.login({ creds });
-		if (result.isOk()) {
+		const [user, error] = await authAPI.login({ creds });
+
+		if (user) {
 			// Clear credentials on success
 			email = '';
 			password = '';
 			// await invalidateAll();
 			goto(redir);
 		} else {
-			const error = result.error;
 			if (error instanceof ArgumentError) {
 				errorMessage = error.message;
-				result.error.logError();
+				console.error(error);
 			} else {
 				// TODO:Temp anonymous accounts disabled
 				if (false /* error?.data?.requiresMigration */) {
 				} else {
 					errorMessage = 'Login failed';
-					Err.UNHANDLED(result.error);
+					Err.UNHANDLED(error);
 				}
 			}
 		}

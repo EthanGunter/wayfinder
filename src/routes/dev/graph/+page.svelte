@@ -10,12 +10,12 @@
 		useSvelteFlow,
 		BackgroundVariant
 	} from '@xyflow/svelte';
-	import { Checkbox } from '@/components/ui/checkbox';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { runElkLayout, type ElkLayoutOptions } from './ELKlayout';
-	import AppHeader from '@/components/AppHeader.svelte';
-	import AppFooter from '@/components/AppFooter.svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppFooter from '$lib/components/AppFooter.svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import { settings } from '@/user-settings/schema';
+	import { settings } from '$lib/user-settings/schema';
 
 	let shouldlog = $state(false);
 	let isLayingOut = $state(false);

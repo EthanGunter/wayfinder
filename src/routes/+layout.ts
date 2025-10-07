@@ -1,10 +1,10 @@
 import { redirect } from '@sveltejs/kit';
-import { tasksAPI } from '@/API/Tasks';
-import { authState } from '@/API/Auth';
+import { tasksAPI } from '$lib/API/Tasks';
+import { authState } from '$lib/API/Auth';
 import { get } from 'svelte/store';
-// import { processQueueInClient } from '@/API/SyncQueue';
+// import { processQueueInClient } from '$lib/API/SyncQueue';
 import type { LayoutLoad } from './$types';
-import { Err } from '@/Errors';
+import { Err } from '$domain/errors';
 
 export const ssr = false;
 export const prerender = true;
@@ -46,7 +46,7 @@ export const load: LayoutLoad = async ({ parent, url }) => {
 		}
 	} else if (finalAuthState.status === 'error') {
 		// TODO:UX Add error page
-		finalAuthState.error.logError();
+		console.error(finalAuthState.error);
 		throw redirect(302, `/login`);
 	}
 };

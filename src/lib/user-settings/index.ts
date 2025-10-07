@@ -2,7 +2,8 @@ export * from './schema'
 export { assignPaths, DictSetting, BoolSetting, StringSetting, NumberSetting, EnumSetting, type AnySetting, type SettingsTree } from './types';
 
 import { settings } from './schema';
-import { dbPromise, APP_TABLE_NAME } from '@/API/localDB';
+import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
+import { Err } from '$domain/errors';
 
 // Apply settings from a plain path->value object to the tree silently
 function applySettings(tree: Record<string, any>, overrides: Record<string, any>): void {
@@ -67,13 +68,11 @@ export const deviceSettingsReady: Promise<void> = (async () => {
 
 // Initialize settings from user object (dynamic import to avoid early cycles)
 void (async () => {
-    try {
-        const { authAPI } = await import('@/API/Auth');
-        const userResponse = await authAPI.getUser();
-        if (userResponse.isOk() && userResponse.value.setting_overrides) {
-            applySettings(settings, userResponse.value.setting_overrides);
-        }
-    } catch (e) {
-        console.warn('Failed to initialize settings from user', e);
+    const { authAPI } = await import('$lib/API/Auth');
+    const [user, error] = await authAPI.getUser();
+    if (error) Err.UNHANDLED(error);
+
+    if (user && user.setting_overrides) {
+        applySettings(settings, user.setting_overrides);
     }
 })();

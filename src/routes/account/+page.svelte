@@ -4,14 +4,14 @@
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 	import { page } from '$app/state';
-	import { Button } from '@/components/ui/button';
-	import { authAPI, authState } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
+	import { Button } from '$lib/components/ui/button';
+	import { authAPI, authState } from '$lib/API/Auth';
+	import { tasksAPI } from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
-	import AvatarEditor from '@/components/AvatarEditor.svelte';
-	import * as AlertDialog from '@/components/ui/alert-dialog';
-	import { Err } from '@/Errors';
-	import UserSettings from '@/user-settings/UserSettings.svelte';
+	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import { Err } from '$domain/errors';
+	import UserSettings from '$lib/user-settings/UserSettings.svelte';
 
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
@@ -39,14 +39,10 @@
 	async function loadTaskCount() {
 		if ($authState.status !== 'signed-in') return;
 
-		try {
-			const result = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
-			if (result.isOk()) {
-				const { successes, errors } = result.value;
-				errors.forEach((e) => e.logError());
-				taskCount = successes.length;
-			}
-		} catch (error) {
+		const [userTasks, error] = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
+		if (userTasks) {
+			taskCount = userTasks.length;
+		} else {
 			console.error('Failed to load task count:', error);
 			taskCount = 0;
 		}
@@ -57,16 +53,16 @@
 
 		isDeleting = true;
 		try {
-			const rootRes = await tasksAPI.getRootTasks();
-			if (rootRes.isErr()) Err.UNHANDLED(rootRes.error);
+			const [roots, getRootsError] = await tasksAPI.getRootTasks();
+			if (getRootsError) Err.UNHANDLED(getRootsError);
 
 			await tasksAPI.deleteTasks({
-				ids: rootRes.value.map((r) => r.id)
+				ids: roots.map((r) => r.id)
 			});
 
 			// Delete the user account
-			const deleteRes = await authAPI.deleteUser({ userId: $authState.user.id });
-			if (deleteRes.isErr()) Err.UNHANDLED(deleteRes.error);
+			const [_, deleteUserError] = await authAPI.deleteUser({ userId: $authState.user.id });
+			if (deleteUserError) Err.UNHANDLED(deleteUserError);
 
 			// TODO:Temp anonymous accounts disabled
 			/* const defaultUserResult = await auth.getDefaultUser();

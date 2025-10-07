@@ -6,7 +6,7 @@
 	import { Button } from '../../lib/components/ui/button';
 	import * as Dialog from '../../lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';
-	import { Checkbox } from '@/components/ui/checkbox';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { dev } from '$app/environment';
 
 	const {

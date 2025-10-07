@@ -1,7 +1,8 @@
 import browserTasksAPI from './BrowserTaskProvider';
 import type { ITasksLocal, ITasks, UpdateTaskParams } from './types';
 import { type Task } from './Task';
-import { Err } from '$lib/Errors';
+import { Err } from '$domain/errors';
+import { ok } from '$domain/result';
 
 export * from './types';
 export * from './Task'
@@ -123,8 +124,8 @@ async function getParentUpdates(provider: ITasks | ITasksLocal, parentAdditions:
     const allChildIds = Array.from(parentAdditions.values()).flatMap(set => Array.from(set));
     const uniqueChildIds = [...new Set(allChildIds)];
 
-    const childrenResult = await provider.getTasks({ ids: uniqueChildIds });
-    const children = childrenResult.isOk() ? (childrenResult.value.errors.forEach(e => e.logError()), childrenResult.value.successes) : [];
+    const [children, error] = await provider.getTasks({ ids: uniqueChildIds });
+    if (error) Err.UNHANDLED(error)
 
     const updates = children.flatMap(child => {
         // Find all parents that should be added to this child
@@ -156,40 +157,30 @@ async function processParentRemovals(provider: ITasks | ITasksLocal, parentRemov
     const allChildIds = Array.from(parentRemovals.values()).flatMap(set => Array.from(set));
     const uniqueChildIds = [...new Set(allChildIds)];
 
-    const childrenResult = await provider.getTasks({ ids: uniqueChildIds });
-    return await childrenResult.match(
-        async (childResults) => {
-            // TODO not found errors will be returned during recursive delete. I'm not sure why exactly, and I don't know if it matters...
-            const { successes: children, errors } = childResults as any;
-            errors.forEach((e: any) => e.logError());
+    const [children, error] = await provider.getTasks({ ids: uniqueChildIds });
+    if (error) Err.UNHANDLED(error);
 
-            const updates = (children as Task[]).flatMap(child => {
-                // Find all parents that should be removed from this child
-                const parentsToRemove: string[] = [];
-                parentRemovals.forEach((childIds, parentId) => {
-                    if (childIds.has(child.id) && child.parents.includes(parentId)) {
-                        parentsToRemove.push(parentId);
-                    }
-                });
+    const updates = (children as Task[]).flatMap(child => {
+        // Find all parents that should be removed from this child
+        const parentsToRemove: string[] = [];
+        parentRemovals.forEach((childIds, parentId) => {
+            if (childIds.has(child.id) && child.parents.includes(parentId)) {
+                parentsToRemove.push(parentId);
+            }
+        });
 
-                if (parentsToRemove.length > 0) {
-                    return {
-                        id: child.id,
-                        data: {},
-                        relations: parentsToRemove.map(parentId => ({ id: parentId, operation: 'removeParent' as const }))
-                    };
-                }
-                return [];
-            });
-
-            // TODO Return as collection
-            return updates;
-        },
-        (err) => {
-            Err.UNHANDLED(err);
-            return [] as UpdateTaskParams[];
+        if (parentsToRemove.length > 0) {
+            return {
+                id: child.id,
+                data: {},
+                relations: parentsToRemove.map(parentId => ({ id: parentId, operation: 'removeParent' as const }))
+            };
         }
-    );
+        return [];
+    });
+
+    // TODO Return as collection
+    return updates;
 }
 
 async function processChildAdditions(provider: ITasks | ITasksLocal, childAdditions: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
@@ -199,37 +190,29 @@ async function processChildAdditions(provider: ITasks | ITasksLocal, childAdditi
     const allParentIds = Array.from(childAdditions.values()).flatMap(set => Array.from(set));
     const uniqueParentIds = [...new Set(allParentIds)];
 
-    const parentsResult = await provider.getTasks({ ids: uniqueParentIds });
-    return await parentsResult.match(
-        async (parentResults) => {
-            const { successes: parents, errors } = parentResults as any;
-            errors.forEach((e: any) => e.logError());
-            const updates = (parents as Task[]).flatMap(parent => {
-                // Find all children that should be added to this parent
-                const childrenToAdd: string[] = [];
-                childAdditions.forEach((parentIds, childId) => {
-                    if (parentIds.has(parent.id) && !parent.children.includes(childId)) {
-                        childrenToAdd.push(childId);
-                    }
-                });
+    const [parents, error] = await provider.getTasks({ ids: uniqueParentIds });
+    if (error) Err.UNHANDLED(error);
 
-                if (childrenToAdd.length > 0) {
-                    return {
-                        id: parent.id,
-                        data: {},
-                        relations: childrenToAdd.map(childId => ({ id: childId, operation: 'addChild' as const }))
-                    };
-                }
-                return [];
-            });
+    const updates = (parents as Task[]).flatMap(parent => {
+        // Find all children that should be added to this parent
+        const childrenToAdd: string[] = [];
+        childAdditions.forEach((parentIds, childId) => {
+            if (parentIds.has(parent.id) && !parent.children.includes(childId)) {
+                childrenToAdd.push(childId);
+            }
+        });
 
-            return updates;
-        },
-        (err) => {
-            Err.UNHANDLED(err);
-            return [] as UpdateTaskParams[];
+        if (childrenToAdd.length > 0) {
+            return {
+                id: parent.id,
+                data: {},
+                relations: childrenToAdd.map(childId => ({ id: childId, operation: 'addChild' as const }))
+            };
         }
-    );
+        return [];
+    });
+
+    return updates;
 }
 
 async function processChildRemovals(provider: ITasks | ITasksLocal, childRemovals: Map<string, Set<string>>): Promise<UpdateTaskParams[]> {
@@ -239,36 +222,28 @@ async function processChildRemovals(provider: ITasks | ITasksLocal, childRemoval
     const allParentIds = Array.from(childRemovals.values()).flatMap(set => Array.from(set));
     const uniqueParentIds = [...new Set(allParentIds)];
 
-    const parentsResult = await provider.getTasks({ ids: uniqueParentIds });
-    return await parentsResult.match(
-        async (parentResults) => {
-            const { successes: parents, errors } = parentResults as any;
-            errors.forEach((e: any) => e.logError());
-            const updates = (parents as Task[]).flatMap(parent => {
-                // Find all children that should be removed from this parent
-                const childrenToRemove: string[] = [];
-                childRemovals.forEach((parentIds, childId) => {
-                    if (parentIds.has(parent.id) && parent.children.includes(childId)) {
-                        childrenToRemove.push(childId);
-                    }
-                });
+    const [parents, error] = await provider.getTasks({ ids: uniqueParentIds });
+    if (error) Err.UNHANDLED(error);
 
-                if (childrenToRemove.length > 0) {
-                    return {
-                        id: parent.id,
-                        data: {},
-                        relations: childrenToRemove.map(childId => ({ id: childId, operation: 'removeChild' as const }))
-                    };
-                }
-                return [];
-            });
+    const updates = (parents as Task[]).flatMap(parent => {
+        // Find all children that should be removed from this parent
+        const childrenToRemove: string[] = [];
+        childRemovals.forEach((parentIds, childId) => {
+            if (parentIds.has(parent.id) && parent.children.includes(childId)) {
+                childrenToRemove.push(childId);
+            }
+        });
 
-            return updates;
-        },
-        (err) => {
-            Err.UNHANDLED(err);
-            return [] as UpdateTaskParams[];
+        if (childrenToRemove.length > 0) {
+            return {
+                id: parent.id,
+                data: {},
+                relations: childrenToRemove.map(childId => ({ id: childId, operation: 'removeChild' as const }))
+            };
         }
-    );
+        return [];
+    });
+
+    return updates;
 }
 //#endregion

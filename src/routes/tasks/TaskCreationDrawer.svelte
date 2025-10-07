@@ -4,8 +4,9 @@
 	import Icon from '@iconify/svelte';
 	import { type Task, TaskStatus } from '$lib/API/Tasks/Task';
 	import { tasksAPI, type CreateTaskParams } from '$lib/API/Tasks';
-	import { authState } from '@/API/Auth';
+	import { authState } from '$lib/API/Auth';
 	import { v4 } from 'uuid';
+	import { Err } from '$domain/errors';
 
 	interface Props {
 		open: boolean;
@@ -61,16 +62,9 @@
 			}
 		}
 
-		const result = await tasksAPI.createTask({ createDetail });
-
-		result.match(
-			(newTask) => {
-				open = false;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
+		const [task, error] = await tasksAPI.createTask({ createDetail });
+		if (error) Err.UNHANDLED(error);
+		if (task) open = false;
 	}
 
 	const isValid = $derived(formData.title.trim().length > 0);

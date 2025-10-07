@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { tutorials } from '@/tutorials/store';
-	import TModal from '@/tutorials/primitives/TModal.svelte';
-	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
+	import { tutorials } from '$lib/tutorials/store';
+	import TModal from '$lib/tutorials/primitives/TModal.svelte';
+	import EventHandler from '$lib/tutorials/primitives/EventHandler.svelte';
 	import Icon from '@iconify/svelte';
 	import { goto } from '$app/navigation';
 

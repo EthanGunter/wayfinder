@@ -66,11 +66,11 @@
 		"@supabase/supabase-js": "^2.50.2",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
+		"convex": "^1.27.4",
 		"flexsearch": "^0.8.205",
 		"idb": "^8.0.3",
 		"js-yaml": "^4.1.0",
 		"jszip": "^3.10.1",
-		"neverthrow": "^8.2.0",
 		"tailwind-merge": "^3.3.1",
 		"uuid": "^11.1.0",
 		"vitest": "^3.2.4"

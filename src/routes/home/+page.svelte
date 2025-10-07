@@ -7,13 +7,11 @@
 	import { onMount } from 'svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
-	import { type User } from '$lib/API/Auth/User.js';
-	import { Button } from '@/components/ui/button';
-	import { authAPI, authState } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
-	import type { ILocalTasks } from '@/API/Tasks';
+	import { Button } from '$lib/components/ui/button';
+	import { authState } from '$lib/API/Auth';
+	import { tasksAPI } from '$lib/API/Tasks';
 	import { page } from '$app/state';
-	import { Err } from '@/Errors';
+	import { Err } from '$domain/errors';
 	import TutorialWelcome from './TutorialWelcome.svelte';
 	import TutorialPlanner from './TutorialPlanner.svelte';
 
@@ -37,40 +35,27 @@
 	});
 
 	function refreshTasks() {
-		tasksAPI!.getTodaysTasks().then((tasks) =>
-			tasks.match(
-				(data) => {
-					todaysList = data;
-				},
-				(err) => {
-					err.logError();
-				}
-			)
-		);
-		tasksAPI!.getPrioritizedTasks(15).then((result) =>
-			result.match(
-				(tasks) => {
-					suggestedTasks = tasks;
-				},
-				(err) => {
-					err.logError();
-				}
-			)
-		);
+		tasksAPI!.getTodaysTasks().then(([todaysTasks, error]) => {
+			if (error) {
+				Err.UNHANDLED(error);
+			}
+			todaysList = todaysTasks;
+		});
+		tasksAPI!.getPrioritizedTasks(15).then(([tasks, error]) => {
+			if (error) {
+				Err.UNHANDLED(error);
+			}
+			suggestedTasks = tasks;
+		});
 
 		// Check if the user has any tasks at all (even if none are actionable)
 		if ($authState.status === 'signed-in') {
-			tasksAPI!.getAllUserTasks({ userId: $authState.user.id }).then((batch) =>
-				batch.match(
-					({ successes, errors }) => {
-						errors.forEach((e) => e.logError());
-						hasAnyTasksExplicit = successes.length > 0;
-					},
-					(err) => {
-						err.logError();
-					}
-				)
-			);
+			tasksAPI!.getAllUserTasks({ userId: $authState.user.id }).then(([userTasks, error]) => {
+				if (error) {
+					Err.UNHANDLED(error);
+				}
+				hasAnyTasksExplicit = userTasks.length > 0;
+			});
 		}
 	}
 
@@ -93,26 +78,24 @@
 		if (!task) return;
 
 		todaysList = todaysList.filter((t) => t.id !== task.id);
-		const res = await tasksAPI!.updateTask({ id: task.id, data: { todays_task: undefined } });
-		res.match(
-			() => {},
-			(err) => {
-				err.logError();
-			}
-		);
+		const [_, error] = await tasksAPI!.updateTask({
+			id: task.id,
+			data: { todays_task: undefined }
+		});
+		if (error) {
+			Err.UNHANDLED(error);
+		}
 		refreshTasks();
 	}
 
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
 		if (changes.children || changes.parents) Err.UNHANDLED('Relational updates not handled');
 
-		const result = await tasksAPI!.updateTask({ id: task.id, data: changes });
-		result.match(
-			() => {},
-			(err) => {
-				err.logError();
-			}
-		);
+		const [_, error] = await tasksAPI!.updateTask({ id: task.id, data: changes });
+		if (error) {
+			Err.UNHANDLED(error);
+		}
+
 		refreshTasks();
 	}
 

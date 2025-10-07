@@ -1,4 +1,4 @@
-import type { AppSettings } from "@/user-settings";
+import type { AppSettings } from "$lib/user-settings";
 
 export type UserStatus = "active" | "deleted";
 export type UserFeature =

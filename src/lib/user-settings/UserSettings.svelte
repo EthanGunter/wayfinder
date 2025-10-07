@@ -19,8 +19,8 @@
 	} from './types';
 	import RangeEditor from './RangeEditor.svelte';
 	import SettingRow from './SettingRow.svelte';
-	import { authState } from '@/API/Auth';
-	import { userHasFeature, type UserFeature } from '@/API/Auth/User';
+	import { authState } from '$lib/API/Auth';
+	import { userHasFeature, type UserFeature } from '$lib/API/Auth/User';
 
 	// track expanded state per item
 	// TODO convert to single item

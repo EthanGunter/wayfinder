@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { type User } from '$lib/API/Auth/User';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import * as Dialog from '@/components/ui/dialog';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';
 
 	interface Props {

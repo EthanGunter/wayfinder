@@ -8,10 +8,11 @@
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import UserAvatar from './UserAvatar.svelte';
-	import { authState, cachedUsers as authUsers } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
+	import { authState, cachedUsers as authUsers } from '$lib/API/Auth';
+	import { tasksAPI } from '$lib/API/Tasks';
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { v4 } from 'uuid';
+	import { Err } from '$domain/errors';
 
 	interface Props {
 		left?: Snippet;
@@ -53,13 +54,13 @@
 
 	async function loadRecentTasks() {
 		if ($authState.status !== 'signed-in') return;
-		try {
-			const todaysTasks = await tasksAPI.getTodaysTasks();
-			if (todaysTasks.isOk()) {
-				recentTasks = todaysTasks.value.slice(0, 5); // Show up to 5 recent tasks
-			}
-		} catch (e) {
-			console.error('Failed to load recent tasks:', e);
+		const [todaysTasks, error] = await tasksAPI.getTodaysTasks();
+		if (error) {
+			Err.UNHANDLED(error);
+		}
+
+		if (todaysTasks) {
+			recentTasks = todaysTasks.slice(0, 5); // Show up to 5 recent tasks
 		}
 	}
 
@@ -69,12 +70,12 @@
 			'This will permanently delete all your tasks and reset all tutorials. Continue?'
 		);
 		if (!confirmed) return;
-		const all = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
-		if (all.isOk()) {
-			const list = all.value.successes;
-			if (list.length > 0) {
-				await tasksAPI.deleteTasks({ ids: list.map((task) => task.id) });
-			}
+		const [userTasks, error] = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
+		if (error) {
+			Err.UNHANDLED(error);
+		}
+		if (userTasks && userTasks.length > 0) {
+			await tasksAPI.deleteTasks({ ids: userTasks.map((task) => task.id) });
 		}
 		try {
 			localStorage.removeItem('wf.tutorials.v1');
@@ -98,21 +99,19 @@
 		if (typeof task === 'string') {
 			// Create a new task with this title
 			if ($authState.status === 'signed-in') {
-				try {
-					const result = await tasksAPI.createTask({
-						createDetail: {
-							id: v4(),
-							user_id: $authState.user.id,
-							title: task
-						}
-					});
-					if (result.isOk()) {
-						goto(`/tasks/?id=${result.value}`);
-					} else {
-						console.error('Failed to create task:', result.error);
+				const [newTaskId, error] = await tasksAPI.createTask({
+					createDetail: {
+						id: v4(),
+						user_id: $authState.user.id,
+						title: task
 					}
-				} catch (error) {
-					console.error('Error creating task:', error);
+				});
+				if (error) {
+					Err.UNHANDLED(error);
+				}
+
+				if (newTaskId) {
+					goto(`/tasks/?id=${newTaskId}`);
 				}
 			}
 		} else {

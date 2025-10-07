@@ -2,13 +2,13 @@ import { type IAuth, type IAuthLocal, isSessionCapable, type AuthState } from '.
 import { isAnonymous, type LocalUser, type User } from './User';
 import { tasksAPI } from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
-import { err, ok } from 'neverthrow';
-import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$lib/Errors';
+import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$domain/errors';
 import SessionVault from './SessionVault';
 import { writable, type Readable, get } from 'svelte/store';
 import { remoteAuth } from '$lib/stores/remoteAuth';
 import { USER_TABLE_NAME } from '../DBConstants';
 import { authState } from '.';
+import { err, ok } from '$domain/result';
 
 // Stores
 const _authState = writable<AuthState>({ status: "loading" });
@@ -65,28 +65,27 @@ const api: IAuthLocal = {
       return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
     }
 
-    const reqsResult = api.getRegistrationRequirements(creds);
-    if (reqsResult.isErr()) {
-      return err(reqsResult.error);
-    } else if (reqsResult.value.length > 0) {
-      return err(new ArgumentError(creds, `Registration credentials had errors. Make sure to call getRegistrationRequirements() before register()`));
+    const [reqmts, reqErr] = api.getRegistrationRequirements(creds);
+    if (reqErr) {
+      return err(reqErr);
+    } else if (reqmts.length > 0) {
+      return err(new ArgumentError(`Registration credentials had errors. Make sure to call getRegistrationRequirements() before register()`, creds));
     }
 
     assertDB(db);
     assertRemoteAuth(_remoteAuth, `Cannot register without remote auth provider`);
 
     // Create the new account on the server
-    const registerResult = await _remoteAuth.register({ creds, userData });
-    if (registerResult.isErr()) {
-      if (registerResult.error instanceof ArgumentError) {
+    const [registeredUser, regErr] = await _remoteAuth.register({ creds, userData });
+    if (regErr) {
+      if (regErr instanceof ArgumentError) {
         // TODO:DX Invalid state doesn't clearly guarantee the user is already registered...
         // Attempt to log the user in with the account
-        const logRes = await api.login({ creds });
-        if (logRes.isOk()) return ok(logRes.value);
+        const [logRes, logErr] = await api.login({ creds });
+        if (logRes) return ok(logRes);
       }
-      return err(registerResult.error);
+      return err(regErr);
     }
-    const registeredUser = registerResult.value;
 
     // Create local user with registered user data
     await db.put(USER_TABLE_NAME, registeredUser);
@@ -139,18 +138,18 @@ const api: IAuthLocal = {
         let material = await SessionVault.get(newUserId);
         if (!material) {
           // Fallback: probe remote for current session (e.g., right after login just occurred)
-          const probe = await _remoteAuth.getSessionMaterial({ userId: newUserId });
-          if (probe.isOk() && probe.value) {
-            material = probe.value;
+          const [probe, probeErr] = await _remoteAuth.getSessionMaterial({ userId: newUserId });
+          if (probe) {
+            material = probe;
             await SessionVault.save(newUserId, material);
           }
         }
         if (material) {
-          const res = await _remoteAuth.restoreSession({ userId: newUserId, material });
-          if (res.isErr()) {
+          const [res, resErr] = await _remoteAuth.restoreSession({ userId: newUserId, material });
+          if (resErr) {
             return err(new InputRequiredError('Session expired. Please log in again.', { userId: newUserId }));
           }
-          const rotated = res.value.rotatedMaterial;
+          const rotated = res.rotatedMaterial;
           if (rotated && rotated !== material) {
             await SessionVault.save(newUserId, rotated);
           }
@@ -189,9 +188,9 @@ const api: IAuthLocal = {
     if (update.id) {
       userId = update.id;
     } else {
-      const activeUserRes = await api.getUser();
-      if (activeUserRes.isErr()) return err(activeUserRes.error);
-      userId = activeUserRes.value.id;
+      const [activeUser, activeUserErr] = await api.getUser();
+      if (activeUserErr) return err(activeUserErr);
+      userId = activeUser.id;
     }
 
     const user = await db.get(USER_TABLE_NAME, userId) as LocalUser | undefined;
@@ -229,10 +228,11 @@ const api: IAuthLocal = {
       let updateWithId: Partial<User> & { id: string } = { ...update, id: userId };
       void _remoteAuth.updateUser({ update: updateWithId })
         .then(async (response) => {
-          if (response.isErr()) {
+          const [_, responseErr] = response;
+          if (responseErr) {
             await api.handleUpdateUserResponse(err({ oldUser: user }));
           } else {
-            await api.handleUpdateUserResponse(ok());
+            await api.handleUpdateUserResponse(ok(undefined));
           }
         })
         .catch(async (error) => {
@@ -262,10 +262,11 @@ const api: IAuthLocal = {
       if (_remoteAuth) {
         void _remoteAuth.deleteUser({ userId })
           .then((response) => {
-            if (response.isErr()) {
+            const [_, responseErr] = response;
+            if (responseErr) {
               void api.handleDeleteUserResponse(err({ oldUser: user }));
             } else {
-              void api.handleDeleteUserResponse(ok());
+              void api.handleDeleteUserResponse(ok(undefined));
             }
           })
           .catch(() => {
@@ -274,20 +275,22 @@ const api: IAuthLocal = {
       }
     }
 
-    return ok();
+    return ok(undefined);
   },
 
   handleDeleteUserResponse: async (response: any) => {
-    if (response.isErr()) {
-      const { oldUser } = response.error;
+    const [_, responseErr] = response;
+    if (responseErr) {
+      const { oldUser } = responseErr;
       assertDB(db);
       await db.put(USER_TABLE_NAME, oldUser);
       await _refreshUsers();
     }
   },
   handleUpdateUserResponse: async (response: any) => {
-    if (response.isErr()) {
-      const { oldUser } = response.error;
+    const [_, responseErr] = response;
+    if (responseErr) {
+      const { oldUser } = responseErr;
       // Undo changes
       assertDB(db);
       await db.put(USER_TABLE_NAME, oldUser);
@@ -305,14 +308,14 @@ const api: IAuthLocal = {
     assertRemoteAuth(_remoteAuth);
 
     // Proceed with remote login
-    const loginResult = await _remoteAuth.login({ creds });
-    if (loginResult.isErr()) {
-      console.log(loginResult.error);
+    const [loginResult, loginErr] = await _remoteAuth.login({ creds });
+    if (loginErr) {
+      console.log(loginErr);
       ;
-      return err(loginResult.error);
+      return err(loginErr);
     }
 
-    const remoteUser = loginResult.value;
+    const remoteUser = loginResult;
 
     // Create local user with remote user data
     await db.put(USER_TABLE_NAME, remoteUser);
@@ -321,9 +324,9 @@ const api: IAuthLocal = {
     // Persist session material BEFORE switching so switchUser can restore remote session if needed
     if (_remoteAuth && isSessionCapable(_remoteAuth)) {
       try {
-        const materialRes = await _remoteAuth.getSessionMaterial({ userId: remoteUser.id });
-        if (materialRes.isOk() && materialRes.value) {
-          await SessionVault.save(remoteUser.id, materialRes.value);
+        const [material, materialErr] = await _remoteAuth.getSessionMaterial({ userId: remoteUser.id });
+        if (!materialErr && material) {
+          await SessionVault.save(remoteUser.id, material);
         }
       } catch { }
     }
@@ -355,7 +358,7 @@ const api: IAuthLocal = {
 
     // Update store
     _authState.set({ status: "signed-out", user: null });
-    return ok();
+    return ok(undefined);
   }
 }
 export default api;
@@ -368,13 +371,13 @@ async function _fetchAndPersistLatestUser(current: LocalUser): Promise<LocalUser
   if (!_remoteAuth) {
     return current;
   }
-  const res = await _remoteAuth.getUser({ id: current.id });
-  if (res.isErr()) {
-    Err.UNHANDLED(res.error);
+  const [res, resErr] = await _remoteAuth.getUser({ id: current.id });
+  if (resErr) {
+    Err.UNHANDLED(resErr);
     return current;
   }
 
-  const remoteUser = res.value;
+  const remoteUser = res;
   const merged: LocalUser = { ...current, ...remoteUser };
   await db.put(USER_TABLE_NAME, merged);
   await _refreshUsers();

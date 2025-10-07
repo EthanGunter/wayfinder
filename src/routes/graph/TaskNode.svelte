@@ -5,9 +5,9 @@
 	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from './TaskEditor.svelte';
-	import { tasksAPI } from '@/API/Tasks';
+	import { tasksAPI } from '$lib/API/Tasks';
 	import { dev } from '$app/environment';
-	import DialogClose from '@/components/ui/dialog/dialog-close.svelte';
+	import DialogClose from '$lib/components/ui/dialog/dialog-close.svelte';
 
 	let { data }: { data: Task } = $props();
 

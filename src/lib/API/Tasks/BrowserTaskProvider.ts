@@ -1,16 +1,15 @@
 import type { ITasks, ITasksLocal, CreateTaskParams, UpdateTaskParams, TaskDelta } from './types';
-import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError, okBatch, type BatchResult } from '$lib/Errors';
+import { NotFoundError, Err, ParseError, IOError, NotImplementedError, InvalidStateError, ArgumentError, NotAuthorizedError } from '$domain/errors';
+import { err, ok, type Result } from '$domain/result';
 import type { Task } from './Task';
 import { createTask, toMarkdown, isTaskCompleted } from './Task';
 import { getRelationshipUpdates, tasksAPI } from '.';
-import JSZip from 'jszip';
 import { TaskSearchService } from './TaskSearchService';
 import { dbPromise, type LocalDB } from '../localDB';
 import { remoteTasks as remoteTasksStore } from '$lib/stores/remoteTasks';
 import { get, readable, type Readable } from 'svelte/store';
 import { userHasFeature, type UserFeature } from '../Auth/User';
 import { authState } from '../Auth';
-import { err, ok } from 'neverthrow';
 import { v4 } from 'uuid';
 import { TASK_TABLE_NAME } from '../DBConstants';
 // import { queueTaskSyncCommand } from './types';
@@ -23,33 +22,27 @@ const api: ITasksLocal = {
    * @error {@link IOError} if the IndexedDB.put() attempt fails
    */
   createTask: async function ({ createDetail: task }) {
-    const res = await _createTasksLocal([task]);
+    const [newTask, error] = await _createTasksLocal([task]);
+    if (error) return err(error);
 
-    if (res.isErr()) {
-      return err(res.error);
-    }
-    const { successes, errors } = res.value;
-
-    if (errors.length > 0) return err(errors[0]);
-
-    return ok(successes[0].id);
+    return ok(newTask[0].id);
   },
   /**
   * @error {@link NotFoundError}, {@link ParseError} if trouble syncing the created file with the indexed db
   * @error {@link IOError} if the IndexedDB.put() attempt fails
   */
   createTasks: async ({ createDetails }) => {
-    const res = await _createTasksLocal(createDetails);
-    if (res.isErr()) return err(res.error);
+    const [newTasks, error] = await _createTasksLocal(createDetails);
+    if (error) return err(error);
 
-    return ok(res.value.successes.map(t => t.id));
+    return ok(newTasks.map(t => t.id));
   },
-  handleCreateTasksResponse: async function (response) {
-    if (response.isOk()) {
-      const { updatedIds, affectedTasks } = response.value;
+  handleCreateTasksResponse: async function ([success, failure]) {
+    if (!failure) {
+      const { updatedIds, affectedTasks } = success;
       await _remapLocalIdsAndRelationships(updatedIds, affectedTasks);
     } else {
-      const { idsToDelete, error } = response.error;
+      const { idsToDelete, error } = failure;
       if (error instanceof NotAuthorizedError && !currentUserHasFeature('task-sync')) {
         // We don't want to revert local tasks if the user isn't paying for sync
         // otherwise they won't be able to use the app at all
@@ -58,7 +51,7 @@ const api: ITasksLocal = {
 
       // TODO:sync Unknown errors should not destroy the local version, but queue for a retry...
       // Don't forget to log for the developer's sake, however
-      new IOError('[SERVER/SYNC] Remote createTasks failed; reverting local', response.error).logError();
+      console.error(new IOError('[SERVER/SYNC] Remote createTasks failed; reverting local', error));
       await _deleteTasksLocal(idsToDelete, false);
     }
   },
@@ -69,39 +62,31 @@ const api: ITasksLocal = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   getTask: async function ({ id }) {
-    const batch = await api.getTasks({ ids: [id] });
-    if (batch.isErr()) return err(batch.error);
+    const [tasks, error] = await api.getTasks({ ids: [id] });
+    if (error) return err(error);
 
-    const { successes, errors } = batch.value;
-    if (errors.length > 0) return err(errors[0]);
-
-    return ok(successes[0]);
+    return ok(tasks[0]);
   },
   getTasks: async function ({ ids }) {
     assertDB(_db);
     const tasks: Task[] = [];
-    const notFoundIds: string[] = [];
 
-    try {
-      for (const id of ids) {
-        const task = await _db.get(TASK_TABLE_NAME, id);
-        if (task) {
-          const taskObj = task as Task;
-          // Only return tasks owned by the current user
-          if (await validateTaskOwnership(taskObj)) {
-            tasks.push(taskObj);
-          } else {
-            notFoundIds.push(id); // Treat unauthorized access as "not found"
-          }
+    for (const id of ids) {
+      const task = await _db.get(TASK_TABLE_NAME, id);
+      if (task) {
+        const taskObj = task as Task;
+        // Only return tasks owned by the current user
+        if (await validateTaskOwnership(taskObj)) {
+          tasks.push(taskObj);
         } else {
-          notFoundIds.push(id);
+          return err(new NotFoundError("User not authorized to access task", id));
         }
+      } else {
+        return err(new NotFoundError("failed to get task", id));
       }
-
-      return okBatch(tasks, notFoundIds.map(id => new NotFoundError("failed to get task", id)));
-    } catch (e) {
-      return err(new IOError("Batch read", ids.join(', '), e));
     }
+
+    return ok(tasks);
   },
   getAllUserTasks: async function ({ userId }) {
     assertDB(_db);
@@ -109,10 +94,10 @@ const api: ITasksLocal = {
     // TODO:debt Should we be subscribing to the store, rather than using get(authState) everywhere?
     const auth = get(authState);
     if (auth.status === 'signed-in' && auth.user.id !== userId) {
-      return okBatch([] as Task[]);
+      return ok([] as Task[]);
     }
     const userTasks = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', userId);
-    return okBatch(userTasks as Task[]);
+    return ok(userTasks as Task[]);
   },
 
   /**
@@ -122,19 +107,16 @@ const api: ITasksLocal = {
    * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
    */
   updateTask: async function (update) {
-    const batch = await api.updateTasks({ updates: [update] });
-    if (batch.isErr()) return err(batch.error);
+    const [tasks, error] = await api.updateTasks({ updates: [update] });
+    if (error) return err(error);
 
-    const { successes, errors } = batch.value;
-    if (errors.length > 0) return err(errors[0]);
-
-    return ok(successes[0]);
+    return ok(tasks[0]);
   },
   updateTasks: ({ updates }) => _updateTasksLocal(updates),
-  handleUpdateTasksResponse: async function (response) {
-    if (response.isErr()) {
+  handleUpdateTasksResponse: async function ([success, failure]) {
+    if (failure) {
       assertDB(_db);
-      const { oldState, error } = response.error;
+      const { oldState, error } = failure;
 
       if (error instanceof NotAuthorizedError && !currentUserHasFeature('task-sync')) {
         // We don't want to revert local tasks if the user isn't paying for sync
@@ -142,7 +124,7 @@ const api: ITasksLocal = {
         return;
       }
 
-      new IOError('[SERVER/SYNC] Remote updateTasks failed; reverting local', response.error).logError();
+      console.error(new IOError('[SERVER/SYNC] Remote updateTasks failed; reverting local', error));
       await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false);
     }
   },
@@ -156,16 +138,16 @@ const api: ITasksLocal = {
     return await api.deleteTasks({ ids: [id] });
   },
   deleteTasks: ({ ids }) => _deleteTasksLocal(ids ?? false),
-  handleDeleteTasksResponse: async function (response) {
-    if (response.isErr()) {
+  handleDeleteTasksResponse: async function ([success, failure]) {
+    if (failure) {
       assertDB(_db);
-      const { oldState, error } = response.error;
+      const { oldState, error } = failure;
       if (error instanceof NotAuthorizedError && !currentUserHasFeature('task-sync')) {
         // We don't want to revert local tasks if the user isn't paying for sync
         // otherwise they won't be able to use the app at all
         return;
       }
-      new IOError('[SERVER/SYNC] Remote deleteTasks failed; restoring local deletions', response.error).logError();
+      console.error(new IOError('[SERVER/SYNC] Remote deleteTasks failed; restoring local deletions', failure));
       await _createTasksLocal(oldState, false);
     }
   },
@@ -176,46 +158,37 @@ const api: ITasksLocal = {
 
   getChildrenOf: async function ({ id }) {
     // First get the parent task to access its children array
-    const parentResult = await api.getTask({ id });
-    if (parentResult.isErr()) {
-      return err(parentResult.error);
+    const [parentTask, getPErr] = await api.getTask({ id });
+    if (getPErr) {
+      return err(getPErr);
     }
-    const parentTask = parentResult.value;
 
     if (parentTask.children.length === 0) {
       return ok([]);
     }
 
     // Fetch only the specific child tasks
-    const childPromises = parentTask.children.map(childId => api.getTask({ id: childId }));
-    const childResults = await Promise.all(childPromises);
-
-    // Filter out any failed reads and extract successful tasks
-    const children = childResults
-      .filter(result => result.isOk())
-      .map(result => result.value as Task);
+    const [children, getCErr] = await api.getTasks({ ids: parentTask.children });
+    if (getCErr) {
+      return err(getCErr);
+    }
 
     return ok(children);
   },
   getParentsOf: async function ({ id }) {
-
     // Convert id to task object
-    const childTaskResult = await api.getTask({ id });
-    if (childTaskResult.isErr()) {
-      return err(childTaskResult.error);
+    const [childTask, getCErr] = await api.getTask({ id });
+    if (getCErr) {
+      return err(getCErr);
     }
-    const childTask = childTaskResult.value;
 
     // Get the parents
     if (childTask.parents.length > 0) {
-      const parentsBatch = await api.getTasks({ ids: childTask.parents });
-      if (parentsBatch.isErr()) return err(parentsBatch.error);
+      const [parents, getPErr] = await api.getTasks({ ids: childTask.parents });
+      if (getPErr) return err(getPErr);
       else {
-        const { successes, errors } = parentsBatch.value;
-        errors.forEach(e => e.logError());
-        return ok(successes);
+        return ok(parents);
       }
-
     } else {
       return ok([]);
     }
@@ -345,11 +318,11 @@ const api: ITasksLocal = {
       (async () => {
         const included = await _computeIncludedIds(sub.ids, sub.ancestorDepth, sub.descendantDepth);
         sub.includedIds = included;
-        const batch = await api.getTasks({ ids: Array.from(included) });
-        if (batch.isOk()) {
-          const { successes, errors } = batch.value;
-          errors.forEach(e => e.logError());
-          sub.onInitialize(successes);
+        const [tasks, error] = await api.getTasks({ ids: Array.from(included) });
+        if (error) { Err.UNHANDLED(error); }
+
+        if (tasks) {
+          sub.onInitialize(tasks);
         } else {
           sub.onInitialize([]);
         }
@@ -388,14 +361,12 @@ const api: ITasksLocal = {
         switch (mode) {
           case 'replace':
             // Delete all data, the fall through to the add logic
-            const allTasksRes = await tasksAPI.getAllUserTasks({ userId: auth.user.id });
-            if (allTasksRes.isErr()) {
-              Err.UNHANDLED(allTasksRes.error);
-            } else if (allTasksRes.value.errors.length > 0) {
-              Err.UNHANDLED(allTasksRes.value.errors);
+            const [userTasks, error] = await tasksAPI.getAllUserTasks({ userId: auth.user.id });
+            if (error) {
+              Err.UNHANDLED(error);
             }
 
-            const allIds = allTasksRes.value.successes.map(t => t.id);
+            const allIds = userTasks.map(t => t.id);
             await tasksAPI.deleteTasks({ ids: allIds });
 
           case "add":
@@ -417,12 +388,12 @@ const api: ITasksLocal = {
               children: remap(t.children),
             }));
 
-            const res = await _createTasksLocal(createDetails, true);
-            if (res.isErr()) {
-              throw res.error;
+            const [newTasks, createError] = await _createTasksLocal(createDetails, true);
+            if (createError) {
+              Err.UNHANDLED(createError);
             }
-            return res.value.successes.length;
 
+            return newTasks.length;
         }
     }
   },
@@ -432,15 +403,15 @@ const api: ITasksLocal = {
     if (!_remoteTasks) return; // No remote available; nothing to hydrate
 
     try {
-      const remoteBatch = await _remoteTasks.getAllUserTasks({ userId: user.id });
-      if (remoteBatch.isOk()) {
-        const { successes: remoteList, errors } = remoteBatch.value;
-        errors.forEach(e => e.logError());
+      const [userTasks, error] = await _remoteTasks.getAllUserTasks({ userId: user.id });
+      if (error) { Err.UNHANDLED(error); }
+
+      if (userTasks) {
         const localList = await _db.getAllFromIndex(TASK_TABLE_NAME, 'by-user', user.id) as Task[];
         const localById = new Map(localList.map(t => [t.id, t] as [string, Task]));
 
         let changed = false;
-        for (const rt of remoteList) {
+        for (const rt of userTasks) {
           const lt = localById.get(rt.id);
           const rtEdit = rt.last_edit ? new Date(rt.last_edit).getTime() : 0;
           const ltEdit = lt?.last_edit ? new Date(lt.last_edit).getTime() : 0;
@@ -463,12 +434,11 @@ const api: ITasksLocal = {
 type ExportData = { version: number, data: any }
 export default api;
 
-async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolean = true): Promise<BatchResult<Task, ArgumentError, InvalidStateError | NotAuthorizedError>> {
-  if (tasks.length === 0) return okBatch([], []);
+async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolean = true): Promise<Result<Task[], ArgumentError | InvalidStateError | NotAuthorizedError>> {
+  if (tasks.length === 0) return ok([]);
 
   assertDB(_db);
   const createdTasks: Task[] = [];
-  const errors: ArgumentError[] = [];
 
   // Get current user to assign ownership
   const auth = get(authState);
@@ -477,11 +447,11 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
   }
 
   for (const taskDTO of tasks) {
+    // Check that we won't overwrite existing tasks
     if (taskDTO.id) {
-      const result = await api.getTask({ id: taskDTO.id });
-      if (result.isOk()) {
-        errors.push(new ArgumentError(taskDTO, `[BROWSER] Attempted to create a task with an id that already exists. Use update if you wish to overwrite.`));
-        continue;
+      const [task, error] = await api.getTask({ id: taskDTO.id });
+      if (task) {
+        return err(new ArgumentError(`[BROWSER] Attempted to create a task with an id that already exists. Use update if you wish to overwrite.`, taskDTO));
       }
     }
 
@@ -510,51 +480,43 @@ async function _createTasksLocal(tasks: CreateTaskParams[], updateServer: boolea
 
   await _emitChanges(createdTasks.map(newTask => ({ oldTask: null, newTask })) as TaskDelta[]);
 
-  /* if (updateServer) {
-      await queueTaskSyncCommand('createTasks', { createDetails: tasks }, { createdIds: createdTasks.map(t => t.id) }); */
   if (updateServer && _remoteTasks) {
     void _remoteTasks.createTasks({ createDetails: createdTasks })
-      .then(async (response) => {
-        if (response.isErr()) {
+      .then(async ([tasks, error]) => {
+        if (error) {
           const idsToDelete = createdTasks.map(t => t.id);
-          if (response.error instanceof NotAuthorizedError) {
+          if (error instanceof NotAuthorizedError) {
             await api.handleCreateTasksResponse(
               err({ idsToDelete, error: new NotAuthorizedError('Unauthorized createTasks', idsToDelete) })
             );
           } else {
-            new IOError('[SERVER/SYNC] Remote createTasks failed; reverting local', response.error).logError();
+            console.error(new IOError('[SERVER/SYNC] Remote createTasks failed; reverting local', error));
             await _deleteTasksLocal(idsToDelete, false);
           }
         } else {
-          await api.handleCreateTasksResponse(ok(response.value));
+          await api.handleCreateTasksResponse(ok(tasks));
         }
       })
-      .catch(async (e) => {
-        Err.UNHANDLED(e, '[SERVER/SYNC]');
-      });
   }
 
-  return okBatch(createdTasks, errors);
-};
+  return ok(createdTasks);
+}
 
 // TODO:critical Add infinite recursion guards
 async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: boolean = true) {
-  if (updates.length === 0) return okBatch([], []);
+  if (updates.length === 0) return ok([]);
 
   assertDB(_db);
   const updatedTasks: Map<Task, Task> = new Map();
-  const errors: Err[] = [];
 
   for (const update of updates) {
     const { id, data: changes = {}, relations = [] } = update;
-    const taskResult = await api.getTask({ id });
-    if (taskResult.isErr()) { errors.push(taskResult.error); continue; }
-    const task = taskResult.value;
+    const [task, error] = await api.getTask({ id });
+    if (error) { return err(error); }
 
     // Validate user ownership before allowing update
     if (!(await validateTaskOwnership(task))) {
-      errors.push(new NotFoundError(task.id, "Task (unauthorized)"));
-      continue;
+      return err(new NotFoundError("Task (unauthorized)", task.id));
     }
 
     // Apply relationship changes
@@ -581,8 +543,8 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
     const updated: Task = {
       ...(task as Task),
       ...(changes as Partial<Task>),
-      children: Array.from(updatedChildren),
-      parents: Array.from(updatedParents),
+      children: Array.from(updatedChildren) as string[],
+      parents: Array.from(updatedParents) as string[],
       last_edit: new Date().toISOString()
     };
 
@@ -606,26 +568,25 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
 
   if (updateServer && _remoteTasks) {
     void _remoteTasks.updateTasks({ updates })
-      .then(async (response) => {
-        if (response.isErr()) {
+      .then(async ([tasks, error]) => {
+        if (error) {
           const oldState = Array.from(updatedTasks).map(([task]) => ({ updatedId: task.id, task }));
-          const unauthorized = response.error instanceof NotAuthorizedError;
+          const unauthorized = error instanceof NotAuthorizedError;
           if (unauthorized) {
             await api.handleUpdateTasksResponse(
               err({ oldState, error: new NotAuthorizedError('Unauthorized updateTasks', oldState) })
             );
           } else {
-            new IOError('Remote updateTasks failed; reverting local', response.error).logError();
+            console.error(new IOError('Remote updateTasks failed; reverting local', error));
             await _updateTasksLocal(oldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false);
           }
         } else {
-          const { successes } = response.value;
-          const successIds = new Set((successes as Task[]).map(t => t.id));
+          const successIds = new Set((tasks).map(t => t.id));
           const failedOldState = Array.from(updatedTasks)
             .filter(([oldTask]) => !successIds.has(oldTask.id))
             .map(([oldTask]) => ({ updatedId: oldTask.id, task: oldTask }));
           if (failedOldState.length > 0) {
-            new IOError('Remote updateTasks partially failed; reverting local for failed items', failedOldState).logError();
+            console.error(new IOError('Remote updateTasks partially failed; reverting local for failed items', failedOldState));
             await _updateTasksLocal(failedOldState.map(t => ({ id: t.updatedId, data: t.task, relations: [] })), false);
           }
         }
@@ -635,22 +596,20 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
       });
   }
 
-  return okBatch(updatedTasks.values().toArray(), errors);
+  return ok(updatedTasks.values().toArray());
 };
 async function _deleteTasksLocal(ids: string[], updateServer: boolean = true) {
-  if (ids.length === 0) return ok();
+  if (ids.length === 0) return ok(undefined);
 
   assertDB(_db);
 
   const deletedTasks: Task[] = [];
   const errors: (NotFoundError | NotAuthorizedError)[] = [];
   for (const id of ids) {
-    const taskResult = await api.getTask({ id });
-    if (taskResult.isErr()) {
-      errors.push(taskResult.error);
-      continue;
+    const [task, error] = await api.getTask({ id });
+    if (error) {
+      return err(error);
     }
-    const task = taskResult.value;
 
     // Validate user ownership before allowing deletion
     if (!(await validateTaskOwnership(task))) {
@@ -688,15 +647,15 @@ async function _deleteTasksLocal(ids: string[], updateServer: boolean = true) {
     // Send server the IDs of tasks that were actually deleted (post-recursion)
     const idsToDelete = deletedTasks.map(task => task.id);
     void _remoteTasks.deleteTasks({ ids: idsToDelete })
-      .then(async (response) => {
-        if (response.isErr()) {
-          const unauthorized = response.error instanceof NotAuthorizedError;
+      .then(async ([_, error]) => {
+        if (error) {
+          const unauthorized = error instanceof NotAuthorizedError;
           if (unauthorized) {
             await api.handleDeleteTasksResponse(
               err({ oldState: deletedTasks, error: new NotAuthorizedError('Unauthorized deleteTasks', idsToDelete) })
             );
           } else {
-            new IOError('Remote deleteTasks failed; restoring local deletions', response.error).logError();
+            console.error(new IOError('Remote deleteTasks failed; restoring local deletions', error));
             await _createTasksLocal(deletedTasks, false);
           }
         }
@@ -708,7 +667,7 @@ async function _deleteTasksLocal(ids: string[], updateServer: boolean = true) {
   if (errors.length > 0) {
     return err(new IOError("Batch delete", errors));
   }
-  return ok();
+  return ok(undefined);
 };
 
 //#endregion
@@ -738,8 +697,9 @@ type IncludedSet = Set<string>;
 async function _computeIncludedIds(seedIds: string[], ancestorDepth: number, descendantDepth: number): Promise<IncludedSet> {
   const included: IncludedSet = new Set(seedIds);
   const get = async (id: string) => {
-    const res = await api.getTask({ id });
-    return res.isOk() ? res.value : null;
+    const [task, error] = await api.getTask({ id });
+    if (error) { Err.UNHANDLED(error); }
+    return task;
   };
   // Ancestors (parents)
   let up = [...seedIds];
@@ -962,12 +922,10 @@ let _unsubscribeRemoteTasks: (() => void) | null = null;
     // Reindex search for current user
     const auth = get(authState);
     if (auth.status === 'signed-in') {
-      const existingTasksResult = await api.getAllUserTasks({ userId: auth.user.id });
-      if (existingTasksResult.isOk()) {
-        const { successes, errors } = existingTasksResult.value;
-        errors.forEach(e => e.logError());
-        _searchService.reindexTasks(successes);
-      }
+      const [userTasks, error] = await api.getAllUserTasks({ userId: auth.user.id });
+      if (userTasks) {
+        _searchService.reindexTasks(userTasks);
+      } else Err.UNHANDLED(error);
     }
 
     // Subscribe to remote tasks availability store

@@ -1,4 +1,4 @@
-import { Err } from '@/Errors';
+import { Err } from '$domain/errors';
 import { dbPromise, APP_TABLE_NAME } from '../localDB';
 
 // TODO:mobile Use platform secure storage (Keychain/SecureStorage) for vault key and entries

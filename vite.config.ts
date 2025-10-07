@@ -11,7 +11,10 @@ export default defineConfig({
 	// 	outdir: './src/lib/paraglide'
 	// })
 	resolve: {
-		alias: { $lib: path.resolve(__dirname, 'src/lib') }
+		alias: {
+			$lib: path.resolve(__dirname, 'src/lib'),
+			$domain: path.resolve(__dirname, 'src/domain')
+		}
 	},
-	test: { setupFiles: ['src/vitest.setup.ts'] }
+	// test: { setupFiles: ['src/vitest.setup.ts'] }
 });

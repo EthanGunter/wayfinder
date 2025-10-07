@@ -1,8 +1,8 @@
-import { Err, InvalidStateError } from '@/Errors';
+import { Err, InvalidStateError } from '$domain/errors';
 import { writable, derived, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
-import { dbPromise, APP_TABLE_NAME } from '@/API/localDB';
+import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import type { SvelteComponent } from 'svelte';
-import type { UserFeature } from '@/API/Auth/User';
+import type { UserFeature } from '$lib/API/Auth/User';
 
 export type SettingScope = 'user' | 'device';
 
@@ -82,14 +82,13 @@ export abstract class BaseSetting<T> implements Writable<T> {
 
   private async persistToUser(key: string, value: any): Promise<void> {
     try {
-      const { authAPI } = await import('@/API/Auth');
-      const userResult = await authAPI.getUser();
-      if (userResult.isErr()) {
+      const { authAPI } = await import('$lib/API/Auth');
+      const [user, error] = await authAPI.getUser();
+      if (error) {
         console.warn('Cannot persist setting: no user available');
         return;
       }
 
-      const user = userResult.value;
       const settings = user.setting_overrides ?? {} as any;
       settings[key] = value;
 

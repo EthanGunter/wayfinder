@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { tutorials } from '$lib/tutorials/store';
-	import TModal from '@/tutorials/primitives/TModal.svelte';
-	import EventHandler from '@/tutorials/primitives/EventHandler.svelte';
+	import TModal from '$lib/tutorials/primitives/TModal.svelte';
+	import EventHandler from '$lib/tutorials/primitives/EventHandler.svelte';
 	import Icon from '@iconify/svelte';
-	import TGate from '@/tutorials/primitives/TGate.svelte';
+	import TGate from '$lib/tutorials/primitives/TGate.svelte';
 
 	let active = $state(false);
 	let step = $state(0);

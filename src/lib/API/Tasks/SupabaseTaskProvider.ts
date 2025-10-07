@@ -1,9 +1,9 @@
-import { Err, IOError, NotAuthorizedError, NotFoundError, NotImplementedError, okBatch } from "$lib/Errors";
-import { err, ok } from "neverthrow";
+import { Err, IOError, NotAuthorizedError, NotFoundError, NotImplementedError } from "$domain/errors";
+import { err, ok } from "$domain/result";
 import type { ITasks, UpdateTaskParams } from "./types";
 import { type Task, populateTaskDTO } from "./Task";
 import { getRelationshipUpdates } from "./index";
-import { settings, deviceSettingsReady } from "@/user-settings";
+import { settings, deviceSettingsReady } from "$lib/user-settings";
 import { createClient } from "@supabase/supabase-js";
 import { get } from "svelte/store";
 import type { Database } from "../supabase";
@@ -77,8 +77,9 @@ const api: ITasks = {
     const allUpdates: UpdateTaskParams[] = [...relUpdates, ...selfFixes];
     if (allUpdates.length > 0) {
       const batch = await api.updateTasks({ updates: allUpdates });
-      if (batch.isErr()) {
-        return err(batch.error);
+      const [_, batchErr] = batch;
+      if (batchErr) {
+        return err(batchErr);
       }
     }
 
@@ -141,8 +142,9 @@ const api: ITasks = {
     const allUpdates: UpdateTaskParams[] = [...relationshipUpdates, ...selfFixes];
     if (allUpdates.length > 0) {
       const batch = await api.updateTasks({ updates: allUpdates });
-      if (batch.isErr()) {
-        return err(batch.error);
+      const [_, batchErr] = batch;
+      if (batchErr) {
+        return err(batchErr);
       }
     }
 
@@ -176,32 +178,32 @@ const api: ITasks = {
       return err(new IOError(`[Supabase] Failed to read tasks (${ids.join(', ')})`, error));
     }
     const foundIds = new Set((data ?? []).map((r: any) => r.id));
-    const missing = ids.filter(id => !foundIds.has(id)).map(id => new NotFoundError('[Supabase] Task not found', id));
-    return okBatch((data ?? []), missing);
+
+    for (const id of ids) {
+      if (!ids.includes(id))
+        return err(new NotFoundError('[Supabase] Task not found', id));
+    }
+
+    return ok(data ?? []);
   },
   getAllUserTasks: async ({ userId }) => {
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').eq('user_id', userId);
     if (error) {
       return err(new IOError(`[Supabase] Failed to read tasks for user`, error, userId));
     }
-    return okBatch((data ?? []));
+    return ok((data ?? []));
   },
 
   updateTask: async (update: UpdateTaskParams) => {
-    const batch = await api.updateTasks({ updates: [update] });
-    if (batch.isErr()) {
-      return err(batch.error);
+    const [tasks, error] = await api.updateTasks({ updates: [update] });
+    if (error) {
+      return err(error);
     }
 
-    const { successes, errors } = batch.value;
-    if (errors.length === 1) {
-      return err(errors[0]);
-    }
-
-    return ok(successes[0]);
+    return ok(tasks[0]);
   },
   updateTasks: async ({ updates }) => {
-    if (updates.length === 0) return okBatch([], []);
+    if (updates.length === 0) return ok([]);
     const ids = updates.map(u => u.id);
 
     const existingRes = await supabase.from(TASK_TABLE_NAME).select('*').in('id', ids);
@@ -212,13 +214,11 @@ const api: ITasks = {
     const idToRow = new Map((existingRes.data ?? []).map((r: any) => [r.id, r] as [string, any]));
 
     const results: Task[] = [];
-    const notFounds: NotFoundError[] = [];
 
     for (const u of updates) {
       const current = idToRow.get(u.id) as Task | undefined;
       if (!current) {
-        notFounds.push(new NotFoundError('[Supabase] Task not found for update', u.id));
-        continue;
+        return err(new NotFoundError('[Supabase] Task not found for update', u.id));
       }
 
       // Build the next state to compute relation array changes
@@ -273,7 +273,7 @@ const api: ITasks = {
       results.push(data as Task);
     }
 
-    return okBatch(results, notFounds);
+    return ok(results);
   },
 
   deleteTask: async ({ id }) => {
@@ -302,7 +302,7 @@ const api: ITasks = {
     if (readErr) {
       return err(new IOError('[Supabase] Failed to read tasks for ownership change', readErr, oldUserID));
     }
-    if (!toChange || toChange.length === 0) return okBatch([]);
+    if (!toChange || toChange.length === 0) return ok([]);
     const { data, error } = await supabase
       .from(TASK_TABLE_NAME)
       .update({ user_id: newUserID, last_edit: new Date().toISOString() })
@@ -311,33 +311,33 @@ const api: ITasks = {
     if (error || !data) {
       return err(new IOError('[Supabase] Failed to change ownership', error));
     }
-    return okBatch(data);
+    return ok(data);
   }, */
 
   getChildrenOf: async ({ id }) => {
-    const parent = await api.getTask({ id });
-    if (parent.isErr()) {
-      return err(parent.error);
+    const [parent, parentErr] = await api.getTask({ id });
+    if (parentErr) {
+      return err(parentErr);
     }
-    const childIds = parent.value.children ?? [];
+    const childIds = parent.children ?? [];
     if (childIds.length === 0) return ok([]);
 
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').in('id', childIds);
     if (error) {
-      return err(new IOError(`[Supabase] Failed to find children for ${parent.value.title}`, error, childIds));
+      return err(new IOError(`[Supabase] Failed to find children for ${parent.title}`, error, childIds));
     }
     return ok(data ?? []);
   },
   getParentsOf: async ({ id }) => {
-    const child = await api.getTask({ id });
-    if (child.isErr()) {
-      return err(child.error);
+    const [child, childErr] = await api.getTask({ id });
+    if (childErr) {
+      return err(childErr);
     }
-    const parentIds = child.value.parents ?? [];
+    const parentIds = child.parents ?? [];
     if (parentIds.length === 0) return ok([]);
     const { data, error } = await supabase.from(TASK_TABLE_NAME).select('*').in('id', parentIds);
     if (error) {
-      return err(new IOError(`[Supabase] Failed to find parents for ${child.value.title}`, error, parentIds));
+      return err(new IOError(`[Supabase] Failed to find parents for ${child.title}`, error, parentIds));
     }
     return ok(data ?? []);
   },
