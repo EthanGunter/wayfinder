@@ -17,7 +17,7 @@
 		id: '',
 		displayName: '',
 		avatarUrl: '',
-		createdAt: new Date().toISOString(),
+		createdAt: new Date(),
 		status: 'active',
 		features: []
 	});
@@ -52,11 +52,11 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const userData = {
+			const userData: User = {
 				id: v4(),
-				display_name: tempUser.displayName.trim(),
-				avatar_url: tempUser.avatarUrl || '',
-				created_at: new Date().toISOString(),
+				displayName: tempUser.displayName.trim(),
+				avatarUrl: tempUser.avatarUrl || '',
+				createdAt: new Date(),
 				status: tempUser.status || 'active',
 				features: [...(tempUser.features || [])]
 			};
@@ -69,12 +69,11 @@
 				errorMessage = reqs.map((r: any) => r.message).join(', ');
 				return;
 			}
-			const [user, registerError] = await authAPI.register({ creds, userData });
-			if (user) {
-				// await invalidateAll();
-				goto(redir);
-			} else {
+			const [_, registerError] = await authAPI.register({ creds, userData });
+			if (registerError) {
 				errorMessage = registerError.message || 'Registration failed';
+			} else {
+				goto(redir);
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';

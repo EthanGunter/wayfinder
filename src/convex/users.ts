@@ -1,7 +1,7 @@
 // convex/auth.ts
 import { NotFoundError, NotImplementedError } from "$domain/errors";
-import { User } from "$domain/models/user";
-import { Doc } from "./_generated/dataModel";
+import { type User } from "$domain/models/user";
+import { type Doc } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
@@ -79,14 +79,13 @@ export const register = mutation({
     // exists/allowed. For now assume userData.id is validated externally.
     console.log("register user", userData);
     // TODO get authId from auth provider registration
-    const id = ctx.auth.getUserIdentity();
-
-
+    const authId = "TODO:authId";
+    ctx.auth.getUserIdentity();
 
     // Upsert by authId
     const existing = await ctx.db
       .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", userData.id))
+      .withIndex("by_authId", (q) => q.eq("authId", authId))
       .unique();
 
     if (existing) {
@@ -113,7 +112,7 @@ export const register = mutation({
     }
 
     const _id = await ctx.db.insert("users", {
-      authId: userData.id,
+      authId: authId,
       displayName: userData.displayName,
       avatarUrl: userData.avatarUrl,
       status: userData.status ?? "active",

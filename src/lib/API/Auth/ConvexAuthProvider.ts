@@ -24,13 +24,14 @@ import { api } from "$convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { PUBLIC_CONVEX_URL } from "$env/static/public";
 import type { Doc } from "$convex/_generated/dataModel";
+import { authkit } from "$lib/API/WorkOSAuthKit";
 
 const client = new ConvexClient(PUBLIC_CONVEX_URL);
 
 const convexApi: IAuthRemote = {
 	watchUser: ({ id }: { id: string }): LiveStore<Fetchable<User>> => {
 		return toLiveStore(
-			api.auth.watchUser,
+			api.users.watchUser,
 			{ id },
 			{
 				status: "error",
@@ -44,7 +45,7 @@ const convexApi: IAuthRemote = {
 	},
 	watchUsers: ({ ids }: { ids: string[] }): LiveStore<Fetchable<User[]>> => {
 		return toLiveStore(
-			api.auth.watchUsers,
+			api.users.watchUsers,
 			{ ids },
 			{ status: "resolved", data: [] }, // empty list on not-found
 		);
@@ -55,30 +56,33 @@ const convexApi: IAuthRemote = {
 
 	register: async ({ creds, userData }) => {
 		console.log("[ConvexAuthProvider] register user");
-		await client.mutation(api.auth.register, { creds, userData });
+		await authkit.signIn();
+		await client.mutation(api.users.register, { creds, userData });
 		return ok();
 	},
 
 	updateUser: async ({ update }) => {
-		const res = await client.mutation(api.auth.updateUser, { update });
+		const res = await client.mutation(api.users.updateUser, { update });
 		if (res.ok) return ok(res.value);
 		return err(res.error);
 	},
 
 	deleteUser: async ({ userId }) => {
-		const res = await client.mutation(api.auth.deleteUser, { userId })
+		const res = await client.mutation(api.users.deleteUser, { userId })
 		if (res.ok) return ok();
 		return err(res.error);
 	},
 
 	login: async ({ creds }) => {
-		const res = await client.mutation(api.auth.login, { creds })
+		await authkit.signIn();
+		const res = await client.mutation(api.users.login, { creds })
 		if (res.ok) return ok();
 		return err(res.error);
 	},
 
 	logout: async () => {
-		await client.mutation(api.auth.logout, {})
+		await authkit.signOut();
+		await client.mutation(api.users.logout, {})
 	}
 };
 

@@ -1,5 +1,5 @@
-import { Task } from "$domain/models/task";
-import { Doc } from "./_generated/dataModel";
+import { type Task } from "$domain/models/task";
+import { type Doc } from "./_generated/dataModel";
 
 
 //#region Mapping Utility

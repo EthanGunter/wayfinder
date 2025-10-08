@@ -71,22 +71,23 @@ export abstract class BaseSetting<T> implements Writable<T> {
   }
 
   private async persistToUser(key: string, value: any): Promise<void> {
-    try {
-      const { authAPI } = await import('$lib/API/Auth');
-      const [user, error] = await authAPI.getUser();
-      if (error) {
-        console.warn('Cannot persist setting: no user available');
-        return;
-      }
-
-      const settings = user.settingOverrides ?? {} as any;
-      settings[key] = value;
-
-      // Update user with new settings (this handles both local IDB and remote sync)
-      await authAPI.updateUser({ update: { id: user.id, settingOverrides: settings } });
-    } catch (e) {
-      console.warn('Failed to persist setting', e);
-    }
+    throw new Error("Deprecated")
+    /*  try {
+       const { authAPI } = await import('$lib/API/Auth');
+       const [user, error] = await authAPI.getUser();
+       if (error) {
+         console.warn('Cannot persist setting: no user available');
+         return;
+       }
+ 
+       const settings = user.settingOverrides ?? {} as any;
+       settings[key] = value;
+ 
+       // Update user with new settings (this handles both local IDB and remote sync)
+       await authAPI.updateUser({ update: { id: user.id, settingOverrides: settings } });
+     } catch (e) {
+       console.warn('Failed to persist setting', e);
+     } */
   }
 }
 

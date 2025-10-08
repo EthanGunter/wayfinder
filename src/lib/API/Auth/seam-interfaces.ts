@@ -1,5 +1,5 @@
 import type { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError } from "$domain/errors";
-import type { LocalUser, LoginCredentials, LoginMethod, RegistrationRequirements, User } from "$domain/models/user";
+import type { LocalUser, LoginCredentials, RegistrationRequirements, User } from "$domain/models/user";
 import type { Result } from "$domain/result";
 import type { Readable } from "svelte/store";
 
@@ -26,7 +26,7 @@ export interface IAuthLocal {
 	register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<void, NotImplementedError | ArgumentError>>,
 
 	/** Defines the requirements and availability for different Authentication methods */
-	getRegistrationRequirements(method: LoginMethod): Result<RegistrationRequirements[], NotImplementedError>,
+	getRegistrationRequirements(method: LoginCredentials): Result<RegistrationRequirements[], NotImplementedError>,
 
 	/** Sets the active user for this device */
 	switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
@@ -60,7 +60,7 @@ export interface IAuthRemote {
 	/* --- Mutators --- */
 
 	/** Defines the requirements and availability for different Authentication methods */
-	getRegistrationRequirements(method: LoginMethod): Result<RegistrationRequirements[], NotImplementedError>,
+	getRegistrationRequirements(creds: LoginCredentials): Result<RegistrationRequirements[], NotImplementedError>,
 	/** Responsible for creating a new user account with the given credentials */
 	register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<void, NotImplementedError | ArgumentError | InvalidStateError>>,
 	updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,

@@ -69,10 +69,18 @@ export const deviceSettingsReady: Promise<void> = (async () => {
 // Initialize settings from user object (dynamic import to avoid early cycles)
 void (async () => {
     const { authAPI } = await import('$lib/API/Auth');
-    const [user, error] = await authAPI.getUser();
-    if (error) Err.UNHANDLED(error);
+    authAPI.watchAuthState().subscribe(state => {
+        switch (state.status) {
+            case 'error':
+                Err.UNHANDLED(state.error);
+                break;
+            case 'signed-in':
+                if (state.user.settingOverrides) {
+                    applySettings(settings, state.user.settingOverrides);
+                }
+            default:
+                break;
+        }
+    });
 
-    if (user && user.settingOverrides) {
-        applySettings(settings, user.settingOverrides);
-    }
 })();

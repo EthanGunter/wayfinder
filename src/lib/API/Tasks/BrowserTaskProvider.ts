@@ -214,7 +214,7 @@ const api: ITasksLocal = {
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
     const userTasks = (allTasks as Task[]).filter(t => t.userAuthId === auth.user.id);
     const today = new Date().toISOString().split('T')[0];
-    const todays = userTasks.filter(t => t.todaysTask && t.todaysTask.startsWith(today));
+    const todays = userTasks.filter(t => t.todaysTask && t.todaysTask.toISOString().startsWith(today));
     return ok(todays);
   },
   getPrioritizedTasks: async function (limit: number) {
@@ -543,7 +543,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
       ...(changes as Partial<Task>),
       children: Array.from(updatedChildren) as string[],
       parents: Array.from(updatedParents) as string[],
-      lastEdit: new Date().toISOString()
+      lastEdit: new Date()
     };
 
     await _db.put(TASK_TABLE_NAME, updated);

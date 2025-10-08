@@ -6,7 +6,9 @@ import { writable, type Readable, get } from 'svelte/store';
 import { USER_TABLE_NAME } from '../DBConstants';
 import { remoteAuth } from '.';
 import { err, ok } from '$domain/result';
-import { type AuthState, type LocalUser, type IAuth, type IAuthLocal, isAnonymous, isSessionCapable, type User } from '$domain/models/user';
+import { isAnonymous, type LocalUser, type User, type LoginCredentials } from '$domain/models/user';
+import type { AuthState, IAuthLocal, IAuthRemote } from './seam-interfaces';
+import { isSessionCapable } from './seam-interfaces';
 
 // Stores
 const _authState = writable<AuthState>({ status: "loading" });
@@ -17,11 +19,12 @@ export const browserCachedUsers: Readable<LocalUser[]> = _users;
 
 // Module state
 let db: LocalDB | null = null;
-let _remoteAuth: IAuth | null = null;
+let _remoteAuth: IAuthRemote | null = null;
 
 // Module-load hydration
 (async () => {
   try {
+    console.log('[TODO:debug EG] BrowserAuthProvider init start'); // TODO:debug EG
     db = await dbPromise;
 
     // Hydrate users list
@@ -30,14 +33,18 @@ let _remoteAuth: IAuth | null = null;
 
     // Hydrate active user state
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+    console.log('[TODO:debug EG] activeUserId from DB:', activeUserId); // TODO:debug EG
     if (activeUserId) {
       const activeUser = await db.get(USER_TABLE_NAME, activeUserId) as LocalUser | undefined;
       if (activeUser) {
+        console.log('[TODO:debug EG] setting signed-in with user:', activeUser.id); // TODO:debug EG
         _authState.set({ status: "signed-in", user: activeUser });
       } else {
+        console.log('[TODO:debug EG] activeUserId but no user found, setting signed-out'); // TODO:debug EG
         _authState.set({ status: "signed-out", user: null });
       }
     } else {
+      console.log('[TODO:debug EG] no activeUserId, setting signed-out'); // TODO:debug EG
       _authState.set({ status: "signed-out", user: null });
     }
 
@@ -58,12 +65,16 @@ let _remoteAuth: IAuth | null = null;
 })();
 
 const api: IAuthLocal = {
-  register: async ({ creds, userData }) => {
+  watchAuthState: () => {
+    return browserAuthState;
+  },
+
+  register: async ({ creds, userData }: { creds: LoginCredentials, userData: LocalUser }) => {
     if (isAnonymous(userData)) {
       return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
     }
 
-    const [reqmts, reqErr] = api.getRegistrationRequirements(creds.type);
+    const [reqmts, reqErr] = api.getRegistrationRequirements(creds);
     if (reqErr) {
       return err(reqErr);
     } else if (reqmts.length > 0) {
@@ -74,44 +85,30 @@ const api: IAuthLocal = {
     assertRemoteAuth(_remoteAuth, `Cannot register without remote auth provider`);
 
     // Create the new account on the server
-    const [registeredUser, regErr] = await _remoteAuth.register({ creds, userData });
+    const [_, regErr] = await _remoteAuth.register({ creds, userData });
     if (regErr) {
       if (regErr instanceof ArgumentError) {
         // TODO:DX Invalid state doesn't clearly guarantee the user is already registered...
         // Attempt to log the user in with the account
-        const [logRes, logErr] = await api.login({ creds });
-        if (logRes) return ok(logRes);
+        return await api.login({ creds });
       }
       return err(regErr);
     }
 
     // Create local user with registered user data
-    await db.put(USER_TABLE_NAME, registeredUser);
+    await db.put(USER_TABLE_NAME, userData);
     await _refreshUsers();
 
     // Switch to the new user
-    await api.switchUser(registeredUser.id);
+    await api.switchUser(userData.id);
 
-    return ok(registeredUser);
+    return ok(undefined);
   },
 
   removeCachedUser: async (userId: string): Promise<void> => {
     assertDB(db);
     await db.delete(USER_TABLE_NAME, userId);
     await _refreshUsers();
-  },
-
-  getUser: async () => {
-    assertDB(db);
-    const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    if (activeId) {
-      const activeUser = await db.get(USER_TABLE_NAME, activeId);
-      if (activeUser) {
-        return ok(activeUser);
-      }
-    }
-
-    return err(new InvalidStateError("No active user"));
   },
 
   switchUser: async (newUserId: string) => {
@@ -179,21 +176,23 @@ const api: IAuthLocal = {
     return _remoteAuth.getRegistrationRequirements(signUpCred);
   },
 
-  updateUser: async ({ update }) => {
+  updateUser: async ({ update }: { update: Partial<User> }) => {
     assertDB(db);
 
     let userId;
     if (update.id) {
       userId = update.id;
     } else {
-      const [activeUser, activeUserErr] = await api.getUser();
-      if (activeUserErr) return err(activeUserErr);
-      userId = activeUser.id;
+      const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
+      if (!activeId) {
+        return err(new InvalidStateError("No active user to update"));
+      }
+      userId = activeId;
     }
 
     const user = await db.get(USER_TABLE_NAME, userId) as LocalUser | undefined;
     if (!user) {
-      return err(new NotFoundError(update.id, "User"));
+      return err(new NotFoundError(userId, "User"));
     }
 
     // Skip if no real change (avoid redundant store writes/loops)
@@ -241,7 +240,7 @@ const api: IAuthLocal = {
     return ok(updatedUser);
   },
 
-  deleteUser: async ({ userId }) => {
+  deleteUser: async ({ userId }: { userId: string }) => {
     assertDB(db);
 
     const user = await db.get(USER_TABLE_NAME, userId) as LocalUser | undefined;
@@ -301,41 +300,22 @@ const api: IAuthLocal = {
     }
   },
 
-  login: async ({ creds }) => {
+  login: async ({ creds }: { creds: LoginCredentials }) => {
     assertDB(db);
     assertRemoteAuth(_remoteAuth);
 
     // Proceed with remote login
-    const [loginResult, loginErr] = await _remoteAuth.login({ creds });
+    const [_, loginErr] = await _remoteAuth.login({ creds });
     if (loginErr) {
       console.log(loginErr);
-      ;
       return err(loginErr);
     }
 
-    const remoteUser = loginResult;
+    // TODO: After login, we need to get the authenticated user from the remote provider
+    // The current implementation assumes login sets up the session and we can get the user somehow
+    // For now, we'll need to handle this based on how WorkOS AuthKit provides user info
 
-    // Create local user with remote user data
-    await db.put(USER_TABLE_NAME, remoteUser);
-    await _refreshUsers();
-
-    // Persist session material BEFORE switching so switchUser can restore remote session if needed
-    if (_remoteAuth && isSessionCapable(_remoteAuth)) {
-      try {
-        const [material, materialErr] = await _remoteAuth.getSessionMaterial({ userId: remoteUser.id });
-        if (!materialErr && material) {
-          await SessionVault.save(remoteUser.id, material);
-        }
-      } catch { }
-    }
-
-    // Switch to the logged in user
-    await api.switchUser(remoteUser.id);
-
-    // Hydrate tasks for this user
-    await tasksAPI.hydrateForUser({ user: remoteUser });
-
-    return ok(remoteUser);
+    return ok(undefined);
   },
 
   logout: async () => {
@@ -345,7 +325,7 @@ const api: IAuthLocal = {
     await db.delete(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME);
 
     // Invalidate remote session
-    void await _remoteAuth?.logout();
+    await _remoteAuth?.logout();
 
     // Remove the refresh token and local data for switching
     if (activeId) {
@@ -356,7 +336,6 @@ const api: IAuthLocal = {
 
     // Update store
     _authState.set({ status: "signed-out", user: null });
-    return ok(undefined);
   }
 }
 export default api;
@@ -369,17 +348,22 @@ async function _fetchAndPersistLatestUser(current: LocalUser): Promise<LocalUser
   if (!_remoteAuth) {
     return current;
   }
-  const [res, resErr] = await _remoteAuth.getUser({ id: current.id });
-  if (resErr) {
-    Err.UNHANDLED(resErr);
-    return current;
-  }
 
-  const remoteUser = res;
-  const merged: LocalUser = { ...current, ...remoteUser };
-  await db.put(USER_TABLE_NAME, merged);
-  await _refreshUsers();
-  return merged;
+  // TODO: IAuthRemote doesn't have a getUser method - need to use watchUser or add getUser to interface
+  // For now, just return current user
+  return current;
+
+  // const [res, resErr] = await _remoteAuth.getUser({ id: current.id });
+  // if (resErr) {
+  //   Err.UNHANDLED(resErr);
+  //   return current;
+  // }
+
+  // const remoteUser = res;
+  // const merged: LocalUser = { ...current, ...remoteUser };
+  // await db.put(USER_TABLE_NAME, merged);
+  // await _refreshUsers();
+  // return merged;
 }
 
 // Helper to refresh users list from DB
@@ -392,7 +376,7 @@ async function _refreshUsers(): Promise<void> {
 function assertDB(db: LocalDB | null, errorMessage?: string): asserts db is LocalDB {
   if (!db) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use LocalAuthProvider without a db connection. Make sure to call .get()"));
 }
-function assertRemoteAuth(remoteAuth: IAuth | null, errorMessage?: string): asserts remoteAuth is IAuth {
+function assertRemoteAuth(remoteAuth: IAuthRemote | null, errorMessage?: string): asserts remoteAuth is IAuthRemote {
   if (!remoteAuth) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use Remote auth without a provider."));
 }
 
