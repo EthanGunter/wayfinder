@@ -63,10 +63,13 @@
 		"vitest-mock-extended": "^3.1.0"
 	},
 	"dependencies": {
+		"@auth/core": "^0.37.0",
+		"@convex-dev/auth": "^0.0.90",
 		"@supabase/supabase-js": "^2.50.2",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"convex": "^1.27.4",
+		"convex-svelte": "^0.0.11",
 		"flexsearch": "^0.8.205",
 		"idb": "^8.0.3",
 		"js-yaml": "^4.1.0",

@@ -54,7 +54,7 @@
 		void (await tasksAPI.createTask({
 			createDetail: {
 				id: 'DEMO-1',
-				user_id: $authState.user.id,
+				userAuthId: $authState.user.id,
 				title: 'Go to the ball 💃🕺'
 			}
 		}));
@@ -70,7 +70,7 @@
 		const [task, error] = await tasksAPI.createTask({
 			createDetail: {
 				id: 'DEMO-2',
-				user_id: $authState.user.id,
+				userAuthId: $authState.user.id,
 				title: 'Get dress clothes 🥿👗👔👞',
 				parents: ['DEMO-1']
 			}

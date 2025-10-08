@@ -10,12 +10,12 @@ import type { User } from "./user";
 
 export interface Task {
     id: string,
-    user_id: string,
+    userAuthId: string,
     // filepath?: string // TODO I'd eventually like to make Wayfinder local-plain-text-first, but that's a future feature
     title: string,
     content?: string,
     status: TaskStatus,
-    todays_task?: string, // ISO Timestamp
+    todaysTask?: Date, // Time of assignment
     priority?: number,
     /** 
      * Tasks that depend on this one's completion.
@@ -25,8 +25,8 @@ export interface Task {
      * This task's prequisite[s].
     */
     children: string[]
-    created: string, // ISO Timestamp
-    last_edit: string, // ISO Timestamp
+    created: Date,
+    lastEdit: Date,
 }
 
 export enum TaskStatus {
@@ -54,27 +54,27 @@ export function isTaskCompleted(task: Task): boolean {
 export function createTask(params: CreateTaskParams): Task {
     const {
         id,
-        user_id,
+        userAuthId: user_id,
         title,
         content,
         status = TaskStatus.incomplete,
-        todays_task,
+        todaysTask: todays_task,
         priority = 0,
-        created = new Date().toISOString(),
-        last_edit = new Date().toISOString(),
+        created = new Date(),
+        lastEdit: last_edit = new Date(),
         parents = [],
         children = [],
     } = params;
     return {
         id: id ?? v4(),
-        user_id: user_id,
+        userAuthId: user_id,
         title: title,
         content,
         status,
-        todays_task,
+        todaysTask: todays_task,
         priority,
         created,
-        last_edit,
+        lastEdit: last_edit,
         parents,
         children,
     };
@@ -82,7 +82,7 @@ export function createTask(params: CreateTaskParams): Task {
 
 export function taskEquals(a: Task, b: Task, ignoreId: boolean = false): boolean {
     if (!ignoreId && a.id !== b.id) return false;
-    return a.user_id === b.user_id
+    return a.userAuthId === b.userAuthId
         && a.title === b.title
         && a.content === b.content
         && a.status === b.status
@@ -94,21 +94,21 @@ export function taskEquals(a: Task, b: Task, ignoreId: boolean = false): boolean
 }
 
 export function populateTaskDTO(dto: CreateTaskParams): PopulatedTaskDTO {
-    const populated = {
+    const populated: PopulatedTaskDTO = {
         id: dto.id ?? v4(),
-        user_id: dto.user_id,
+        userAuthId: dto.userAuthId,
         priority: dto.priority ?? 0,
         title: dto.title,
         content: dto.content,
         // filepath: dto.filepath ?? `${dto.title}.md`,
         status: dto.status ?? TaskStatus.incomplete,
-        todays_task: dto.todays_task,
-        created: dto.created ?? new Date().toISOString(),
-        last_edit: dto.last_edit ?? new Date().toISOString(),
+        todaysTask: dto.todaysTask,
+        created: dto.created ?? new Date(),
+        lastEdit: dto.lastEdit ?? new Date(),
         parents: dto.parents ?? [],
         children: dto.children ?? [],
     };
-    if (!populated.id)
+    if (!dto.id)
         delete (populated as any).id;
     return populated;
 }
@@ -288,8 +288,8 @@ export type TaskDelta = { oldTask: Task | null; newTask: Task | null };
 export type CreateTaskParams = Partial<Task> & Omit<Task,
     // | "id"
     | "created"
-    | "last_edit"
-    | "todays_task"
+    | "lastEdit"
+    | "todaysTask"
     | "status"
     | "parents"
     | "children"

@@ -3,9 +3,8 @@ import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, t
 import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$domain/errors';
 import SessionVault from './SessionVault';
 import { writable, type Readable, get } from 'svelte/store';
-import { remoteAuth } from '$lib/stores/remoteAuth';
 import { USER_TABLE_NAME } from '../DBConstants';
-import { authState } from '.';
+import { remoteAuth } from '.';
 import { err, ok } from '$domain/result';
 import { type AuthState, type LocalUser, type IAuth, type IAuthLocal, isAnonymous, isSessionCapable, type User } from '$domain/models/user';
 
@@ -64,7 +63,7 @@ const api: IAuthLocal = {
       return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
     }
 
-    const [reqmts, reqErr] = api.getRegistrationRequirements(creds);
+    const [reqmts, reqErr] = api.getRegistrationRequirements(creds.type);
     if (reqErr) {
       return err(reqErr);
     } else if (reqmts.length > 0) {

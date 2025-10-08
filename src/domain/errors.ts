@@ -1,9 +1,9 @@
 // errors.ts — preserve source maps; rebase at throw site; exclude internal frames via captureStackTrace
 
-import { settings } from "$lib/user-settings";
+/* import { settings } from "$lib/user-settings";
 
 const dev = settings.dev.root.enabled;
-if (dev) console.log("Err system in DEV mode");
+if (dev) console.log("Err system in DEV mode"); */
 
 function captureHere(err: Error, excludeFn: Function) {
     if ((Error as any).captureStackTrace) {
@@ -81,7 +81,11 @@ export class Err extends Error {
     }
 }
 
-export type UnknownError = Err;
+export class UnknownError extends Err {
+    constructor(message: string, cause?: Error) {
+        super("UnknownError", message, cause);
+    }
+}
 
 export class InvalidStateError extends Err {
     constructor(message: string, context?: any) {
@@ -102,7 +106,7 @@ export class InputRequiredError extends Err {
 }
 
 export class NotFoundError extends Err {
-    constructor(msg: string = "Item not found", key?: any) {
+    constructor(msg: string, key?: any) {
         super("NotFoundError", msg, key);
     }
 }

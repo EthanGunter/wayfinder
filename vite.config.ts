@@ -13,7 +13,8 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			$lib: path.resolve(__dirname, 'src/lib'),
-			$domain: path.resolve(__dirname, 'src/domain')
+			$domain: path.resolve(__dirname, 'src/domain'),
+			$convex: path.resolve(__dirname, 'src/convex')
 		}
 	},
 	// test: { setupFiles: ['src/vitest.setup.ts'] }

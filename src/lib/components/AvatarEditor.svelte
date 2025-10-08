@@ -16,7 +16,7 @@
 
 	// Watch for changes and update user - create new object reference to trigger reactivity
 	function handleAvatarUrlChange(newUrl: string) {
-		user = { ...user, avatar_url: newUrl };
+		user = { ...user, avatarUrl: newUrl };
 		if (onAvatarChange) {
 			onAvatarChange(newUrl);
 		}
@@ -132,7 +132,7 @@
 					<input
 						id="avatar-url"
 						type="url"
-						value={user.avatar_url ?? ''}
+						value={user.avatarUrl ?? ''}
 						oninput={(e) => {
 							handleAvatarUrlChange(e.currentTarget.value);
 						}}

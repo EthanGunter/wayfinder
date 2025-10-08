@@ -41,7 +41,7 @@
 		const url = URL.createObjectURL(exportBlob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `wayfinder-${$authState.user.display_name.replaceAll(' ', '_')}-${new Date().toISOString().split('T')[0]}.json`;
+		a.download = `wayfinder-${$authState.user.displayName.replaceAll(' ', '_')}-${new Date().toISOString().split('T')[0]}.json`;
 		a.click();
 		URL.revokeObjectURL(url);
 		onClose?.();
@@ -82,7 +82,7 @@
 	<Sheet.Header>
 		<Sheet.Title>Account</Sheet.Title>
 		<Sheet.Description>
-			{$authState.user.display_name}
+			{$authState.user.displayName}
 		</Sheet.Description>
 	</Sheet.Header>
 

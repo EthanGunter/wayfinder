@@ -101,7 +101,7 @@
 				const [newTaskId, error] = await tasksAPI.createTask({
 					createDetail: {
 						id: v4(),
-						user_id: $authState.user.id,
+						userAuthId: $authState.user.id,
 						title: task
 					}
 				});
@@ -210,7 +210,7 @@
 							{:else}
 								<Icon icon="material-symbols:radio-button-unchecked" class="size-4 text-gray-400" />
 							{/if}
-							{#if task.todays_task}
+							{#if task.todaysTask}
 								<Icon icon="material-symbols:today" class="size-3 text-blue-600" />
 							{/if}
 						</div>

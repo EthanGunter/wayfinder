@@ -23,15 +23,16 @@
     "noEmit": true,
     "paths": {
       "$domain/*": [
-        "../src/domain/*"
-      ]
+        "../domain/*"
+      ],
     }
   },
   "include": [
     "./**/*",
-    "../src/domain/*"
+    "../domain/*"
   ],
   "exclude": [
-    "./_generated"
+    "./_generated",
+    "../lib/*"
   ]
 }

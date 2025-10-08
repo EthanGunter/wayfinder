@@ -1,8 +1,9 @@
-//#region User Interface and Utilities
-
-import type { AppSettings } from "$lib/user-settings";
 import { Err, type ArgumentError, type InvalidStateError, type NotFoundError, type NotImplementedError } from "$domain/errors";
 import type { Result } from "$domain/result";
+// import type { AppSettings } from "$lib/user-settings/schema";
+
+
+//#region User Interface and Utilities
 
 export type UserStatus = "active" | "deleted";
 export type UserFeature =
@@ -12,12 +13,12 @@ export type UserFeature =
 // Base user interface
 export interface User {
 	id: string;
-	display_name: string;
-	avatar_url?: string;
-	created_at: string;
+	displayName: string;
+	avatarUrl?: string;
+	createdAt: Date;
 	status: UserStatus;
 	features: string[];
-	setting_overrides?: AppSettings;
+	settingOverrides?: any/* AppSettings */;
 }
 
 // Local user interface extends base user with local avatar and settings
@@ -52,9 +53,9 @@ export function getDefaultUserFeatures(): UserFeature[] {
 
 //#region API Interfaces
 
-
 export type LoginCredentials =
 	| { type: 'email_password'; email: string; password: string }
+export type LoginMethod = LoginCredentials['type'];
 
 export class IncorrectPasswordError extends Err {
 	constructor(message: string, ctx?: any) {
@@ -67,7 +68,7 @@ export type SignOutOptions = {
 	signOutOthers: boolean
 }
 
-export interface MigrationRequirements {
+export interface RegistrationRequirements {
 	target: AccountIssueTarget;
 	message: string;
 }
@@ -103,7 +104,7 @@ export interface IAuthLocal {
 	register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError>>,
 
 	/** Defines the requirements and availability for different Authentication methods */
-	getRegistrationRequirements(signUpCred: LoginCredentials): Result<MigrationRequirements[], NotImplementedError>,
+	getRegistrationRequirements(signUpCred: LoginMethod): Result<RegistrationRequirements[], NotImplementedError>,
 
 	/** Sets the active user for this device */
 	switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
@@ -134,7 +135,7 @@ export interface IAuthLocal {
 // NOTE All SyncQueued functions must use the params signature
 export interface IAuth {
 	/** Defines the requirements and availability for different Authentication methods */
-	getRegistrationRequirements(signUpCred: LoginCredentials): Result<MigrationRequirements[], NotImplementedError>,
+	getRegistrationRequirements(signUpCred: LoginMethod): Result<RegistrationRequirements[], NotImplementedError>,
 	/** Responsible for creating a new user account with the given credentials */
 	register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<User, NotImplementedError | ArgumentError | InvalidStateError>>,
 	getUser(params: { id: string }): Promise<Result<User, NotFoundError>>,

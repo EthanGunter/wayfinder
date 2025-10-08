@@ -39,7 +39,7 @@
 
 		const createDetail: CreateTaskParams = {
 			id: v4(),
-			user_id: $authState.user.id,
+			userAuthId: $authState.user.id,
 			title: formData.title.trim()
 		};
 

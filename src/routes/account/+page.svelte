@@ -24,7 +24,7 @@
 		const unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in' && state.user) {
 				// keep draft in sync with store (but do not write back)
-				if (draftName !== state.user.display_name) draftName = state.user.display_name;
+				if (draftName !== state.user.displayName) draftName = state.user.displayName;
 				loadTaskCount();
 			} else if (state.status === 'signed-out') {
 				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
@@ -108,12 +108,12 @@
 						if ($authState.status !== 'signed-in') return;
 						console.log(
 							avatar_url,
-							$authState.user.avatar_url,
-							avatar_url !== $authState.user.avatar_url
+							$authState.user.avatarUrl,
+							avatar_url !== $authState.user.avatarUrl
 						);
 
-						if (avatar_url !== $authState.user.avatar_url) {
-							void debouncedUpdateUser({ update: { id: $authState.user.id, avatar_url } });
+						if (avatar_url !== $authState.user.avatarUrl) {
+							void debouncedUpdateUser({ update: { id: $authState.user.id, avatarUrl: avatar_url } });
 						}
 					}}
 					class="m-auto max-h-[50vh] max-w-[50vw]"
@@ -127,9 +127,9 @@
 						oninput={(event) => {
 							event.preventDefault();
 							if ($authState.status !== 'signed-in') return;
-							if (event.currentTarget.value !== $authState.user.display_name) {
+							if (event.currentTarget.value !== $authState.user.displayName) {
 								void debouncedUpdateUser({
-									update: { id: $authState.user.id, display_name: event.currentTarget.value }
+									update: { id: $authState.user.id, displayName: event.currentTarget.value }
 								});
 							}
 						}}

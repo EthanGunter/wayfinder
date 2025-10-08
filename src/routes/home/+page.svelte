@@ -66,7 +66,7 @@
 			todaysList = [...todaysList, task];
 			await tasksAPI!.updateTask({
 				id: task.id,
-				data: { todays_task: new Date().toISOString() }
+				data: { todaysTask: new Date().toISOString() }
 			});
 			refreshTasks();
 		}
@@ -79,7 +79,7 @@
 		todaysList = todaysList.filter((t) => t.id !== task.id);
 		const [_, error] = await tasksAPI!.updateTask({
 			id: task.id,
-			data: { todays_task: undefined }
+			data: { todaysTask: undefined }
 		});
 		if (error) {
 			Err.UNHANDLED(error);

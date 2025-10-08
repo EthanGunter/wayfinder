@@ -1,38 +1,43 @@
-// convex/lib/map.ts
-import type { Doc } from "./_generated/dataModel";
-import { Task, User } from "$domain/data-types";
+import { Task } from "$domain/models/task";
+import { Doc } from "./_generated/dataModel";
 
-// DB row -> domain
-export function toDomainUser(row: Doc<"users">): User {
-	return {
-		id: row.authId,
-		display_name: row.display_name,
-		avatar_url: row.avatar_url ?? undefined,
-		created_at: row.created_at,
-		status: (row.status ?? "active") as User["status"],
-		features: row.features ?? [],
-		setting_overrides: row.setting_overrides,
-	};
-}
 
-export function toDomainTask(row: Doc<"tasks">): Task {
+//#region Mapping Utility
+
+function rowToTask(row: Doc<"tasks">): Task {
 	return {
 		id: row._id,
-		user_id: row.user_auth_id,
+		userAuthId: row.userAuthId,
 		title: row.title,
 		content: row.content ?? undefined,
 		status: row.status,
-		todays_task: row.todays_task ?? undefined,
+		todaysTask: row.todaysTask ? new Date(row.todaysTask) : undefined,
 		priority: row.priority ?? 0,
 		parents: row.parents ?? [],
 		children: row.children ?? [],
-		created: row.created,
-		last_edit: row.last_edit,
+		created: new Date(row._creationTime),
+		lastEdit: new Date(row.lastEdit),
 	};
 }
 
+function taskToRow(task: Task): Omit<Doc<"tasks">, "_id"> {
+	return {
+		userAuthId: task.userAuthId,
+		title: task.title,
+		content: task.content ?? undefined,
+		status: task.status,
+		todaysTask: task.todaysTask?.getTime() ?? undefined,
+		priority: task.priority ?? 0,
+		parents: task.parents ?? [],
+		children: task.children ?? [],
+		_creationTime: task.created.getTime(),
+		lastEdit: task.lastEdit.getTime(),
+	};
+}
+
+
 // Domain -> DB insert (when you generate authoritative IDs server-side)
-export function newTaskDbDoc(params: {
+function newTaskDbDoc(params: {
 	id: string;
 	userId: string;
 	title: string;
@@ -58,7 +63,7 @@ export function newTaskDbDoc(params: {
 }
 
 // Partial patch builder for updates: domain-ish input -> DB patch
-export function buildTaskPatch(current: Doc<"tasks">, input: {
+function buildTaskPatch(current: Doc<"tasks">, input: {
 	data?: Partial<Task>;
 	relations?: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[];
 }) {
@@ -75,15 +80,15 @@ export function buildTaskPatch(current: Doc<"tasks">, input: {
 		}
 	}
 
-	const patch: Partial<Doc<"tasks">> = { last_edit: new Date().toISOString() };
+	const patch: Partial<Doc<"tasks">> = { lastEdit: new Date().getTime() };
 
 	// map domain fields to db fields
 	const d = input.data ?? {};
-	if ("title" in d) patch.title = d.title!;
-	if ("content" in d) patch.content = d.content;
-	if ("status" in d) patch.status = d.status!;
-	if ("todays_task" in d) patch.todays_task = d.todays_task;
-	if ("priority" in d) patch.priority = d.priority;
+	if (d.title) patch.title = d.title!;
+	if (d.content) patch.content = d.content;
+	if (d.status) patch.status = d.status!;
+	if (d.todaysTask) patch.todaysTask = d.todaysTask.getTime();
+	if (d.priority) patch.priority = d.priority;
 	if ((input.relations ?? []).length > 0) {
 		patch.parents = parents;
 		patch.children = children;
@@ -91,3 +96,5 @@ export function buildTaskPatch(current: Doc<"tasks">, input: {
 
 	return patch;
 }
+
+//#endregion

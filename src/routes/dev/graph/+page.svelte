@@ -15,7 +15,6 @@
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import { settings } from '$lib/user-settings/schema';
 
 	let shouldlog = $state(false);
 	let isLayingOut = $state(false);

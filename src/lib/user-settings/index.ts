@@ -72,7 +72,7 @@ void (async () => {
     const [user, error] = await authAPI.getUser();
     if (error) Err.UNHANDLED(error);
 
-    if (user && user.setting_overrides) {
-        applySettings(settings, user.setting_overrides);
+    if (user && user.settingOverrides) {
+        applySettings(settings, user.settingOverrides);
     }
 })();

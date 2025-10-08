@@ -15,9 +15,9 @@
 	// Temporary user data for registration
 	let tempUser = $state<User>({
 		id: '',
-		display_name: '',
-		avatar_url: '',
-		created_at: new Date().toISOString(),
+		displayName: '',
+		avatarUrl: '',
+		createdAt: new Date().toISOString(),
 		status: 'active',
 		features: []
 	});
@@ -45,7 +45,7 @@
 			errorMessage = 'Passwords do not match';
 			return;
 		}
-		if (!tempUser.display_name?.trim()) {
+		if (!tempUser.displayName?.trim()) {
 			errorMessage = 'Display name is required';
 			return;
 		}
@@ -54,8 +54,8 @@
 		try {
 			const userData = {
 				id: v4(),
-				display_name: tempUser.display_name.trim(),
-				avatar_url: tempUser.avatar_url || '',
+				display_name: tempUser.displayName.trim(),
+				avatar_url: tempUser.avatarUrl || '',
 				created_at: new Date().toISOString(),
 				status: tempUser.status || 'active',
 				features: [...(tempUser.features || [])]
@@ -106,7 +106,7 @@
 		<AvatarEditor
 			class="h-32 w-32 flex-shrink-0"
 			user={tempUser}
-			onAvatarChange={(avatarUrl: string) => updateTempUser({ avatar_url: avatarUrl })}
+			onAvatarChange={(avatarUrl: string) => updateTempUser({ avatarUrl: avatarUrl })}
 		/>
 	</div>
 
@@ -115,7 +115,7 @@
 		<input
 			id="displayName"
 			type="text"
-			bind:value={tempUser.display_name}
+			bind:value={tempUser.displayName}
 			placeholder="Enter your name"
 			required
 			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"

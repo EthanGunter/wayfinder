@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { get } from "svelte/store";
 import type { Database } from "../supabase";
 import { TASK_TABLE_NAME } from "../DBConstants";
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_API_KEY } from "$env/static/public";
 
 // TODO:bulk This provider uses sequential inserts to guarantee deterministic id mapping without fingerprints.
 // For very large imports this is inefficient (O(N) round-trips).
@@ -22,8 +23,8 @@ import { TASK_TABLE_NAME } from "../DBConstants";
 
 const urlOverride = get(settings.dev.overrides.supabaseTaskUrl);
 const keyOverride = get(settings.dev.overrides.supabaseTaskKey);
-const supabaseUrl = urlOverride || import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = keyOverride || import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
+const supabaseUrl = urlOverride || PUBLIC_SUPABASE_URL;
+const supabaseKey = keyOverride || PUBLIC_SUPABASE_API_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   const missing = [];
@@ -223,16 +224,16 @@ const api: ITasks = {
       // Build the next state to compute relation array changes
       const next: Task = {
         id: current.id,
-        user_id: current.user_id, // never change user_id in update path
+        userAuthId: current.userAuthId, // never change user_id in update path
         title: u.data?.title ?? current.title,
         content: u.data?.content ?? current.content,
         status: u.data?.status ?? current.status,
-        todays_task: u.data?.todays_task ?? current.todays_task,
+        todaysTask: u.data?.todaysTask ?? current.todaysTask,
         priority: u.data?.priority ?? current.priority,
         parents: [...(current.parents ?? [])],
         children: [...(current.children ?? [])],
         created: current.created,
-        last_edit: new Date().toISOString(),
+        lastEdit: new Date().toISOString(),
       };
 
       for (const rel of u.relations ?? []) {
@@ -245,11 +246,11 @@ const api: ITasks = {
       }
 
       // Build partial patch to avoid touching user_id and other immutable fields
-      const patch: any = { last_edit: next.last_edit };
+      const patch: any = { last_edit: next.lastEdit };
       if (u.data && 'title' in (u.data as any)) patch.title = next.title;
       if (u.data && 'content' in (u.data as any)) patch.content = next.content;
       if (u.data && 'status' in (u.data as any)) patch.status = next.status;
-      if (u.data && 'todays_task' in (u.data as any)) patch.todays_task = next.todays_task;
+      if (u.data && 'todays_task' in (u.data as any)) patch.todays_task = next.todaysTask;
       if (u.data && 'priority' in (u.data as any)) patch.priority = next.priority;
       if ((u.relations ?? []).length > 0) {
         patch.parents = next.parents ?? [];
@@ -260,7 +261,7 @@ const api: ITasks = {
         .from(TASK_TABLE_NAME)
         .update(patch)
         .eq('id', u.id)
-        .eq('user_id', current.user_id)
+        .eq('user_id', current.userAuthId)
         .select('*')
         .single();
 
@@ -409,16 +410,16 @@ export default api;
 function toTask(row: any): Task {
   return {
     id: row.id,
-    user_id: row.user_id,
+    userAuthId: row.user_id,
     title: row.title,
     content: row.content ?? undefined,
     status: row.status,
-    todays_task: row.todays_task,
+    todaysTask: row.todays_task,
     priority: row.priority ?? 0,
     parents: row.parents ?? [],
     children: row.children ?? [],
     created: row.created,
-    last_edit: row.last_edit,
+    lastEdit: row.last_edit,
   };
 }
 

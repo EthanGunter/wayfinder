@@ -22,7 +22,7 @@
 	onMount(() => {
 		const unsubscribeUsers = authUsers.subscribe((userList) => {
 			// Sort users alphabetically by display name
-			users = userList.sort((a, b) => a.display_name.localeCompare(b.display_name));
+			users = userList.sort((a, b) => a.displayName.localeCompare(b.displayName));
 			// Determine initial mode: explicit query param wins; otherwise default to 'switch' if users exist
 			const qpMode = page.url.searchParams.get('mode');
 			if (users.length === 0) mode = 'login';
@@ -55,7 +55,7 @@
 				mode = 'login';
 				const u = users.find((u) => u.id === userId);
 				errorMessage = u
-					? `Please sign in to continue as ${u.display_name}.`
+					? `Please sign in to continue as ${u.displayName}.`
 					: 'Login required to access this account.';
 			} else {
 				Err.UNHANDLED(error);
@@ -122,7 +122,7 @@
 					<UserAvatar {user} class="h-10 w-10" />
 					<div class="flex-1">
 						<div class="font-medium text-gray-900">
-							{user.display_name}
+							{user.displayName}
 						</div>
 						{#if currentUser?.id === user.id}
 							<div class="text-xs text-blue-600">Currently active</div>

@@ -20,7 +20,6 @@ export abstract class BaseSetting<T> implements Writable<T> {
   readonly desc?: string;
   readonly hint?: string | (new (...args: any) => SvelteComponent);
   readonly onChange?: (oldVal: T, newVal: T) => void;
-  readonly scope: SettingScope;
   protected readonly store: Writable<T>;
   private _id: string;
 
@@ -28,7 +27,6 @@ export abstract class BaseSetting<T> implements Writable<T> {
     this.label = args.label;
     this.desc = args.desc;
     this.hint = args.hint;
-    this.scope = args.scope ?? 'user';
     this.store = writable(args.defaultValue);
     this._id = "NOT_CALCULATED";
     this.onChange = this.onChange;
@@ -49,11 +47,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
   set = (value: T): void => {
     this.store.set(value);
     if (this._id) {
-      if (this.scope === 'device') {
-        void this.persistToDevice(this._id, value as unknown as any);
-      } else {
-        void this.persistToUser(this._id, value);
-      }
+      void this.persistToUser(this._id, value);
     } else {
       Err.throw(new InvalidStateError("Attempted to write setting value before it was assigned an id"));
     }
@@ -63,11 +57,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
     this.store.update((prev) => {
       const next = updater(prev);
       if (this._id) {
-        if (this.scope === 'device') {
-          void this.persistToDevice(this._id, next as unknown as any);
-        } else {
-          void this.persistToUser(this._id, next as unknown);
-        }
+        void this.persistToUser(this._id, next as unknown);
       } else {
         Err.throw(new InvalidStateError("Attempted to write setting value before it was assigned an id"));
       }
@@ -89,24 +79,13 @@ export abstract class BaseSetting<T> implements Writable<T> {
         return;
       }
 
-      const settings = user.setting_overrides ?? {} as any;
+      const settings = user.settingOverrides ?? {} as any;
       settings[key] = value;
 
       // Update user with new settings (this handles both local IDB and remote sync)
-      await authAPI.updateUser({ update: { id: user.id, setting_overrides: settings } });
+      await authAPI.updateUser({ update: { id: user.id, settingOverrides: settings } });
     } catch (e) {
       console.warn('Failed to persist setting', e);
-    }
-  }
-
-  private async persistToDevice(key: string, value: any): Promise<void> {
-    try {
-      const db = await dbPromise;
-      // Store JSON string to allow arbitrary types; parse on load
-      const serialized = JSON.stringify(value);
-      await db.put(APP_TABLE_NAME, serialized, `settings:${key}`);
-    } catch (e) {
-      console.warn('Failed to persist device setting', e);
     }
   }
 }

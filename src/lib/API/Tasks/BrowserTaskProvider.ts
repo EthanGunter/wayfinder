@@ -200,7 +200,7 @@ const api: ITasksLocal = {
 
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
     const rootTasks = (allTasks as Task[]).filter(task =>
-      task.parents.length === 0 && task.user_id === auth.user.id);
+      task.parents.length === 0 && task.userAuthId === auth.user.id);
     return ok(rootTasks);
   },
 
@@ -212,9 +212,9 @@ const api: ITasksLocal = {
     }
 
     const allTasks = await _db.getAll(TASK_TABLE_NAME);
-    const userTasks = (allTasks as Task[]).filter(t => t.user_id === auth.user.id);
+    const userTasks = (allTasks as Task[]).filter(t => t.userAuthId === auth.user.id);
     const today = new Date().toISOString().split('T')[0];
-    const todays = userTasks.filter(t => t.todays_task && t.todays_task.startsWith(today));
+    const todays = userTasks.filter(t => t.todaysTask && t.todaysTask.startsWith(today));
     return ok(todays);
   },
   getPrioritizedTasks: async function (limit: number) {
@@ -225,7 +225,7 @@ const api: ITasksLocal = {
     }
 
     let taskArray: Task[] = (await _db.getAll(TASK_TABLE_NAME) as Task[])
-      .filter(t => t.user_id === auth.user.id);
+      .filter(t => t.userAuthId === auth.user.id);
 
     const roots: Task[] = taskArray.filter(t => t.parents.length === 0);
     const tasksMap: Map<string, Task> = new Map(taskArray.map(t => [t.id, t] as [string, Task]));
@@ -295,7 +295,7 @@ const api: ITasksLocal = {
       _subscriptions.push(sub);
       // Initialize
       _getAllTasksForCurrentUser().then(tasks => {
-        const init = tasks.filter(t => t.user_id === sub.userId);
+        const init = tasks.filter(t => t.userAuthId === sub.userId);
         sub.onInitialize(init);
       });
       return () => {
@@ -411,8 +411,8 @@ const api: ITasksLocal = {
         let changed = false;
         for (const rt of userTasks) {
           const lt = localById.get(rt.id);
-          const rtEdit = rt.last_edit ? new Date(rt.last_edit).getTime() : 0;
-          const ltEdit = lt?.last_edit ? new Date(lt.last_edit).getTime() : 0;
+          const rtEdit = rt.lastEdit ? new Date(rt.lastEdit).getTime() : 0;
+          const ltEdit = lt?.lastEdit ? new Date(lt.lastEdit).getTime() : 0;
           if (!lt || rtEdit > ltEdit) {
             await _db.put(TASK_TABLE_NAME, rt);
             changed = true;
@@ -543,7 +543,7 @@ async function _updateTasksLocal(updates: UpdateTaskParams[], updateServer: bool
       ...(changes as Partial<Task>),
       children: Array.from(updatedChildren) as string[],
       parents: Array.from(updatedParents) as string[],
-      last_edit: new Date().toISOString()
+      lastEdit: new Date().toISOString()
     };
 
     await _db.put(TASK_TABLE_NAME, updated);
@@ -733,7 +733,7 @@ async function _emitChanges(deltas: TaskDelta[]) {
   if (deltas.length === 0) return;
   for (const sub of _subscriptions) {
     if (sub.kind === 'user-tasks') {
-      const filtered = deltas.filter(d => (d.newTask?.user_id ?? d.oldTask?.user_id) === sub.userId);
+      const filtered = deltas.filter(d => (d.newTask?.userAuthId ?? d.oldTask?.userAuthId) === sub.userId);
       if (filtered.length > 0) sub.onChange(filtered);
     } else {
       // Recompute included set per event to reflect latest graph state
@@ -818,7 +818,7 @@ async function validateTaskOwnership(task: Task): Promise<boolean> {
   if (auth.status !== 'signed-in') {
     return false; // No authenticated user
   }
-  return task.user_id === auth.user.id;
+  return task.userAuthId === auth.user.id;
 }
 
 async function validateTasksOwnership(tasks: Task[]): Promise<Task[]> {
@@ -826,7 +826,7 @@ async function validateTasksOwnership(tasks: Task[]): Promise<Task[]> {
   if (auth.status !== 'signed-in') {
     return []; // No authenticated user
   }
-  return tasks.filter(task => task.user_id === auth.user.id);
+  return tasks.filter(task => task.userAuthId === auth.user.id);
 }
 
 /** This function manages writing the markdown file, then updating the index */

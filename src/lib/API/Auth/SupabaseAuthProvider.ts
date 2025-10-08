@@ -1,16 +1,17 @@
 import { NotFoundError, Err, NotImplementedError, ArgumentError, InvalidStateError, IOError } from '$domain/errors';
 import { err, ok } from '$domain/result';
-import { type IAuth, type MigrationRequirements, AccountIssueTarget, type IAuthSessionCapable, type User } from '$domain/models/user';
+import { type IAuth, type RegistrationRequirements, AccountIssueTarget, type IAuthSessionCapable, type User } from '$domain/models/user';
 import type { Database, TablesInsert } from '../supabase';
 import { createClient } from '@supabase/supabase-js';
 import { USER_TABLE_NAME } from '../DBConstants';
+import { PUBLIC_SUPABASE_API_KEY, PUBLIC_SUPABASE_URL } from '$env/static/public';
 
 
 //#region Supabase Connection
 
 
-const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = import.meta.env?.VITE_SUPABASE_API_KEY || process.env.SUPABASE_API_KEY;
+const supabaseUrl = PUBLIC_SUPABASE_URL;
+const supabaseKey = PUBLIC_SUPABASE_API_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
     const missing = [];
@@ -26,7 +27,7 @@ const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 
 const api: IAuth = {
     getRegistrationRequirements: function (cred) {
-        const issues: MigrationRequirements[] = [];
+        const issues: RegistrationRequirements[] = [];
 
         switch (cred.type) {
             case "email_password":
@@ -73,8 +74,8 @@ const api: IAuth = {
         // Then, create the user record in our public.users table
         const userInsert: TablesInsert<'users'> = {
             id: authRes.data.user.id,
-            display_name: userData.display_name,
-            avatar_url: userData.avatar_url,
+            display_name: userData.displayName,
+            avatar_url: userData.avatarUrl,
             created_at: authRes.data.user.created_at,
             status: 'active',
             features: userData.features,
@@ -92,9 +93,9 @@ const api: IAuth = {
 
         const created: User = {
             id: inserted!.id,
-            display_name: inserted!.display_name,
-            avatar_url: inserted!.avatar_url ?? undefined,
-            created_at: inserted!.created_at,
+            displayName: inserted!.display_name,
+            avatarUrl: inserted!.avatar_url ?? undefined,
+            createdAt: inserted!.created_at,
             status: (inserted!.status ?? 'active') as User['status'],
             features: inserted!.features ?? [],
         };
@@ -119,9 +120,9 @@ const api: IAuth = {
 
         const mapped: User = {
             id: userData.id,
-            display_name: userData.display_name,
-            avatar_url: userData.avatar_url ?? undefined,
-            created_at: userData.created_at,
+            displayName: userData.display_name,
+            avatarUrl: userData.avatar_url ?? undefined,
+            createdAt: userData.created_at,
             status: (userData.status ?? 'active') as User['status'],
             features: userData.features ?? [],
         };
@@ -149,11 +150,11 @@ const api: IAuth = {
         const { data: updatedUser, error: updateError } = await supabase
             .from(USER_TABLE_NAME)
             .update({
-                display_name: update.display_name,
-                avatar_url: update.avatar_url,
+                display_name: update.displayName,
+                avatar_url: update.avatarUrl,
                 // features: update.features, // Should not be allowed to update their own features, right?
                 status: update.status,
-                setting_overrides: update.setting_overrides as any
+                setting_overrides: update.settingOverrides as any
             })
             .eq('id', update.id)
             .select('*')
@@ -165,9 +166,9 @@ const api: IAuth = {
 
         const mapped: User = {
             id: updatedUser.id,
-            display_name: updatedUser.display_name,
-            avatar_url: updatedUser.avatar_url ?? undefined,
-            created_at: updatedUser.created_at,
+            displayName: updatedUser.display_name,
+            avatarUrl: updatedUser.avatar_url ?? undefined,
+            createdAt: updatedUser.created_at,
             status: (updatedUser.status ?? 'active') as User['status'],
             features: updatedUser.features ?? [],
         };
@@ -225,9 +226,9 @@ const api: IAuth = {
 
                     const mapped: User = {
                         id: userData.id,
-                        display_name: userData.display_name,
-                        avatar_url: userData.avatar_url ?? undefined,
-                        created_at: userData.created_at,
+                        displayName: userData.display_name,
+                        avatarUrl: userData.avatar_url ?? undefined,
+                        createdAt: userData.created_at,
                         status: (userData.status ?? 'active') as User['status'],
                         features: userData.features ?? [],
                     };

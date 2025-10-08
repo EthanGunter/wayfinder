@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { PUBLIC_CONVEX_URL } from '$env/static/public';
+	import { setupConvex } from 'convex-svelte';
 	import '../app.css';
 
 	const { children } = $props();
 
-	//TODO Implement handlers for Browser/Android back buttons,
-	// as well as state change handlers for when the app gets focused/goes into the backgroud
+	// setupConvex(PUBLIC_CONVEX_URL);
 </script>
 
 <div class="absolute top-0 left-0 h-screen w-screen">
