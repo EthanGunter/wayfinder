@@ -19,7 +19,6 @@ export interface IAuthLocal {
 	/* --- Observers --- */
 	watchAuthState(): LiveStore<AuthState>,
 
-
 	/* --- Mutators --- */
 
 	/** Registers a remote user account and creates local user simultaneously */
@@ -53,8 +52,8 @@ export interface IAuthLocal {
 // NOTE All SyncQueued functions must use the params signature
 export interface IAuthRemote {
 	/* --- Observers --- */
-	watchUser(params: { id: string }): LiveStore<Fetchable<User>>,
-	watchUsers(params: { ids: string[] }): LiveStore<Fetchable<User[]>>,
+	watchAuthState(): LiveStore<AuthState>,
+	watchUsers(params: { ids: string[] }): LiveStore<Fetchable<User[] /* TODO This should be a public UserDTO */>>,
 
 
 	/* --- Mutators --- */

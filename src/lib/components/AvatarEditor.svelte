@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type { User } from '$domain/models/user';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import type { LocalUser } from '$domain/models/user';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';
+	import UserAvatar from './UserAvatar.svelte';
 
 	interface Props {
-		user: User;
-		onAvatarChange?: (avatarUrl: string) => void;
+		user: LocalUser;
+		onAvatarChange: (avatarUrl: string) => void;
 		class?: string;
 	}
 	let { user, onAvatarChange, class: className }: Props = $props();

@@ -1,56 +1,115 @@
-// src/lib/adapters/ConvexAuthProvider.ts
 import { readable } from "svelte/store";
 import {
-	NetworkError,
+	type AuthState,
 	type Fetchable,
 	type IAuthRemote,
 	type LiveStore,
 } from "./seam-interfaces";
 import type {
 	User,
-	LoginCredentials,
 	RegistrationRequirements,
 } from "$domain/models/user";
 import {
 	type NotImplementedError,
-	type ArgumentError,
-	type InvalidStateError,
-	type NotFoundError,
-	UnknownError,
 } from "$domain/errors";
 import { err, ok, type Result } from "$domain/result";
 
 import { api } from "$convex/_generated/api";
 import { ConvexClient } from "convex/browser";
-import { PUBLIC_CONVEX_URL } from "$env/static/public";
-import type { Doc } from "$convex/_generated/dataModel";
+import { PUBLIC_CONVEX_URL, PUBLIC_CONVEX_API_URL } from "$env/static/public";
 import { authkit } from "$lib/API/WorkOSAuthKit";
 
 const client = new ConvexClient(PUBLIC_CONVEX_URL);
 
 const convexApi: IAuthRemote = {
-	watchUser: ({ id }: { id: string }): LiveStore<Fetchable<User>> => {
-		return toLiveStore(
-			api.users.watchUser,
-			{ id },
-			{
-				status: "error",
-				error: {
-					type: "NotFoundError",
-					message: "User not found",
-					ctx: { id },
-				} as any,
-			},
-		);
+	watchAuthState: function (): LiveStore<AuthState> {
+		return readable<AuthState>({ status: "loading" }, (set) => {
+			let unsubUser: (() => void) | null = null;
+			let stopped = false;
+
+			const resolveSignedOut = () => {
+				if (unsubUser) {
+					unsubUser();
+					unsubUser = null;
+				}
+				set({ status: "signed-out", user: null });
+			};
+
+			const bootstrap = async () => {
+				console.log("[ConvexAuthProvider] bootstrap");
+
+				try {
+					// 1) Ask Convex (server) who we are via cookie-verified endpoint
+					const res = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/whoami`, {
+						credentials: "include",
+					});
+					const { userId } = await res.json();
+
+					if (!userId) {
+						resolveSignedOut();
+						return;
+					}
+
+					// 2) Ensure a users row exists
+					await fetch(`${PUBLIC_CONVEX_URL}/rpc/users.upsertCurrent`, {
+						method: "POST",
+						credentials: "include",
+					});
+
+					// 3) Live-subscribe to the user profile via authId
+					unsubUser = client.onUpdate(
+						api.users.watchUser,
+						{ id: userId },
+						(u: User | null) => {
+							if (!u) {
+								// Row missing momentarily; treat as loading or signed-out fallback
+								set({ status: "loading" });
+								return;
+							}
+							set({ status: "signed-in", user: u as any });
+						},
+						(error: Error) => {
+							set({
+								status: "error",
+								error: {
+									type: "NetworkError",
+									message: error.message,
+									ctx: { original: error },
+								} as any,
+							});
+						}
+					);
+				} catch (e: any) {
+					resolveSignedOut();
+				}
+			};
+
+			// Kick off bootstrap
+			bootstrap();
+
+			// Optional: re-check when page becomes visible again (in case cookie rotates)
+			const onVis = () => {
+				if (document.visibilityState === "visible") bootstrap();
+			};
+			document.addEventListener("visibilitychange", onVis);
+
+			return () => {
+				stopped = true;
+				document.removeEventListener("visibilitychange", onVis);
+				if (unsubUser) unsubUser();
+			};
+		});
 	},
-	watchUsers: ({ ids }: { ids: string[] }): LiveStore<Fetchable<User[]>> => {
+
+	watchUsers: ({ ids }: { ids: string[]; }): LiveStore<Fetchable<User[]>> => {
 		return toLiveStore(
 			api.users.watchUsers,
 			{ ids },
-			{ status: "resolved", data: [] }, // empty list on not-found
+			{ status: "resolved", data: [] }
 		);
 	},
-	getRegistrationRequirements(_method): Result<RegistrationRequirements[], NotImplementedError> {
+
+	getRegistrationRequirements(creds): Result<RegistrationRequirements[], NotImplementedError> {
 		return ok<RegistrationRequirements[]>([]);
 	},
 
@@ -62,28 +121,26 @@ const convexApi: IAuthRemote = {
 	},
 
 	updateUser: async ({ update }) => {
-		const res = await client.mutation(api.users.updateUser, { update });
+		const res = await client.mutation(api.users.updateUser, update);
 		if (res.ok) return ok(res.value);
 		return err(res.error);
 	},
 
 	deleteUser: async ({ userId }) => {
-		const res = await client.mutation(api.users.deleteUser, { userId })
+		const res = await client.mutation(api.users.deleteUser, { userId });
 		if (res.ok) return ok();
 		return err(res.error);
 	},
 
 	login: async ({ creds }) => {
-		await authkit.signIn();
-		const res = await client.mutation(api.users.login, { creds })
-		if (res.ok) return ok();
-		return err(res.error);
+		authkit.signIn()
+		return ok();
 	},
 
 	logout: async () => {
 		await authkit.signOut();
-		await client.mutation(api.users.logout, {})
-	}
+		await client.mutation(api.users.logout, {});
+	},
 };
 
 export default convexApi;

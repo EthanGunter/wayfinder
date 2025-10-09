@@ -25,7 +25,9 @@ let _remoteAuth: IAuthRemote | null = null;
 (async () => {
   try {
     console.log('[TODO:debug EG] BrowserAuthProvider init start'); // TODO:debug EG
+    console.log('[TODO:debug EG] About to await dbPromise'); // TODO:debug EG
     db = await dbPromise;
+    console.log('[TODO:debug EG] dbPromise resolved, db=', db); // TODO:debug EG
 
     // Hydrate users list
     const allUsers = await db.getAll(USER_TABLE_NAME) as LocalUser[];
@@ -60,8 +62,10 @@ let _remoteAuth: IAuthRemote | null = null;
       // remoteAuth store doesn't exist yet; will remain null
     }
   } catch (e: any) {
+    console.error('[TODO:debug EG] BrowserAuthProvider init error:', e); // TODO:debug EG
     _authState.set({ status: "error", error: Err.wrap(e) });
   }
+  console.log('[TODO:debug EG] BrowserAuthProvider init IIFE complete'); // TODO:debug EG
 })();
 
 const api: IAuthLocal = {

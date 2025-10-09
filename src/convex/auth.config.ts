@@ -1,6 +1,6 @@
 // This file is read by Convex runtime, not by convexAuth().
 // It enables Convex to validate WorkOS AuthKit ID tokens.
-const clientId = process.env.WORKOS_CLIENT_ID;
+const clientId = process.env.PUBLIC_WORKOS_CLIENT_ID;
 
 const config = {
   providers: [

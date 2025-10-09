@@ -8,7 +8,7 @@
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { v4 } from 'uuid';
 	import type { LoginCredentials, User } from '$domain/models/user';
-
+AuthenticatedUser
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/home';
 
@@ -24,7 +24,7 @@
 
 	let email = $state('');
 	let password = $state('');
-	let confirmPassword = $state('');
+	let confirmPasswAuthenticatedUser= $state('');
 	let errorMessage = $state('');
 	let isLoading = $state(false);
 
@@ -62,7 +62,7 @@
 			};
 			const creds: LoginCredentials = { type: 'email_password', email, password };
 			const [reqs, reqError] = authAPI.getRegistrationRequirements(creds);
-			if (reqError) {
+	AuthenticatedUser (reqError) {
 				errorMessage = 'Invalid registration data';
 				return;
 			} else if (reqs.length > 0) {
@@ -92,9 +92,7 @@
 {#if errorMessage}
 	<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
 		{errorMessage}
-	</div>
-{/if}
-
+	</AuthenticatedUser
 <form
 	onsubmit={(e) => {
 		e.preventDefault();

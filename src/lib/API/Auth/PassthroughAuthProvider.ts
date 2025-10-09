@@ -1,7 +1,6 @@
-import { type NotImplementedError, type ArgumentError, NotFoundError, Err, InvalidStateError } from "$domain/errors";
-import type { LocalUser, LoginCredentials, RegistrationRequirements, User } from "$domain/models/user";
-import { err, type Result } from "$domain/result";
-import type { AuthState, IAuthLocal, IAuthRemote, LiveStore } from "./seam-interfaces";
+import { NotFoundError, Err, InvalidStateError } from "$domain/errors";
+import { err } from "$domain/result";
+import type { IAuthLocal, IAuthRemote } from "./seam-interfaces";
 import { get } from "svelte/store";
 
 /** Skips the optimistic update paths for local provider and calls the remote provider where possible */
@@ -11,7 +10,7 @@ export function getApi(localAuth: IAuthLocal, remoteAuth: IAuthRemote): IAuthLoc
 
 	return ({
 		// Local-only: no remote equivalent
-		watchAuthState: () => localAuth.watchAuthState(),
+		watchAuthState: () => remoteAuth.watchAuthState(),
 
 		// Remote preferred: exists on IAuthRemote
 		register: (params) => remoteAuth.register(params),
@@ -29,12 +28,12 @@ export function getApi(localAuth: IAuthLocal, remoteAuth: IAuthRemote): IAuthLoc
 			if (update.id) {
 				return remoteAuth.updateUser({ update: { ...update, id: update.id } });
 			}
-			
+
 			const authState = get(localAuth.watchAuthState());
 			if (authState.status !== 'signed-in') {
 				return err(new NotFoundError('No active user', 'User'));
 			}
-			
+
 			const currentUser = authState.user;
 			return remoteAuth.updateUser({ update: { ...update, id: currentUser.id } });
 		},

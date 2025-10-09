@@ -53,6 +53,7 @@ export function getDefaultUserFeatures(): UserFeature[] {
 
 export type LoginCredentials =
 	| { type: 'email_password'; email: string; password: string }
+	| { type: 'external'; }
 
 export class IncorrectPasswordError extends Err {
 	constructor(message: string, ctx?: any) {

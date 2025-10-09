@@ -13,8 +13,9 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as auth from "../auth.js";
 import type * as http from "../http.js";
+import type * as lib_workosSession from "../lib/workosSession.js";
+import type * as node_workos from "../node/workos.js";
 import type * as tasks from "../tasks.js";
 import type * as users from "../users.js";
 
@@ -27,8 +28,9 @@ import type * as users from "../users.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  auth: typeof auth;
   http: typeof http;
+  "lib/workosSession": typeof lib_workosSession;
+  "node/workos": typeof node_workos;
   tasks: typeof tasks;
   users: typeof users;
 }>;

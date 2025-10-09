@@ -66,7 +66,7 @@
 			todaysList = [...todaysList, task];
 			await tasksAPI!.updateTask({
 				id: task.id,
-				data: { todaysTask: new Date().toISOString() }
+				data: { todaysTask: new Date() }
 			});
 			refreshTasks();
 		}
