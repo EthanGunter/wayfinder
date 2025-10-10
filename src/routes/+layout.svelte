@@ -12,8 +12,11 @@
 	// Reactive effect that responds to auth state changes
 	$effect(() => {
 		const state = $authState;
+		console.log('[TODO:debug EG] +layout $effect triggered, state:', state); // TODO:debug EG
 		const currentPath = $page.url.pathname;
 		const isAuthPage = currentPath === '/login' || currentPath === '/register';
+
+		console.log('auth state:', state);
 
 		if (state.status === 'loading') {
 			console.log('auth loading');

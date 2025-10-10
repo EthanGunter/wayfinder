@@ -1,4 +1,4 @@
-import { readable } from "svelte/store";
+import { readable, writable } from "svelte/store";
 import {
 	type AuthState,
 	type Fetchable,
@@ -17,7 +17,6 @@ import { err, ok, type Result } from "$domain/result";
 import { api } from "$convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { PUBLIC_CONVEX_URL, PUBLIC_CONVEX_API_URL } from "$env/static/public";
-import { authkit } from "$lib/API/WorkOSAuthKit";
 
 const client = new ConvexClient(PUBLIC_CONVEX_URL);
 
@@ -32,41 +31,39 @@ const convexApi: IAuthRemote = {
 					unsubUser();
 					unsubUser = null;
 				}
-				set({ status: "signed-out", user: null });
+				set({ status: "signed-out" });
 			};
 
 			const bootstrap = async () => {
 				console.log("[ConvexAuthProvider] bootstrap");
 
 				try {
-					// 1) Ask Convex (server) who we are via cookie-verified endpoint
+					// Verify identity from cookie
 					const res = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/whoami`, {
 						credentials: "include",
 					});
-					const { userId } = await res.json();
+
+					const json = await res.json();
+					console.log("whoami res:", json);
+					const { userId } = json;
 
 					if (!userId) {
 						resolveSignedOut();
 						return;
 					}
 
-					// 2) Ensure a users row exists
-					await fetch(`${PUBLIC_CONVEX_URL}/rpc/users.upsertCurrent`, {
-						method: "POST",
-						credentials: "include",
-					});
-
-					// 3) Live-subscribe to the user profile via authId
+					// User row already upserted by callback; subscribe directly
 					unsubUser = client.onUpdate(
 						api.users.watchUser,
 						{ id: userId },
-						(u: User | null) => {
-							if (!u) {
-								// Row missing momentarily; treat as loading or signed-out fallback
+						(user) => {
+							console.log('[TODO:debug EG] ConvexAuthProvider onUpdate callback, user:', user); // TODO:debug EG
+							if (!user) {
 								set({ status: "loading" });
 								return;
 							}
-							set({ status: "signed-in", user: u as any });
+							console.log('[TODO:debug EG] ConvexAuthProvider calling set with signed-in'); // TODO:debug EG
+							set({ status: "signed-in", user: { ...user, createdAt: new Date(user._creationTime) } });
 						},
 						(error: Error) => {
 							set({
@@ -138,8 +135,8 @@ const convexApi: IAuthRemote = {
 	},
 
 	logout: async () => {
-		await authkit.signOut();
-		await client.mutation(api.users.logout, {});
+		authkit.signOut();
+
 	},
 };
 

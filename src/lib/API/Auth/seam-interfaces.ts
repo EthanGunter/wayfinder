@@ -11,7 +11,7 @@ export type Fetchable<T> =
 
 export type AuthState = Exclude<Fetchable<LocalUser>, { status: "resolved" }>
 	| { status: "signed-in", user: LocalUser/* , anonymous: boolean */ }
-	| { status: "signed-out", user: null }
+	| { status: "signed-out" }
 
 export type LiveStore<T> = Readable<T>;
 

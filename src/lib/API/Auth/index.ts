@@ -7,7 +7,7 @@ import browserAuthAPI,
 	browserAuthState,
 	browserCachedUsers,
 } from './BrowserAuthProvider';
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 
 import ConvexAuthProvider from './ConvexAuthProvider';
 import type { AuthState, IAuthLocal, IAuthRemote } from './seam-interfaces';
@@ -32,7 +32,8 @@ let authAPI: IAuthLocal,
 
 if (true /* browser */) {
 	authAPI = getApi(browserAuthAPI, get(remoteAuth) as IAuthRemote);
-	authState = browserAuthState;
+	authState = derived(authAPI.watchAuthState(), (state) => state);
+	console.log('[TODO:debug EG] index.ts: authState set to browserAuthState'); // TODO:debug EG
 	cachedUsers = browserCachedUsers;
 } else /* if ( mobile ) */ {
 	Err.throw(new NotImplementedError("Mobile auth provider not implemented"));

@@ -9,4 +9,4 @@ export const authkit = await createClient(
 	}
 );
 
-console.log(PUBLIC_WORKOS_CLIENT_ID, PUBLIC_CONVEX_API_URL + '/workos');
+console.log(PUBLIC_WORKOS_CLIENT_ID, PUBLIC_CONVEX_API_URL + '/callback/workos');

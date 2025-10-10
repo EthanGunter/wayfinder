@@ -8,6 +8,15 @@ import { v } from "convex/values";
 
 //#region Shared Types
 
+const argsUser = {
+  id: v.string(), // authId
+  displayName: v.optional(v.string()),
+  avatarUrl: v.optional(v.string()),
+  status: v.optional(v.union(v.literal("active"), v.literal("deleted"))),
+  features: v.optional(v.array(v.string())),
+  settingOverrides: v.optional(v.any()),
+}
+
 const typeLoginCredentials = v.union(
   v.object({
     type: v.literal("email_password"),
@@ -22,7 +31,6 @@ const typeLoginCredentials = v.union(
 //#endregion
 
 export const watchUser = query({
-  // watch by authId (client passes User.id == authId)
   args: { id: v.string() },
   handler: async (ctx, args) => {
     const user = await ctx.db
@@ -37,7 +45,7 @@ export const watchUser = query({
       id: user.authId,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl ?? undefined,
-      createdAt: new Date(0), // not stored yet; adjust if you add createdAt
+      _creationTime: user._creationTime, // not stored yet; adjust if you add createdAt
       status: (user.status ?? "active") as "active" | "deleted",
       features: user.features ?? [],
       settingOverrides: user.settingOverrides ?? undefined,
@@ -152,14 +160,7 @@ export const register = mutation({
 });
 
 export const updateUser = mutation({
-  args: {
-    id: v.string(), // authId
-    displayName: v.optional(v.string()),
-    avatarUrl: v.optional(v.string()),
-    status: v.optional(v.union(v.literal("active"), v.literal("deleted"))),
-    features: v.optional(v.array(v.string())),
-    settingOverrides: v.optional(v.any()),
-  },
+  args: argsUser,
   handler: async (ctx, update) => {
     const id = await ctx.auth.getUserIdentity();
     if (!id) throw new Error("User identity not available");
@@ -236,20 +237,12 @@ export const login = mutation({
   },
 });
 
-export const logout = mutation({
-  args: {},
-  handler: async (_ctx, _args) => {
-    return { ok: true as const, value: undefined };
-  },
-});
-
-
 export const upsertCurrentUser = internalMutation({
-  args: { callerAuthId: v.string() },
-  handler: async (ctx, { callerAuthId }) => {
+  args: argsUser,
+  handler: async (ctx, { id, displayName }) => {
     const existing = await ctx.db
       .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", callerAuthId))
+      .withIndex("by_authId", (q) => q.eq("authId", id))
       .unique();
 
     if (existing) {
@@ -257,8 +250,8 @@ export const upsertCurrentUser = internalMutation({
     }
 
     const _id = await ctx.db.insert("users", {
-      authId: callerAuthId,
-      displayName: "New User",
+      authId: id,
+      displayName: displayName ?? "New User",
       avatarUrl: undefined,
       status: "active",
       features: [],
