@@ -54,9 +54,11 @@ http.route({
 
 		const h = corsHeadersFor(req);
 		for (const [k, v] of (result.headers as [string, string][])) {
-			if (k.toLowerCase() === "set-cookie") h.append("Set-Cookie", v);
-			if (k.toLowerCase() === "content-type") h.set("Content-Type", v);
+			h.set(k, v);
 		}
+
+		console.log("WorkOS callback headers:", JSON.stringify(h, undefined, 2));
+
 
 		return new Response(result.body, {
 			status: result.status,

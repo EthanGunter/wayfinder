@@ -41,7 +41,7 @@
 			label: string;
 			data: { id: string; setting: AnySetting }[];
 		}[];
-	}[] = Object.entries(settings)
+	}[] = $derived(Object.entries(settings)
 		// Disable unauthorized tabs
 		.filter(([label, tab]) => !label.startsWith('$') && userHasAccess(tab))
 		// Parse sections
@@ -60,7 +60,7 @@
 							setting: setting as AnySetting
 						}))
 				}))
-		}));
+		})));
 </script>
 
 {#if tabs.length > 0}

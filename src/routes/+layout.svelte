@@ -10,54 +10,48 @@
 	const { children } = $props();
 
 	// Reactive effect that responds to auth state changes
-	$effect(() => {
-		const state = $authState;
-		console.log('[TODO:debug EG] +layout $effect triggered, state:', state); // TODO:debug EG
-		const currentPath = $page.url.pathname;
-		const isAuthPage = currentPath === '/login' || currentPath === '/register';
+	// $effect(() => {
+	const state = $authState;
+	const currentPath = $page.url.pathname;
+	const isAuthPage = currentPath === '/login' || currentPath === '/register';
 
-		console.log('auth state:', state);
+	if (state.status === 'loading') {
+		console.log('[root/+layout] auth loading');
+	} else if (state.status === 'signed-in') {
+		console.log('[root/+layout] auth signed in');
 
-		if (state.status === 'loading') {
-			console.log('auth loading');
-			return;
+		// User is authenticated - hydrate their data and allow access to app
+		tasksAPI.hydrateForUser({ user: state.user });
+
+		// Optionally redirect away from auth pages if already signed in
+		if (isAuthPage) {
+			goto('/planner');
 		}
+	} else if (state.status === 'signed-out') {
+		console.log('[root/+layout] auth signed out');
 
-		if (state.status === 'signed-in') {
-			console.log('auth signed in');
+		/**
+		 * TODO this is supposed to send to WorkOS hosted login ui,
+		 * but since we don't handle the response,
+		 * if the user is logged in we get stuck in an infinite loop
+		 */
+		// await authkit.signIn();
 
-			// User is authenticated - hydrate their data and allow access to app
-			tasksAPI.hydrateForUser({ user: state.user });
-
-			// Optionally redirect away from auth pages if already signed in
-			if (isAuthPage) {
-				goto('/home');
-			}
-		} else if (state.status === 'signed-out') {
-			console.log('auth signed out');
-
-			/**
-			 * TODO this is supposed to send to WorkOS hosted login ui,
-			 * but since we don't handle the response,
-			 * if the user is logged in we get stuck in an infinite loop
-			 */
-			// await authkit.signIn();
-
-			if (!isAuthPage) {
-				// Don't redirect to the same page to avoid infinite loops
-				const redir = encodeURIComponent(currentPath + $page.url.search);
-				goto(`/login${currentPath === '/' ? '' : '?redirect=' + redir}`);
-			}
-		} else if (state.status === 'error') {
-			// TODO:UX Add error page
-			console.error('auth error:', state.error);
-			// await authkit.signIn();
-
-			if (!isAuthPage) {
-				goto('/login');
-			}
+		if (!isAuthPage) {
+			// Don't redirect to the same page to avoid infinite loops
+			const redir = encodeURIComponent(currentPath + $page.url.search);
+			goto(`/login${currentPath === '/' ? '' : '?redirect=' + redir}`);
 		}
-	});
+	} else if (state.status === 'error') {
+		// TODO:UX Add error page
+		console.error('[root/+layout] auth error:', state.error);
+		// await authkit.signIn();
+
+		if (!isAuthPage) {
+			goto('/login');
+		}
+	}
+	// });
 
 	// setupConvex(PUBLIC_CONVEX_URL);
 </script>

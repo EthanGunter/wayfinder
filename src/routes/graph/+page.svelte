@@ -68,7 +68,7 @@
 
 	onMount(async () => {
 		if (!tutorials.isDone('home.welcome')) {
-			goto('/home');
+			goto('/planner');
 			return;
 		}
 

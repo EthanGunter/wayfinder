@@ -1,4 +1,4 @@
-import { readable, writable } from "svelte/store";
+import { derived, readable, writable } from "svelte/store";
 import {
 	type AuthState,
 	type Fetchable,
@@ -17,85 +17,84 @@ import { err, ok, type Result } from "$domain/result";
 import { api } from "$convex/_generated/api";
 import { ConvexClient } from "convex/browser";
 import { PUBLIC_CONVEX_URL, PUBLIC_CONVEX_API_URL } from "$env/static/public";
+import { authkit } from "../WorkOSAuthKit";
 
 const client = new ConvexClient(PUBLIC_CONVEX_URL);
 
+// Internal auth state - managed by bootstrap and mutations
+const authState = writable<AuthState>({ status: "loading" });
+let unsubUser: (() => void) | null = null;
+
+const resolveSignedOut = () => {
+	if (unsubUser) {
+		unsubUser();
+		unsubUser = null;
+		console.log("Unsubscribed from user");
+	}
+	authState.set({ status: "signed-out" });
+};
+
+const bootstrap = async () => {
+	console.log("[ConvexAuthProvider] bootstrap");
+
+	try {
+		// Verify identity from cookie
+		const res = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/whoami`, {
+			credentials: "include",
+		});
+
+		const json = await res.json();
+		console.log("whoami res:", json);
+		const { userId } = json;
+
+		if (!userId) {
+			resolveSignedOut();
+			return;
+		}
+
+		// User row already upserted by callback; subscribe directly
+		console.log("Subscribing to user");
+
+		unsubUser = client.onUpdate(
+			api.users.watchUser,
+			{ id: userId },
+			(user) => {
+				console.log('[TODO:debug EG] ConvexAuthProvider onUpdate callback, user:', user); // TODO:debug EG
+				if (!user) {
+					authState.set({ status: "loading" });
+					return;
+				}
+				console.log('[TODO:debug EG] ConvexAuthProvider calling set with signed-in'); // TODO:debug EG
+				authState.set({ status: "signed-in", user: { ...user, createdAt: new Date(user._creationTime) } });
+			},
+			(error: Error) => {
+				authState.set({
+					status: "error",
+					error: {
+						type: "NetworkError",
+						message: error.message,
+						ctx: { original: error },
+					} as any,
+				});
+			}
+		);
+	} catch (e: any) {
+		resolveSignedOut();
+	}
+};
+
+// Re-check when page becomes visible again (in case cookie rotates)
+const onVis = () => {
+	if (document.visibilityState === "visible") bootstrap();
+};
+document.addEventListener("visibilitychange", onVis);
+
+// Bootstrap at module load
+bootstrap();
+
 const convexApi: IAuthRemote = {
 	watchAuthState: function (): LiveStore<AuthState> {
-		return readable<AuthState>({ status: "loading" }, (set) => {
-			let unsubUser: (() => void) | null = null;
-			let stopped = false;
-
-			const resolveSignedOut = () => {
-				if (unsubUser) {
-					unsubUser();
-					unsubUser = null;
-				}
-				set({ status: "signed-out" });
-			};
-
-			const bootstrap = async () => {
-				console.log("[ConvexAuthProvider] bootstrap");
-
-				try {
-					// Verify identity from cookie
-					const res = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/whoami`, {
-						credentials: "include",
-					});
-
-					const json = await res.json();
-					console.log("whoami res:", json);
-					const { userId } = json;
-
-					if (!userId) {
-						resolveSignedOut();
-						return;
-					}
-
-					// User row already upserted by callback; subscribe directly
-					unsubUser = client.onUpdate(
-						api.users.watchUser,
-						{ id: userId },
-						(user) => {
-							console.log('[TODO:debug EG] ConvexAuthProvider onUpdate callback, user:', user); // TODO:debug EG
-							if (!user) {
-								set({ status: "loading" });
-								return;
-							}
-							console.log('[TODO:debug EG] ConvexAuthProvider calling set with signed-in'); // TODO:debug EG
-							set({ status: "signed-in", user: { ...user, createdAt: new Date(user._creationTime) } });
-						},
-						(error: Error) => {
-							set({
-								status: "error",
-								error: {
-									type: "NetworkError",
-									message: error.message,
-									ctx: { original: error },
-								} as any,
-							});
-						}
-					);
-				} catch (e: any) {
-					resolveSignedOut();
-				}
-			};
-
-			// Kick off bootstrap
-			bootstrap();
-
-			// Optional: re-check when page becomes visible again (in case cookie rotates)
-			const onVis = () => {
-				if (document.visibilityState === "visible") bootstrap();
-			};
-			document.addEventListener("visibilitychange", onVis);
-
-			return () => {
-				stopped = true;
-				document.removeEventListener("visibilitychange", onVis);
-				if (unsubUser) unsubUser();
-			};
-		});
+		return derived(authState, $state => $state);
 	},
 
 	watchUsers: ({ ids }: { ids: string[]; }): LiveStore<Fetchable<User[]>> => {
@@ -136,7 +135,7 @@ const convexApi: IAuthRemote = {
 
 	logout: async () => {
 		authkit.signOut();
-
+		resolveSignedOut();
 	},
 };
 

@@ -18,7 +18,7 @@
 
 	onMount(() => {
 		if (!tutorials.isDone('home.welcome')) {
-			goto('/home');
+			goto('/planner');
 			return;
 		}
 		if (tutorials.isDone(id)) return;
@@ -98,7 +98,7 @@
 
 	function navigateToPlanner() {
 		markDone();
-		goto('/home');
+		goto('/planner');
 	}
 
 	async function createDemoTasks() {

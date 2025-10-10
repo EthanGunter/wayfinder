@@ -15,7 +15,9 @@
 
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
-	let draftName = $state<string>('');
+	let draftName = $state<string>(
+		$authState.status === 'signed-in' ? $authState.user.displayName : ''
+	);
 
 	const debouncedUpdateUser = debounce(authAPI.updateUser, 200);
 
@@ -23,8 +25,8 @@
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
 			if (state.status === 'signed-in' && state.user) {
-				// keep draft in sync with store (but do not write back)
-				if (draftName !== state.user.displayName) draftName = state.user.displayName;
+				console.log("Signed-in user changed");
+				
 				loadTaskCount();
 			} else if (state.status === 'signed-out') {
 				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
@@ -83,7 +85,7 @@
 		if (redirect) {
 			goto(redirect);
 		} else {
-			goto('/');
+			goto('/planner');
 		}
 	}
 </script>
@@ -113,7 +115,9 @@
 						);
 
 						if (avatar_url !== $authState.user.avatarUrl) {
-							void debouncedUpdateUser({ update: { id: $authState.user.id, avatarUrl: avatar_url } });
+							void debouncedUpdateUser({
+								update: { id: $authState.user.id, avatarUrl: avatar_url }
+							});
 						}
 					}}
 					class="m-auto max-h-[50vh] max-w-[50vw]"

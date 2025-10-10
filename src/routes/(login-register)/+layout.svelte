@@ -9,7 +9,7 @@
 		if (redirect) {
 			goto(redirect);
 		} else {
-			goto('/');
+			goto('/planner');
 		}
 	}
 </script>
