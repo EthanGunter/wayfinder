@@ -21,10 +21,10 @@
 	onMount(() => {
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
+			console.log('[planner] auth state changed:', state);
+
 			if (state.status === 'signed-in') {
 				// refreshTasks();
-			} else if (state.status === 'signed-out') {
-				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
 			}
 		});
 

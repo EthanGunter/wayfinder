@@ -1,4 +1,4 @@
-import type { ArgumentError, Err, InvalidStateError, NotFoundError, NotImplementedError } from "$domain/errors";
+import type { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from "$domain/errors";
 import type { LocalUser, LoginCredentials, RegistrationRequirements, User } from "$domain/models/user";
 import type { Result } from "$domain/result";
 import type { Readable } from "svelte/store";
@@ -28,7 +28,7 @@ export interface IAuthLocal {
 	getRegistrationRequirements(method: LoginCredentials): Result<RegistrationRequirements[], NotImplementedError>,
 
 	/** Sets the active user for this device */
-	switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError>>,
+	switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError | InputRequiredError>>,
 
 	/** Updates the active user, unless a specific id is provided */
 	updateUser(params: { update: Partial<User> }): Promise<Result<User, NotFoundError>>,
@@ -42,8 +42,8 @@ export interface IAuthLocal {
 
 	/** Removes a cached user account from the local machine. It still be logged into remotely */
 	removeCachedUser(userId: string): Promise<void>,
-	login(params: { creds: LoginCredentials }): Promise<Result<void, NotFoundError | ArgumentError | NotImplementedError>>,
-	logout(): Promise<void>,
+	login(creds: LoginCredentials): Promise<Result<void, NotFoundError | ArgumentError | NotImplementedError>>,
+	logout(options?: { keepCached?: boolean }): Promise<void>,
 
 	// #endregion
 
@@ -64,15 +64,19 @@ export interface IAuthRemote {
 	register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<void, NotImplementedError | ArgumentError | InvalidStateError>>,
 	updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
 	deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
-	login(params: { creds: LoginCredentials }): Promise<Result<void, NotFoundError | ArgumentError | NotImplementedError>>,
-	logout(): Promise<void>,
+	login(creds: LoginCredentials): Promise<Result<void, NotFoundError | ArgumentError | NotImplementedError>>,
+	logout(options?: { keepCached?: boolean }): Promise<void>,
 }
 
 export interface IAuthSessionCapable {
-	/** Returns opaque session material for the currently authenticated user (e.g., refresh token) */
-	getSessionMaterial(params: { userId: string }): Promise<Result<string | null, NotImplementedError>>;
-	/** Restores/refreshes a session for a given user using previously stored material; may return rotated material */
-	restoreSession(params: { userId: string, material: string }): Promise<Result<{ rotatedMaterial?: string }, NotImplementedError>>;
+	/** Returns opaque session material for the currently authenticated user (e.g., refresh token)
+	 * @error InvalidStateError if the user is not authenticated
+	 */
+	getSessionMaterial(params: { userId: string }): Promise<Result<string | null, InvalidStateError>>;
+	/** Restores/refreshes a session for a given user using previously stored material; may return rotated material 
+	 * @error InputRequiredError if the session is expired
+	*/
+	restoreSession(params: { userId: string, material: string }): Promise<Result<{ rotatedMaterial?: string }, InputRequiredError>>;
 }
 
 export function isSessionCapable(auth: IAuthRemote): auth is IAuthRemote & IAuthSessionCapable {

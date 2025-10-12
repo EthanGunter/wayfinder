@@ -74,7 +74,7 @@
 	}
 
 	function handleSwitchUser() {
-		goto(`/login?mode=switch&redirect=${page.url.pathname + page.url.search}`);
+		goto(`/switch-user?redirect=${page.url.pathname + page.url.search}`);
 	}
 </script>
 

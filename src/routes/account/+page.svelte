@@ -24,12 +24,10 @@
 	onMount(() => {
 		// Subscribe to auth state
 		const unsubscribeAuth = authState.subscribe((state) => {
-			if (state.status === 'signed-in' && state.user) {
-				console.log("Signed-in user changed");
-				
+			if (state.status === 'signed-in') {
+				console.log('Signed-in user changed');
+
 				loadTaskCount();
-			} else if (state.status === 'signed-out') {
-				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
 			}
 		});
 

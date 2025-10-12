@@ -4,8 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { JWTPayload } from "jose";
 
 // Correct JWKS for User Management tokens (NOT /sso/jwks)
-const WORKOS_JWKS_URL = "https://api.workos.com/sso/jwks/client_01K72N66HDHSSHQ1VBGM4R24WJ";
-const JWKS = createRemoteJWKSet(new URL(WORKOS_JWKS_URL));
+const JWKS = createRemoteJWKSet(new URL(process.env.AUTH_JWKS_URL!));
 
 export function readCookieFromHeader(req: Request, name: string): string | null {
   const cookie = req.headers.get("Cookie");
@@ -21,12 +20,44 @@ export function readCookieFromHeader(req: Request, name: string): string | null 
   return null;
 }
 
+export function parseSessionCookie(cookieValue: string): { accessToken: string; refreshToken: string } | null {
+  try {
+    const parsed = JSON.parse(cookieValue);
+    if (parsed.accessToken && parsed.refreshToken) {
+      return { accessToken: parsed.accessToken, refreshToken: parsed.refreshToken };
+    }
+    return null;
+  } catch {
+    // Might be old format (just access token) - treat as invalid
+    return null;
+  }
+}
+
+/**
+ * Verify a WorkOS JWT access token and extract user/session IDs.
+ * 
+ * JWT Structure:
+ * - Header: {kid: "...", alg: "RS256", ...}
+ * - Payload: {sub: "user_01...", sid: "session_01...", exp: timestamp, ...}
+ * - Signature: Verified against WorkOS JWKS (public keys)
+ * 
+ * Verification:
+ * 1. Fetch public key from WorkOS JWKS endpoint (cached by jose)
+ * 2. Verify signature using RS256
+ * 3. Check expiration (exp claim)
+ * 4. Extract sub (user ID) and sid (session ID)
+ * 
+ * Returns {userId, sessionId} if valid, null if invalid/expired.
+ */
 export async function verifyWorkOSAccessToken(
   token: string
-): Promise<{ userId: string } | null> {
+): Promise<{ userId: string; sessionId: string } | null> {
   try {
-    // Verify against WorkOS User Management JWKS (we don't pre-read iss)
-    // jose will pick the key via kid; we can optionally enforce issuer
+    // Verify against WorkOS User Management JWKS (public keys)
+    // jose will automatically:
+    // - Select the right key via kid (key ID) in JWT header
+    // - Verify the signature matches the payload
+    // - Check the token hasn't expired (exp claim)
     const { payload } = await jwtVerify(token, JWKS);
 
     // If you want to enforce issuer after verify, do it here:
@@ -35,12 +66,27 @@ export async function verifyWorkOSAccessToken(
     //   return null;
     // }
 
+    // Extract user ID and session ID from payload
     const sub = typeof payload.sub === "string" ? payload.sub : undefined;
-    if (!sub) return null;
+    const sid = typeof payload.sid === "string" ? payload.sid : undefined;
+    if (!sub || !sid) return null;
 
-    return { userId: sub };
+    return { userId: sub, sessionId: sid };
   } catch (e: any) {
     console.error("[workos] jwtVerify error:", e?.message || e);
     return null;
   }
+}
+
+export async function getSessionFromCookie(req: Request, cookieName: string): Promise<{ accessToken: string; refreshToken: string; userId: string; sessionId: string } | null> {
+  const cookieValue = readCookieFromHeader(req, cookieName);
+  if (!cookieValue) return null;
+  
+  const parsed = parseSessionCookie(cookieValue);
+  if (!parsed) return null;
+  
+  const verified = await verifyWorkOSAccessToken(parsed.accessToken);
+  if (!verified) return null;
+  
+  return { ...parsed, ...verified };
 }

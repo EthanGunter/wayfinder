@@ -38,7 +38,7 @@ export const settings = {
 				manualSave: true,
 			}),
 		},
-	},
+	}
 } satisfies SettingsTree;
 
 export type AppSettings = typeof settings;

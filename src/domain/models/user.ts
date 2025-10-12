@@ -21,9 +21,10 @@ export interface User {
 	settingOverrides?: any/* AppSettings */;
 }
 
-// Local user interface extends base user with local avatar and settings
+// Local user interface extends base user with local avatar, settings, and session material
 export interface LocalUser extends User {
 	avatar?: Blob;
+	sessionMaterial?: string; // Refresh token or other session restoration data
 }
 
 // Utility functions for User objects

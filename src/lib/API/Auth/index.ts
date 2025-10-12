@@ -2,39 +2,27 @@ import type { LocalUser } from '$domain/models/user';
 import { Err, NotImplementedError } from '$domain/errors';
 import type { Readable } from 'svelte/store';
 
-import browserAuthAPI,
-{
-	browserAuthState,
-	browserCachedUsers,
-} from './BrowserAuthProvider';
-import { derived, get, writable } from 'svelte/store';
-
 import ConvexAuthProvider from './ConvexAuthProvider';
 import type { AuthState, IAuthLocal, IAuthRemote } from './seam-interfaces';
-import { getApi } from './PassthroughAuthProvider';
+import PassthroughAuthProvider, { passthroughAuthState, passthroughCachedUsers } from './PassthroughAuthProvider';
 
 // Canonical source for whether remote auth operations are available.
 // null => remote unavailable; non-null => remote enabled and usable.
-export const remoteAuth = writable<IAuthRemote | null>(null);
-
-(async () => {
-	try {
-		remoteAuth.set(ConvexAuthProvider);
-	} catch (e) {
-		console.error('Failed to initialize remoteAuth provider:', e);
-		remoteAuth.set(null);
-	}
-})();
+// TODO:?? To be fair, it doesn't really may sense for auth to *not* be available...
+export const remoteAuth = ConvexAuthProvider;
 
 let authAPI: IAuthLocal,
 	authState: Readable<AuthState>,
 	cachedUsers: Readable<LocalUser[]>
 
 if (true /* browser */) {
-	authAPI = getApi(browserAuthAPI, get(remoteAuth) as IAuthRemote);
-	authState = derived(authAPI.watchAuthState(), (state) => state);
-	console.log('[TODO:debug EG] index.ts: authState set to browserAuthState'); // TODO:debug EG
-	cachedUsers = browserCachedUsers;
+	authAPI = PassthroughAuthProvider;
+	cachedUsers = passthroughCachedUsers;
+	authState = passthroughAuthState;
+	console.log('[TODO:debug EG] index.ts: authState assigned to passthroughAuthState'); // TODO:debug EG
+	authState.subscribe((state) => {
+		console.log('[TODO:debug EG] index.ts: authState changed to', state.status); // TODO:debug EG
+	});
 } else /* if ( mobile ) */ {
 	Err.throw(new NotImplementedError("Mobile auth provider not implemented"));
 }

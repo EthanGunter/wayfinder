@@ -6,6 +6,29 @@ import { WorkOS } from "@workos-inc/node";
 import { verifyWorkOSAccessToken } from "../lib/workosSession";
 import { api, internal } from "../_generated/api";
 
+/**
+ * Handle OAuth callback from WorkOS after user authentication.
+ * 
+ * OAuth Flow:
+ * 1. User clicks "Sign in with Google" (or email/password on WorkOS)
+ * 2. WorkOS authenticates the user
+ * 3. WorkOS redirects to this endpoint with ?code=...
+ * 4. We exchange the code for an access token + user profile
+ * 5. Upsert user in Convex DB
+ * 6. Set HttpOnly cookie with access token
+ * 7. Redirect to SITE_URL (our app)
+ * 
+ * Data received from WorkOS:
+ * - accessToken: JWT access token (10min expiry, contains userId + sessionId)
+ * - user: {id, email, firstName, lastName, profilePictureUrl, ...}
+ * 
+ * Data stored:
+ * - Cookie: wos_session={accessToken} (HttpOnly, so JS can't access it)
+ * - Convex DB: users table with authId=user.id
+ * 
+ * After redirect, ConvexAuthProvider.bootstrap() will check /auth/whoami
+ * to verify the cookie and subscribe to user data.
+ */
 export const workosSigninCallbackAction = action({
 	args: {
 		url: v.string(), // full URL including ?code=...
@@ -13,25 +36,25 @@ export const workosSigninCallbackAction = action({
 	handler: async (ctx, { url }) => {
 
 		// Read from Convex env (mirrored to process.env in Node actions)
-		const workOSApiKey = process.env.WORKOS_API_KEY;
-		const workOSClientId = process.env.PUBLIC_WORKOS_CLIENT_ID;
-		const cookieName = process.env.SESSION_COOKIE_NAME ?? "wos_session";
-		const cookieDomain = process.env.SESSION_COOKIE_DOMAIN;
-		const cookieSecure = true //(process.env.SESSION_COOKIE_SECURE ?? "true").toLowerCase() === "true";
-		const sameSite = "None" //(process.env.SESSION_COOKIE_SAMESITE ?? "None") as "Lax" | "Strict" | "None";
+		const AUTH_API_KEY = process.env.AUTH_API_KEY;
+		const AUTH_CLIENT_ID = process.env.AUTH_CLIENT_ID;
+		const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME;
+		const SESSION_COOKIE_DOMAIN = process.env.SESSION_COOKIE_DOMAIN;
+		const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE;
+		const SESSION_COOKIE_SAMESITE = process.env.SESSION_COOKIE_SAMESITE;
 
-		if (!workOSApiKey) {
+		if (!AUTH_API_KEY) {
 			return {
 				status: 500 as const,
 				headers: [] as Array<[string, string]>,
-				body: "Missing WORKOS_API_KEY",
+				body: "Missing AUTH_API_KEY",
 			};
 		}
-		if (!workOSClientId) {
+		if (!AUTH_CLIENT_ID) {
 			return {
 				status: 500 as const,
 				headers: [] as Array<[string, string]>,
-				body: "Missing WORKOS_CLIENT_ID",
+				body: "Missing AUTH_CLIENT_ID",
 			};
 		}
 
@@ -45,11 +68,13 @@ export const workosSigninCallbackAction = action({
 			};
 		}
 
-		const workos = new WorkOS(workOSApiKey);
+		const workos = new WorkOS(AUTH_API_KEY);
 
+		// Exchange authorization code for access token + user profile
+		// This is the core OAuth code-for-token exchange
 		const result = await workos.userManagement.authenticateWithCode({
 			code,
-			clientId: workOSClientId,
+			clientId: AUTH_CLIENT_ID,
 		});
 
 		console.log("[workos] authenticateWithCode result:", JSON.stringify(result));
@@ -63,8 +88,8 @@ export const workosSigninCallbackAction = action({
 			};
 		}
 
-		// Verify token to get the WorkOS user id, then upsert user now
-		// so the DB is ready when the app loads.
+		// Verify token to extract WorkOS user ID and session ID
+		// This decodes and validates the JWT against WorkOS JWKS
 		const verified = await verifyWorkOSAccessToken(accessToken);
 		if (!verified) {
 			return {
@@ -77,6 +102,8 @@ export const workosSigninCallbackAction = action({
 		const user = result.user;
 		console.log("callback user:", JSON.stringify(user, undefined, 2));
 
+		// Upsert user in Convex DB so it's ready when the app loads
+		// This ensures the user exists before bootstrap() subscribes to it
 		const displayName = user.firstName ?
 			user.lastName ? user.firstName + " " + user.lastName : user.firstName
 			: "New User";
@@ -86,14 +113,17 @@ export const workosSigninCallbackAction = action({
 			avatarUrl: user.profilePictureUrl ?? undefined
 		});
 
-		const cookie = setCookieHeader(cookieName, accessToken, {
-			httpOnly: true,
-			secure: true,
-			sameSite: "None",
+		// Set HttpOnly cookie with access token
+		// This is the session cookie that will be sent with all future requests
+		const cookie = setCookieHeader(SESSION_COOKIE_NAME, accessToken, {
+			httpOnly: true,  // JS can't access (security)
+			secure: true,    // HTTPS only
+			sameSite: "None", // Allow cross-site (Convex backend is different domain)
 			path: "/",
 			// No Domain: host-only for convex.site
 		});
 
+		// Redirect back to the app with session cookie set
 		return {
 			status: 302 as const,
 			headers: [["Set-Cookie", cookie], ["Location", process.env.SITE_URL!]],
@@ -102,6 +132,45 @@ export const workosSigninCallbackAction = action({
 	},
 });
 
+
+export const revokeSessionAction = action({
+	args: {
+		sessionId: v.string(),
+	},
+	handler: async (ctx, { sessionId }) => {
+		const workOSApiKey = process.env.WORKOS_API_KEY;
+
+		if (!workOSApiKey) {
+			return {
+				success: false,
+				logoutUrl: null,
+			};
+		}
+
+		try {
+			const workos = new WorkOS(workOSApiKey);
+
+			// Revoke the session on WorkOS side
+			await workos.userManagement.revokeSession({ sessionId });
+
+			// Get the logout URL to clear WorkOS browser session
+			const logoutUrl = workos.userManagement.getLogoutUrl({ sessionId });
+
+			console.log("[workos] Session revoked, logout URL:", logoutUrl);
+
+			return {
+				success: true,
+				logoutUrl,
+			};
+		} catch (e: any) {
+			console.error("[workos] Failed to revoke session:", e?.message || e);
+			return {
+				success: false,
+				logoutUrl: null,
+			};
+		}
+	},
+});
 
 function setCookieHeader(
 	name: string,

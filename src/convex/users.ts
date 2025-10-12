@@ -73,7 +73,7 @@ export const watchUsers = query({
         id: user!.authId,
         displayName: user!.displayName,
         avatarUrl: user!.avatarUrl ?? undefined,
-        createdAt: new Date(0),
+        _creationTime: user!._creationTime,
         status: (user!.status ?? "active") as "active" | "deleted",
         features: user!.features ?? [],
         settingOverrides: user!.settingOverrides ?? undefined,
