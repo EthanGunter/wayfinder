@@ -3,79 +3,126 @@
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { authAPI, authState } from '$lib/API/Auth';
-	import { ArgumentError, Err } from '$domain/errors';
-	import type { LoginCredentials } from '$domain/models/user';
+
+console.log("LOGIN!");
+
 
 	let redir = page.url.searchParams.get('redirect') || '/';
 	let errorMessage = $state('');
-	let isLoading = $state(false);
-	let email = $state('');
-	let password = $state('');
+	let testOutput = $state('');
 
-	async function handleRemoteLogin() {
-		if (!authAPI || isLoading || !email.trim() || !password.trim()) return;
-		isLoading = true;
-		errorMessage = '';
-
-		const creds: LoginCredentials = { type: 'email_password', email, password };
-		const [user, error] = await authAPI.login(creds);
-
-		if (user) {
-			// Clear credentials on success
-			email = '';
-			password = '';
-			goto(redir);
-		} else {
-			if (error instanceof ArgumentError) {
-				errorMessage = error.message;
-				console.error(error);
+	async function handleLogin() {
+		testOutput = 'Initiating GitHub login...';
+		try {
+			const result = await authAPI.login({ type: 'external' });
+			if (result[0]) {
+				testOutput = '✓ Login initiated successfully';
 			} else {
-				// TODO:Temp anonymous accounts disabled
-				if (false /* error?.data?.requiresMigration */) {
-				} else {
-					errorMessage = 'Login failed';
-					Err.UNHANDLED(error);
-				}
+				testOutput = `✗ Login error: ${result[1]?.message}`;
 			}
+		} catch (e: any) {
+			testOutput = `✗ Login exception: ${e.message}`;
 		}
-		isLoading = false;
 	}
 
-	console.log($authState.status);
+	async function handleLogout() {
+		testOutput = 'Logging out...';
+		try {
+			await authAPI.logout();
+			testOutput = '✓ Logged out successfully';
+		} catch (e: any) {
+			testOutput = `✗ Logout exception: ${e.message}`;
+		}
+	}
 
-	// TEMP: Login with hosted WorkOS UI
-	authAPI.login({ type: 'external' });
+	async function handleLogoutKeepCached() {
+		testOutput = 'Logging out (keeping cached)...';
+		try {
+			await authAPI.logout({ keepCached: true });
+			testOutput = '✓ Logged out (kept cached)';
+		} catch (e: any) {
+			testOutput = `✗ Logout exception: ${e.message}`;
+		}
+	}
+
+	function checkAuthState() {
+		testOutput = `Auth State: ${JSON.stringify($authState, null, 2)}`;
+	}
+
+	async function testUpdateUser() {
+		testOutput = 'Updating user displayName...';
+		try {
+			const result = await authAPI.updateUser({ 
+				update: { displayName: 'Test User ' + Date.now() } 
+			});
+			if (result[0]) {
+				testOutput = `✓ User updated: ${JSON.stringify(result[0], null, 2)}`;
+			} else {
+				testOutput = `✗ Update error: ${result[1]?.message}`;
+			}
+		} catch (e: any) {
+			testOutput = `✗ Update exception: ${e.message}`;
+		}
+	}
+
+	console.log('[Login page] Auth state:', $authState.status);
 </script>
 
-<!-- TEMP: Prefer workos hosted UI for now -->
-{#if false}
-	<h1 class="text-center text-gray-800">Login</h1>
-	{#if errorMessage}
-		<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
-			{errorMessage}
+<div class="mx-auto max-w-2xl p-6">
+	<h1 class="mb-6 text-center text-3xl font-bold text-gray-800">Auth Test Page</h1>
+
+	<!-- Auth State Display -->
+	<div class="mb-6 rounded-lg border border-gray-300 bg-gray-50 p-4">
+		<h2 class="mb-2 font-semibold">Current Auth State:</h2>
+		<div class="font-mono text-sm">
+			<div>Status: <strong>{$authState.status}</strong></div>
+			{#if $authState.status === 'signed-in'}
+				<div>User ID: {$authState.user.id}</div>
+				<div>Display Name: {$authState.user.displayName}</div>
+				<div>Avatar: {$authState.user.avatarUrl || 'none'}</div>
+			{/if}
+		</div>
+	</div>
+
+	<!-- Test Buttons -->
+	<div class="mb-6 space-y-3">
+		<Button class="w-full" onclick={handleLogin}>
+			🔐 Login with GitHub (OAuth)
+		</Button>
+		
+		<Button class="w-full" variant="secondary" onclick={checkAuthState}>
+			📊 Check Auth State (Console)
+		</Button>
+
+		<Button class="w-full" variant="secondary" onclick={testUpdateUser}>
+			✏️ Update User DisplayName
+		</Button>
+
+		<Button class="w-full" variant="destructive" onclick={handleLogout}>
+			🚪 Logout
+		</Button>
+
+		<Button class="w-full" variant="outline" onclick={handleLogoutKeepCached}>
+			🚪 Logout (Keep Cached)
+		</Button>
+
+		<Button class="w-full" variant="link" onclick={() => goto(`/register?redirect=${redir}`)}>
+			📝 Go to Register Page
+		</Button>
+	</div>
+
+	<!-- Test Output -->
+	{#if testOutput}
+		<div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+			<h3 class="mb-2 font-semibold text-blue-900">Test Output:</h3>
+			<pre class="whitespace-pre-wrap font-mono text-sm text-blue-800">{testOutput}</pre>
 		</div>
 	{/if}
 
-	<form class="mb-6 space-y-3" onsubmit={handleRemoteLogin}>
-		<label for="email" class="block text-sm text-gray-600">Email</label>
-		<input
-			name="email"
-			type="email"
-			bind:value={email}
-			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-		/>
-		<label for="password" class="block text-sm text-gray-600">Password</label>
-		<input
-			name="password"
-			type="password"
-			bind:value={password}
-			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-		/>
-		<Button class="w-full" type="submit" disabled={isLoading}>
-			{isLoading ? 'Please wait...' : 'Sign in'}
-		</Button>
-	</form>
-	<div class="mb-4 flex items-center justify-center text-sm">
-		<Button variant="link" onclick={() => goto(`/register?redirect=${redir}`)}>Register</Button>
-	</div>
-{/if}
+	<!-- Error Display -->
+	{#if errorMessage}
+		<div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+			{errorMessage}
+		</div>
+	{/if}
+</div>

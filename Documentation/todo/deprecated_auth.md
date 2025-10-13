@@ -7,7 +7,7 @@ Server issues application JWTs and validates them locally.
 
 Environment Variabls:
 - Frontend SPA: SITE_URL
-- Convex backend: CONVEX_URL / CONVEX_API
+- Convex backend: CONVEX_URL / CONVEX_SITE_URL
 - WorkOS
 	- JWKS: AUTH_JWKS_URL
 	- api key: AUTH_API_KEY

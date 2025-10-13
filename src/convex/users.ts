@@ -30,6 +30,14 @@ const typeLoginCredentials = v.union(
 
 //#endregion
 
+export const whoami = query({
+  args: {},
+  handler: async (ctx) => {
+    const id = await ctx.auth.getUserIdentity();
+    return id ? { authId: id.subject, email: id.email } : null;
+  },
+});
+
 export const watchUser = query({
   args: { id: v.string() },
   handler: async (ctx, args) => {
@@ -205,6 +213,7 @@ export const updateUser = mutation({
 export const deleteUser = mutation({
   args: { userId: v.string() }, // authId
   handler: async (ctx, { userId }) => {
+    const identity = await ctx.auth.getUserIdentity();
     const existing = await ctx.db
       .query("users")
       .withIndex("by_authId", (q) => q.eq("authId", userId))
@@ -234,6 +243,45 @@ export const login = mutation({
       ok: false as const,
       error: serializeError(new NotImplementedError("ConvexAuth.login"))
     };
+  },
+});
+
+export const ensureCurrentUser = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Get authenticated user from BetterAuth
+    const identity = await ctx.auth.getUserIdentity();
+    console.log("ensureCurrentUser", identity, process.env.AUTH_URL);
+    
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const authId = identity.subject;
+    const displayName = identity.name || identity.email || "New User";
+
+    // Check if user exists
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_authId", (q) => q.eq("authId", authId))
+      .unique();
+
+    if (existing) {
+      return { ok: true as const, userId: existing.authId };
+    }
+
+    // Create new user record
+    const _id = await ctx.db.insert("users", {
+      authId,
+      displayName,
+      avatarUrl: undefined,
+      status: "active",
+      features: [],
+      settingOverrides: undefined,
+    });
+
+    const inserted = await ctx.db.get(_id);
+    return { ok: true as const, userId: inserted!.authId };
   },
 });
 

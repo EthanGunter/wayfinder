@@ -11,7 +11,7 @@
     "jsx": "react-jsx",
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     /* These compiler options are required by Convex */
     "target": "ESNext",
     "lib": [

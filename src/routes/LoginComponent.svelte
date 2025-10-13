@@ -6,9 +6,7 @@
 	import { authAPI, authState, cachedUsers as authUsers, cachedUsers } from '$lib/API/Auth';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import Icon from '@iconify/svelte';
-	import { Err, InputRequiredError } from '$domain/errors';
-	import type { LocalUser } from '$domain/models/user';
-	import { authkit } from '$lib/API/WorkOSAuthKit';
+	import { Err, InputRequiredError, NotImplementedError } from '$domain/errors';
 
 	let currentUser = $derived($authState.status === 'signed-in' ? $authState.user : null);
 	let redir = page.url.searchParams.get('redirect') || '/';
@@ -94,7 +92,7 @@
 				await authAPI.logout({ keepCached: true });
 			}
 			console.log('[TODO:debug EG] switch-user → login: calling WorkOS signIn'); // TODO:debug EG
-			authkit.signIn();
+			Err.throw(new NotImplementedError('Login not implemented'));
 		}}
 	>
 		Login
@@ -110,7 +108,7 @@
 				await authAPI.logout({ keepCached: true });
 			}
 			console.log('[TODO:debug EG] switch-user → register: calling WorkOS signUp'); // TODO:debug EG
-			authkit.signUp();
+			Err.throw(new NotImplementedError('Sign up not implemented'));
 		}}
 	>
 		Register

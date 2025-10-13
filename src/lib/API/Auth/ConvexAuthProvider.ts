@@ -19,14 +19,18 @@ import { err, ok, type Result } from "$domain/result";
 
 import { api } from "$convex/_generated/api";
 import { ConvexClient } from "convex/browser";
-import { PUBLIC_CONVEX_URL, PUBLIC_CONVEX_API_URL } from "$env/static/public";
-import { authkit } from "../WorkOSAuthKit";
+import { PUBLIC_AUTH_URL, PUBLIC_CONVEX_URL } from "$env/static/public";
+import { createAuthClient } from 'better-auth/svelte';
+import { convexClient } from "@convex-dev/better-auth/client/plugins";
 
-const client = new ConvexClient(PUBLIC_CONVEX_URL);
+export const authClient = createAuthClient({
+  plugins: [convexClient()],
+});
 
-// Internal auth state - managed by bootstrap and mutations
+// Internal auth state - managed by BetterAuth session
 const authState = writable<AuthState>({ status: "loading" });
 let unsubUser: (() => void) | null = null;
+let client = new ConvexClient(PUBLIC_CONVEX_URL);
 
 const resolveSignedOut = () => {
 	if (unsubUser) {
@@ -34,6 +38,8 @@ const resolveSignedOut = () => {
 		unsubUser = null;
 		console.log("Unsubscribed from user");
 	}
+	// Clear Convex auth - provide fetcher that returns null token
+	client.setAuth(async () => null);
 	authState.set({ status: "signed-out" });
 };
 
@@ -41,34 +47,51 @@ const bootstrap = async () => {
 	console.log("[ConvexAuthProvider] bootstrap");
 
 	try {
-		// Verify identity from cookie
-		const res = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/whoami`, {
-			credentials: "include",
-		});
+		// Get session from BetterAuth
+		const session = await authClient.getSession();
 
-		const json = await res.json();
-		console.log("whoami res:", json);
-		const { userId } = json;
+		// TODO:debug EG - Log full session structure to find Convex token
+		console.log("[ConvexAuthProvider] TODO:debug - Full session object:", JSON.stringify(session, null, 2));
 
-		if (!userId) {
+		if (!session?.data?.user?.id) {
+			console.log("[ConvexAuthProvider] No session found");
 			resolveSignedOut();
 			return;
 		}
 
-		// User row already upserted by callback; subscribe directly
-		console.log("Subscribing to user");
+		const userId = session.data.user.id;
+		console.log("BetterAuth session found for user:", userId);
+		// Ensure Convex client has the latest auth token
+		client.setAuth(async () => {
+			try {
+				const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, {
+					credentials: "include",
+				});
+				if (!resp.ok) return null;
+				const { token } = await resp.json();
+				return token ?? null;
+			} catch {
+				return null;
+			}
+		});
+		// Ensure user record exists in our app DB (creates if first-time login)
+		// This mutation validates auth internally via ctx.auth.getUserIdentity()
+		await client.mutation(api.users.ensureCurrentUser, {});
 
+		// Subscribe to user from Convex
 		unsubUser = client.onUpdate(
 			api.users.watchUser,
 			{ id: userId },
 			(user) => {
-				console.log('[TODO:debug EG] ConvexAuthProvider onUpdate callback, user:', user); // TODO:debug EG
+				console.log('[ConvexAuthProvider] User update:', user);
 				if (!user) {
 					authState.set({ status: "loading" });
 					return;
 				}
-				console.log('[TODO:debug EG] ConvexAuthProvider calling set with signed-in'); // TODO:debug EG
-				authState.set({ status: "signed-in", user: { ...user, createdAt: new Date(user._creationTime) } });
+				authState.set({
+					status: "signed-in",
+					user: { ...user, createdAt: new Date(user._creationTime) }
+				});
 			},
 			(error: Error) => {
 				authState.set({
@@ -82,11 +105,12 @@ const bootstrap = async () => {
 			}
 		);
 	} catch (e: any) {
+		console.error("[ConvexAuthProvider] Bootstrap failed:", e);
 		resolveSignedOut();
 	}
 };
 
-// Re-check when page becomes visible again (in case cookie rotates)
+// Re-check when page becomes visible again
 const onVis = () => {
 	if (document.visibilityState === "visible") bootstrap();
 };
@@ -139,8 +163,11 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 
 	register: async ({ creds, userData }) => {
 		console.log("[ConvexAuthProvider] register user");
-		await authkit.signIn();
-		await client.mutation(api.users.register, { creds, userData });
+		// For now, registration uses GitHub OAuth
+		// BetterAuth will create the auth user, then we create our app user record
+		await authClient.signIn.social({ provider: 'github', callbackURL: window.location.origin + '/planner' });
+		// After OAuth completes and redirects back, the session will be active
+		// and bootstrap will be triggered to create/fetch the user
 		return ok();
 	},
 
@@ -157,74 +184,66 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 	},
 
 	login: async (creds) => {
-		authkit.signIn()
+		console.log("[ConvexAuthProvider] login user");
+		// TODO:debug EG - Log the exact URL being called
+		const callbackURL = window.location.origin + '/planner';
+		console.log('[ConvexAuthProvider] TODO:debug - authClient config:', {
+			callbackURL,
+			windowOrigin: window.location.origin,
+			authClientKeys: Object.keys(authClient)
+		});
+		// GitHub OAuth login
+		try {
+			await authClient.signIn.social({ provider: 'github' });
+			console.log('[ConvexAuthProvider] TODO:debug - signIn.social completed without error');
+		} catch (e: any) {
+			console.error('[ConvexAuthProvider] TODO:debug - signIn.social threw error:', e);
+			throw e;
+		}
 		return ok();
 	},
 
 	logout: async (options?: { keepCached?: boolean }) => {
-		// Clear our app's cookie AND revoke WorkOS session
+		console.log("[ConvexAuthProvider] logout");
 		try {
-			const response = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/signout`, {
-				method: "POST",
-				credentials: "include",
-			});
+			// Sign out via BetterAuth
+			await authClient.signOut();
 
-			const data = await response.json();
-			console.log("[ConvexAuthProvider] Signout response:", data);
-
-			// Update UI immediately
+			// Clear Convex auth and update UI
 			resolveSignedOut();
 
-			// Redirect to WorkOS logout URL to clear their browser session
-			// Skip redirect if keepCached is true (we're switching users, not fully logging out)
-			if (data.logoutUrl && !options?.keepCached) {
-				console.log("[ConvexAuthProvider] Redirecting to WorkOS logout:", data.logoutUrl);
-				window.location.href = data.logoutUrl;
-			} else if (options?.keepCached) {
-				console.log("[ConvexAuthProvider] Keeping cached - no WorkOS redirect");
+			// For multi-account support, if keepCached is true, we don't fully redirect
+			if (!options?.keepCached) {
+				// Optionally redirect to login page
+				// window.location.href = '/login';
 			}
 		} catch (e) {
-			console.error("Failed to clear session:", e);
+			console.error("Failed to sign out:", e);
 			// Still update UI even if server call failed
 			resolveSignedOut();
 		}
 	},
 
 	// Session-capable methods for account switching
+	// TODO: BetterAuth multi-session support needs to be implemented
+	// For now, these are stubs that maintain the interface
 	getSessionMaterial: async ({ userId }: { userId: string }) => {
-		try {
-			const response = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/session-material`, {
-				method: "GET",
-				credentials: "include", // Send HttpOnly cookie
-			});
-
-			const data = await response.json();
-			return ok(data.material || null);
-		} catch (e) {
-			console.error("Failed to get session material:", e);
-			return ok(null);
-		}
+		console.log("[ConvexAuthProvider] getSessionMaterial - TODO: implement with BetterAuth");
+		// BetterAuth stores sessions in httpOnly cookies
+		// For multi-account, we'll need to implement session storage on the server
+		// or use BetterAuth's multi-session capabilities
+		return ok(null);
 	},
 
 	restoreSession: async ({ userId, material }: { userId: string; material: string }) => {
-		// Set the cookie with the saved session material
-		// Note: We can't set HttpOnly cookies from JavaScript, so we need a server endpoint
-		const response = await fetch(`${PUBLIC_CONVEX_API_URL}/auth/restore-session`, {
-			method: "POST",
-			credentials: "include",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ material }),
-		});
+		console.log("[ConvexAuthProvider] restoreSession - TODO: implement with BetterAuth");
+		// For multi-account switching, we need to:
+		// 1. Store multiple session tokens server-side
+		// 2. Use an identifier to switch between them
+		// 3. Set the active session cookie
 
-		if (response.status === 401) {
-			return err(new InputRequiredError('Session expired. Please log in again.', { userId }))
-		} else if (!response.ok) {
-			return Err.UNHANDLED(response);
-		}
-
-		// Trigger bootstrap to update auth state
+		// For now, just re-bootstrap
 		await bootstrap();
-
 		return ok({ rotatedMaterial: undefined });
 	},
 };

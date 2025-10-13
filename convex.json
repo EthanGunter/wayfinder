@@ -1,6 +1,3 @@
 {
-  "functions": "src/convex/",
-  "auth": {
-    "use": "convex/auth.ts"
-  }
+  "functions": "src/convex/"
 }

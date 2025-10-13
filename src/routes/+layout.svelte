@@ -5,7 +5,6 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import Icon from '@iconify/svelte';
-	import LoginComponent from './LoginComponent.svelte';
 
 	const { children } = $props();
 	let isLogin = $state(false);
@@ -35,6 +34,9 @@
 			}
 		} else if (state.status === 'signed-out') {
 			console.log('[root/+layout] auth signed out');
+			if (!isAuthPage) {
+				goto('/login');
+			}
 		} else if (state.status === 'error') {
 			// TODO:UX Add error page
 			console.error('[root/+layout] auth error:', state.error);
@@ -45,8 +47,6 @@
 			}
 		}
 	});
-
-	// setupConvex(PUBLIC_CONVEX_URL);
 </script>
 
 <div class="absolute top-0 left-0 h-screen w-screen">
@@ -54,14 +54,8 @@
 		<div class="flex h-screen w-full items-center justify-center">
 			<Icon icon="lucide:loader-circle" class="size-10 animate-spin" />
 		</div>
-	{:else if $authState.status === 'signed-out'}
-		{#if isAuthPage}
-		<!-- Temporary solution to show auth content -->
-			{@render children?.()}
-		{:else}
-			<LoginComponent />
-		{/if}
-	{:else if $authState.status === 'signed-in'}
+		<!-- {:else if $authState.status === 'signed-in'} -->
+	{:else}
 		{@render children?.()}
 	{/if}
 </div>
