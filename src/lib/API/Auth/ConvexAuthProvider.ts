@@ -13,6 +13,7 @@ import type {
 import {
 	Err,
 	InputRequiredError,
+	InvalidStateError,
 	type NotImplementedError,
 } from "$domain/errors";
 import { err, ok, type Result } from "$domain/result";
@@ -22,9 +23,10 @@ import { ConvexClient } from "convex/browser";
 import { PUBLIC_AUTH_URL, PUBLIC_CONVEX_URL } from "$env/static/public";
 import { createAuthClient } from 'better-auth/svelte';
 import { convexClient } from "@convex-dev/better-auth/client/plugins";
+import { multiSessionClient } from "better-auth/client/plugins";
 
-export const authClient = createAuthClient({
-  plugins: [convexClient()],
+const authClient = createAuthClient({
+	plugins: [convexClient(), multiSessionClient()],
 });
 
 // Internal auth state - managed by BetterAuth session
@@ -96,11 +98,7 @@ const bootstrap = async () => {
 			(error: Error) => {
 				authState.set({
 					status: "error",
-					error: {
-						type: "NetworkError",
-						message: error.message,
-						ctx: { original: error },
-					} as any,
+					error: Err.wrap(error),
 				});
 			}
 		);
@@ -145,11 +143,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				(error: Error) => {
 					set({
 						status: "error",
-						error: {
-							type: "NetworkError",
-							message: error.message,
-							ctx: { original: error },
-						} as any,
+						error: Err.wrap(error),
 					});
 				}
 			);
@@ -163,15 +157,27 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 
 	register: async ({ creds, userData }) => {
 		console.log("[ConvexAuthProvider] register user");
-		// For now, registration uses GitHub OAuth
-		// BetterAuth will create the auth user, then we create our app user record
-		await authClient.signIn.social({ provider: 'github', callbackURL: window.location.origin + '/planner' });
+		if (creds.type === 'external') {
+			// Social registration
+			await authClient.signIn.social({ provider: 'github', callbackURL: window.location.origin + '/planner' });
+		} else if (creds.type === 'email_password') {
+			// Email/password registration — BetterAuth requires name in some configs; keep to sign-in only for now
+			await authClient.signUp.email({
+				name: userData.displayName,
+				email: creds.email,
+				password: creds.password,
+				image: userData.avatarUrl,
+			});
+			bootstrap();
+		}
 		// After OAuth completes and redirects back, the session will be active
 		// and bootstrap will be triggered to create/fetch the user
 		return ok();
 	},
 
 	updateUser: async ({ update }) => {
+		console.log("[ConvexAuthProvider] updateUser", update);
+
 		const res = await client.mutation(api.users.updateUser, update);
 		if (res.ok) return ok(res.value);
 		return err(res.error);
@@ -184,20 +190,20 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 	},
 
 	login: async (creds) => {
-		console.log("[ConvexAuthProvider] login user");
-		// TODO:debug EG - Log the exact URL being called
-		const callbackURL = window.location.origin + '/planner';
-		console.log('[ConvexAuthProvider] TODO:debug - authClient config:', {
-			callbackURL,
-			windowOrigin: window.location.origin,
-			authClientKeys: Object.keys(authClient)
-		});
-		// GitHub OAuth login
 		try {
-			await authClient.signIn.social({ provider: 'github' });
-			console.log('[ConvexAuthProvider] TODO:debug - signIn.social completed without error');
+			if (creds.type === 'external') {
+				// GitHub OAuth login
+				await authClient.signIn.social({ provider: 'github' });
+			} else if (creds.type === 'email_password') {
+				await authClient.signIn.email({
+					email: creds.email,
+					password: creds.password,
+				});
+				bootstrap();
+			}
+			console.log('[ConvexAuthProvider] TODO:debug - signIn completed without error');
 		} catch (e: any) {
-			console.error('[ConvexAuthProvider] TODO:debug - signIn.social threw error:', e);
+			console.error('[ConvexAuthProvider] TODO:debug - signIn threw error:', e);
 			throw e;
 		}
 		return ok();
@@ -228,23 +234,44 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 	// TODO: BetterAuth multi-session support needs to be implemented
 	// For now, these are stubs that maintain the interface
 	getSessionMaterial: async ({ userId }: { userId: string }) => {
-		console.log("[ConvexAuthProvider] getSessionMaterial - TODO: implement with BetterAuth");
-		// BetterAuth stores sessions in httpOnly cookies
-		// For multi-account, we'll need to implement session storage on the server
-		// or use BetterAuth's multi-session capabilities
-		return ok(null);
+		try {
+			const res = await authClient.multiSession.listDeviceSessions();
+			if (res.error) return err(new InvalidStateError('Unable to list sessions'));
+			const match = res.data.find((s) => s.user.id === userId || s.session.userId === userId);
+			return ok<string | null>(match?.session.token ?? null);
+		} catch (e) {
+			return err(new InvalidStateError('Unable to list sessions'));
+		}
 	},
 
 	restoreSession: async ({ userId, material }: { userId: string; material: string }) => {
-		console.log("[ConvexAuthProvider] restoreSession - TODO: implement with BetterAuth");
-		// For multi-account switching, we need to:
-		// 1. Store multiple session tokens server-side
-		// 2. Use an identifier to switch between them
-		// 3. Set the active session cookie
+		try {
+			await authClient.multiSession.setActive({ sessionToken: material });
+			// Ensure Convex receives a fresh JWT tied to the active BetterAuth session
+			await client.mutation(api.users.ensureCurrentUser, {});
+			return ok({ rotatedMaterial: undefined });
+		} catch (e) {
+			return err(new InputRequiredError('Failed to activate session', { userId }));
+		}
+	},
 
-		// For now, just re-bootstrap
-		await bootstrap();
-		return ok({ rotatedMaterial: undefined });
+	// List sessions in an interface-safe DTO
+	getUserSessions: async () => {
+		try {
+			const res = await authClient.multiSession.listDeviceSessions();
+			if (res.error) return err(new InvalidStateError('Unable to list sessions'));
+			const mapped = res.data.map((s) => ({
+				session: { token: s.session.token, userId: s.session.userId },
+				user: {
+					id: s.user.id,
+					displayName: s.user.name,
+					avatarUrl: s.user.image ?? undefined,
+				},
+			}));
+			return ok(mapped);
+		} catch (e) {
+			return err(new InvalidStateError('Unable to list sessions'));
+		}
 	},
 };
 
@@ -271,11 +298,7 @@ function toLiveStore<T>(
 			(error: Error) => {
 				set({
 					status: "error",
-					error: {
-						type: "NetworkError",
-						message: error.message,
-						ctx: { original: error },
-					} as any,
+					error: Err.wrap(error),
 				});
 			},
 		);

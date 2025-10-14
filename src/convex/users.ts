@@ -170,6 +170,9 @@ export const register = mutation({
 export const updateUser = mutation({
   args: argsUser,
   handler: async (ctx, update) => {
+    console.log('Update: ', update);
+
+
     const id = await ctx.auth.getUserIdentity();
     if (!id) throw new Error("User identity not available");
 
@@ -190,19 +193,23 @@ export const updateUser = mutation({
         error: serializeError(new NotFoundError("User not found", update.id)),
       };
     }
+    const patch = userToPatch(update);
+    console.log('Existing: ', existing, "\nUpdate: ", update, "\nPatch: ", patch);
 
-    const patch: Record<string, any> = {};
-    if (update.displayName !== undefined) patch.displayName = update.displayName;
-    if (update.avatarUrl !== undefined) patch.avatarUrl = update.avatarUrl;
-    if (update.status !== undefined) patch.status = update.status;
-    if (update.features !== undefined) patch.features = update.features;
-    if (update.settingOverrides !== undefined) patch.settingOverrides = update.settingOverrides;
+    // const patch: Record<string, any> = {};
+    // if (update.displayName !== undefined) patch.displayName = update.displayName;
+    // if (update.avatarUrl !== undefined) patch.avatarUrl = update.avatarUrl;
+    // if (update.status !== undefined) patch.status = update.status;
+    // if (update.features !== undefined) patch.features = update.features;
+    // if (update.settingOverrides !== undefined) patch.settingOverrides = update.settingOverrides;
 
     if (Object.keys(patch).length) {
       await ctx.db.patch(existing._id, patch);
     }
 
     const refreshed = await ctx.db.get(existing._id);
+    console.log('Refreshed: ', refreshed);
+
     return {
       ok: true as const,
       value: rowToAuthenticatedUser(refreshed as Doc<'users'>),
@@ -251,8 +258,7 @@ export const ensureCurrentUser = mutation({
   handler: async (ctx) => {
     // Get authenticated user from BetterAuth
     const identity = await ctx.auth.getUserIdentity();
-    console.log("ensureCurrentUser", identity, process.env.AUTH_URL);
-    
+
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -322,19 +328,31 @@ function rowToAuthenticatedUser(row: Doc<"users">): User {
   return {
     ...row,
     id: row.authId,
-    createdAt: new Date(row._creationTime),
+    createdAt: row._creationTime as any, // Dates are not supported in Convex
     status: row.status ?? "active",
     features: row.features ?? [],
   };
 }
 function rowToPublicUser(row: Doc<"users">): User {
-  throw new NotImplementedError("rowToPublicUser");
+  const cleanedUser: Partial<User> = rowToAuthenticatedUser(row);
+  delete cleanedUser.features;
+  delete cleanedUser.settingOverrides;
+  return cleanedUser as User;
 }
 
 function userToRow(user: User): Omit<Doc<'users'>, '_id' | '_creationTime'> {
+  return userToPatch(user) as Omit<Doc<'users'>, '_id' | '_creationTime'>;
+}
+
+function userToPatch(user: Partial<User>): Partial<Omit<Doc<'users'>, '_id' | '_creationTime'>> {
+  const authId = user.id;
+
+  delete user.createdAt;
+  delete user.id;
+
   return {
     ...user,
-    authId: user.id
+    authId
   }
 }
 

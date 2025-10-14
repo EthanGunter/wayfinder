@@ -4,9 +4,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { authAPI, authState } from '$lib/API/Auth';
 
-console.log("LOGIN!");
-
-
 	let redir = page.url.searchParams.get('redirect') || '/';
 	let errorMessage = $state('');
 	let testOutput = $state('');
@@ -52,8 +49,8 @@ console.log("LOGIN!");
 	async function testUpdateUser() {
 		testOutput = 'Updating user displayName...';
 		try {
-			const result = await authAPI.updateUser({ 
-				update: { displayName: 'Test User ' + Date.now() } 
+			const result = await authAPI.updateUser({
+				update: { displayName: 'Test User ' + Date.now() }
 			});
 			if (result[0]) {
 				testOutput = `✓ User updated: ${JSON.stringify(result[0], null, 2)}`;
@@ -86,10 +83,8 @@ console.log("LOGIN!");
 
 	<!-- Test Buttons -->
 	<div class="mb-6 space-y-3">
-		<Button class="w-full" onclick={handleLogin}>
-			🔐 Login with GitHub (OAuth)
-		</Button>
-		
+		<Button class="w-full" onclick={handleLogin}>🔐 Login with GitHub (OAuth)</Button>
+
 		<Button class="w-full" variant="secondary" onclick={checkAuthState}>
 			📊 Check Auth State (Console)
 		</Button>
@@ -98,9 +93,7 @@ console.log("LOGIN!");
 			✏️ Update User DisplayName
 		</Button>
 
-		<Button class="w-full" variant="destructive" onclick={handleLogout}>
-			🚪 Logout
-		</Button>
+		<Button class="w-full" variant="destructive" onclick={handleLogout}>🚪 Logout</Button>
 
 		<Button class="w-full" variant="outline" onclick={handleLogoutKeepCached}>
 			🚪 Logout (Keep Cached)
@@ -115,7 +108,7 @@ console.log("LOGIN!");
 	{#if testOutput}
 		<div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
 			<h3 class="mb-2 font-semibold text-blue-900">Test Output:</h3>
-			<pre class="whitespace-pre-wrap font-mono text-sm text-blue-800">{testOutput}</pre>
+			<pre class="font-mono text-sm whitespace-pre-wrap text-blue-800">{testOutput}</pre>
 		</div>
 	{/if}
 

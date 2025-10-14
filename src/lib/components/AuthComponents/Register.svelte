@@ -8,10 +8,20 @@
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { v4 } from 'uuid';
 	import type { LoginCredentials, User } from '$domain/models/user';
+	import type { Err } from '$domain/errors';
+
+	interface Props {
+		onError?: (message: string, error?: Err) => void;
+	}
+
+	const { onError }: Props = $props();
 
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/planner';
-	console.log('[TODO:debug EG] register page mounted', { redirect_param: page.url.searchParams.get('redirect'), redir }); // TODO:debug EG
+	console.log('[TODO:debug EG] register page mounted', {
+		redirect_param: page.url.searchParams.get('redirect'),
+		redir
+	}); // TODO:debug EG
 
 	// Temporary user data for registration
 	let tempUser = $state<User>({
@@ -67,7 +77,7 @@
 				errorMessage = 'Invalid registration data';
 				return;
 			} else if (reqs.length > 0) {
-				errorMessage = reqs.map((r: any) => r.message).join(', ');
+				errorMessage = 'Invalid registration data: ' + reqs.map((r: any) => r.message).join(', ');
 				return;
 			}
 			const [_, registerError] = await authAPI.register({ creds, userData });
@@ -76,7 +86,8 @@
 				console.log('[TODO:debug EG] registration failed', { registerError }); // TODO:debug EG
 			} else {
 				console.log('[TODO:debug EG] registration success, redirecting', { redir }); // TODO:debug EG
-				goto(redir);
+
+				goto(redir || '/planner');
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';
@@ -91,7 +102,6 @@
 	}
 </script>
 
-<h1 class="text-center text-gray-800">Create Account</h1>
 {#if errorMessage}
 	<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
 		{errorMessage}
@@ -171,10 +181,8 @@
 </form>
 
 <div class="mb-4 flex items-center justify-center text-sm">
-	<Button variant="link" onclick={() => goto(`/login?redirect=${redir}`)}>Login</Button>
+	<!-- <Button variant="link" onclick={() => goto(`/login?redirect=${redir}`)}>Login</Button> -->
 	{#if multipleAccounts}
-		/ <Button variant="link" onclick={() => goto(`/?redirect=${redir}`)}
-			>Switch user</Button
-		>
+		/ <Button variant="link" onclick={() => goto(`/?redirect=${redir}`)}>Switch user</Button>
 	{/if}
 </div>

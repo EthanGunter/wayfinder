@@ -21,20 +21,20 @@
 
 	const debouncedUpdateUser = debounce(authAPI.updateUser, 200);
 
-	onMount(() => {
-		// Subscribe to auth state
-		const unsubscribeAuth = authState.subscribe((state) => {
-			if (state.status === 'signed-in') {
-				console.log('Signed-in user changed');
+	// onMount(() => {
+	// 	// Subscribe to auth state
+	// 	const unsubscribeAuth = authState.subscribe((state) => {
+	// 		if (state.status === 'signed-in') {
+	// 			console.log('Signed-in user changed');
 
-				loadTaskCount();
-			}
-		});
+	// 			loadTaskCount();
+	// 		}
+	// 	});
 
-		return () => {
-			unsubscribeAuth();
-		};
-	});
+	// 	return () => {
+	// 		unsubscribeAuth();
+	// 	};
+	// });
 
 	async function loadTaskCount() {
 		if ($authState.status !== 'signed-in') return;
@@ -71,7 +71,7 @@
 			} */
 
 			// Redirect to login page since current user is deleted
-			goto('/login');
+			// goto('/login');
 		} catch (error) {
 			console.error('Failed to delete user:', error);
 			isDeleting = false;
@@ -81,9 +81,9 @@
 	function goBack() {
 		const redirect = page.url.searchParams.get('redirect');
 		if (redirect) {
-			goto(redirect);
+			// goto(redirect);
 		} else {
-			goto('/planner');
+			// goto('/planner');
 		}
 	}
 </script>

@@ -43,7 +43,7 @@ export interface IAuthLocal {
 	/** Removes a cached user account from the local machine. It still be logged into remotely */
 	removeCachedUser(userId: string): Promise<void>,
 	login(creds: LoginCredentials): Promise<Result<void, NotFoundError | ArgumentError | NotImplementedError>>,
-	logout(options?: { keepCached?: boolean }): Promise<void>,
+	logout(): Promise<void>,
 
 	// #endregion
 
@@ -77,6 +77,9 @@ export interface IAuthSessionCapable {
 	 * @error InputRequiredError if the session is expired
 	*/
 	restoreSession(params: { userId: string, material: string }): Promise<Result<{ rotatedMaterial?: string }, InputRequiredError>>;
+
+	/** Lists device sessions and associated users that can be switched to */
+	getUserSessions(): Promise<Result<{ session: { token: string, userId: string }, user: { id: string, displayName: string, avatarUrl?: string } }[], InvalidStateError>>;
 }
 
 export function isSessionCapable(auth: IAuthRemote): auth is IAuthRemote & IAuthSessionCapable {

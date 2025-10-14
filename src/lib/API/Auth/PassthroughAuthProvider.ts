@@ -144,10 +144,10 @@ const api: IAuthLocal = {
 		}
 
 		// Logout current user first (keep cached) to clear session before switching
-		if (activeId) {
+/* 		if (activeId) {
 			console.log('[TODO:debug EG] switchUser: logging out current user (keepCached=true)', activeId); // TODO:debug EG
-			await api.logout({ keepCached: true });
-		}
+			await api.logout();
+		} */
 
 		// Check if user is cached
 		const material = await SessionVault.get(newUserId);
