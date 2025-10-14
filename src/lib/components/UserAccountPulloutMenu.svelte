@@ -2,6 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Button } from './ui/button';
+	import * as Popover from './ui/popover';
+	import SelectUserView from '$lib/components/AuthComponents/SelectUser.svelte';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { authAPI, authState, cachedUsers as authUsers } from '$lib/API/Auth';
 	import { tasksAPI } from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
@@ -73,20 +76,35 @@
 		await authAPI.logout();
 	}
 
-	function handleSwitchUser() {
-		goto(`/switch-user?redirect=${page.url.pathname + page.url.search}`);
-	}
+	let switchError = $state('');
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<Sheet.Header>
-		<Sheet.Title>Account</Sheet.Title>
-		<Sheet.Description>
-			{$authState.user.displayName}
-		</Sheet.Description>
-	</Sheet.Header>
+	<div class="flex h-full flex-col gap-4">
+		<!-- Switch user dropdown -->
+		<Popover.Root>
+			<Popover.Trigger class="w-full mb-4">
+				<div class="flex h-16 w-full items-center justify-start gap-3 border-b-1 px-3">
+					<UserAvatar user={$authState.user} class="h-8 w-8" />
+					<div class="text-left">
+						<div class="font-medium">{$authState.user.displayName}</div>
+						<div class="text-sm text-gray-500">Switch account</div>
+					</div>
+					<Icon icon="mdi:chevron-down" class="ml-auto size-5 text-gray-500" />
+				</div>
+			</Popover.Trigger>
+			<Popover.Content class="w-[24rem] p-0">
+				{#if switchError}
+					<div class="border-b border-red-200 bg-red-50 p-2 text-sm text-red-700">
+						{switchError}
+					</div>
+				{/if}
+				<div class="max-h-[50vh] overflow-auto p-2">
+					<SelectUserView onError={(msg) => (switchError = msg)} />
+				</div>
+			</Popover.Content>
+		</Popover.Root>
 
-	<div class="mt-6 flex flex-col gap-4">
 		<Button
 			variant="outline"
 			class="flex h-16 items-center justify-start gap-3"
@@ -96,19 +114,6 @@
 			<div class="text-left">
 				<div class="font-medium">User Settings</div>
 				<div class="text-sm text-gray-500">Manage your preferences</div>
-			</div>
-		</Button>
-
-		<!-- Switch user -->
-		<Button
-			variant="outline"
-			class="flex h-16 items-center justify-start gap-3"
-			onclick={handleSwitchUser}
-		>
-			<Icon icon="mdi:account-switch" class="size-6 text-gray-600" />
-			<div class="text-left">
-				<div class="font-medium">Switch user</div>
-				<div class="text-sm text-gray-500">Choose another local account</div>
 			</div>
 		</Button>
 
@@ -125,7 +130,7 @@
 			</div>
 		</Button>
 
-		<hr />
+		<hr class="mt-auto" />
 		<h2>Backup</h2>
 		<!-- <h3>Local Disk</h3> -->
 		<span class="flew-row flex justify-around">

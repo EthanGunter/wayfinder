@@ -24,6 +24,7 @@ import { PUBLIC_AUTH_URL, PUBLIC_CONVEX_URL } from "$env/static/public";
 import { createAuthClient } from 'better-auth/svelte';
 import { convexClient } from "@convex-dev/better-auth/client/plugins";
 import { multiSessionClient } from "better-auth/client/plugins";
+import { page } from "$app/state";
 
 const authClient = createAuthClient({
 	plugins: [convexClient(), multiSessionClient()],
@@ -159,7 +160,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		console.log("[ConvexAuthProvider] register user");
 		if (creds.type === 'external') {
 			// Social registration
-			await authClient.signIn.social({ provider: 'github', callbackURL: window.location.origin + '/planner' });
+			await authClient.signIn.social({ provider: 'github', callbackURL: page.url.pathname });
 		} else if (creds.type === 'email_password') {
 			// Email/password registration — BetterAuth requires name in some configs; keep to sign-in only for now
 			await authClient.signUp.email({
