@@ -2,8 +2,11 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
-	import { authAPI, authState } from '$lib/API/Auth';
+	import { onMount } from 'svelte';
+	import { authAPI, cachedUsers as authUsers } from '$lib/API/Auth';
 	import type { Err } from '$domain/errors';
+	import Register from './Register.svelte';
+	import Icon from '@iconify/svelte';
 
 	interface Props {
 		onError?: (message: string, error?: Err) => void;
@@ -11,123 +14,172 @@
 
 	const { onError }: Props = $props();
 
+	let multipleAccounts = $state(false);
+	let showRegister = $state(false);
+	let redir = page.url.searchParams.get('redirect') || '/planner';
+
 	let email = $state('');
 	let password = $state('');
-
-	// goto('/dev/auth');
-
-	let redir = page.url.searchParams.get('redirect') || '/';
 	let errorMessage = $state('');
-	let testOutput = $state('');
+	let isLoading = $state(false);
 
-	async function handleLogin() {
-		testOutput = 'Initiating GitHub login...';
+	onMount(() => {
+		const unsubscribeUsers = authUsers.subscribe((userList) => {
+			multipleAccounts = userList.length > 1;
+		});
+		return () => unsubscribeUsers();
+	});
+
+	async function handleOAuthLogin() {
+		isLoading = true;
+		errorMessage = '';
 		try {
-			const result = await authAPI.login({ type: 'external' });
-			if (result[0]) {
-				testOutput = '✓ Login initiated successfully';
-			} else {
-				testOutput = `✗ Login error: ${result[1]?.message}`;
+			const [_, error] = await authAPI.login({ type: 'external' });
+			if (error) {
+				errorMessage = error.message || 'Login failed';
+				onError?.(errorMessage, error);
 			}
+			// OAuth flow will handle redirect via provider/callback
 		} catch (e: any) {
-			testOutput = `✗ Login exception: ${e.message}`;
+			errorMessage = 'An unexpected error occurred';
+			onError?.(errorMessage);
+		} finally {
+			isLoading = false;
 		}
 	}
 
 	async function handleEmailLogin() {
-		testOutput = 'Signing in with email...';
+		if (!email || !password) {
+			errorMessage = 'Email and password are required';
+			return;
+		}
+		isLoading = true;
+		errorMessage = '';
 		try {
 			const [_, error] = await authAPI.login({ type: 'email_password', email, password });
 			if (error) {
-				testOutput = `✗ Email sign-in error: ${error.message}`;
-			} else {
-				testOutput = '✓ Email sign-in initiated';
+				errorMessage = error.message || 'Login failed';
+				onError?.(errorMessage, error);
+				return;
 			}
+			goto(redir || '/planner');
 		} catch (e: any) {
-			testOutput = `✗ Email sign-in exception: ${e.message}`;
-		}
-
-		goto(redir || '/planner');
-	}
-
-	async function handleLogout() {
-		testOutput = 'Logging out...';
-		try {
-			await authAPI.logout();
-			testOutput = '✓ Logged out successfully';
-		} catch (e: any) {
-			testOutput = `✗ Logout exception: ${e.message}`;
+			errorMessage = 'An unexpected error occurred';
+			onError?.(errorMessage);
+		} finally {
+			isLoading = false;
 		}
 	}
 
-	function checkAuthState() {
-		testOutput = `Auth State: ${JSON.stringify($authState, null, 2)}`;
+	function openRegister() {
+		showRegister = true;
+	}
+
+	function goBack() {
+		showRegister = false;
 	}
 </script>
 
-<div class="mx-auto max-w-2xl p-6">
-	<h1 class="mb-6 text-center text-3xl font-bold text-gray-800">Auth Test Page</h1>
-
-	<!-- Auth State Display -->
-	<div class="mb-6 rounded-lg border border-gray-300 bg-gray-50 p-4">
-		<h2 class="mb-2 font-semibold">Current Auth State:</h2>
-		<div class="font-mono text-sm">
-			<div>Status: <strong>{$authState.status}</strong></div>
-			{#if $authState.status === 'signed-in'}
-				<div>User ID: {$authState.user.id}</div>
-				<div>Display Name: {$authState.user.displayName}</div>
-				<div>Avatar: {$authState.user.avatarUrl || 'none'}</div>
-			{/if}
+<div class="flex items-center justify-center">
+	{#if showRegister}
+		<div class="w-full max-w-md">
+			<button
+				onclick={goBack}
+				class="group mb-3 inline-flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-600 transition-all duration-200 hover:-translate-x-0.5 hover:text-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100"
+			>
+				<span class="text-xl transition-transform duration-200 group-hover:-translate-x-1">←</span>
+				<span>Back to login</span>
+			</button>
+			<Register {onError} initialDisplayName={email.split('@')[0]} initialEmail={email} initialPassword={password} />
 		</div>
-	</div>
-
-	<!-- Test Buttons -->
-	<div class="mb-6 space-y-3">
-		<Button class="w-full" onclick={handleLogin}>🔐 Login with GitHub (OAuth)</Button>
-
-		<div class="rounded border border-gray-200 p-3">
-			<div class="mb-2 font-medium">Email / Password</div>
-			<div class="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-				<input
-					class="w-full rounded border p-2"
-					type="email"
-					placeholder="email@example.com"
-					bind:value={email}
-				/>
-				<input
-					class="w-full rounded border p-2"
-					type="password"
-					placeholder="password"
-					bind:value={password}
-				/>
+	{:else}
+		<div class="w-full max-w-md p-4 sm:p-6">
+			<div class="mb-4 text-center">
+				<h2 class="mb-1 text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-100">
+					Welcome back
+				</h2>
+				<p class="text-sm text-zinc-500 dark:text-zinc-400">Sign in to continue</p>
 			</div>
-			<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-				<Button class="w-full" variant="secondary" onclick={handleEmailLogin}
-					>Login with Email</Button
+
+			{#if errorMessage}
+				<div
+					class="mb-4 flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
 				>
-				<!-- Optional: add sign-up later when local user creation is aligned -->
+					<span class="shrink-0">⚠</span>
+					<span>{errorMessage}</span>
+				</div>
+			{/if}
+
+			<div class="mb-4">
+				<Button
+					class="w-full gap-2 px-3 py-3 font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+					variant="secondary"
+					onclick={handleOAuthLogin}
+					disabled={isLoading}
+				>
+					<Icon icon="lucide:github" class="text-lg" />
+					<span>Continue with GitHub</span>
+				</Button>
 			</div>
-		</div>
 
-		<Button class="w-full" variant="secondary" onclick={checkAuthState}>
-			📊 Check Auth State (Console)
-		</Button>
+			<div class="my-4 flex items-center gap-3">
+				<span class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
+				<span
+					class="text-xs font-medium tracking-wide whitespace-nowrap text-zinc-500 uppercase dark:text-zinc-400"
+					>or</span
+				>
+				<span class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
+			</div>
 
-		<Button class="w-full" variant="destructive" onclick={handleLogout}>🚪 Logout</Button>
-	</div>
+			<form
+				class="flex flex-col gap-2"
+				onsubmit={(e) => {
+					e.preventDefault();
+					handleEmailLogin();
+				}}
+			>
+				<div class="flex flex-col gap-1.5">
+					<label for="email" class="text-sm font-medium text-zinc-700 dark:text-zinc-200"
+						>Email</label
+					>
+					<input
+						id="email"
+						type="email"
+						bind:value={email}
+						placeholder="you@example.com"
+						required
+						class="w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+					/>
+				</div>
 
-	<!-- Test Output -->
-	{#if testOutput}
-		<div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
-			<h3 class="mb-2 font-semibold text-blue-900">Test Output:</h3>
-			<pre class="font-mono text-sm whitespace-pre-wrap text-blue-800">{testOutput}</pre>
-		</div>
-	{/if}
-
-	<!-- Error Display -->
-	{#if errorMessage}
-		<div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-			{errorMessage}
+				<div class="flex flex-col gap-1.5">
+					<label for="password" class="text-sm font-medium text-zinc-700 dark:text-zinc-200"
+						>Password</label
+					>
+					<input
+						id="password"
+						type="password"
+						bind:value={password}
+						placeholder="••••••••"
+						required
+						class="w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+					/>
+				</div>
+				<div
+					class="flex items-center justify-center gap-2 text-sm"
+				>
+					<Button variant="link" onclick={openRegister}>Register</Button>
+					/
+					<Button
+						type="submit"
+						variant="link"
+						
+						disabled={isLoading}
+					>
+						{isLoading ? 'Signing in...' : 'Sign in'}
+					</Button>
+				</div>
+			</form>
 		</div>
 	{/if}
 </div>

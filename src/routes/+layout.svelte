@@ -45,8 +45,9 @@
 	// Lightweight cross-app toggle for the auth overlay without navigation
 	$effect.root(() => {
 		function handleOpenAuth(event: CustomEvent<{ mode: /* 'select' | */ 'login' | 'register' }>) {
-			const next = event?.detail?.mode;
-			if (next && next !== mode) mode = next;
+			// const next = event?.detail?.mode;
+			// Coerce to 'login' since Register is now embedded inside Login
+			mode = 'login';
 			overlayOpen = true;
 		}
 		window.addEventListener('open-auth', handleOpenAuth as EventListener);
@@ -76,7 +77,7 @@
 	{:else if $authState.status === 'signed-out' || overlayOpen}
 		<div class="page flex min-h-screen min-w-screen items-center justify-center p-4">
 			<div
-				class="relative grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg"
+				class="relative grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-lg border bg-background p-4 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg"
 			>
 				<!-- Back Button -->
 				<!-- 				<Button
@@ -93,8 +94,10 @@
 					</div>
 				{/if}
 
-				<Accordion.Root type="single" bind:value={mode}>
-					<!-- 					{#if $cachedUsers.length > 0}
+				<LoginView onError={setErrorMessage} />
+
+				<!-- 				<Accordion.Root type="single" bind:value={mode}>
+					{#if $cachedUsers.length > 0}
 						<Accordion.Item value="select">
 							<Accordion.Trigger
 								class="transition-all data-[state=closed]:rounded-md data-[state=closed]:bg-muted/50 data-[state=closed]:px-3 data-[state=closed]:py-3 data-[state=open]:py-5 data-[state=open]:text-lg data-[state=open]:font-semibold"
@@ -104,7 +107,7 @@
 								<SelectUserView onError={setErrorMessage} />
 							</Accordion.Content>
 						</Accordion.Item>
-					{/if} -->
+					{/if}
 
 					<Accordion.Item value="login">
 						<Accordion.Trigger
@@ -115,17 +118,7 @@
 							<LoginView onError={setErrorMessage} />
 						</Accordion.Content>
 					</Accordion.Item>
-
-					<Accordion.Item value="register">
-						<Accordion.Trigger
-							class="transition-all data-[state=closed]:rounded-md data-[state=closed]:bg-muted/50 data-[state=closed]:px-3 data-[state=closed]:py-3 data-[state=open]:py-5 data-[state=open]:text-lg data-[state=open]:font-semibold"
-							>Create account</Accordion.Trigger
-						>
-						<Accordion.Content>
-							<RegisterView onError={setErrorMessage} />
-						</Accordion.Content>
-					</Accordion.Item>
-				</Accordion.Root>
+				</Accordion.Root> -->
 			</div>
 		</div>
 	{:else}

@@ -12,9 +12,12 @@
 
 	interface Props {
 		onError?: (message: string, error?: Err) => void;
+		initialDisplayName?: string;
+		initialEmail?: string;
+		initialPassword?: string;
 	}
 
-	const { onError }: Props = $props();
+	const { onError, initialEmail = '', initialPassword = '', initialDisplayName = '' }: Props = $props();
 
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/planner';
@@ -22,7 +25,7 @@
 	// Temporary user data for registration
 	let tempUser = $state<SessionUser>({
 		id: '',
-		displayName: '',
+		displayName: initialDisplayName,
 		avatarUrl: '',
 		createdAt: new Date(),
 		status: 'active',
@@ -30,8 +33,8 @@
 		sessionStatus: 'revoked' // TODO This may need to be active or expired...
 	});
 
-	let email = $state('');
-	let password = $state('');
+	let email = $state(initialEmail);
+	let password = $state(initialPassword);
 	let confirmPassword = $state('');
 	let errorMessage = $state('');
 	let isLoading = $state(false);
@@ -97,87 +100,86 @@
 	}
 </script>
 
-{#if errorMessage}
-	<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
-		{errorMessage}
+<div class="w-full max-w-md p-4 sm:p-6">
+    <div class="mb-4 text-center">
+        <h2 class="mb-1 text-2xl font-semibold sm:text-3xl text-zinc-900 dark:text-zinc-100">Create account</h2>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400">Get started with Wayfinder</p>
 	</div>
-{/if}
-<form
-	onsubmit={(e) => {
+
+    {#if errorMessage}
+    <div class="mb-4 flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+			<span class="shrink-0">⚠</span>
+			<span>{errorMessage}</span>
+		</div>
+	{/if}
+
+	<form class="flex flex-col gap-2" onsubmit={(e) => {
 		e.preventDefault();
 		handleRegister();
-	}}
->
-	<div class="mb-6 flex min-h-20 w-full justify-center">
-		<AvatarEditor
-			class="h-32 w-32 flex-shrink-0"
-			user={tempUser}
-			onAvatarChange={(avatarUrl: string) => updateTempUser({ avatarUrl: avatarUrl })}
-		/>
-	</div>
+	}}>
+        <div class="mb-1 flex justify-center py-2">
+			<AvatarEditor
+				class="h-24 w-24 sm:h-28 sm:w-28"
+				user={tempUser}
+				onAvatarChange={(avatarUrl: string) => updateTempUser({ avatarUrl: avatarUrl })}
+			/>
+		</div>
 
-	<div class="mb-4">
-		<label for="displayName" class="mb-2 block font-medium text-gray-800">Display Name</label>
-		<input
-			id="displayName"
-			type="text"
-			bind:value={tempUser.displayName}
-			placeholder="Enter your name"
-			required
-			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-		/>
-	</div>
+		<div class="flex flex-col gap-1.5">
+            <label for="displayName" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Display Name</label>
+			<input
+				id="displayName"
+				type="text"
+				bind:value={tempUser.displayName}
+				placeholder="Your name"
+				required
+				class="w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			/>
+		</div>
 
-	<div class="mb-4">
-		<label for="email" class="mb-2 block font-medium text-gray-800">Email</label>
-		<input
-			id="email"
-			type="email"
-			bind:value={email}
-			placeholder="Enter your email"
-			required
-			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-		/>
-	</div>
+		<div class="flex flex-col gap-1.5">
+            <label for="email" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Email</label>
+			<input
+				id="email"
+				type="email"
+				bind:value={email}
+				placeholder="you@example.com"
+				required
+				class="w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			/>
+		</div>
 
-	<div class="mb-4">
-		<label for="password" class="mb-2 block font-medium text-gray-800">Password</label>
-		<input
-			id="password"
-			type="password"
-			bind:value={password}
-			placeholder="Enter your password"
-			required
-			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-		/>
-	</div>
+		<div class="flex flex-col gap-1.5">
+            <label for="password" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Password</label>
+			<input
+				id="password"
+				type="password"
+				bind:value={password}
+				placeholder="••••••••"
+				required
+				class="w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			/>
+		</div>
 
-	<div class="mb-4">
-		<label for="confirmPassword" class="mb-2 block font-medium text-gray-800"
-			>Confirm Password</label
-		>
-		<input
-			id="confirmPassword"
-			type="password"
-			bind:value={confirmPassword}
-			placeholder="Confirm your password"
-			required
-			class="box-border w-full rounded border border-gray-300 p-3 text-base focus:border-blue-500 focus:shadow-[0_0_0_2px_rgba(0,122,204,0.2)] focus:outline-none"
-		/>
-	</div>
+		<div class="flex flex-col gap-1.5">
+            <label for="confirmPassword" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Confirm Password</label>
+			<input
+				id="confirmPassword"
+				type="password"
+				bind:value={confirmPassword}
+				placeholder="••••••••"
+				required
+				class="w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			/>
+		</div>
 
-	<Button
-		type="submit"
-		class="mb-4 w-full cursor-pointer rounded border-none bg-blue-500 p-3 text-base font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
-		disabled={isLoading}
-	>
-		{isLoading ? 'Please wait...' : 'Create Account'}
-	</Button>
-</form>
+		<div class="flex items-center justify-center gap-2 text-sm">
+			<Button variant="link" onclick={() => goto(`/login?redirect=${redir}`)}>Login</Button>
+			/
+			<Button type="submit" variant="link" disabled={isLoading}>
+				{isLoading ? 'Creating account...' : 'Create Account'}
+			</Button>
+		</div>
+	</form>
 
-<div class="mb-4 flex items-center justify-center text-sm">
-	<!-- <Button variant="link" onclick={() => goto(`/login?redirect=${redir}`)}>Login</Button> -->
-	{#if multipleAccounts}
-		/ <Button variant="link" onclick={() => goto(`/?redirect=${redir}`)}>Switch user</Button>
-	{/if}
 </div>
