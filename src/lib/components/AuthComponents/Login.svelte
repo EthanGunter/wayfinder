@@ -47,7 +47,6 @@
 			testOutput = `✗ Email sign-in exception: ${e.message}`;
 		}
 
-		console.log('[login page] login success, redirecting', { redir }); // TODO:debug EG
 		goto(redir || '/planner');
 	}
 
@@ -64,8 +63,6 @@
 	function checkAuthState() {
 		testOutput = `Auth State: ${JSON.stringify($authState, null, 2)}`;
 	}
-
-	console.log('[Login page] Auth state:', $authState.status);
 </script>
 
 <div class="mx-auto max-w-2xl p-6">

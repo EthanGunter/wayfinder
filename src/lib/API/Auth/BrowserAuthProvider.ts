@@ -23,10 +23,7 @@ let db: LocalDB | null = null;
 // Module-load hydration
 (async () => {
   try {
-    console.log('[TODO:debug EG] BrowserAuthProvider init start'); // TODO:debug EG
-    console.log('[TODO:debug EG] About to await dbPromise'); // TODO:debug EG
     db = await dbPromise;
-    console.log('[TODO:debug EG] dbPromise resolved, db=', db); // TODO:debug EG
 
     // Hydrate users list
     const allUsers = await db.getAll(USER_TABLE_NAME) as SessionUser[];
@@ -34,18 +31,14 @@ let db: LocalDB | null = null;
 
     // Hydrate active user state
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
-    console.log('[TODO:debug EG] activeUserId from DB:', activeUserId); // TODO:debug EG
     if (activeUserId) {
       const activeUser = await db.get(USER_TABLE_NAME, activeUserId) as SessionUser | undefined;
       if (activeUser) {
-        console.log('[TODO:debug EG] setting signed-in with user:', activeUser.id); // TODO:debug EG
         _authState.set({ status: "signed-in", user: activeUser });
       } else {
-        console.log('[TODO:debug EG] activeUserId but no user found, setting signed-out'); // TODO:debug EG
         _authState.set({ status: "signed-out" });
       }
     } else {
-      console.log('[TODO:debug EG] no activeUserId, setting signed-out'); // TODO:debug EG
       _authState.set({ status: "signed-out" });
     }
 
@@ -60,10 +53,8 @@ let db: LocalDB | null = null;
       // remoteAuth store doesn't exist yet; will remain null
     }
   } catch (e: any) {
-    console.error('[TODO:debug EG] BrowserAuthProvider init error:', e); // TODO:debug EG
     _authState.set({ status: "error", error: Err.wrap(e) });
   }
-  console.log('[TODO:debug EG] BrowserAuthProvider init IIFE complete'); // TODO:debug EG
 })();
 
 const api: IAuthLocal = {
@@ -309,7 +300,6 @@ const api: IAuthLocal = {
     // Proceed with remote login
     const [_, loginErr] = await remoteAuth.login(creds);
     if (loginErr) {
-      console.log(loginErr);
       return err(loginErr);
     }
 

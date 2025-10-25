@@ -48,8 +48,8 @@
 
 			handleAvatarUrlChange(serverUrl);
 		} catch (error) {
-			console.error('File upload failed:', error);
 			// TODO: Show error message to user
+			Err.UNHANDLED(error, 'File upload failed:');
 		} finally {
 			isUploading = false;
 		}

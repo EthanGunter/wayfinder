@@ -21,21 +21,6 @@
 
 	const debouncedUpdateUser = debounce(authAPI.updateUser, 200);
 
-	// onMount(() => {
-	// 	// Subscribe to auth state
-	// 	const unsubscribeAuth = authState.subscribe((state) => {
-	// 		if (state.status === 'signed-in') {
-	// 			console.log('Signed-in user changed');
-
-	// 			loadTaskCount();
-	// 		}
-	// 	});
-
-	// 	return () => {
-	// 		unsubscribeAuth();
-	// 	};
-	// });
-
 	async function loadTaskCount() {
 		if ($authState.status !== 'signed-in') return;
 
@@ -43,8 +28,8 @@
 		if (userTasks) {
 			taskCount = userTasks.length;
 		} else {
-			console.error('Failed to load task count:', error);
 			taskCount = 0;
+			Err.UNHANDLED(error, 'Failed to load task count:');
 		}
 	}
 
@@ -73,17 +58,17 @@
 			// Redirect to login page since current user is deleted
 			// goto('/login');
 		} catch (error) {
-			console.error('Failed to delete user:', error);
 			isDeleting = false;
+			Err.UNHANDLED(error, 'Failed to delete user:');
 		}
 	}
 
 	function goBack() {
 		const redirect = page.url.searchParams.get('redirect');
 		if (redirect) {
-			// goto(redirect);
+			goto(redirect);
 		} else {
-			// goto('/planner');
+			goto('/planner');
 		}
 	}
 </script>
@@ -106,12 +91,6 @@
 					user={$authState.user}
 					onAvatarChange={(avatar_url) => {
 						if ($authState.status !== 'signed-in') return;
-						console.log(
-							avatar_url,
-							$authState.user.avatarUrl,
-							avatar_url !== $authState.user.avatarUrl
-						);
-
 						if (avatar_url !== $authState.user.avatarUrl) {
 							void debouncedUpdateUser({
 								update: { id: $authState.user.id, avatarUrl: avatar_url }

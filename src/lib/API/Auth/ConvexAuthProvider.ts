@@ -42,7 +42,6 @@ const resolveSignedOut = () => {
 	if (unsubUser) {
 		unsubUser();
 		unsubUser = null;
-		console.log("Unsubscribed from user");
 	}
 	// Clear Convex auth - provide fetcher that returns null token
 	client.setAuth(async () => null);
@@ -50,23 +49,16 @@ const resolveSignedOut = () => {
 };
 
 const bootstrap = async () => {
-	console.log("[ConvexAuthProvider] bootstrap");
-
 	try {
 		// Get session from BetterAuth
 		const session = await authClient.getSession();
 
-		// TODO:debug EG - Log full session structure to find Convex token
-		console.log("[ConvexAuthProvider] TODO:debug - Full session object:", JSON.stringify(session, null, 2));
-
 		if (!session?.data?.user?.id) {
-			console.log("[ConvexAuthProvider] No session found");
 			resolveSignedOut();
 			return;
 		}
 
 		const userId = session.data.user.id;
-		console.log("BetterAuth session found for user:", userId);
 		// Ensure Convex client has the latest auth token
 		client.setAuth(async () => {
 			try {
@@ -94,14 +86,15 @@ const bootstrap = async () => {
 			api.users.watchUser,
 			{ id: userId },
 			(user) => {
-				console.log('[ConvexAuthProvider] User update:', user);
 				if (!user) {
 					authState.set({ status: "loading" });
 					return;
 				}
 				(async () => {
-					const normalized = { ...user, createdAt: new Date(user._creationTime) } as Omit<SessionUser, "sessionStatus" | "expiresAt" | "sessionRefreshMaterial"> & { _creationTime?: number };
-					let enriched: SessionUser;
+					const { _creationTime, ...rest } = user;
+					const normalized = { ...rest, createdAt: new Date(user._creationTime) } as User;
+
+					let sessionUser: SessionUser;
 					try {
 						const device = await authClient.multiSession.listDeviceSessions();
 						if (!device.error) {
@@ -109,31 +102,31 @@ const bootstrap = async () => {
 							if (match) {
 								const expiresAt = new Date(match.session.expiresAt);
 								const isActive = Date.now() < expiresAt.getTime();
-								enriched = {
+								sessionUser = {
 									...(normalized as any),
 									sessionStatus: isActive ? 'active' : 'expired',
 									expiresAt,
 									sessionRefreshMaterial: match.session.token,
 								} as SessionUser;
 							} else {
-								enriched = {
+								sessionUser = {
 									...(normalized as any),
 									sessionStatus: 'revoked',
 								} as SessionUser;
 							}
 						} else {
-							enriched = {
+							sessionUser = {
 								...(normalized as any),
 								sessionStatus: 'revoked',
 							} as SessionUser;
 						}
 					} catch {
-						enriched = {
+						sessionUser = {
 							...(normalized as any),
 							sessionStatus: 'revoked',
 						} as SessionUser;
 					}
-					authState.set({ status: 'signed-in', user: enriched });
+					authState.set({ status: 'signed-in', user: sessionUser });
 				})();
 			},
 			(error: Error) => {
@@ -144,8 +137,8 @@ const bootstrap = async () => {
 			}
 		);
 	} catch (e: any) {
-		console.error("[ConvexAuthProvider] Bootstrap failed:", e);
 		resolveSignedOut();
+		Err.UNHANDLED("[ConvexAuthProvider] Bootstrap failed:", e);
 	}
 };
 
@@ -197,7 +190,6 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 	},
 
 	register: async ({ creds, userData }) => {
-		console.log("[ConvexAuthProvider] register user");
 		if (creds.type === 'external') {
 			// Social registration
 			await authClient.signIn.social({ provider: 'github', callbackURL: page.url.pathname });
@@ -217,8 +209,6 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 	},
 
 	updateUser: async ({ update }) => {
-		console.log("[ConvexAuthProvider] updateUser", update);
-
 		const res = await client.mutation(api.users.updateUser, update);
 		if (res.ok) return ok(res.value);
 		return err(res.error);
@@ -240,21 +230,18 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				const res = await authClient.signIn.email({
 					email: creds.email,
 					password: creds.password,
-				}); 
+				});
 				if (res.error) throw res.error;
 
 				bootstrap();
 			}
-			console.log('[ConvexAuthProvider] TODO:debug - signIn completed without error');
 		} catch (e: any) {
-			console.error('[ConvexAuthProvider] TODO:debug - signIn threw error:', e);
-			throw e;
+			Err.UNHANDLED('[ConvexAuthProvider] TODO:debug - signIn threw error:', e);
 		}
 		return ok();
 	},
 
 	logout: async () => {
-		console.log("[ConvexAuthProvider] logout");
 		try {
 			// Clear Convex auth and update UI
 			resolveSignedOut();
@@ -262,9 +249,9 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 			// Sign out via BetterAuth
 			await authClient.signOut();
 		} catch (e) {
-			console.error("Failed to sign out:", e);
 			// Still update UI even if server call failed
 			resolveSignedOut();
+			Err.UNHANDLED(e, "Failed to sign out");
 		}
 	},
 

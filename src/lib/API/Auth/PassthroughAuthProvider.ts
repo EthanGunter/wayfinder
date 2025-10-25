@@ -16,11 +16,7 @@ export const passthroughAuthState: LiveStore<AuthState> = readable(
 	{ status: "loading" } as AuthState,
 	(set) => {
 		// Defer access to remoteAuth until first subscription (after module initialization)
-		console.log('[TODO:debug EG] PassthroughAuthProvider: subscribing to remoteAuth.watchAuthState()'); // TODO:debug EG
-		const unsubscribe = remoteAuth.watchAuthState().subscribe((state) => {
-			console.log('[TODO:debug EG] PassthroughAuthProvider received state update:', state.status); // TODO:debug EG
-			set(state);
-		});
+		const unsubscribe = remoteAuth.watchAuthState().subscribe((state) => set(state));
 		return unsubscribe;
 	}
 );
@@ -34,8 +30,6 @@ export const passthroughCachedUsers = derived(
 			return;
 		}
 		const unsubscribe = remoteAuth.watchUsers({ ids: $ids }).subscribe(async (users) => {
-			console.log(`Watch users updated`, users);
-
 			if (users.status === 'resolved') {
 				try {
 					let sessionList: { session: { token: string, userId: string, expiresAt: Date | string }, user: { id: string } }[] = [];
@@ -84,10 +78,6 @@ let db: LocalDB | null = null;
 		if (state.status === 'signed-in' && db) {
 			const userId = state.user.id;
 
-			// TODO:debug EG - Check all cached users before processing
-			const allCachedBefore = await db.getAllKeys(USER_TABLE_NAME);
-			console.log('[TODO:debug EG] Auth state changed to signed-in, userId:', userId, 'cached users before:', allCachedBefore); // TODO:debug EG
-
 			// Ensure userId exists in local cache for selector hydration
 			const exists = await db.get(USER_TABLE_NAME, userId);
 			if (!exists) {
@@ -96,11 +86,7 @@ let db: LocalDB | null = null;
 				if (!currentIds.includes(userId)) {
 					_cachedUserIds.set([...currentIds, userId]);
 				}
-				console.log('[PassthroughAuthProvider] Cached new user id:', userId);
 				const allCachedAfter = await db.getAllKeys(USER_TABLE_NAME);
-				console.log('[TODO:debug EG] Cached users after adding new user:', allCachedAfter); // TODO:debug EG
-			} else {
-				console.log('[TODO:debug EG] User already cached, skipping:', userId); // TODO:debug EG
 			}
 		}
 	});
@@ -153,16 +139,9 @@ const api: IAuthLocal = {
 		// Check if already active
 		const activeId = getActiveUserId();
 		if (newUserId === activeId) {
-			console.log('[TODO:debug EG] switchUser: already active user', newUserId); // TODO:debug EG
 			const state = get(remoteAuth.watchAuthState());
 			return state.status === 'signed-in' ? ok(state.user) : err(new NotFoundError(newUserId, "User"));
 		}
-
-		// Logout current user first (keep cached) to clear session before switching
-		/* 		if (activeId) {
-					console.log('[TODO:debug EG] switchUser: logging out current user (keepCached=true)', activeId); // TODO:debug EG
-					await api.logout();
-				} */
 
 		// Check if user is cached
 		const cached = get(cachedUsers).find((u) => u.id === newUserId);
@@ -174,17 +153,14 @@ const api: IAuthLocal = {
 
 		const material = cached.sessionRefreshMaterial;
 
-		console.log('[TODO:debug EG] switchUser: session material exists?', !!material); // TODO:debug EG
 		if (!material) {
 			return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
 		}
 
 		// Attempt to restore remote session
 		try {
-			console.log('[TODO:debug EG] switchUser: restoring session for user', newUserId); // TODO:debug EG
 			const [res, resErr] = await remoteAuth.restoreSession({ userId: newUserId, material });
 			if (resErr) {
-				console.log('[TODO:debug EG] switchUser: session restore failed', resErr); // TODO:debug EG
 				return err(resErr);
 			}
 
@@ -197,10 +173,8 @@ const api: IAuthLocal = {
 
 			// Return the user from remote state (will be updated after session restore)
 			const state = get(remoteAuth.watchAuthState());
-			console.log('[TODO:debug EG] switchUser: session restored, new auth state', state.status); // TODO:debug EG
 			return state.status === 'signed-in' ? ok(state.user) : err(new NotFoundError(newUserId, "User"));
 		} catch (e) {
-			console.log('[TODO:debug EG] switchUser: exception during restore', e); // TODO:debug EG
 			return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
 		}
 	},
@@ -284,10 +258,8 @@ const api: IAuthLocal = {
 
 		// Remove the session material from local cache (unless keepCached is true)
 		if (activeId && !options?.keepCached) {
-			console.log('[TODO:debug EG] logout: removing cached user', activeId); // TODO:debug EG
 			await api.removeCachedUser(activeId);
 		} else if (activeId && options?.keepCached) {
-			console.log('[TODO:debug EG] logout: keeping cached user', activeId); // TODO:debug EG
 		}
 	}
 }

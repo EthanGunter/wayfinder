@@ -45,7 +45,6 @@
 	// Lightweight cross-app toggle for the auth overlay without navigation
 	$effect.root(() => {
 		function handleOpenAuth(event: CustomEvent<{ mode: /* 'select' | */ 'login' | 'register' }>) {
-			console.log('handleOpenAuth', event);
 			const next = event?.detail?.mode;
 			if (next && next !== mode) mode = next;
 			overlayOpen = true;

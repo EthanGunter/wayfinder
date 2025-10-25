@@ -10,12 +10,12 @@
 	// Fallback avatar images from 3rd-party (BetterAuth) only when first-party avatarUrl is missing
 	let fallbackAvatars = $state<Map<string, string | undefined>>(new Map());
 
-interface Props {
-	onError?: (message: string, error?: Err) => void;
-	onAddAccount?: () => void;
-}
+	interface Props {
+		onError?: (message: string, error?: Err) => void;
+		onAddAccount?: () => void;
+	}
 
-const { onError, onAddAccount: onAddUser }: Props = $props();
+	const { onError, onAddAccount: onAddUser }: Props = $props();
 
 	let currentUser = $derived($authState.status === 'signed-in' ? $authState.user : null);
 	let redir = page.url.searchParams.get('redirect') || '/';
@@ -32,7 +32,6 @@ const { onError, onAddAccount: onAddUser }: Props = $props();
 	async function handleUserSwitch(userId: string) {
 		try {
 			const [newUser, error] = await authAPI.switchUser(userId);
-			console.log(newUser, error);
 
 			if (newUser) {
 				// Switch successful, redirect
@@ -55,7 +54,7 @@ const { onError, onAddAccount: onAddUser }: Props = $props();
 			}
 		} catch (error) {
 			onError?.('An unexpected error occurred');
-			console.error('User switch error:', error);
+			Err.UNHANDLED(error, 'User switch error:');
 		}
 	}
 </script>

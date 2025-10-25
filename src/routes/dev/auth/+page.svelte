@@ -52,7 +52,6 @@
 		}
 	}
 
-	console.log('[Login page] Auth state:', $authState.status);
 </script>
 
 <div class="mx-auto max-w-2xl p-6">

@@ -1,4 +1,5 @@
 <script lang="ts" generics="T">
+	import { Err } from '$domain/errors';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -34,8 +35,8 @@
 				searchResults = await onQueryUpdate(query.trim());
 				showResults = true;
 			} catch (error) {
-				console.error('Search error:', error);
 				searchResults = [];
+				Err.UNHANDLED(error, 'Search error:');
 			} finally {
 				isLoading = false;
 			}
@@ -80,7 +81,7 @@
 	let displayResults = $derived<(T | string)[]>(query.length > 0 ? searchResults : defaultOptions);
 </script>
 
-<div class="flex-1 relative border-gray-300 border-1 rounded">
+<div class="relative flex-1 rounded border-1 border-gray-300">
 	{#if !inverted}
 		<input
 			type="text"
@@ -91,20 +92,27 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
-			class="w-full z-[101] h-9 p-2"
+			class="z-[101] h-9 w-full p-2"
 		/>
 	{/if}
 
 	{#if isLoading}
-		<div class="absolute top-full left-0 right-0 p-2 text-sm z-[1000] bg-gray-100 rounded-lg shadow-[3px_3px_10px_0_rgba(25,24,24,0.32)]">Searching...</div>
+		<div
+			class="absolute top-full right-0 left-0 z-[1000] rounded-lg bg-gray-100 p-2 text-sm shadow-[3px_3px_10px_0_rgba(25,24,24,0.32)]"
+		>
+			Searching...
+		</div>
 	{:else if showResults && displayResults.length > 0}
-		<ul class="absolute top-full left-0 right-0 z-[1000] max-h-[200px] overflow-y-auto m-0 p-0 list-none gap-1 flex flex-col" class:bottom-full={inverted}>
+		<ul
+			class="absolute top-full right-0 left-0 z-[1000] m-0 flex max-h-[200px] list-none flex-col gap-1 overflow-y-auto p-0"
+			class:bottom-full={inverted}
+		>
 			{#each displayResults as result}
-				<li class="bg-gray-100 rounded-lg shadow-[3px_3px_10px_0_rgba(25,24,24,0.32)]">
-					<button 
-						onclick={() => selectItem(result)} 
-						tabindex={0} 
-						class="w-full p-2 border-none bg-transparent cursor-pointer text-left rounded-lg hover:bg-white focus:outline-2 focus:outline-blue-500 focus:outline-offset-2 transition-colors"
+				<li class="rounded-lg bg-gray-100 shadow-[3px_3px_10px_0_rgba(25,24,24,0.32)]">
+					<button
+						onclick={() => selectItem(result)}
+						tabindex={0}
+						class="w-full cursor-pointer rounded-lg border-none bg-transparent p-2 text-left transition-colors hover:bg-white focus:outline-2 focus:outline-offset-2 focus:outline-blue-500"
 					>
 						{#if children}
 							{@render children(result)}
@@ -127,7 +135,7 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
-			class="w-full z-[101] h-9"
+			class="z-[101] h-9 w-full"
 		/>
 	{/if}
 </div>

@@ -53,13 +53,11 @@
 	}
 
 	async function onDelete(task: Task) {
-		try {
-			await tasksAPI.deleteTask({ id: task.id });
-			// Close editor after deletion
-			editorOpen = false;
-		} catch (e) {
-			console.error('Failed to delete task', e);
-		}
+		const [_, error] = await tasksAPI.deleteTask({ id: task.id });
+		if (error) Err.UNHANDLED(error, 'Failed to delete task');
+		
+		// Close editor after deletion
+		editorOpen = false;
 	}
 </script>
 

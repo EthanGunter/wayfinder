@@ -19,10 +19,6 @@ if (true /* browser */) {
 	authAPI = PassthroughAuthProvider;
 	cachedUsers = passthroughCachedUsers;
 	authState = passthroughAuthState;
-	console.log('[TODO:debug EG] index.ts: authState assigned to passthroughAuthState'); // TODO:debug EG
-	authState.subscribe((state) => {
-		console.log('[TODO:debug EG] index.ts: authState changed to', state.status); // TODO:debug EG
-	});
 } else /* if ( mobile ) */ {
 	Err.throw(new NotImplementedError("Mobile auth provider not implemented"));
 }

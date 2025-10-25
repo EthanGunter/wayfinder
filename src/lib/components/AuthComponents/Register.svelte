@@ -8,7 +8,7 @@
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { v4 } from 'uuid';
 	import type { SessionUser, LoginCredentials, User } from '$domain/models/user';
-	import type { Err } from '$domain/errors';
+	import { Err } from '$domain/errors';
 
 	interface Props {
 		onError?: (message: string, error?: Err) => void;
@@ -18,10 +18,6 @@
 
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/planner';
-	console.log('[TODO:debug EG] register page mounted', {
-		redirect_param: page.url.searchParams.get('redirect'),
-		redir
-	}); // TODO:debug EG
 
 	// Temporary user data for registration
 	let tempUser = $state<SessionUser>({
@@ -85,15 +81,12 @@
 			const [_, registerError] = await authAPI.register({ creds, userData });
 			if (registerError) {
 				errorMessage = registerError.message || 'Registration failed';
-				console.log('[TODO:debug EG] registration failed', { registerError }); // TODO:debug EG
 			} else {
-				console.log('[TODO:debug EG] registration success, redirecting', { redir }); // TODO:debug EG
-
 				goto(redir || '/planner');
 			}
 		} catch (error) {
 			errorMessage = 'An unexpected error occurred';
-			console.error('Registration error:', error);
+			Err.UNHANDLED(error, 'Registration error:');
 		} finally {
 			isLoading = false;
 		}
