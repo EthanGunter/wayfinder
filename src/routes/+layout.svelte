@@ -10,7 +10,7 @@
 	import * as Accordion from '$lib/components/ui/accordion';
 
 	const { children } = $props();
-	let mode = $state<'select' | 'login' | 'register'>('login');
+	let mode = $state</* 'select' | */ 'login' | 'register'>('login');
 	let errorMessage = $state('');
 	let overlayOpen = $state(false);
 
@@ -29,20 +29,22 @@
 			// TODO:UX Add error page
 		} else if (state.status === 'signed-out') {
 			// Decide initial mode on signed-out
-			mode = $cachedUsers.length > 0 ? 'select' : 'login';
+			// mode = $cachedUsers.length > 0 ? 'select' : 'login';
+			mode = 'login';
 		}
 	});
 
 	// Keep one section open: if value becomes falsy, force fallback based on cached users
 	$effect(() => {
 		if (!mode) {
-			mode = $cachedUsers.length > 0 ? 'select' : 'login';
+			// mode = $cachedUsers.length > 0 ? 'select' : 'login';
+			mode = 'login';
 		}
 	});
 
 	// Lightweight cross-app toggle for the auth overlay without navigation
 	$effect.root(() => {
-		function handleOpenAuth(event: CustomEvent<{ mode: 'select' | 'login' | 'register' }>) {
+		function handleOpenAuth(event: CustomEvent<{ mode: /* 'select' | */ 'login' | 'register' }>) {
 			console.log('handleOpenAuth', event);
 			const next = event?.detail?.mode;
 			if (next && next !== mode) mode = next;
@@ -93,7 +95,7 @@
 				{/if}
 
 				<Accordion.Root type="single" bind:value={mode}>
-					{#if $cachedUsers.length > 0}
+					<!-- 					{#if $cachedUsers.length > 0}
 						<Accordion.Item value="select">
 							<Accordion.Trigger
 								class="transition-all data-[state=closed]:rounded-md data-[state=closed]:bg-muted/50 data-[state=closed]:px-3 data-[state=closed]:py-3 data-[state=open]:py-5 data-[state=open]:text-lg data-[state=open]:font-semibold"
@@ -103,7 +105,7 @@
 								<SelectUserView onError={setErrorMessage} />
 							</Accordion.Content>
 						</Accordion.Item>
-					{/if}
+					{/if} -->
 
 					<Accordion.Item value="login">
 						<Accordion.Trigger

@@ -86,21 +86,22 @@
 {#if $authState.status === 'signed-in'}
 	<div class="flex h-full flex-col gap-4">
 		<!-- Switch user dropdown -->
-		<Popover.Root>
+		<!-- 		<Popover.Root>
 			<Popover.Trigger class="mb-4 w-full">
-				<div class="flex h-16 w-full items-center justify-start gap-3 border-b-1 px-3">
-					<UserAvatar
-						avatarUrl={$authState.user.avatarUrl}
-						displayName={$authState.user.displayName}
-						class="h-8 w-8"
-					/>
-					<div class="text-left">
-						<div class="font-medium">{$authState.user.displayName}</div>
-						<div class="text-sm text-gray-500">Switch account</div>
-					</div>
-					<Icon icon="mdi:chevron-down" class="ml-auto size-5 text-gray-500" />
-				</div>
-			</Popover.Trigger>
+ -->
+		<div class="flex w-full items-center justify-start gap-3 border-b-1 pb-3">
+			<UserAvatar
+				avatarUrl={$authState.user.avatarUrl}
+				displayName={$authState.user.displayName}
+				class="h-12 w-12"
+			/>
+			<div class="text-left">
+				<div class="font-medium">{$authState.user.displayName}</div>
+				<!-- <div class="text-sm text-gray-500">Switch account</div> -->
+			</div>
+			<!-- <Icon icon="mdi:chevron-down" class="ml-auto size-5 text-gray-500" /> -->
+		</div>
+		<!-- 			</Popover.Trigger>
 			<Popover.Content class="w-[24rem] p-0">
 				{#if switchError}
 					<div class="border-b border-red-200 bg-red-50 p-2 text-sm text-red-700">
@@ -112,7 +113,7 @@
 				</div>
 			</Popover.Content>
 		</Popover.Root>
-
+ -->
 		<Button
 			variant="outline"
 			class="flex h-16 items-center justify-start gap-3"
