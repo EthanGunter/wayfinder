@@ -1,4 +1,4 @@
-import type { LocalUser } from '$domain/models/user';
+import type { SessionUser } from '$domain/models/user';
 import { Err, NotImplementedError } from '$domain/errors';
 import type { Readable } from 'svelte/store';
 
@@ -13,7 +13,7 @@ export const remoteAuth = ConvexAuthProvider;
 
 let authAPI: IAuthLocal,
 	authState: Readable<AuthState>,
-	cachedUsers: Readable<LocalUser[]>
+	cachedUsers: Readable<SessionUser[]>
 
 if (true /* browser */) {
 	authAPI = PassthroughAuthProvider;

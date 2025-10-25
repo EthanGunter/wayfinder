@@ -7,7 +7,7 @@
 	import { authAPI, cachedUsers as authUsers } from '$lib/API/Auth';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { v4 } from 'uuid';
-	import type { LoginCredentials, User } from '$domain/models/user';
+	import type { SessionUser, LoginCredentials, User } from '$domain/models/user';
 	import type { Err } from '$domain/errors';
 
 	interface Props {
@@ -24,13 +24,14 @@
 	}); // TODO:debug EG
 
 	// Temporary user data for registration
-	let tempUser = $state<User>({
+	let tempUser = $state<SessionUser>({
 		id: '',
 		displayName: '',
 		avatarUrl: '',
 		createdAt: new Date(),
 		status: 'active',
-		features: []
+		features: [],
+		sessionStatus: 'revoked' // TODO This may need to be active or expired...
 	});
 
 	let email = $state('');
@@ -63,13 +64,14 @@
 		isLoading = true;
 		errorMessage = '';
 		try {
-			const userData: User = {
+			const userData: SessionUser = {
 				id: v4(),
 				displayName: tempUser.displayName.trim(),
 				avatarUrl: tempUser.avatarUrl || '',
 				createdAt: new Date(),
 				status: tempUser.status || 'active',
-				features: [...(tempUser.features || [])]
+				features: [...(tempUser.features || [])],
+				sessionStatus: 'revoked' // TODO This may need to be active or expired...
 			};
 			const creds: LoginCredentials = { type: 'email_password', email, password };
 			const [reqs, reqError] = authAPI.getRegistrationRequirements(creds);

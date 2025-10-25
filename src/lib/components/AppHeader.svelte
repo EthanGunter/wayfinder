@@ -241,7 +241,10 @@
 		<Sheet.Root bind:open={authSheetOpen}>
 			<Sheet.Trigger>
 				<div id="account-menu-btn" class="btn flex h-12 w-12 overflow-hidden rounded-full p-0">
-					<UserAvatar user={$authState.user} />
+					<UserAvatar
+						avatarUrl={$authState.user.avatarUrl}
+						displayName={$authState.user.displayName}
+					/>
 				</div>
 			</Sheet.Trigger>
 			<Sheet.Content side="right" class="w-80">

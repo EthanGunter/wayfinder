@@ -6,16 +6,16 @@ import { writable, type Readable, get } from 'svelte/store';
 import { USER_TABLE_NAME } from '../DBConstants';
 import { remoteAuth } from '.';
 import { err, ok } from '$domain/result';
-import { isAnonymous, type LocalUser, type User, type LoginCredentials } from '$domain/models/user';
+import { isAnonymous, type SessionUser, type User, type LoginCredentials } from '$domain/models/user';
 import type { AuthState, IAuthLocal, IAuthRemote } from './seam-interfaces';
 import { isSessionCapable } from './seam-interfaces';
 
 // Stores
 const _authState = writable<AuthState>({ status: "loading" });
-const _users = writable<LocalUser[]>([]);
+const _users = writable<SessionUser[]>([]);
 
 export const browserAuthState: Readable<AuthState> = _authState;
-export const browserCachedUsers: Readable<LocalUser[]> = _users;
+export const browserCachedUsers: Readable<SessionUser[]> = _users;
 
 // Module state
 let db: LocalDB | null = null;
@@ -29,14 +29,14 @@ let db: LocalDB | null = null;
     console.log('[TODO:debug EG] dbPromise resolved, db=', db); // TODO:debug EG
 
     // Hydrate users list
-    const allUsers = await db.getAll(USER_TABLE_NAME) as LocalUser[];
+    const allUsers = await db.getAll(USER_TABLE_NAME) as SessionUser[];
     _users.set(allUsers);
 
     // Hydrate active user state
     const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     console.log('[TODO:debug EG] activeUserId from DB:', activeUserId); // TODO:debug EG
     if (activeUserId) {
-      const activeUser = await db.get(USER_TABLE_NAME, activeUserId) as LocalUser | undefined;
+      const activeUser = await db.get(USER_TABLE_NAME, activeUserId) as SessionUser | undefined;
       if (activeUser) {
         console.log('[TODO:debug EG] setting signed-in with user:', activeUser.id); // TODO:debug EG
         _authState.set({ status: "signed-in", user: activeUser });
@@ -71,7 +71,7 @@ const api: IAuthLocal = {
     return remoteAuth ? remoteAuth.watchAuthState() : browserAuthState;
   },
 
-  register: async ({ creds, userData }: { creds: LoginCredentials, userData: LocalUser }) => {
+  register: async ({ creds, userData }: { creds: LoginCredentials, userData: SessionUser }) => {
     if (isAnonymous(userData)) {
       return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
     }
@@ -120,11 +120,11 @@ const api: IAuthLocal = {
     assertDB(db);
     const activeId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
     if (newUserId === activeId) {
-      const user = await db.get(USER_TABLE_NAME, activeId) as LocalUser | undefined;
+      const user = await db.get(USER_TABLE_NAME, activeId) as SessionUser | undefined;
       return user ? ok(user) : err(new NotFoundError(newUserId, "User"));
     }
 
-    let user = await db.get(USER_TABLE_NAME, newUserId) as LocalUser | undefined;
+    let user = await db.get(USER_TABLE_NAME, newUserId) as SessionUser | undefined;
     if (!user) {
       return err(new NotFoundError(newUserId, "User"));
     }
@@ -192,14 +192,14 @@ const api: IAuthLocal = {
       userId = activeId;
     }
 
-    const user = await db.get(USER_TABLE_NAME, userId) as LocalUser | undefined;
+    const user = await db.get(USER_TABLE_NAME, userId) as SessionUser | undefined;
     if (!user) {
       return err(new NotFoundError(userId, "User"));
     }
 
     // Skip if no real change (avoid redundant store writes/loops)
-    const keys = Object.keys(update) as (keyof LocalUser)[];
-    const noChange = keys.length === 0 || keys.every((k) => (update as LocalUser)[k] === user[k]);
+    const keys = Object.keys(update) as (keyof SessionUser)[];
+    const noChange = keys.length === 0 || keys.every((k) => (update as SessionUser)[k] === user[k]);
     if (noChange) {
       return ok(user);
     }
@@ -245,7 +245,7 @@ const api: IAuthLocal = {
   deleteUser: async ({ userId }: { userId: string }) => {
     assertDB(db);
 
-    const user = await db.get(USER_TABLE_NAME, userId) as LocalUser | undefined;
+    const user = await db.get(USER_TABLE_NAME, userId) as SessionUser | undefined;
 
     if (user) {
       const activeUserId = await db.get(APP_TABLE_NAME, ACTIVEUSER_COLUMN_NAME) as string | undefined;
@@ -345,7 +345,7 @@ export default api;
 // #region UTILITIES
 
 // Fetch the latest remote user row and persist/merge into local DB
-async function _fetchAndPersistLatestUser(current: LocalUser): Promise<LocalUser> {
+async function _fetchAndPersistLatestUser(current: SessionUser): Promise<SessionUser> {
   assertDB(db);
   if (!remoteAuth) {
     return current;
@@ -371,7 +371,7 @@ async function _fetchAndPersistLatestUser(current: LocalUser): Promise<LocalUser
 // Helper to refresh users list from DB
 async function _refreshUsers(): Promise<void> {
   assertDB(db);
-  const allUsers = await db.getAll(USER_TABLE_NAME) as LocalUser[];
+  const allUsers = await db.getAll(USER_TABLE_NAME) as SessionUser[];
   _users.set(allUsers);
 }
 

@@ -1,5 +1,5 @@
 import type { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from "$domain/errors";
-import type { LocalUser, LoginCredentials, RegistrationRequirements, User } from "$domain/models/user";
+import type { SessionUser, LoginCredentials, RegistrationRequirements, User } from "$domain/models/user";
 import type { Result } from "$domain/result";
 import type { Readable } from "svelte/store";
 
@@ -9,8 +9,8 @@ export type Fetchable<T> =
 	| { status: "error", error: Err }
 	| { status: "resolved", data: T }
 
-export type AuthState = Exclude<Fetchable<LocalUser>, { status: "resolved" }>
-	| { status: "signed-in", user: LocalUser/* , anonymous: boolean */ }
+export type AuthState = Exclude<Fetchable<SessionUser>, { status: "resolved" }>
+	| { status: "signed-in", user: SessionUser/* , anonymous: boolean */ }
 	| { status: "signed-out" }
 
 export type LiveStore<T> = Readable<T>;
@@ -22,23 +22,23 @@ export interface IAuthLocal {
 	/* --- Mutators --- */
 
 	/** Registers a remote user account and creates local user simultaneously */
-	register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<void, NotImplementedError | ArgumentError>>,
+	register(params: { creds: LoginCredentials, userData: User }): Promise<Result<void, NotImplementedError | ArgumentError>>,
 
 	/** Defines the requirements and availability for different Authentication methods */
 	getRegistrationRequirements(method: LoginCredentials): Result<RegistrationRequirements[], NotImplementedError>,
 
 	/** Sets the active user for this device */
-	switchUser(newUser: string): Promise<Result<LocalUser, NotFoundError | InputRequiredError>>,
+	switchUser(newUser: string): Promise<Result<SessionUser, NotFoundError | InputRequiredError>>,
 
 	/** Updates the active user, unless a specific id is provided */
 	updateUser(params: { update: Partial<User> }): Promise<Result<User, NotFoundError>>,
-	handleUpdateUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
+	handleUpdateUserResponse(response: Result<void, { oldUser: SessionUser }>): Promise<void>,
 
 	/** Marks a user account as deleted in the server's database
 	 * There is currently no method of reactivating deleted accounts
 	 */
 	deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
-	handleDeleteUserResponse(response: Result<void, { oldUser: LocalUser }>): Promise<void>,
+	handleDeleteUserResponse(response: Result<void, { oldUser: SessionUser }>): Promise<void>,
 
 	/** Removes a cached user account from the local machine. It still be logged into remotely */
 	removeCachedUser(userId: string): Promise<void>,
@@ -61,7 +61,7 @@ export interface IAuthRemote {
 	/** Defines the requirements and availability for different Authentication methods */
 	getRegistrationRequirements(creds: LoginCredentials): Result<RegistrationRequirements[], NotImplementedError>,
 	/** Responsible for creating a new user account with the given credentials */
-	register(params: { creds: LoginCredentials, userData: LocalUser }): Promise<Result<void, NotImplementedError | ArgumentError | InvalidStateError>>,
+	register(params: { creds: LoginCredentials, userData: SessionUser }): Promise<Result<void, NotImplementedError | ArgumentError | InvalidStateError>>,
 	updateUser(params: { update: Partial<User> & { id: string } }): Promise<Result<User, NotFoundError>>,
 	deleteUser(params: { userId: string }): Promise<Result<void, NotFoundError>>,
 	login(creds: LoginCredentials): Promise<Result<void, NotFoundError | ArgumentError | NotImplementedError>>,
@@ -79,7 +79,7 @@ export interface IAuthSessionCapable {
 	restoreSession(params: { userId: string, material: string }): Promise<Result<{ rotatedMaterial?: string }, InputRequiredError>>;
 
 	/** Lists device sessions and associated users that can be switched to */
-	getUserSessions(): Promise<Result<{ session: { token: string, userId: string }, user: { id: string, displayName: string, avatarUrl?: string } }[], InvalidStateError>>;
+	getUserSessions(): Promise<Result<{ session: { token: string, userId: string, expiresAt: Date }, user: { id: string, displayName: string, avatarUrl?: string } }[], InvalidStateError>>;
 }
 
 export function isSessionCapable(auth: IAuthRemote): auth is IAuthRemote & IAuthSessionCapable {

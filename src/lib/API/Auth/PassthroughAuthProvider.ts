@@ -1,11 +1,10 @@
 import { dbPromise, type LocalDB } from '../localDB';
-import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$domain/errors';
-import SessionVault from './SessionVault';
+import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from '$domain/errors';
 import { writable, get, readable, derived } from 'svelte/store';
 import { USER_TABLE_NAME } from '../DBConstants';
-import { remoteAuth } from '.';
+import { cachedUsers, remoteAuth } from '.';
 import { err, ok } from '$domain/result';
-import { isAnonymous, type LocalUser, type LoginCredentials } from '$domain/models/user';
+import { isAnonymous, type SessionUser, type LoginCredentials } from '$domain/models/user';
 import type { AuthState, IAuthLocal, LiveStore } from './seam-interfaces';
 import { isSessionCapable } from './seam-interfaces';
 
@@ -34,16 +33,39 @@ export const passthroughCachedUsers = derived(
 			set([]);
 			return;
 		}
-		const unsubscribe = remoteAuth.watchUsers({ ids: $ids }).subscribe((fetchable) => {
-			console.log(`Watch users updated`, fetchable);
+		const unsubscribe = remoteAuth.watchUsers({ ids: $ids }).subscribe(async (users) => {
+			console.log(`Watch users updated`, users);
 
-			if (fetchable.status === 'resolved') {
-				set(fetchable.data as LocalUser[]);
+			if (users.status === 'resolved') {
+				try {
+					let sessionList: { session: { token: string, userId: string, expiresAt: Date | string }, user: { id: string } }[] = [];
+					if (isSessionCapable(remoteAuth)) {
+						const [dto, dtoErr] = await remoteAuth.getUserSessions();
+						if (!dtoErr) sessionList = dto as any;
+					}
+					const mapped: SessionUser[] = (users.data as any[]).map((u) => {
+						const match = sessionList.find((s) => s.user.id === u.id || s.session.userId === u.id);
+						if (match) {
+							const expiresAt = match.session.expiresAt instanceof Date ? match.session.expiresAt : new Date(match.session.expiresAt);
+							const isActive = Date.now() < expiresAt.getTime();
+							return {
+								...u,
+								sessionStatus: isActive ? 'active' : 'expired',
+								expiresAt,
+								sessionRefreshMaterial: match.session.token,
+							} as SessionUser;
+						}
+						return { ...u, sessionStatus: 'revoked' } as SessionUser;
+					});
+					set(mapped);
+				} catch {
+					set((users.data as any[]).map((u) => ({ ...u, sessionStatus: 'revoked' })) as SessionUser[]);
+				}
 			}
 		});
 		return () => unsubscribe();
 	},
-	[] as LocalUser[]
+	[] as SessionUser[]
 );
 
 // Module state
@@ -66,27 +88,17 @@ let db: LocalDB | null = null;
 			const allCachedBefore = await db.getAllKeys(USER_TABLE_NAME);
 			console.log('[TODO:debug EG] Auth state changed to signed-in, userId:', userId, 'cached users before:', allCachedBefore); // TODO:debug EG
 
-			// Check if user is already cached
-			const existingSession = await SessionVault.get(userId);
-			if (!existingSession) {
-				// New user - cache session material
-				const sessionMaterial = await getSessionMaterialFromCookie();
-				if (sessionMaterial) {
-					await SessionVault.save(userId, sessionMaterial);
-
-					// Mark this user as cached by storing a minimal marker object
-					// The USER_TABLE_NAME store uses keyPath: "id", so we include it in the object
-					await db.put(USER_TABLE_NAME, { id: userId } as any);
-					const currentIds = get(_cachedUserIds);
-					if (!currentIds.includes(userId)) {
-						_cachedUserIds.set([...currentIds, userId]);
-					}
-					console.log('[PassthroughAuthProvider] Cached new user session:', userId);
-					
-					// TODO:debug EG - Verify cache after adding
-					const allCachedAfter = await db.getAllKeys(USER_TABLE_NAME);
-					console.log('[TODO:debug EG] Cached users after adding new user:', allCachedAfter); // TODO:debug EG
+			// Ensure userId exists in local cache for selector hydration
+			const exists = await db.get(USER_TABLE_NAME, userId);
+			if (!exists) {
+				await db.put(USER_TABLE_NAME, { id: userId } as any);
+				const currentIds = get(_cachedUserIds);
+				if (!currentIds.includes(userId)) {
+					_cachedUserIds.set([...currentIds, userId]);
 				}
+				console.log('[PassthroughAuthProvider] Cached new user id:', userId);
+				const allCachedAfter = await db.getAllKeys(USER_TABLE_NAME);
+				console.log('[TODO:debug EG] Cached users after adding new user:', allCachedAfter); // TODO:debug EG
 			} else {
 				console.log('[TODO:debug EG] User already cached, skipping:', userId); // TODO:debug EG
 			}
@@ -99,7 +111,7 @@ const api: IAuthLocal = {
 		return passthroughAuthState;
 	},
 
-	register: async ({ creds, userData }: { creds: LoginCredentials, userData: LocalUser }) => {
+	register: async ({ creds, userData }: { creds: LoginCredentials, userData: SessionUser }) => {
 		if (isAnonymous(userData)) {
 			return err(new InvalidStateError("Cannot register an account with 'anonymous' id", userData))
 		}
@@ -131,6 +143,9 @@ const api: IAuthLocal = {
 	},
 
 	switchUser: async (newUserId: string) => {
+		if (!isSessionCapable(remoteAuth)) {
+			return err(new NotImplementedError("Session restoration not supported"));
+		}
 		if (!newUserId || newUserId == '') {
 			Err.throw(new ArgumentError(newUserId, "UserId required to switch user. Use logout if you want no active user"));
 		}
@@ -144,45 +159,50 @@ const api: IAuthLocal = {
 		}
 
 		// Logout current user first (keep cached) to clear session before switching
-/* 		if (activeId) {
-			console.log('[TODO:debug EG] switchUser: logging out current user (keepCached=true)', activeId); // TODO:debug EG
-			await api.logout();
-		} */
+		/* 		if (activeId) {
+					console.log('[TODO:debug EG] switchUser: logging out current user (keepCached=true)', activeId); // TODO:debug EG
+					await api.logout();
+				} */
 
 		// Check if user is cached
-		const material = await SessionVault.get(newUserId);
+		const cached = get(cachedUsers).find((u) => u.id === newUserId);
+		if (!cached) Err.throw(new NotFoundError(newUserId, "Cached User"));
+
+		if (cached.sessionStatus === 'revoked' || (cached.sessionStatus === 'active' && cached.expiresAt < new Date())) {
+			return err(new InputRequiredError('Cached user session expired', { userId: newUserId }));
+		}
+
+		const material = cached.sessionRefreshMaterial;
+
 		console.log('[TODO:debug EG] switchUser: session material exists?', !!material); // TODO:debug EG
 		if (!material) {
 			return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
 		}
 
 		// Attempt to restore remote session
-		if (isSessionCapable(remoteAuth)) {
-			try {
-				console.log('[TODO:debug EG] switchUser: restoring session for user', newUserId); // TODO:debug EG
-				const [res, resErr] = await remoteAuth.restoreSession({ userId: newUserId, material });
-				if (resErr) {
-					console.log('[TODO:debug EG] switchUser: session restore failed', resErr); // TODO:debug EG
-					return err(resErr);
-				}
-
-				// Update session material if rotated
-				const rotated = res.rotatedMaterial;
-				if (rotated && rotated !== material) {
-					await SessionVault.save(newUserId, rotated);
-				}
-
-				// Return the user from remote state (will be updated after session restore)
-				const state = get(remoteAuth.watchAuthState());
-				console.log('[TODO:debug EG] switchUser: session restored, new auth state', state.status); // TODO:debug EG
-				return state.status === 'signed-in' ? ok(state.user) : err(new NotFoundError(newUserId, "User"));
-			} catch (e) {
-				console.log('[TODO:debug EG] switchUser: exception during restore', e); // TODO:debug EG
-				return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
+		try {
+			console.log('[TODO:debug EG] switchUser: restoring session for user', newUserId); // TODO:debug EG
+			const [res, resErr] = await remoteAuth.restoreSession({ userId: newUserId, material });
+			if (resErr) {
+				console.log('[TODO:debug EG] switchUser: session restore failed', resErr); // TODO:debug EG
+				return err(resErr);
 			}
-		}
 
-		return err(new InputRequiredError('Session restoration not supported', { userId: newUserId }));
+			// If rotated, just trigger re-enrichment by bumping ids
+			const rotated = res.rotatedMaterial;
+			if (rotated && rotated !== material) {
+				const ids = get(_cachedUserIds);
+				_cachedUserIds.set([...ids]);
+			}
+
+			// Return the user from remote state (will be updated after session restore)
+			const state = get(remoteAuth.watchAuthState());
+			console.log('[TODO:debug EG] switchUser: session restored, new auth state', state.status); // TODO:debug EG
+			return state.status === 'signed-in' ? ok(state.user) : err(new NotFoundError(newUserId, "User"));
+		} catch (e) {
+			console.log('[TODO:debug EG] switchUser: exception during restore', e); // TODO:debug EG
+			return err(new InputRequiredError('Login required to access this account', { userId: newUserId }));
+		}
 	},
 
 	updateUser: async ({ update }) => {
@@ -238,9 +258,6 @@ const api: IAuthLocal = {
 	removeCachedUser: async (userId: string): Promise<void> => {
 		assertDB(db);
 
-		// Remove session material
-		await SessionVault.remove(userId);
-
 		// Remove user ID from cache
 		await db.delete(USER_TABLE_NAME, userId);
 		const currentIds = get(_cachedUserIds);
@@ -285,20 +302,7 @@ function getActiveUserId(): string | undefined {
 	return state.status === 'signed-in' ? state.user.id : undefined;
 }
 
-// Helper to get session material from the current cookie
-async function getSessionMaterialFromCookie(): Promise<string | undefined> {
-	if (!isSessionCapable(remoteAuth)) return undefined;
 
-	// Get session material via the remote auth provider
-	// This calls the server endpoint that extracts the access token from the HttpOnly cookie
-	const activeId = getActiveUserId();
-	if (!activeId) return undefined;
-
-	const [material, err] = await remoteAuth.getSessionMaterial({ userId: activeId });
-	if (err || !material) return undefined;
-
-	return material;
-}
 
 function assertDB(db: LocalDB | null, errorMessage?: string): asserts db is LocalDB {
 	if (!db) Err.throw(new InvalidStateError(errorMessage ?? "Attempted to use PassthroughAuthProvider without a db connection"));

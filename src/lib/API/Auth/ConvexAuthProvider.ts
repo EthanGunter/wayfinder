@@ -1,4 +1,4 @@
-import { derived, readable, writable } from "svelte/store";
+import { derived, get, readable, writable } from "svelte/store";
 import {
 	type AuthState,
 	type Fetchable,
@@ -7,8 +7,9 @@ import {
 	type LiveStore,
 } from "./seam-interfaces";
 import type {
-	User,
-	RegistrationRequirements,
+    User,
+    RegistrationRequirements,
+    SessionUser,
 } from "$domain/models/user";
 import {
 	Err,
@@ -25,6 +26,7 @@ import { createAuthClient } from 'better-auth/svelte';
 import { convexClient } from "@convex-dev/better-auth/client/plugins";
 import { multiSessionClient } from "better-auth/client/plugins";
 import { page } from "$app/state";
+import { cachedUsers } from ".";
 
 const authClient = createAuthClient({
 	plugins: [convexClient(), multiSessionClient()],
@@ -34,6 +36,7 @@ const authClient = createAuthClient({
 const authState = writable<AuthState>({ status: "loading" });
 let unsubUser: (() => void) | null = null;
 let client = new ConvexClient(PUBLIC_CONVEX_URL);
+let subscribedUserId: string | null = null;
 
 const resolveSignedOut = () => {
 	if (unsubUser) {
@@ -81,21 +84,58 @@ const bootstrap = async () => {
 		// This mutation validates auth internally via ctx.auth.getUserIdentity()
 		await client.mutation(api.users.ensureCurrentUser, {});
 
-		// Subscribe to user from Convex
-		unsubUser = client.onUpdate(
-			api.users.watchUser,
-			{ id: userId },
-			(user) => {
-				console.log('[ConvexAuthProvider] User update:', user);
-				if (!user) {
-					authState.set({ status: "loading" });
-					return;
-				}
-				authState.set({
-					status: "signed-in",
-					user: { ...user, createdAt: new Date(user._creationTime) }
-				});
-			},
+        // Subscribe to user from Convex
+        if (unsubUser) {
+            unsubUser();
+            unsubUser = null;
+        }
+        subscribedUserId = userId;
+        unsubUser = client.onUpdate(
+            api.users.watchUser,
+            { id: userId },
+            (user) => {
+                console.log('[ConvexAuthProvider] User update:', user);
+                if (!user) {
+                    authState.set({ status: "loading" });
+                    return;
+                }
+                (async () => {
+                    const normalized = { ...user, createdAt: new Date(user._creationTime) } as Omit<SessionUser, "sessionStatus" | "expiresAt" | "sessionRefreshMaterial"> & { _creationTime?: number };
+                    let enriched: SessionUser;
+                    try {
+                        const device = await authClient.multiSession.listDeviceSessions();
+                        if (!device.error) {
+                            const match = device.data.find((s) => s.user.id === userId || s.session.userId === userId);
+                            if (match) {
+                                const expiresAt = new Date(match.session.expiresAt);
+                                const isActive = Date.now() < expiresAt.getTime();
+                                enriched = {
+                                    ...(normalized as any),
+                                    sessionStatus: isActive ? 'active' : 'expired',
+                                    expiresAt,
+                                    sessionRefreshMaterial: match.session.token,
+                                } as SessionUser;
+                            } else {
+                                enriched = {
+                                    ...(normalized as any),
+                                    sessionStatus: 'revoked',
+                                } as SessionUser;
+                            }
+                        } else {
+                            enriched = {
+                                ...(normalized as any),
+                                sessionStatus: 'revoked',
+                            } as SessionUser;
+                        }
+                    } catch {
+                        enriched = {
+                            ...(normalized as any),
+                            sessionStatus: 'revoked',
+                        } as SessionUser;
+                    }
+                    authState.set({ status: 'signed-in', user: enriched });
+                })();
+            },
 			(error: Error) => {
 				authState.set({
 					status: "error",
@@ -250,6 +290,52 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 			await authClient.multiSession.setActive({ sessionToken: material });
 			// Ensure Convex receives a fresh JWT tied to the active BetterAuth session
 			await client.mutation(api.users.ensureCurrentUser, {});
+            // Re-subscribe to the now-active user's data
+            const session = await authClient.getSession();
+            const newUserId = session?.data?.user?.id;
+            if (newUserId && newUserId !== subscribedUserId) {
+                if (unsubUser) {
+                    unsubUser();
+                    unsubUser = null;
+                }
+                authState.set({ status: 'loading' });
+                subscribedUserId = newUserId;
+                unsubUser = client.onUpdate(
+                    api.users.watchUser,
+                    { id: newUserId },
+                    (user) => {
+                        if (!user) {
+                            authState.set({ status: 'loading' });
+                            return;
+                        }
+                        (async () => {
+                            const normalized = { ...user, createdAt: new Date(user._creationTime) } as any;
+                            let enriched: SessionUser;
+                            try {
+                                const device = await authClient.multiSession.listDeviceSessions();
+                                if (!device.error) {
+                                    const match = device.data.find((s) => s.user.id === newUserId || s.session.userId === newUserId);
+                                    if (match) {
+                                        const expiresAt = new Date(match.session.expiresAt);
+                                        const isActive = Date.now() < expiresAt.getTime();
+                                        enriched = { ...(normalized as any), sessionStatus: isActive ? 'active' : 'expired', expiresAt, sessionRefreshMaterial: match.session.token } as SessionUser;
+                                    } else {
+                                        enriched = { ...(normalized as any), sessionStatus: 'revoked' } as SessionUser;
+                                    }
+                                } else {
+                                    enriched = { ...(normalized as any), sessionStatus: 'revoked' } as SessionUser;
+                                }
+                            } catch {
+                                enriched = { ...(normalized as any), sessionStatus: 'revoked' } as SessionUser;
+                            }
+                            authState.set({ status: 'signed-in', user: enriched });
+                        })();
+                    },
+                    (error: Error) => {
+                        authState.set({ status: 'error', error: Err.wrap(error) });
+                    }
+                );
+            }
 			return ok({ rotatedMaterial: undefined });
 		} catch (e) {
 			return err(new InputRequiredError('Failed to activate session', { userId }));
@@ -261,9 +347,12 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		try {
 			const res = await authClient.multiSession.listDeviceSessions();
 			if (res.error) return err(new InvalidStateError('Unable to list sessions'));
+			const cached = get(cachedUsers);
+
 			const mapped = res.data.map((s) => ({
-				session: { token: s.session.token, userId: s.session.userId },
+				session: { token: s.session.token, userId: s.session.userId, expiresAt: new Date(s.session.expiresAt) },
 				user: {
+					...cached.find(u => u.id === s.user.id),
 					id: s.user.id,
 					displayName: s.user.name,
 					avatarUrl: s.user.image ?? undefined,
@@ -277,32 +366,3 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 };
 
 export default convexApi;
-
-
-// Helper to build LiveStore from onUpdate subscription
-function toLiveStore<T>(
-	queryRef: any,
-	args: any,
-	notFoundValue: Fetchable<T>,
-): LiveStore<Fetchable<T>> {
-	return readable<Fetchable<T>>({ status: "loading" }, (set) => {
-		const unsubscribe = client.onUpdate(
-			queryRef,
-			args,
-			(dataFromServer: T | null) => {
-				if (dataFromServer === null) {
-					set(notFoundValue);
-				} else {
-					set({ status: "resolved", data: dataFromServer });
-				}
-			},
-			(error: Error) => {
-				set({
-					status: "error",
-					error: Err.wrap(error),
-				});
-			},
-		);
-		return unsubscribe;
-	});
-}

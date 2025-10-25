@@ -22,10 +22,17 @@ export interface User {
 }
 
 // Local user interface extends base user with local avatar, settings, and session material
-export interface LocalUser extends User {
-	avatar?: Blob;
-	sessionMaterial?: string; // Refresh token or other session restoration data
-}
+export type SessionUser = User &
+	({
+		sessionStatus: 'active' | 'expired';
+		expiresAt: Date;
+		sessionRefreshMaterial?: string; // Refresh token or other session restoration data
+	} | {
+		sessionStatus: 'expired';
+		sessionRefreshMaterial?: string; // Refresh token or other session restoration data
+	} | {
+		sessionStatus: 'revoked'
+	})
 
 // Utility functions for User objects
 /**

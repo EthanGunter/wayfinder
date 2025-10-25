@@ -12,6 +12,7 @@
 	const { children } = $props();
 	let mode = $state<'select' | 'login' | 'register'>('login');
 	let errorMessage = $state('');
+	let overlayOpen = $state(false);
 
 	// Reactive effect that responds to auth state changes
 	$effect(() => {
@@ -22,6 +23,8 @@
 			// TODO:optimization I think this happens entirely too often
 			// User is authenticated - hydrate their data and allow access to app
 			tasksAPI.hydrateForUser({ user: state.user });
+			// Auto-close overlay once we are signed in
+			overlayOpen = false;
 		} else if (state.status === 'error') {
 			// TODO:UX Add error page
 		} else if (state.status === 'signed-out') {
@@ -35,6 +38,18 @@
 		if (!mode) {
 			mode = $cachedUsers.length > 0 ? 'select' : 'login';
 		}
+	});
+
+	// Lightweight cross-app toggle for the auth overlay without navigation
+	$effect.root(() => {
+		function handleOpenAuth(event: CustomEvent<{ mode: 'select' | 'login' | 'register' }>) {
+			console.log('handleOpenAuth', event);
+			const next = event?.detail?.mode;
+			if (next && next !== mode) mode = next;
+			overlayOpen = true;
+		}
+		window.addEventListener('open-auth', handleOpenAuth as EventListener);
+		return () => window.removeEventListener('open-auth', handleOpenAuth as EventListener);
 	});
 
 	async function setErrorMessage(message: string, error?: Err) {
@@ -57,7 +72,7 @@
 		<div class="flex h-screen w-full items-center justify-center">
 			<Icon icon="lucide:loader-circle" class="size-10 animate-spin" />
 		</div>
-	{:else if $authState.status === 'signed-out'}
+	{:else if $authState.status === 'signed-out' || overlayOpen}
 		<div class="page flex min-h-screen min-w-screen items-center justify-center p-4">
 			<div
 				class="relative grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg"
@@ -80,7 +95,10 @@
 				<Accordion.Root type="single" bind:value={mode}>
 					{#if $cachedUsers.length > 0}
 						<Accordion.Item value="select">
-							<Accordion.Trigger class="transition-all data-[state=open]:text-lg data-[state=open]:py-5 data-[state=open]:font-semibold data-[state=closed]:bg-muted/50 data-[state=closed]:py-3 data-[state=closed]:px-3 data-[state=closed]:rounded-md">Choose an account</Accordion.Trigger>
+							<Accordion.Trigger
+								class="transition-all data-[state=closed]:rounded-md data-[state=closed]:bg-muted/50 data-[state=closed]:px-3 data-[state=closed]:py-3 data-[state=open]:py-5 data-[state=open]:text-lg data-[state=open]:font-semibold"
+								>Choose an account</Accordion.Trigger
+							>
 							<Accordion.Content>
 								<SelectUserView onError={setErrorMessage} />
 							</Accordion.Content>
@@ -88,14 +106,20 @@
 					{/if}
 
 					<Accordion.Item value="login">
-						<Accordion.Trigger class="transition-all data-[state=open]:text-lg data-[state=open]:py-5 data-[state=open]:font-semibold data-[state=closed]:bg-muted/50 data-[state=closed]:py-3 data-[state=closed]:px-3 data-[state=closed]:rounded-md">Sign in</Accordion.Trigger>
+						<Accordion.Trigger
+							class="transition-all data-[state=closed]:rounded-md data-[state=closed]:bg-muted/50 data-[state=closed]:px-3 data-[state=closed]:py-3 data-[state=open]:py-5 data-[state=open]:text-lg data-[state=open]:font-semibold"
+							>Sign in</Accordion.Trigger
+						>
 						<Accordion.Content>
 							<LoginView onError={setErrorMessage} />
 						</Accordion.Content>
 					</Accordion.Item>
 
 					<Accordion.Item value="register">
-						<Accordion.Trigger class="transition-all data-[state=open]:text-lg data-[state=open]:py-5 data-[state=open]:font-semibold data-[state=closed]:bg-muted/50 data-[state=closed]:py-3 data-[state=closed]:px-3 data-[state=closed]:rounded-md">Create account</Accordion.Trigger>
+						<Accordion.Trigger
+							class="transition-all data-[state=closed]:rounded-md data-[state=closed]:bg-muted/50 data-[state=closed]:px-3 data-[state=closed]:py-3 data-[state=open]:py-5 data-[state=open]:text-lg data-[state=open]:font-semibold"
+							>Create account</Accordion.Trigger
+						>
 						<Accordion.Content>
 							<RegisterView onError={setErrorMessage} />
 						</Accordion.Content>

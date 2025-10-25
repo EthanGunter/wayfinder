@@ -77,15 +77,23 @@
 	}
 
 	let switchError = $state('');
+
+	function handleAddAccount(): void {
+		window.dispatchEvent(new CustomEvent('open-auth', { detail: { mode: 'login' } }));
+	}
 </script>
 
 {#if $authState.status === 'signed-in'}
 	<div class="flex h-full flex-col gap-4">
 		<!-- Switch user dropdown -->
 		<Popover.Root>
-			<Popover.Trigger class="w-full mb-4">
+			<Popover.Trigger class="mb-4 w-full">
 				<div class="flex h-16 w-full items-center justify-start gap-3 border-b-1 px-3">
-					<UserAvatar user={$authState.user} class="h-8 w-8" />
+					<UserAvatar
+						avatarUrl={$authState.user.avatarUrl}
+						displayName={$authState.user.displayName}
+						class="h-8 w-8"
+					/>
 					<div class="text-left">
 						<div class="font-medium">{$authState.user.displayName}</div>
 						<div class="text-sm text-gray-500">Switch account</div>
@@ -100,7 +108,7 @@
 					</div>
 				{/if}
 				<div class="max-h-[50vh] overflow-auto p-2">
-					<SelectUserView onError={(msg) => (switchError = msg)} />
+					<SelectUserView onError={(msg) => (switchError = msg)} onAddAccount={handleAddAccount} />
 				</div>
 			</Popover.Content>
 		</Popover.Root>

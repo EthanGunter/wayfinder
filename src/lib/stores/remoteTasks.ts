@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 import SupabaseTaskProvider from '$lib/API/Tasks/SupabaseTaskProvider';
 import type { ITasks } from '$domain/models/task';
-import { userHasFeature, type LocalUser } from '$domain/models/user';
+import { userHasFeature, type SessionUser } from '$domain/models/user';
 
 // TODO:refactor Move this code to /Tasks/index.ts
 // Canonical source for whether remote task operations are available.
@@ -9,7 +9,7 @@ import { userHasFeature, type LocalUser } from '$domain/models/user';
 export const remoteTasks = writable<ITasks | null>(null);
 
 // Subscribe to auth state changes and set/clear the remote tasks provider.
-const updateRemoteTasks = async (user: LocalUser | null) => {
+const updateRemoteTasks = async (user: SessionUser | null) => {
   if (user && userHasFeature(user, 'task-sync')) {
     remoteTasks.set(SupabaseTaskProvider);
   } else {

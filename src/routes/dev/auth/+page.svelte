@@ -32,16 +32,6 @@
 		}
 	}
 
-	async function handleLogoutKeepCached() {
-		testOutput = 'Logging out (keeping cached)...';
-		try {
-			await authAPI.logout({ keepCached: true });
-			testOutput = '✓ Logged out (kept cached)';
-		} catch (e: any) {
-			testOutput = `✗ Logout exception: ${e.message}`;
-		}
-	}
-
 	function checkAuthState() {
 		testOutput = `Auth State: ${JSON.stringify($authState, null, 2)}`;
 	}
@@ -94,10 +84,6 @@
 		</Button>
 
 		<Button class="w-full" variant="destructive" onclick={handleLogout}>🚪 Logout</Button>
-
-		<Button class="w-full" variant="outline" onclick={handleLogoutKeepCached}>
-			🚪 Logout (Keep Cached)
-		</Button>
 
 		<Button class="w-full" variant="link" onclick={() => goto(`/register?redirect=${redir}`)}>
 			📝 Go to Register Page
