@@ -8,7 +8,7 @@
 	import debounce from '$lib/debounce';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { authState } from '$lib/API/Auth';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 	import TaskListItem from './TaskListItem.svelte';
 	import Icon from '@iconify/svelte';
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';

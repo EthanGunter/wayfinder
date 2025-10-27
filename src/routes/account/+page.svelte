@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { authAPI, authState } from '$lib/API/Auth';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
@@ -192,7 +192,7 @@
 					</Button>
 				</div>
 			{/if} -->
-			<div class="m-2 border-t border-gray-300 p-2">
+			<div class="m-2 border-t border-gray-300 p-2 w-full">
 				<UserSettings />
 			</div>
 		</div>

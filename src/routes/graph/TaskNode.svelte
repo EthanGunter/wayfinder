@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Handle, Position } from '@xyflow/svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from './TaskEditor.svelte';
-	import { tasksAPI } from '$lib/API/Tasks';
-	import { dev } from '$app/environment';
-	import DialogClose from '$lib/components/ui/dialog/dialog-close.svelte';
+	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
+	import { dev } from '$lib/user-settings';
 
 	let { data }: { data: Task } = $props();
 
@@ -55,7 +53,7 @@
 	async function onDelete(task: Task) {
 		const [_, error] = await tasksAPI.deleteTask({ id: task.id });
 		if (error) Err.UNHANDLED(error, 'Failed to delete task');
-		
+
 		// Close editor after deletion
 		editorOpen = false;
 	}
@@ -79,7 +77,7 @@
 						{data?.content}
 					</div>
 				{/if}
-				{#if dev}
+				{#if $dev}
 					<div class="text-[7px]">
 						<span>id: {data.id.substring(0, 4)}</span>
 						{#if data.parents.length > 0}

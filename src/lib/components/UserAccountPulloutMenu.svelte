@@ -6,7 +6,7 @@
 	import SelectUserView from '$lib/components/AuthComponents/SelectUser.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { authAPI, authState, cachedUsers as authUsers } from '$lib/API/Auth';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';

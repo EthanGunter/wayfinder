@@ -6,7 +6,7 @@
 
 	import EventHandler from '$lib/tutorials/primitives/EventHandler.svelte';
 	import { authState } from '$lib/API/Auth';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 	import { queryOrWait } from '$lib/tutorials/dom';
 	import demoData from '$lib/tutorials/DemoData.json';
 	import { TaskStatus } from '$domain/models/task';

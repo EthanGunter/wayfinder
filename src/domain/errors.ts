@@ -2,7 +2,7 @@
 
 /* import { settings } from "$lib/user-settings";
 
-const dev = settings.dev.root.enabled;
+const dev = settings.dev.$enabled;
 if (dev) console.log("Err system in DEV mode"); */
 
 function captureHere(err: Error, excludeFn: Function) {

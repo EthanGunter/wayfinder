@@ -4,18 +4,10 @@ import { type User } from "$domain/models/user";
 import { type Doc } from "./_generated/dataModel";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { UserDef, UserFeatureDef, UserStatusDef } from "./schema";
 
 
 //#region Shared Types
-
-const argsUser = {
-  id: v.string(), // authId
-  displayName: v.optional(v.string()),
-  avatarUrl: v.optional(v.string()),
-  status: v.optional(v.union(v.literal("active"), v.literal("deleted"))),
-  features: v.optional(v.array(v.string())),
-  settingOverrides: v.optional(v.any()),
-}
 
 const typeLoginCredentials = v.union(
   v.object({
@@ -93,13 +85,7 @@ export const register = mutation({
   args: {
     // You may validate shape more strictly; align with your LocalUser
     creds: typeLoginCredentials,
-    userData: v.object({
-      displayName: v.string(),
-      avatarUrl: v.optional(v.string()),
-      status: v.optional(v.union(v.literal("active"), v.literal("deleted"))),
-      features: v.optional(v.array(v.string())),
-      settingOverrides: v.optional(v.any()),
-    }),
+    userData: v.object(UserDef),
   },
   handler: async (ctx, { creds, userData }) => {
     // Normally you'd validate creds via BetterAuth and ensure authId (userData.id)
@@ -168,10 +154,16 @@ export const register = mutation({
 });
 
 export const updateUser = mutation({
-  args: argsUser,
+  args: v.object({
+    id: v.string(), // external user id from BetterAuth
+    displayName: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+    status: v.optional(UserStatusDef),
+    features: v.optional(UserFeatureDef),
+    settingOverrides: v.optional(v.any()),
+  }),
   handler: async (ctx, update) => {
     console.log('Update: ', update);
-
 
     const id = await ctx.auth.getUserIdentity();
     if (!id) throw new Error("User identity not available");
@@ -193,15 +185,10 @@ export const updateUser = mutation({
         error: serializeError(new NotFoundError("User not found", update.id)),
       };
     }
+
     const patch = userToPatch(update);
     console.log('Existing: ', existing, "\nUpdate: ", update, "\nPatch: ", patch);
 
-    // const patch: Record<string, any> = {};
-    // if (update.displayName !== undefined) patch.displayName = update.displayName;
-    // if (update.avatarUrl !== undefined) patch.avatarUrl = update.avatarUrl;
-    // if (update.status !== undefined) patch.status = update.status;
-    // if (update.features !== undefined) patch.features = update.features;
-    // if (update.settingOverrides !== undefined) patch.settingOverrides = update.settingOverrides;
 
     if (Object.keys(patch).length) {
       await ctx.db.patch(existing._id, patch);
@@ -282,7 +269,12 @@ export const ensureCurrentUser = mutation({
       displayName,
       avatarUrl: undefined,
       status: "active",
-      features: [],
+      /**
+       * TODO: Temp:IMPORTANT - This allows us to skip local optimistic updates, 
+       * at the cost of grandfathering in users to our first income source...
+       * It's worth it while figuring out the UX, but should change ASAP
+       */ 
+      features: ['task-sync'], 
       settingOverrides: undefined,
     });
 
@@ -291,7 +283,7 @@ export const ensureCurrentUser = mutation({
   },
 });
 
-export const upsertCurrentUser = internalMutation({
+/* export const upsertCurrentUser = internalMutation({
   args: argsUser,
   handler: async (ctx, { id, displayName }) => {
     const existing = await ctx.db
@@ -315,7 +307,7 @@ export const upsertCurrentUser = internalMutation({
     const inserted = await ctx.db.get(_id);
     return { ok: true as const, userId: inserted!.authId };
   },
-});
+}); */
 
 
 //#region Utilities

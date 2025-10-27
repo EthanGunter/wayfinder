@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { authState, cachedUsers, authAPI } from '$lib/API/Auth';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 	import Icon from '@iconify/svelte';
 	import SelectUserView from '$lib/components/AuthComponents/SelectUser.svelte';
 	import LoginView from '$lib/components/AuthComponents/Login.svelte';
@@ -22,7 +22,7 @@
 		} else if (state.status === 'signed-in') {
 			// TODO:optimization I think this happens entirely too often
 			// User is authenticated - hydrate their data and allow access to app
-			tasksAPI.hydrateForUser({ user: state.user });
+			// tasksAPI.hydrateForUser({ user: state.user });
 			// Auto-close overlay once we are signed in
 			overlayOpen = false;
 		} else if (state.status === 'error') {

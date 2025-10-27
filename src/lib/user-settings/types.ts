@@ -1,8 +1,9 @@
 import { Err, InvalidStateError } from '$domain/errors';
-import { writable, derived, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
+import { writable, derived, get, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
 import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import type { SvelteComponent } from 'svelte';
 import type { UserFeature } from '$domain/models/user';
+import { authAPI, authState } from '$lib/API/Auth';
 
 export type SettingScope = 'user' | 'device';
 
@@ -29,7 +30,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
     this.hint = args.hint;
     this.store = writable(args.defaultValue);
     this._id = "NOT_CALCULATED";
-    this.onChange = this.onChange;
+    this.onChange = args.onChange;
 
     this.subscribe = this.store.subscribe;
   }
@@ -71,23 +72,47 @@ export abstract class BaseSetting<T> implements Writable<T> {
   }
 
   private async persistToUser(key: string, value: any): Promise<void> {
-    throw new Error("Deprecated")
-    /*  try {
-       const { authAPI } = await import('$lib/API/Auth');
-       const [user, error] = await authAPI.getUser();
-       if (error) {
-         console.warn('Cannot persist setting: no user available');
-         return;
-       }
- 
-       const settings = user.settingOverrides ?? {} as any;
-       settings[key] = value;
- 
-       // Update user with new settings (this handles both local IDB and remote sync)
-       await authAPI.updateUser({ update: { id: user.id, settingOverrides: settings } });
-     } catch (e) {
-       console.warn('Failed to persist setting', e);
-     } */
+    try {
+      // Get current auth state from store
+      const state = get(authState);
+      if (state.status !== 'signed-in')
+        Err.throw(new InvalidStateError('Cannot persist setting: user not signed in'));
+
+      const user = state.user;
+
+      // Get existing settings or initialize empty object
+      const settingOverrides = structuredClone(user.settingOverrides ?? {});
+
+      // Parse path and set nested value (e.g., "dev/$enabled" -> { dev: { $enabled: true } })
+      const pathParts = key.split('/');
+      let current = settingOverrides;
+
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const part = pathParts[i];
+        if (!current[part] || typeof current[part] !== 'object') {
+          current[part] = {};
+        }
+        current = current[part];
+      }
+
+      // Set the final value
+      const lastPart = pathParts[pathParts.length - 1];
+      current[lastPart] = value;
+
+      // Update user with new settings (this handles both local IDB and remote sync)
+      const [, updateError] = await authAPI.updateUser({
+        update: {
+          id: user.id,
+          settingOverrides
+        }
+      });
+
+      if (updateError) {
+        console.error('Failed to persist setting to server:', updateError);
+      }
+    } catch (e) {
+      console.warn('Failed to persist setting', e);
+    }
   }
 }
 
@@ -197,8 +222,22 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
 export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting;
 
 // New shape using $label and direct nesting: tab -> sections -> settings
-export type SettingsSection = { $label: string; $userFeature?: UserFeature } & { [key: string]: AnySetting | string };
-export type SettingsTab = { $label: string; $userFeature?: UserFeature } & { [key: string]: SettingsSection | string };
+export type SettingsSection = {
+  $label: string;
+  $userFeature?: UserFeature;
+  $enabled?: BoolSetting;
+} & {
+  [key: string]: AnySetting | BoolSetting | string | UserFeature;
+};
+
+export type SettingsTab = {
+  $label: string;
+  $userFeature?: UserFeature;
+  $enabled?: BoolSetting;
+} & {
+  [key: string]: SettingsSection | BoolSetting | string | UserFeature;
+};
+
 export type SettingsTree = Record<string, SettingsTab>;
 
 function isSection(val: unknown): val is SettingsSection {
@@ -211,11 +250,22 @@ function isSetting(val: unknown): val is AnySetting {
 
 export function assignPaths(tree: SettingsTree): void {
   for (const [tabId, tab] of Object.entries(tree)) {
+    // Handle tab-level $enabled
+    if (tab.$enabled) {
+      tab.$enabled.setPath(`${tabId}/$enabled`);
+    }
+
     for (const [sectionId, section] of Object.entries(tab)) {
-      if (sectionId === '$label') continue; // skip $label
+      if (sectionId === '$label' || sectionId === '$userFeature' || sectionId === '$enabled') continue;
       if (!isSection(section)) continue;
+
+      // Handle section-level $enabled
+      if (section.$enabled) {
+        section.$enabled.setPath(`${tabId}/${sectionId}/$enabled`);
+      }
+
       for (const [itemId, setting] of Object.entries(section)) {
-        if (itemId === '$label') continue; // skip $label
+        if (itemId === '$label' || itemId === '$userFeature' || itemId === '$enabled') continue;
         if (!isSetting(setting)) continue;
         setting.setPath(`${tabId}/${sectionId}/${itemId}`);
       }

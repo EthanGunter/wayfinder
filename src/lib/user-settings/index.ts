@@ -5,19 +5,53 @@ import { settings } from './schema';
 import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import { Err } from '$domain/errors';
 
-// Apply settings from a plain path->value object to the tree silently
+// Flatten nested object to path->value pairs (e.g., { dev: { $enabled: true } } -> { "dev/$enabled": true })
+function flattenSettings(obj: Record<string, any>, prefix: string = ''): Record<string, any> {
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+        const path = prefix ? `${prefix}/${key}` : key;
+        if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+            // Recursively flatten nested objects
+            Object.assign(result, flattenSettings(value, path));
+        } else {
+            // Leaf value
+            result[path] = value;
+        }
+    }
+    return result;
+}
+
+// Apply settings from a nested or flat path->value object to the tree silently
 function applySettings(tree: Record<string, any>, overrides: Record<string, any>): void {
-    for (const [path, value] of Object.entries(overrides)) {
+    // Flatten in case we receive nested structure from server
+    const flatOverrides = flattenSettings(overrides);
+    
+    for (const [path, value] of Object.entries(flatOverrides)) {
         const parts = path.split('/');
-        if (parts.length !== 3) continue;
-        const [tabId, sectionId, itemId] = parts;
-        const tab = tree[tabId];
-        if (!tab) continue;
-        const section = tab[sectionId];
-        if (!section || typeof section === 'string') continue;
-        const setting = (section as any)[itemId];
-        if (setting && typeof setting === 'object' && 'setSilently' in setting) {
-            setting.setSilently(value);
+        
+        // Handle tab-level settings (e.g., "dev/$enabled")
+        if (parts.length === 2) {
+            const [tabId, itemId] = parts;
+            const tab = tree[tabId];
+            if (!tab) continue;
+            const setting = tab[itemId];
+            if (setting && typeof setting === 'object' && 'setSilently' in setting) {
+                setting.setSilently(value);
+            }
+            continue;
+        }
+        
+        // Handle section-level settings (e.g., "dev/overrides/supabaseTaskUrl")
+        if (parts.length === 3) {
+            const [tabId, sectionId, itemId] = parts;
+            const tab = tree[tabId];
+            if (!tab) continue;
+            const section = tab[sectionId];
+            if (!section || typeof section === 'string') continue;
+            const setting = (section as any)[itemId];
+            if (setting && typeof setting === 'object' && 'setSilently' in setting) {
+                setting.setSilently(value);
+            }
         }
     }
 }

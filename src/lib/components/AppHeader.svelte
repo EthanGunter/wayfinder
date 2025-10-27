@@ -8,7 +8,7 @@
 	import * as Sheet from './ui/sheet';
 	import UserAvatar from './UserAvatar.svelte';
 	import { authState, cachedUsers as authUsers } from '$lib/API/Auth';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 	import { v4 } from 'uuid';
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';

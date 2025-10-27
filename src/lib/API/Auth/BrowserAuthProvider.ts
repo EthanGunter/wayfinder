@@ -1,4 +1,4 @@
-import { tasksAPI } from '../Tasks';
+import tasksAPI from '../Tasks';
 import { ACTIVEUSER_NAME as ACTIVEUSER_COLUMN_NAME, APP_TABLE_NAME, dbPromise, type LocalDB } from '../localDB';
 import { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError } from '$domain/errors';
 import SessionVault from './SessionVault';

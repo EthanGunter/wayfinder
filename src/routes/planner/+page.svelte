@@ -7,7 +7,7 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { authState } from '$lib/API/Auth';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 	import { page } from '$app/state';
 	import { Err } from '$domain/errors';
 	import TutorialWelcome from './TutorialWelcome.svelte';
@@ -17,20 +17,6 @@
 	let todaysList = $state<Task[]>([]);
 	let suggestedTasks = $state<Task[]>([]);
 	let hasAnyTasksExplicit = $state(false);
-
-	onMount(() => {
-		// Subscribe to auth state
-		const unsubscribeAuth = authState.subscribe((state) => {
-
-			if (state.status === 'signed-in') {
-				// refreshTasks();
-			}
-		});
-
-		return () => {
-			unsubscribeAuth();
-		};
-	});
 
 	function refreshTasks() {
 		tasksAPI!.getTodaysTasks().then(([todaysTasks, error]) => {

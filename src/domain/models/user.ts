@@ -17,7 +17,7 @@ export interface User {
 	avatarUrl?: string;
 	createdAt: Date;
 	status: UserStatus;
-	features: string[];
+	features: UserFeature[];
 	settingOverrides?: any/* AppSettings */;
 }
 

@@ -41,26 +41,34 @@
 			label: string;
 			data: { id: string; setting: AnySetting }[];
 		}[];
-	}[] = $derived(Object.entries(settings)
-		// Disable unauthorized tabs
-		.filter(([label, tab]) => !label.startsWith('$') && userHasAccess(tab))
-		// Parse sections
-		.map(([_, tab]) => ({
-			label: tab.$label,
-			sectionData: Object.entries(tab)
-				// Disable unauthorized sections
-				.filter(([label, data]) => !label.startsWith('$') && userHasAccess(data as SettingsSection))
-				// Parse individual settings
-				.map(([label, sec]) => ({
-					label,
-					data: Object.entries(sec as SettingsSection)
-						.filter(([label]) => !label.startsWith('$'))
-						.map(([label, setting]) => ({
-							id: label,
-							setting: setting as AnySetting
-						}))
-				}))
-		})));
+	}[] = $derived(
+		Object.entries(settings)
+			// Disable unauthorized tabs
+			.filter(([label, tab]) => {
+				console.log('tab', label, tab);
+				return !label.startsWith('$') && userHasAccess(tab);
+			})
+			// Parse sections
+			.map(([_, tab]) => ({
+				label: tab.$label,
+				sectionData: Object.entries(tab)
+					// Disable unauthorized sections
+					.filter(([label, data]) => {
+						console.log('section', label, data);
+						return !label.startsWith('$') && userHasAccess(data as SettingsSection);
+					})
+					// Parse individual settings
+					.map(([label, sec]) => ({
+						label: (sec as SettingsSection).$label,
+						data: Object.entries(sec as SettingsSection)
+							.filter(([label]) => !label.startsWith('$'))
+							.map(([label, setting]) => ({
+								id: label,
+								setting: setting as AnySetting
+							}))
+					}))
+			}))
+	);
 </script>
 
 {#if tabs.length > 0}

@@ -6,7 +6,7 @@
 	import { v4 } from 'uuid';
 	import { Err } from '$domain/errors';
 	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
-	import { tasksAPI } from '$lib/API/Tasks';
+	import tasksAPI from '$lib/API/Tasks';
 
 	interface Props {
 		open: boolean;
