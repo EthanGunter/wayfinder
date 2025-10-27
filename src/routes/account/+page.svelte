@@ -191,8 +191,9 @@
 						Upgrade to Cloud Sync
 					</Button>
 				</div>
-			{/if} -->
-			<div class="m-2 border-t border-gray-300 p-2 w-full">
+				{/if} -->
+			{JSON.stringify($authState.user.features)}
+			<div class="m-2 w-full border-t border-gray-300 p-2">
 				<UserSettings />
 			</div>
 		</div>

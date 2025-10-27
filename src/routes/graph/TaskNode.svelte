@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
-	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Dialog from '$lib/compodevEnabledts/ui/dialog';
 	import TaskNodeEditor from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 	import { dev } from '$lib/user-settings';
-
+devEnabled
 	let { data }: { data: Task } = $props();
 
 	let editorOpen = $state(false);

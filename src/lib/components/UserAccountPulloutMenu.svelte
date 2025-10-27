@@ -5,14 +5,13 @@
 	import * as Popover from './ui/popover';
 	import SelectUserView from '$lib/components/AuthComponents/SelectUser.svelte';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import { authAPI, authState, cachedUsers as authUsers } from '$lib/API/Auth';
+	import { authAPI, authState, cachedUsers as authUsers, hasFeature } from '$lib/API/Auth';
 	import tasksAPI from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import * as Sheet from './ui/sheet';
 	import * as Dialog from './ui/dialog';
 	import { Err } from '$domain/errors';
-	import { userHasFeature } from '$domain/models/user';
 
 	interface Props {
 		onClose?: () => void;
@@ -20,9 +19,7 @@
 	const { onClose }: Props = $props();
 
 	let multipleUsers = $state(false);
-	let hasSync = $derived(
-		$authState.status === 'signed-in' && userHasFeature($authState.user, 'task-sync')
-	);
+	let hasSync = hasFeature('task-sync');
 
 	let importDialogOpen = $state(false);
 

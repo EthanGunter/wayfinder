@@ -19,20 +19,24 @@
 	} from './types';
 	import RangeEditor from './RangeEditor.svelte';
 	import SettingRow from './SettingRow.svelte';
-	import { authState } from '$lib/API/Auth';
-	import { userHasFeature, type UserFeature } from '$domain/models/user';
+	import { type UserFeature } from '$domain/models/user';
+	import { hasFeature } from '$lib/API/Auth';
 
 	// track expanded state per item
 	// TODO convert to single item
 	let expanded: Record<string, boolean> = $state({});
 
-	// Section-level gating via optional $userFeature on the section object
-	const userHasAccess = (section: SettingsTab | SettingsSection): boolean => {
-		const feature = section.$userFeature as UserFeature | undefined;
-		if (!feature) return true; // no gate
-		if ($authState.status !== 'signed-in') return false;
-
-		return userHasFeature($authState.user, feature);
+	// Standard pattern: create reactive feature stores for gating
+	const hasDev = hasFeature('dev');
+	const hasSync = hasFeature('task-sync');
+	
+	// Helper to check feature access - must access stores directly with $ for reactivity
+	const checkFeature = (feature: UserFeature | undefined): boolean => {
+		if (!feature) return true;
+		// Access stores directly by name for Svelte reactivity
+		if (feature === 'dev') return $hasDev;
+		if (feature === 'task-sync') return $hasSync;
+		return false;
 	};
 
 	const tabs: {
@@ -45,8 +49,8 @@
 		Object.entries(settings)
 			// Disable unauthorized tabs
 			.filter(([label, tab]) => {
-				console.log('tab', label, tab);
-				return !label.startsWith('$') && userHasAccess(tab);
+				if (label.startsWith('$')) return false;
+				return checkFeature(tab.$userFeature as UserFeature | undefined);
 			})
 			// Parse sections
 			.map(([_, tab]) => ({
@@ -54,8 +58,8 @@
 				sectionData: Object.entries(tab)
 					// Disable unauthorized sections
 					.filter(([label, data]) => {
-						console.log('section', label, data);
-						return !label.startsWith('$') && userHasAccess(data as SettingsSection);
+						if (label.startsWith('$')) return false;
+						return checkFeature((data as SettingsSection).$userFeature as UserFeature | undefined);
 					})
 					// Parse individual settings
 					.map(([label, sec]) => ({

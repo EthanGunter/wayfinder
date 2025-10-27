@@ -58,22 +58,16 @@ const bootstrap = async () => {
 		}
 
 	const userId = session.data.user.id;
-	console.log('[ConvexAuthProvider] TODO:debug - Bootstrap for userId:', userId); // TODO:debug EG
 	// Ensure Convex client has the latest auth token
 	sharedConvexClient.setAuth(async () => {
 		try {
 			const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, {
 				credentials: "include",
 			});
-			if (!resp.ok) {
-				console.log('[ConvexAuthProvider] TODO:debug - Token fetch failed:', resp.status); // TODO:debug EG
-				return null;
-			}
+			if (!resp.ok) return null;
 			const { token } = await resp.json();
-			console.log('[ConvexAuthProvider] TODO:debug - Token fetched, first 20 chars:', token?.substring(0, 20)); // TODO:debug EG
 			return token ?? null;
 		} catch (e) {
-			console.log('[ConvexAuthProvider] TODO:debug - Token fetch error:', e); // TODO:debug EG
 			return null;
 		}
 	});
@@ -125,7 +119,7 @@ const bootstrap = async () => {
 								sessionStatus: 'revoked',
 							} as SessionUser;
 						}
-					} catch {
+					} catch (e) {
 						sessionUser = {
 							...(normalized as any),
 							sessionStatus: 'revoked',
@@ -232,20 +226,15 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				const res = await authClient.signIn.social({ provider: 'github' });
 				if (res.error) throw res.error;
 			} else if (creds.type === 'email_password') {
-				console.log('[ConvexAuthProvider] TODO:debug - Email login starting for:', creds.email); // TODO:debug EG
 				const res = await authClient.signIn.email({
 					email: creds.email,
 					password: creds.password,
 				});
-				if (res.error) {
-					console.log('[ConvexAuthProvider] TODO:debug - Email login error:', res.error); // TODO:debug EG
-					throw res.error;
-				}
-				console.log('[ConvexAuthProvider] TODO:debug - Email login success, calling bootstrap'); // TODO:debug EG
+				if (res.error) throw res.error;
 				bootstrap();
 			}
 		} catch (e: any) {
-			Err.UNHANDLED('[ConvexAuthProvider] TODO:debug - signIn threw error:', e);
+			Err.UNHANDLED('[ConvexAuthProvider] signIn error:', e);
 		}
 		return ok();
 	},

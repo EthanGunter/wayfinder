@@ -7,7 +7,7 @@
 	import Icon from '@iconify/svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
-	import { dev } from '$lib/user-settings';
+	import { devEnabled } from '$lib/user-settings';
 
 	const {
 		task = $bindable(),
@@ -132,7 +132,7 @@
 			{title}
 		</span>
 	{/if}
-	{#if $dev}
+	{#if $devEnabled}
 		<span>DEV: {task.id}</span>
 	{/if}
 	<Button class="rounded-none bg-gray-800" onclick={() => (showContextMenu = true)}>

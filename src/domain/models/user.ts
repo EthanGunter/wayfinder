@@ -1,5 +1,7 @@
 import { Err, type ArgumentError, type InvalidStateError, type NotFoundError, type NotImplementedError } from "$domain/errors";
 import type { Result } from "$domain/result";
+import { authState } from "$lib/API/Auth";
+import { derived, get } from "svelte/store";
 // import type { AppSettings } from "$lib/user-settings/schema";
 
 
@@ -33,14 +35,6 @@ export type SessionUser = User &
 	} | {
 		sessionStatus: 'revoked'
 	})
-
-// Utility functions for User objects
-/**
- * Check if the user has a specific feature
- */
-export function userHasFeature(user: User, feature: UserFeature): boolean {
-	return user.features.includes(feature);
-}
 
 /**
  * Check if the user is anonymous (has a special anonymous ID)

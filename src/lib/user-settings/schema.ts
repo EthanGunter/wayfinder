@@ -8,6 +8,8 @@ import {
 	type SettingsTree,
 } from './types';
 import { dev as devEnv } from '$app/environment';
+import { hasFeature } from '$lib/API/Auth';
+import { derived } from 'svelte/store';
 
 export const settings = {
 	dev: {
@@ -32,6 +34,7 @@ export const settings = {
 } satisfies SettingsTree;
 
 export type AppSettings = typeof settings;
-export let dev = settings.dev.core.enabled;
+
+export const devEnabled = derived([hasFeature('dev'), settings.dev.core.enabled], ([a, b]) => a && b);
 
 assignPaths(settings);
