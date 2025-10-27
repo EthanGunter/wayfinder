@@ -3,21 +3,7 @@ import { err, ok } from "$domain/result";
 import { TaskStatus, type CreateTaskParams, type ITasks, type ITasksLocal, type PopulatedTaskDTO, type Task, type TaskDelta, type UpdateTaskParams } from "$domain/models/task";
 import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
-import { ConvexClient } from "convex/browser";
-import { PUBLIC_AUTH_URL, PUBLIC_CONVEX_URL } from "$env/static/public";
-
-// Convex client with BetterAuth-backed token
-const client = new ConvexClient(PUBLIC_CONVEX_URL);
-client.setAuth(async () => {
-	try {
-		const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, { credentials: "include" });
-		if (!resp.ok) return null;
-		const { token } = await resp.json();
-		return token ?? null;
-	} catch {
-		return null;
-	}
-});
+import { sharedConvexClient as client } from "$lib/API/ConvexClient";
 
 /* type TaskRow = Doc<"tasks">;
 type TaskId = Id<"tasks">;
@@ -26,6 +12,7 @@ function toTaskIds(ids: string[]): TaskId[] { return ids.map(toTaskId); }
  */
 export const api: ITasks = {
 	createTask: async ({ createDetail }) => {
+		console.log('[ConvexTaskProvider] TODO:debug - Using shared client?', client === client); // TODO:debug EG - sanity check
 		console.log('createTask', convexifyTaskDetails(createDetail));
 
 		const res = await client.mutation(convexApi.tasks.createTask, { createDetail: convexifyTaskDetails(createDetail) });
@@ -197,22 +184,9 @@ export const localApi: ITasksLocal = {
 			return deltas;
 		};
 
-		let unsubscribe: (() => void) | null = null;
+	let unsubscribe: (() => void) | null = null;
 
-		// Create a dedicated Convex client instance with auth for live updates
-		const client = new ConvexClient(PUBLIC_CONVEX_URL);
-		client.setAuth(async () => {
-			try {
-				const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, { credentials: "include" });
-				if (!resp.ok) return null;
-				const { token } = await resp.json();
-				return token ?? null;
-			} catch {
-				return null;
-			}
-		});
-
-		const startUserSubscription = () => {
+	const startUserSubscription = () => {
 			unsubscribe = client.onUpdate(
 				convexApi.tasks.getAllUserTasks,
 				{ userId: isUserSubscription(params) ? params.userId : "" },

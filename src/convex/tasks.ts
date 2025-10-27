@@ -30,7 +30,11 @@ export const createTask = mutation({
 		console.log('createTask', createDetail);
 
 		const identity = await ctx.auth.getUserIdentity();
+		console.log('[Convex Backend] TODO:debug - identity:', identity); // TODO:debug EG
+		console.log('[Convex Backend] TODO:debug - identity.subject:', identity?.subject, 'vs createDetail.userAuthId:', createDetail.userAuthId); // TODO:debug EG
 		if (!identity || identity.subject !== createDetail.userAuthId) {
+			console.log(`${identity}, ${identity?.subject}, ${createDetail.userAuthId}`);
+
 			return { ok: false as const, error: serializeError(new NotAuthorizedError("Invalid user context", createDetail.userAuthId)) };
 		}
 
@@ -61,7 +65,7 @@ export const createTask = mutation({
 				newTask
 			});
 			const updateParams = relationshipChangesToUpdateParams(relationshipChanges);
-			
+
 			for (const update of updateParams) {
 				const relatedTaskId = update.id as Id<"tasks">;
 				const result = await applyTaskUpdate(ctx, { id: relatedTaskId, relations: update.relations });
@@ -124,7 +128,7 @@ export const createTasks = mutation({
 		);
 		const updateParams = relationshipChangesToUpdateParams(relationshipUpdates);
 		const affectedTasks = [...insertedTasks];
-		
+
 		for (const update of updateParams) {
 			const relatedTaskId = update.id as Id<"tasks">;
 			const result = await applyTaskUpdate(ctx, { id: relatedTaskId, relations: update.relations });
@@ -209,7 +213,7 @@ export const updateTask = mutation({
 			newTask: convertToTaskBase(newTask)
 		});
 		const updateParams = relationshipChangesToUpdateParams(relationshipChanges);
-		
+
 		for (const relUpdate of updateParams) {
 			const relatedTaskId = relUpdate.id as Id<"tasks">;
 			await applyTaskUpdate(ctx, { id: relatedTaskId, relations: relUpdate.relations });
@@ -264,7 +268,7 @@ export const updateTasks = mutation({
 			}))
 		);
 		const updateParams = relationshipChangesToUpdateParams(allRelationshipChanges);
-		
+
 		// Apply relationship updates
 		for (const relUpdate of updateParams) {
 			const relatedTaskId = relUpdate.id as Id<"tasks">;

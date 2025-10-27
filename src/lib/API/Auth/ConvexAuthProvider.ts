@@ -20,22 +20,21 @@ import {
 import { err, ok, type Result } from "$domain/result";
 
 import { api } from "$convex/_generated/api";
-import { ConvexClient } from "convex/browser";
-import { PUBLIC_AUTH_URL, PUBLIC_CONVEX_URL } from "$env/static/public";
+import { PUBLIC_AUTH_URL } from "$env/static/public";
 import { createAuthClient } from 'better-auth/svelte';
-import { convexClient } from "@convex-dev/better-auth/client/plugins";
+import { convexClient as convexPlugin } from "@convex-dev/better-auth/client/plugins";
 import { multiSessionClient } from "better-auth/client/plugins";
 import { page } from "$app/state";
 import { cachedUsers } from ".";
+import { sharedConvexClient } from "../ConvexClient";
 
 const authClient = createAuthClient({
-	plugins: [convexClient(), multiSessionClient()],
+	plugins: [convexPlugin(), multiSessionClient()],
 });
 
 // Internal auth state - managed by BetterAuth session
 const authState = writable<AuthState>({ status: "loading" });
 let unsubUser: (() => void) | null = null;
-let client = new ConvexClient(PUBLIC_CONVEX_URL);
 let subscribedUserId: string | null = null;
 
 const resolveSignedOut = () => {
@@ -44,7 +43,7 @@ const resolveSignedOut = () => {
 		unsubUser = null;
 	}
 	// Clear Convex auth - provide fetcher that returns null token
-	client.setAuth(async () => null);
+	sharedConvexClient.setAuth(async () => null);
 	authState.set({ status: "signed-out" });
 };
 
@@ -58,33 +57,39 @@ const bootstrap = async () => {
 			return;
 		}
 
-		const userId = session.data.user.id;
-		// Ensure Convex client has the latest auth token
-		client.setAuth(async () => {
-			try {
-				const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, {
-					credentials: "include",
-				});
-				if (!resp.ok) return null;
-				const { token } = await resp.json();
-				return token ?? null;
-			} catch {
+	const userId = session.data.user.id;
+	console.log('[ConvexAuthProvider] TODO:debug - Bootstrap for userId:', userId); // TODO:debug EG
+	// Ensure Convex client has the latest auth token
+	sharedConvexClient.setAuth(async () => {
+		try {
+			const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, {
+				credentials: "include",
+			});
+			if (!resp.ok) {
+				console.log('[ConvexAuthProvider] TODO:debug - Token fetch failed:', resp.status); // TODO:debug EG
 				return null;
 			}
-		});
-		// Ensure user record exists in our app DB (creates if first-time login)
-		// This mutation validates auth internally via ctx.auth.getUserIdentity()
-		await client.mutation(api.users.ensureCurrentUser, {});
+			const { token } = await resp.json();
+			console.log('[ConvexAuthProvider] TODO:debug - Token fetched, first 20 chars:', token?.substring(0, 20)); // TODO:debug EG
+			return token ?? null;
+		} catch (e) {
+			console.log('[ConvexAuthProvider] TODO:debug - Token fetch error:', e); // TODO:debug EG
+			return null;
+		}
+	});
+	// Ensure user record exists in our app DB (creates if first-time login)
+	// This mutation validates auth internally via ctx.auth.getUserIdentity()
+	await sharedConvexClient.mutation(api.users.ensureCurrentUser, {});
 
 		// Subscribe to user from Convex
 		if (unsubUser) {
 			unsubUser();
 			unsubUser = null;
 		}
-		subscribedUserId = userId;
-		unsubUser = client.onUpdate(
-			api.users.watchUser,
-			{ id: userId },
+	subscribedUserId = userId;
+	unsubUser = sharedConvexClient.onUpdate(
+		api.users.watchUser,
+		{ id: userId },
 			(user) => {
 				if (!user) {
 					authState.set({ status: "loading" });
@@ -158,7 +163,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 
 	watchUsers: ({ ids }: { ids: string[]; }): LiveStore<Fetchable<User[]>> => {
 		return readable<Fetchable<User[]>>({ status: "loading" }, (set) => {
-			const unsubscribe = client.onUpdate(
+			const unsubscribe = sharedConvexClient.onUpdate(
 				api.users.watchUsers,
 				{ ids },
 				(users) => {
@@ -209,13 +214,13 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 	},
 
 	updateUser: async ({ update }) => {
-		const res = await client.mutation(api.users.updateUser, update);
+		const res = await sharedConvexClient.mutation(api.users.updateUser, update);
 		if (res.ok) return ok(res.value);
 		return err(res.error);
 	},
 
 	deleteUser: async ({ userId }) => {
-		const res = await client.mutation(api.users.deleteUser, { userId });
+		const res = await sharedConvexClient.mutation(api.users.deleteUser, { userId });
 		if (res.ok) return ok();
 		return err(res.error);
 	},
@@ -227,12 +232,16 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				const res = await authClient.signIn.social({ provider: 'github' });
 				if (res.error) throw res.error;
 			} else if (creds.type === 'email_password') {
+				console.log('[ConvexAuthProvider] TODO:debug - Email login starting for:', creds.email); // TODO:debug EG
 				const res = await authClient.signIn.email({
 					email: creds.email,
 					password: creds.password,
 				});
-				if (res.error) throw res.error;
-
+				if (res.error) {
+					console.log('[ConvexAuthProvider] TODO:debug - Email login error:', res.error); // TODO:debug EG
+					throw res.error;
+				}
+				console.log('[ConvexAuthProvider] TODO:debug - Email login success, calling bootstrap'); // TODO:debug EG
 				bootstrap();
 			}
 		} catch (e: any) {
@@ -273,7 +282,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		try {
 			await authClient.multiSession.setActive({ sessionToken: material });
 			// Ensure Convex receives a fresh JWT tied to the active BetterAuth session
-			await client.mutation(api.users.ensureCurrentUser, {});
+			await sharedConvexClient.mutation(api.users.ensureCurrentUser, {});
 			// Re-subscribe to the now-active user's data
 			const session = await authClient.getSession();
 			const newUserId = session?.data?.user?.id;
@@ -282,11 +291,11 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 					unsubUser();
 					unsubUser = null;
 				}
-				authState.set({ status: 'loading' });
-				subscribedUserId = newUserId;
-				unsubUser = client.onUpdate(
-					api.users.watchUser,
-					{ id: newUserId },
+			authState.set({ status: 'loading' });
+			subscribedUserId = newUserId;
+			unsubUser = sharedConvexClient.onUpdate(
+				api.users.watchUser,
+				{ id: newUserId },
 					(user) => {
 						if (!user) {
 							authState.set({ status: 'loading' });
