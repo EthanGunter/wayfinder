@@ -192,7 +192,6 @@
 					</Button>
 				</div>
 				{/if} -->
-			{JSON.stringify($authState.user.features)}
 			<div class="m-2 w-full border-t border-gray-300 p-2">
 				<UserSettings />
 			</div>

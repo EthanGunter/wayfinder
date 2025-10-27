@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { Handle, Position } from '@xyflow/svelte';
-	import * as Dialog from '$lib/compodevEnabledts/ui/dialog';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
-	import { dev } from '$lib/user-settings';
-devEnabled
+	import { devEnabled } from '$lib/user-settings';
+
 	let { data }: { data: Task } = $props();
 
 	let editorOpen = $state(false);
@@ -77,7 +77,7 @@ devEnabled
 						{data?.content}
 					</div>
 				{/if}
-				{#if $dev}
+				{#if $devEnabled}
 					<div class="text-[7px]">
 						<span>id: {data.id.substring(0, 4)}</span>
 						{#if data.parents.length > 0}

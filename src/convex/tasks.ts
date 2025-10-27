@@ -30,8 +30,6 @@ export const createTask = mutation({
 		console.log('createTask', createDetail);
 
 		const identity = await ctx.auth.getUserIdentity();
-		console.log('[Convex Backend] TODO:debug - identity:', identity); // TODO:debug EG
-		console.log('[Convex Backend] TODO:debug - identity.subject:', identity?.subject, 'vs createDetail.userAuthId:', createDetail.userAuthId); // TODO:debug EG
 		if (!identity || identity.subject !== createDetail.userAuthId) {
 			console.log(`${identity}, ${identity?.subject}, ${createDetail.userAuthId}`);
 

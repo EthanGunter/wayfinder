@@ -12,7 +12,6 @@ function toTaskIds(ids: string[]): TaskId[] { return ids.map(toTaskId); }
  */
 export const api: ITasks = {
 	createTask: async ({ createDetail }) => {
-		console.log('[ConvexTaskProvider] TODO:debug - Using shared client?', client === client); // TODO:debug EG - sanity check
 		console.log('createTask', convexifyTaskDetails(createDetail));
 
 		const res = await client.mutation(convexApi.tasks.createTask, { createDetail: convexifyTaskDetails(createDetail) });

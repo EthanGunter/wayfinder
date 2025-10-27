@@ -29,7 +29,7 @@
 	// Standard pattern: create reactive feature stores for gating
 	const hasDev = hasFeature('dev');
 	const hasSync = hasFeature('task-sync');
-	
+
 	// Helper to check feature access - must access stores directly with $ for reactivity
 	const checkFeature = (feature: UserFeature | undefined): boolean => {
 		if (!feature) return true;

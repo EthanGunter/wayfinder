@@ -4,6 +4,10 @@ export { assignPaths, DictSetting, BoolSetting, StringSetting, NumberSetting, En
 import { settings } from './schema';
 import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import { Err } from '$domain/errors';
+import { derived } from 'svelte/store';
+import { hasFeature } from '$lib/API/Auth';
+
+export const devEnabled = derived([hasFeature('dev'), settings.dev.core.enabled], ([a, b]) => a && b);
 
 // Flatten nested object to path->value pairs (e.g., { dev: { $enabled: true } } -> { "dev/$enabled": true })
 function flattenSettings(obj: Record<string, any>, prefix: string = ''): Record<string, any> {
@@ -25,10 +29,10 @@ function flattenSettings(obj: Record<string, any>, prefix: string = ''): Record<
 function applySettings(tree: Record<string, any>, overrides: Record<string, any>): void {
     // Flatten in case we receive nested structure from server
     const flatOverrides = flattenSettings(overrides);
-    
+
     for (const [path, value] of Object.entries(flatOverrides)) {
         const parts = path.split('/');
-        
+
         // Handle tab-level settings (e.g., "dev/$enabled")
         if (parts.length === 2) {
             const [tabId, itemId] = parts;
@@ -40,7 +44,7 @@ function applySettings(tree: Record<string, any>, overrides: Record<string, any>
             }
             continue;
         }
-        
+
         // Handle section-level settings (e.g., "dev/overrides/supabaseTaskUrl")
         if (parts.length === 3) {
             const [tabId, sectionId, itemId] = parts;
