@@ -1,8 +1,4 @@
-import { Err, type ArgumentError, type InvalidStateError, type NotFoundError, type NotImplementedError } from "$domain/errors";
-import type { Result } from "$domain/result";
-import { authState } from "$lib/API/Auth";
-import { derived, get } from "svelte/store";
-// import type { AppSettings } from "$lib/user-settings/schema";
+import { Err } from "$domain/errors";
 
 
 //#region User Interface and Utilities

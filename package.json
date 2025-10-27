@@ -4,9 +4,10 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
+		"prebuild": "npx convex deploy",
 		"dev": "vite dev",
 		"host": "vite dev --host",
-		"build:web": "vite build --mode web",
+		"build": "vite build --mode web",
 		"build:mobile": "vite build --mode mobile && npx cap sync",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",

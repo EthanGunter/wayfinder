@@ -19,15 +19,5 @@ export default defineConfig(({ mode }) => {
 				$convex: path.resolve(__dirname, 'src/convex')
 			}
 		},
-		server: {
-			proxy: {
-				'/api': {
-					target: env.CONVEX_SITE_URL,
-					changeOrigin: true,
-					secure: false,
-					rewrite: (path) => path.replace(/^\/api/, '/api')
-				}
-			}
-		}
 	};
 });
