@@ -1,10 +1,10 @@
 import { describe, it, beforeAll, afterAll } from "vitest";
 
 // Contract tests against live Convex dev server.
-// Gated by process.env.CONVEX_URL and process.env.CONVEX_SITE_URL; otherwise skipped.
-(process.env.CONVEX_URL ? describe : describe.skip)("ConvexAuthProvider — live contract", () => {
+// Gated by process.env.PUBLIC_CONVEX_URL and process.env.CONVEX_SITE_URL; otherwise skipped.
+(process.env.PUBLIC_CONVEX_URL ? describe : describe.skip)("ConvexAuthProvider — live contract", () => {
 	beforeAll(() => {
-		// - Provide PUBLIC_AUTH_URL mock for convex token endpoint if needed
+		// - Provide PUBLIC_SITE_URL mock for convex token endpoint if needed
 		// - Do NOT mock ConvexClient; let it use PUBLIC_CONVEX_URL (mapped from env)
 		// - TODO: import row->user conversion functions and assert mapping matches source of truth
 	});

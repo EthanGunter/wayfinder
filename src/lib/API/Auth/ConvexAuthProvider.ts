@@ -20,13 +20,13 @@ import {
 import { err, ok, type Result } from "$domain/result";
 
 import { api } from "$convex/_generated/api";
-import { PUBLIC_AUTH_URL } from "$env/static/public";
 import { createAuthClient } from 'better-auth/svelte';
 import { convexClient as convexPlugin } from "@convex-dev/better-auth/client/plugins";
 import { multiSessionClient } from "better-auth/client/plugins";
 import { page } from "$app/state";
 import { cachedUsers } from ".";
 import { sharedConvexClient } from "../ConvexClient";
+import { PUBLIC_SITE_URL } from "$env/static/public";
 
 const authClient = createAuthClient({
 	plugins: [convexPlugin(), multiSessionClient()],
@@ -61,7 +61,7 @@ const bootstrap = async () => {
 		// Ensure Convex client has the latest auth token
 		sharedConvexClient.setAuth(async () => {
 			try {
-				const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, {
+				const resp = await fetch(`${PUBLIC_SITE_URL}/api/auth/convex/token`, {
 					credentials: "include",
 				});
 				if (!resp.ok) return null;
