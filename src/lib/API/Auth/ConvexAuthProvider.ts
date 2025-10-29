@@ -57,33 +57,33 @@ const bootstrap = async () => {
 			return;
 		}
 
-	const userId = session.data.user.id;
-	// Ensure Convex client has the latest auth token
-	sharedConvexClient.setAuth(async () => {
-		try {
-			const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, {
-				credentials: "include",
-			});
-			if (!resp.ok) return null;
-			const { token } = await resp.json();
-			return token ?? null;
-		} catch (e) {
-			return null;
-		}
-	});
-	// Ensure user record exists in our app DB (creates if first-time login)
-	// This mutation validates auth internally via ctx.auth.getUserIdentity()
-	await sharedConvexClient.mutation(api.users.ensureCurrentUser, {});
+		const userId = session.data.user.id;
+		// Ensure Convex client has the latest auth token
+		sharedConvexClient.setAuth(async () => {
+			try {
+				const resp = await fetch(`${PUBLIC_AUTH_URL}/convex/token`, {
+					credentials: "include",
+				});
+				if (!resp.ok) return null;
+				const { token } = await resp.json();
+				return token ?? null;
+			} catch (e) {
+				return null;
+			}
+		});
+		// Ensure user record exists in our app DB (creates if first-time login)
+		// This mutation validates auth internally via ctx.auth.getUserIdentity()
+		await sharedConvexClient.mutation(api.users.ensureCurrentUser, {});
 
 		// Subscribe to user from Convex
 		if (unsubUser) {
 			unsubUser();
 			unsubUser = null;
 		}
-	subscribedUserId = userId;
-	unsubUser = sharedConvexClient.onUpdate(
-		api.users.watchUser,
-		{ id: userId },
+		subscribedUserId = userId;
+		unsubUser = sharedConvexClient.onUpdate(
+			api.users.watchUser,
+			{ id: userId },
 			(user) => {
 				if (!user) {
 					authState.set({ status: "loading" });
@@ -194,12 +194,20 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 			await authClient.signIn.social({ provider: 'github', callbackURL: page.url.pathname });
 		} else if (creds.type === 'email_password') {
 			// Email/password registration — BetterAuth requires name in some configs; keep to sign-in only for now
-			await authClient.signUp.email({
+			const res = await authClient.signUp.email({
 				name: userData.displayName,
 				email: creds.email,
 				password: creds.password,
 				image: userData.avatarUrl,
 			});
+			if (res.error && res.error.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
+				// TODO attempt to login with the email and password
+				const loginRes = await authClient.signIn.email({
+					email: creds.email,
+					password: creds.password,
+				});
+				if (loginRes.error) throw loginRes.error;
+			}
 			bootstrap();
 		}
 		// After OAuth completes and redirects back, the session will be active
@@ -280,11 +288,11 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 					unsubUser();
 					unsubUser = null;
 				}
-			authState.set({ status: 'loading' });
-			subscribedUserId = newUserId;
-			unsubUser = sharedConvexClient.onUpdate(
-				api.users.watchUser,
-				{ id: newUserId },
+				authState.set({ status: 'loading' });
+				subscribedUserId = newUserId;
+				unsubUser = sharedConvexClient.onUpdate(
+					api.users.watchUser,
+					{ id: newUserId },
 					(user) => {
 						if (!user) {
 							authState.set({ status: 'loading' });

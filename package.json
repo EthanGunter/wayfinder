@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"prebuild": "npx convex deploy",
-		"dev": "vite dev",
+		"dev": "concurrently \"pnpx convex dev --local\" \"vite dev\"",
 		"host": "vite dev --host",
 		"build": "vite build --mode web",
 		"build:mobile": "vite build --mode mobile && npx cap sync",
@@ -41,6 +41,7 @@
 		"@typescript-eslint/parser": "^8.34.1",
 		"@xyflow/svelte": "^1.2.4",
 		"bits-ui": "^2.11.4",
+		"concurrently": "^9.2.1",
 		"elkjs": "^0.10.0",
 		"eslint": "^9.29.0",
 		"eslint-config-prettier": "^10.0.1",
