@@ -12,12 +12,19 @@
 
 	interface Props {
 		onError?: (message: string, error?: Err) => void;
+		onBack?: () => void;
 		initialDisplayName?: string;
 		initialEmail?: string;
 		initialPassword?: string;
 	}
 
-	const { onError, initialEmail = '', initialPassword = '', initialDisplayName = '' }: Props = $props();
+	const {
+		onError,
+		onBack,
+		initialEmail = '',
+		initialPassword = '',
+		initialDisplayName = ''
+	}: Props = $props();
 
 	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/planner';
@@ -101,23 +108,30 @@
 </script>
 
 <div class="w-full max-w-md p-4 sm:p-6">
-    <div class="mb-4 text-center">
-        <h2 class="mb-1 text-2xl font-semibold sm:text-3xl text-zinc-900 dark:text-zinc-100">Create account</h2>
-        <p class="text-sm text-zinc-500 dark:text-zinc-400">Get started with Wayfinder</p>
+	<div class="mb-4 text-center">
+		<h2 class="mb-1 text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-100">
+			Create account
+		</h2>
+		<p class="text-sm text-zinc-500 dark:text-zinc-400">Get started with Wayfinder</p>
 	</div>
 
-    {#if errorMessage}
-    <div class="mb-4 flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+	{#if errorMessage}
+		<div
+			class="mb-4 flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+		>
 			<span class="shrink-0">⚠</span>
 			<span>{errorMessage}</span>
 		</div>
 	{/if}
 
-	<form class="flex flex-col gap-2" onsubmit={(e) => {
-		e.preventDefault();
-		handleRegister();
-	}}>
-        <div class="mb-1 flex justify-center py-2">
+	<form
+		class="flex flex-col gap-2"
+		onsubmit={(e) => {
+			e.preventDefault();
+			handleRegister();
+		}}
+	>
+		<div class="mb-1 flex justify-center py-2">
 			<AvatarEditor
 				class="h-24 w-24 sm:h-28 sm:w-28"
 				user={tempUser}
@@ -126,7 +140,9 @@
 		</div>
 
 		<div class="flex flex-col gap-1.5">
-            <label for="displayName" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Display Name</label>
+			<label for="displayName" class="text-sm font-medium text-zinc-700 dark:text-zinc-200"
+				>Display Name</label
+			>
 			<input
 				id="displayName"
 				type="text"
@@ -138,7 +154,7 @@
 		</div>
 
 		<div class="flex flex-col gap-1.5">
-            <label for="email" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Email</label>
+			<label for="email" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Email</label>
 			<input
 				id="email"
 				type="email"
@@ -150,7 +166,9 @@
 		</div>
 
 		<div class="flex flex-col gap-1.5">
-            <label for="password" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Password</label>
+			<label for="password" class="text-sm font-medium text-zinc-700 dark:text-zinc-200"
+				>Password</label
+			>
 			<input
 				id="password"
 				type="password"
@@ -162,7 +180,9 @@
 		</div>
 
 		<div class="flex flex-col gap-1.5">
-            <label for="confirmPassword" class="text-sm font-medium text-zinc-700 dark:text-zinc-200">Confirm Password</label>
+			<label for="confirmPassword" class="text-sm font-medium text-zinc-700 dark:text-zinc-200"
+				>Confirm Password</label
+			>
 			<input
 				id="confirmPassword"
 				type="password"
@@ -174,12 +194,11 @@
 		</div>
 
 		<div class="flex items-center justify-center gap-2 text-sm">
-			<Button variant="link" onclick={() => goto(`/login?redirect=${redir}`)}>Login</Button>
+			<Button variant="link" onclick={onBack}>Login</Button>
 			/
 			<Button type="submit" variant="link" disabled={isLoading}>
 				{isLoading ? 'Creating account...' : 'Create Account'}
 			</Button>
 		</div>
 	</form>
-
 </div>

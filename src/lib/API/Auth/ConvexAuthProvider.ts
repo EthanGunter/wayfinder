@@ -61,6 +61,7 @@ const bootstrap = async () => {
 		// Ensure Convex client has the latest auth token
 		sharedConvexClient.setAuth(async () => {
 			try {
+				// TODO will this result in a double slash and fail to fetch?
 				const resp = await fetch(`${PUBLIC_SITE_URL}/api/auth/convex/token`, {
 					credentials: "include",
 				});

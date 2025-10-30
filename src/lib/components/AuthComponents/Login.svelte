@@ -75,7 +75,7 @@
 		showRegister = true;
 	}
 
-	function goBack() {
+	function closeRegister() {
 		showRegister = false;
 	}
 </script>
@@ -84,13 +84,13 @@
 	{#if showRegister}
 		<div class="w-full max-w-md">
 			<button
-				onclick={goBack}
+				onclick={closeRegister}
 				class="group mb-3 inline-flex items-center gap-2 rounded px-3 py-2 text-sm text-zinc-600 transition-all duration-200 hover:-translate-x-0.5 hover:text-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100"
 			>
 				<span class="text-xl transition-transform duration-200 group-hover:-translate-x-1">←</span>
 				<span>Back to login</span>
 			</button>
-			<Register {onError} initialDisplayName={email.split('@')[0]} initialEmail={email} initialPassword={password} />
+			<Register {onError} onBack={closeRegister} initialDisplayName={email.split('@')[0]} initialEmail={email} initialPassword={password} />
 		</div>
 	{:else}
 		<div class="w-full max-w-md p-4 sm:p-6">
@@ -110,7 +110,7 @@
 				</div>
 			{/if}
 
-			<div class="mb-4">
+			<!-- <div class="mb-4">
 				<Button
 					class="w-full gap-2 px-3 py-3 font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
 					variant="secondary"
@@ -129,7 +129,7 @@
 					>or</span
 				>
 				<span class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700"></span>
-			</div>
+			</div> -->
 
 			<form
 				class="flex flex-col gap-2"

@@ -13,15 +13,20 @@ export const fallback: RequestHandler = async ({ request, params }) => {
 		body: request.method !== 'GET' && request.method !== 'HEAD'
 			? await request.text()
 			: undefined,
+		cache: 'no-store',
 	});
 
 	// Create new headers, stripping problematic ones
 	const headers = new Headers(response.headers);
 	headers.delete('content-encoding');
 	headers.delete('content-length');
+	
+	// Ensure responses aren't cached by the browser or CDN
+	headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+	headers.set('Pragma', 'no-cache');
 
 	return new Response(response.body, {
 		status: response.status,
-		headers: headers, // Use the modified headers
+		headers: headers,
 	});
 };

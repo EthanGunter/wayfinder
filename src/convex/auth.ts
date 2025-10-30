@@ -6,7 +6,6 @@ import { type DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { betterAuth } from "better-auth";
 
-const siteUrl = process.env.PUBLIC_SITE_URL!;
 
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
@@ -20,9 +19,10 @@ export const createAuth = (
     // disable logging when createAuth is called just to generate options.
     // this is not required, but there's a lot of noise in logs without it.
     logger: {
-      disabled: optionsOnly,
+      disabled: false,
     },
-    baseURL: siteUrl,
+    baseURL: process.env.PUBLIC_SITE_URL,
+    trustedOrigins: [process.env.PUBLIC_SITE_URL!],
     database: authComponent.adapter(ctx),
     // Configure simple, non-verified email/password to get started
     emailAndPassword: {
@@ -41,7 +41,6 @@ export const createAuth = (
       convex(),
       multiSession(),
     ],
-    trustedOrigins: []
   });
 };
 
