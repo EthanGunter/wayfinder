@@ -13,12 +13,10 @@
 		type Connection
 	} from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import { type Task } from '$lib/API/Tasks/Task';
-	import { authState } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
-	import type { TaskDelta } from '$lib/API/Tasks/types';
-	import AppHeader from '@/components/AppHeader.svelte';
-	import AppFooter from '@/components/AppFooter.svelte';
+	import { authState } from '$lib/API/Auth';
+	import tasksAPI from '$lib/API/Tasks';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppFooter from '$lib/components/AppFooter.svelte';
 	import TaskCreationDrawer from '../tasks/TaskCreationDrawer.svelte';
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
@@ -33,9 +31,11 @@
 		getFlowPointFromEvent
 	} from './graphNodeHandlers';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { tutorials } from '@/tutorials/store';
+	import { tutorials } from '$lib/tutorials/store';
 	import { goto } from '$app/navigation';
-	import Button from '@/components/ui/button/button.svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
+	import type { Task, TaskDelta } from '$domain/models/task';
+	import { Err } from '$domain/errors';
 
 	let taskById = new SvelteMap<string, Task>();
 	let unsubscribeTasks: (() => void) | null = null;
@@ -69,7 +69,7 @@
 
 	onMount(async () => {
 		if (!tutorials.isDone('home.welcome')) {
-			goto('/home');
+			goto('/planner');
 			return;
 		}
 
@@ -146,10 +146,8 @@
 		params: { nodeId: string | null; handleId: string | null; handleType: any }
 	) {
 		if (reconnectionState.inProgress) {
-			console.log('handleConnectStart (suppressed)');
 			return;
 		}
-		console.log('handleConnectStart');
 		connectionState.sourceNodeId = params?.nodeId ?? null;
 		connectionState.handleType = params?.handleType ?? null;
 		connectionState.successful = false;
@@ -159,7 +157,6 @@
 		edge: Edge,
 		handleType: 'source' | 'target'
 	) {
-		console.log('handleReconnectStart');
 		reconnectionState.successful = false;
 		reconnectionState.detachEnd = handleType;
 		reconnectionState.oldEdge = edge;
@@ -167,7 +164,6 @@
 	}
 
 	async function handleConnect(connection: Connection) {
-		console.log('handleConnect');
 		connectionState.successful = true;
 		try {
 			const parentId: string | undefined = connection?.source;
@@ -179,11 +175,10 @@
 			// Refresh affected nodes
 			nodes = refreshSpecificNodes(nodes, taskById, [parentId, childId]);
 		} catch (e) {
-			console.error('Failed to create connection', e);
+			Err.UNHANDLED(e, 'Failed to create connection');
 		}
 	}
 	function handleBeforeReconnect(reconnectedEdge: Edge, oldEdge: Edge): Edge | false {
-		console.log('handleBeforeReconnect');
 		const newSource = String(reconnectedEdge.source ?? oldEdge.source ?? '');
 		const newTarget = String(reconnectedEdge.target ?? oldEdge.target ?? '');
 		if (!newSource || !newTarget) return false;
@@ -196,7 +191,6 @@
 		oldEdge: Edge,
 		newConnection: { source?: string; target?: string }
 	) {
-		console.log('handleReconnect');
 		reconnectionState.successful = true;
 		try {
 			const oldSource = String(oldEdge.source);
@@ -222,13 +216,12 @@
 			// Refresh all node data
 			nodes = refreshNodeData(nodes, taskById);
 		} catch (e) {
-			console.error('Failed to handle reconnect', e);
+			Err.UNHANDLED(e, 'Failed to handle reconnect');
 		}
 	}
 
 	const handleConnectEnd: OnConnectEnd = (event, connectState) => {
 		if (reconnectionState.inProgress) {
-			console.log('handleConnectEnd (suppressed)');
 			connectionState.sourceNodeId = null;
 			connectionState.handleType = null;
 			connectionState.successful = false;
@@ -260,7 +253,6 @@
 		connectionState.successful = false;
 	};
 	const handleReconnectEnd: OnReconnectEnd = async (event, edge, _handleType, connectState) => {
-		console.log('handleReconnectEnd');
 		try {
 			// If not successful, only delete when truly dropped on the pane (no target handle)
 			if (!reconnectionState.successful) {
@@ -280,7 +272,7 @@
 				}
 			}
 		} catch (e) {
-			console.error('Failed to finalize reconnect', e);
+			Err.UNHANDLED(e, 'Failed to finalize reconnect');
 		} finally {
 			// Reset reconnection state
 			reconnectionState.successful = false;
@@ -293,8 +285,6 @@
 	//#endregion
 
 	async function handleDelete(params: { nodes: Node[]; edges: Edge[] }): Promise<void> {
-		console.log('handleDelete');
-
 		if (params.nodes.length > 0) {
 			// Delete tasks from backend
 			// TODO:GraphUX Ask user whether to delete recursivly OR automatically connect children to parent on node deletion

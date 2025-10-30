@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount, type Snippet } from 'svelte';
-	import * as Tooltip from '@/components/ui/tooltip';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { queryOrWait, bringToViewIfNeeded } from '../dom';
 
 	let {

@@ -105,7 +105,7 @@ async function processQueue() {
         tasks = tasksAPI;
     } catch (e) {
 		const wrapped = toErr(e).withTrace();
-		wrapped.logError();
+console.error(		wrapped);
 		return;
 	}
 	const batch = await takeNextBatch(50);
@@ -140,7 +140,7 @@ async function processQueue() {
 			}
 		} catch (e) {
 			const wrapped = toErr(e).withTrace();
-			wrapped.logError();
+console.error(			wrapped);
 			await markFailed(entry.id!, wrapped);
 			// Don't break - continue processing other entries
 			continue;

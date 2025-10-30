@@ -27,3 +27,4 @@ vite.config.ts.timestamp-*
 src/lib/paraglide
 /src/old-react-code
 /Documentation/.obsidian
+/src/convex/_generated

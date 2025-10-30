@@ -1,18 +1,26 @@
 <script lang="ts">
-	import { type User } from '$lib/API/Auth/User';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import * as Dialog from '@/components/ui/dialog';
+	import type { SessionUser } from '$domain/models/user';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';
+	import UserAvatar from './UserAvatar.svelte';
 
 	interface Props {
-		user: User;
-		onAvatarChange?: (avatarUrl: string) => void;
+		user: SessionUser;
+		onAvatarChange: (avatarUrl: string) => void;
 		class?: string;
 	}
-	const { user = $bindable(), onAvatarChange, class: className }: Props = $props();
+	let { user, onAvatarChange, class: className }: Props = $props();
 
 	let isUploading = $state(false);
 	let dragActive = $state(false);
+
+	// Watch for changes and update user - create new object reference to trigger reactivity
+	function handleAvatarUrlChange(newUrl: string) {
+		user = { ...user, avatarUrl: newUrl };
+		if (onAvatarChange) {
+			onAvatarChange(newUrl);
+		}
+	}
 
 	// Handle file selection
 	function handleFileSelect(event: Event) {
@@ -38,12 +46,10 @@
 			// TODO: Replace with actual server URL
 			const serverUrl = `https://your-server.com/avatars/${user.id}/${file.name}`;
 
-			user.avatar_url = serverUrl;
-
-			onAvatarChange?.(serverUrl);
+			handleAvatarUrlChange(serverUrl);
 		} catch (error) {
-			console.error('File upload failed:', error);
 			// TODO: Show error message to user
+			Err.UNHANDLED(error, 'File upload failed:');
 		} finally {
 			isUploading = false;
 		}
@@ -78,7 +84,11 @@
 <Dialog.Root>
 	<Dialog.Trigger type="button">
 		<div class="group relative cursor-pointer {className}">
-			<UserAvatar {user} class="transition-transform sm:group-hover:scale-105" />
+			<UserAvatar
+				avatarUrl={user.avatarUrl}
+				displayName={user.displayName}
+				class="transition-transform sm:group-hover:scale-105"
+			/>
 
 			<!-- Edit Icon - Always visible on mobile, hover-only on larger screens -->
 			<div
@@ -100,16 +110,19 @@
 		<Dialog.Header>
 			<Dialog.Title>Edit Avatar</Dialog.Title>
 			<Dialog.Description>
-				Update your profile picture by entering a URL. <p class="text-xs text-gray-400">
-					File upload coming soon
-				</p>
+				Update your profile picture by entering a URL.
+				<p class="text-xs text-gray-400">File upload coming soon</p>
 			</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-6 py-4">
 			<!-- Current Avatar Preview -->
 			<div class="flex flex-col items-center space-y-4">
-				<UserAvatar {user} class="h-full max-h-[50vh] w-full max-w-[50vw]" />
+				<UserAvatar
+					avatarUrl={user.avatarUrl}
+					displayName={user.displayName}
+					class="h-full max-h-[50vh] w-full max-w-[50vw]"
+				/>
 				{#if isUploading}
 					<div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
 						<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
@@ -127,7 +140,10 @@
 					<input
 						id="avatar-url"
 						type="url"
-						bind:value={user.avatar_url}
+						value={user.avatarUrl ?? ''}
+						oninput={(e) => {
+							handleAvatarUrlChange(e.currentTarget.value);
+						}}
 						placeholder="https://example.com/avatar.jpg"
 						class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
 					/>

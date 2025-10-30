@@ -2,10 +2,11 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import Icon from '@iconify/svelte';
-	import { type Task, TaskStatus } from '$lib/API/Tasks/Task';
-	import { tasksAPI, type CreateTaskParams } from '$lib/API/Tasks';
-	import { authState } from '@/API/Auth';
+	import { authState } from '$lib/API/Auth';
 	import { v4 } from 'uuid';
+	import { Err } from '$domain/errors';
+	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
+	import tasksAPI from '$lib/API/Tasks';
 
 	interface Props {
 		open: boolean;
@@ -38,7 +39,7 @@
 
 		const createDetail: CreateTaskParams = {
 			id: v4(),
-			user_id: $authState.user.id,
+			userAuthId: $authState.user.id,
 			title: formData.title.trim()
 		};
 
@@ -61,16 +62,9 @@
 			}
 		}
 
-		const result = await tasksAPI.createTask({ createDetail });
-
-		result.match(
-			(newTask) => {
-				open = false;
-			},
-			(err) => {
-				err.logError();
-			}
-		);
+		const [task, error] = await tasksAPI.createTask({ createDetail });
+		if (error) Err.UNHANDLED(error);
+		if (task) open = false;
 	}
 
 	const isValid = $derived(formData.title.trim().length > 0);

@@ -1,6 +1,5 @@
+import type { ITasksLocal, Task } from '$domain/models/task';
 import type { Node, Edge } from '@xyflow/svelte';
-import type { Task } from '$lib/API/Tasks/Task';
-import type { ITasksLocal } from '@/API/Tasks';
 
 /**
  * Updates parent/child relationships between tasks

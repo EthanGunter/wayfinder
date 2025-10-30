@@ -34,14 +34,14 @@
 	{:else}
 		<Button
 			id="btn-nav-planner"
-			onclick={() => navTo('/home')}
-			aria-label="Go to home"
-			class="{btnClass} {page.url.pathname.startsWith('/home') ? 'bg-gray-200 text-gray-900' : ''}"
+			onclick={() => navTo('/planner')}
+			aria-label="Go to planner"
+			class="{btnClass} {page.url.pathname.startsWith('/planner') ? 'bg-gray-200 text-gray-900' : ''}"
 		>
 			<span class="flex items-center gap-4">
 				<Icon icon="lucide:list-todo" class="size-5" />
 				<span
-					class="font-extralight {page.url.pathname.startsWith('/home')
+					class="font-extralight {page.url.pathname.startsWith('/planner')
 						? 'text-gray-900'
 						: 'text-gray-600'}">Planner</span
 				>

@@ -8,7 +8,6 @@
 
 	const { store }: Props<any> = $props();
 	const numberBacked = typeof store.options[0].value === 'number';
-	console.log($store);
 
 	const display = $derived(
 		numberBacked

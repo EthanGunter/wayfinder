@@ -1,6 +1,6 @@
 import { Index } from 'flexsearch';
-import type { Task } from './Task';
-import { isTaskCompleted } from './Task';
+import type { Task } from '../../../domain/models/task';
+import { isTaskCompleted } from '../../../domain/models/task';
 
 export interface TaskSearchResult {
 	task: Task;
@@ -142,7 +142,7 @@ export class TaskSearchService {
 			}
 
 			// Boost today's tasks
-			if (result.task.todays_task) {
+			if (result.task.todaysTask) {
 				additionalScore += 3;
 			}
 
@@ -152,7 +152,7 @@ export class TaskSearchService {
 			}
 
 			// Boost recently edited tasks
-			const daysSinceEdit = (Date.now() - new Date(result.task.last_edit).getTime()) / (1000 * 60 * 60 * 24);
+			const daysSinceEdit = (Date.now() - new Date(result.task.lastEdit).getTime()) / (1000 * 60 * 60 * 24);
 			if (daysSinceEdit < 7) {
 				additionalScore += Math.max(0, 2 - daysSinceEdit / 3.5);
 			}

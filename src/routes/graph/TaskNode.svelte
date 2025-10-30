@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Handle, Position } from '@xyflow/svelte';
-	import type { Task } from '$lib/API/Tasks/Task';
-	import { isTaskCompleted } from '$lib/API/Tasks/Task';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TaskNodeEditor from './TaskEditor.svelte';
-	import { tasksAPI } from '@/API/Tasks';
-	import { dev } from '$app/environment';
-	import DialogClose from '@/components/ui/dialog/dialog-close.svelte';
+	import tasksAPI from '$lib/API/Tasks';
+	import { Err } from '$domain/errors';
+	import { isTaskCompleted, type Task } from '$domain/models/task';
+	import { devEnabled } from '$lib/user-settings';
 
 	let { data }: { data: Task } = $props();
 
@@ -48,25 +46,16 @@
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		try {
-			const res = await tasksAPI.updateTask({ id: original.id, data: update });
-			res?.match?.(
-				() => {},
-				(err: any) => err?.logError?.()
-			);
-		} catch (e) {
-			console.error('Failed to update task', e);
-		}
+		const [_, error] = await tasksAPI.updateTask({ id: original.id, data: update });
+		if (error) Err.UNHANDLED(error);
 	}
 
 	async function onDelete(task: Task) {
-		try {
-			await tasksAPI.deleteTask({ id: task.id });
-			// Close editor after deletion
-			editorOpen = false;
-		} catch (e) {
-			console.error('Failed to delete task', e);
-		}
+		const [_, error] = await tasksAPI.deleteTask({ id: task.id });
+		if (error) Err.UNHANDLED(error, 'Failed to delete task');
+
+		// Close editor after deletion
+		editorOpen = false;
 	}
 </script>
 
@@ -88,7 +77,7 @@
 						{data?.content}
 					</div>
 				{/if}
-				{#if dev}
+				{#if $devEnabled}
 					<div class="text-[7px]">
 						<span>id: {data.id.substring(0, 4)}</span>
 						{#if data.parents.length > 0}

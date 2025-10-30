@@ -4,51 +4,32 @@
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 	import { page } from '$app/state';
-	import { Button } from '@/components/ui/button';
-	import { authAPI, authState } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
+	import { Button } from '$lib/components/ui/button';
+	import { authAPI, authState } from '$lib/API/Auth';
+	import tasksAPI from '$lib/API/Tasks';
 	import { onMount } from 'svelte';
-	import AvatarEditor from '@/components/AvatarEditor.svelte';
-	import * as AlertDialog from '@/components/ui/alert-dialog';
-	import { Err } from '@/Errors';
-	import UserSettings from '@/user-settings/UserSettings.svelte';
+	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import { Err } from '$domain/errors';
+	import UserSettings from '$lib/user-settings/UserSettings.svelte';
 
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
-	let draftName = $state<string>('');
+	let draftName = $state<string>(
+		$authState.status === 'signed-in' ? $authState.user.displayName : ''
+	);
 
 	const debouncedUpdateUser = debounce(authAPI.updateUser, 200);
-
-	onMount(() => {
-		// Subscribe to auth state
-		const unsubscribeAuth = authState.subscribe((state) => {
-			if (state.status === 'signed-in' && state.user) {
-				// keep draft in sync with store (but do not write back)
-				if (draftName !== state.user.display_name) draftName = state.user.display_name;
-				loadTaskCount();
-			} else if (state.status === 'signed-out') {
-				goto(`/login?redirect=${page.url.pathname}${page.url.search}`);
-			}
-		});
-
-		return () => {
-			unsubscribeAuth();
-		};
-	});
 
 	async function loadTaskCount() {
 		if ($authState.status !== 'signed-in') return;
 
-		try {
-			const result = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
-			if (result.isOk()) {
-				const { successes, errors } = result.value;
-				errors.forEach((e) => e.logError());
-				taskCount = successes.length;
-			}
-		} catch (error) {
-			console.error('Failed to load task count:', error);
+		const [userTasks, error] = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
+		if (userTasks) {
+			taskCount = userTasks.length;
+		} else {
 			taskCount = 0;
+			Err.UNHANDLED(error, 'Failed to load task count:');
 		}
 	}
 
@@ -57,16 +38,16 @@
 
 		isDeleting = true;
 		try {
-			const rootRes = await tasksAPI.getRootTasks();
-			if (rootRes.isErr()) Err.UNHANDLED(rootRes.error);
+			const [roots, getRootsError] = await tasksAPI.getRootTasks();
+			if (getRootsError) Err.UNHANDLED(getRootsError);
 
 			await tasksAPI.deleteTasks({
-				ids: rootRes.value.map((r) => r.id)
+				ids: roots.map((r) => r.id)
 			});
 
 			// Delete the user account
-			const deleteRes = await authAPI.deleteUser({ userId: $authState.user.id });
-			if (deleteRes.isErr()) Err.UNHANDLED(deleteRes.error);
+			const [_, deleteUserError] = await authAPI.deleteUser({ userId: $authState.user.id });
+			if (deleteUserError) Err.UNHANDLED(deleteUserError);
 
 			// TODO:Temp anonymous accounts disabled
 			/* const defaultUserResult = await auth.getDefaultUser();
@@ -75,10 +56,10 @@
 			} */
 
 			// Redirect to login page since current user is deleted
-			goto('/login');
+			// goto('/login');
 		} catch (error) {
-			console.error('Failed to delete user:', error);
 			isDeleting = false;
+			Err.UNHANDLED(error, 'Failed to delete user:');
 		}
 	}
 
@@ -87,7 +68,7 @@
 		if (redirect) {
 			goto(redirect);
 		} else {
-			goto('/');
+			goto('/planner');
 		}
 	}
 </script>
@@ -107,11 +88,13 @@
 			<div class="grid gap-4">
 				<!-- TODO:UX avatar only seems to update after navigation or refresh... -->
 				<AvatarEditor
-					user={structuredClone($authState.user)}
+					user={$authState.user}
 					onAvatarChange={(avatar_url) => {
 						if ($authState.status !== 'signed-in') return;
-						if (avatar_url !== $authState.user.avatar_url) {
-							void debouncedUpdateUser({ update: { id: $authState.user.id, avatar_url } });
+						if (avatar_url !== $authState.user.avatarUrl) {
+							void debouncedUpdateUser({
+								update: { id: $authState.user.id, avatarUrl: avatar_url }
+							});
 						}
 					}}
 					class="m-auto max-h-[50vh] max-w-[50vw]"
@@ -125,9 +108,9 @@
 						oninput={(event) => {
 							event.preventDefault();
 							if ($authState.status !== 'signed-in') return;
-							if (event.currentTarget.value !== $authState.user.display_name) {
+							if (event.currentTarget.value !== $authState.user.displayName) {
 								void debouncedUpdateUser({
-									update: { id: $authState.user.id, display_name: event.currentTarget.value }
+									update: { id: $authState.user.id, displayName: event.currentTarget.value }
 								});
 							}
 						}}
@@ -208,8 +191,8 @@
 						Upgrade to Cloud Sync
 					</Button>
 				</div>
-			{/if} -->
-			<div class="m-2 border-t border-gray-300 p-2">
+				{/if} -->
+			<div class="m-2 w-full border-t border-gray-300 p-2">
 				<UserSettings />
 			</div>
 		</div>

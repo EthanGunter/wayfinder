@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { type Task } from '$lib/API/Tasks/Task';
-	import type { TaskDelta } from '$lib/API/Tasks/types';
 	import { page } from '$app/state';
 	import ItemList from '$lib/components/ItemList.svelte';
 	import TaskEditor from './TaskEditor.svelte';
@@ -8,13 +6,15 @@
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { goto } from '$app/navigation';
 	import debounce from '$lib/debounce';
-	import Button from '@/components/ui/button/button.svelte';
-	import { authState } from '@/API/Auth';
-	import { tasksAPI } from '@/API/Tasks';
+	import Button from '$lib/components/ui/button/button.svelte';
+	import { authState } from '$lib/API/Auth';
+	import tasksAPI from '$lib/API/Tasks';
 	import TaskListItem from './TaskListItem.svelte';
 	import Icon from '@iconify/svelte';
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 	import TutorialExampleProject from './TutorialExampleProject.svelte';
+	import { Err } from '$domain/errors';
+	import type { Task, TaskDelta } from '$domain/models/task';
 
 	let currentTask = $state<Task | null>(null);
 	let children = $state<Task[]>([]);
@@ -102,13 +102,10 @@
 	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		const res = await tasksAPI.updateTask({ id: original.id, data: update });
-		res.match(
-			() => {},
-			(err) => {
-				err.logError();
-			}
-		);
+		const [task, error] = await tasksAPI.updateTask({ id: original.id, data: update });
+		if (error) {
+			Err.UNHANDLED(error);
+		}
 	}
 
 	async function onListOrderChanged(items: Task[]) {
@@ -121,14 +118,17 @@
 	}
 
 	async function onDelete(task: Task, recursive: boolean) {
-		await tasksAPI.deleteTask({ id: task.id, recursive });
+		await tasksAPI.deleteTask({ id: task.id /* , recursive  */ });
 	}
 
 	async function onDeleteCurrentTask(task: Task, recursive: boolean) {
 		// Always delete recursively to maintain graph integrity
-		const deleteResult = await tasksAPI.deleteTask({ id: task.id, recursive: true });
+		const [deletedId, error] = await tasksAPI.deleteTask({ id: task.id /* , recursive: true  */ });
+		if (error) {
+			Err.UNHANDLED(error);
+		}
 
-		if (deleteResult.isOk()) {
+		if (deletedId) {
 			// Navigate back to parent or root after deleting current task
 			if (parents.length > 0) {
 				const parentTask = parents[parents.length - 1];

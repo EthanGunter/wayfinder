@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { TaskStatus, type Task, isTaskCompleted } from '$lib/API/Tasks/Task';
 	import { type Snippet } from 'svelte';
 	import Checkbox from '../../lib/components/ui/checkbox/checkbox.svelte';
 	import Icon from '@iconify/svelte';
 	import * as Dialog from '../../lib/components/ui/dialog';
 	import Button from '../../lib/components/ui/button/button.svelte';
 	import { goto } from '$app/navigation';
+	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
 
 	interface Props {
 		task: Task;

@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { Button } from '@/components/ui/button';
+	import { Button } from '$lib/components/ui/button';
 	import type { Snippet } from 'svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { queryOrWait } from '../dom';
-	import * as Popover from '@/components/ui/popover';
+	import * as Popover from '$lib/components/ui/popover';
 	import TGate from './TGate.svelte';
 
 	type Props = {

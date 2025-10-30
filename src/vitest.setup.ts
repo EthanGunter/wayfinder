@@ -1,33 +1,32 @@
 // resultMatchers.ts
-import { Err, type Result } from '$lib/Errors';
+import type { Result } from '$domain/result';
+import { Err } from '$domain/errors';
 import { expect } from 'vitest';
 
 
 expect.extend({
-    toBeOk(received: Result<any, Err>) {
-        const pass = received.isOk();
-        if (pass) {
+    toBeOk([_, error]: Result<any, Err>) {
+        if (!error) {
             return {
                 message: () => `expected Result was Ok`,
                 pass: true,
             };
         } else {
             return {
-                message: () => `expected Ok, but got Err: ${received.error.message}\nContext: ${JSON.stringify(received.error.context, undefined, 2)}`,
+                message: () => `expected Ok, but got Err: ${error.message}\nContext: ${JSON.stringify(error.context, undefined, 2)}`,
                 pass: false,
             };
         }
     },
-    toErr(received: Result<any, Err>) {
-        const pass = received.isErr();
-        if (pass) {
+    toErr([value, error]: Result<any, Err>) {
+        if (error) {
             return {
-                message: () => `expected Result to be Err: ${received.error.message}\nContext: ${JSON.stringify(received.error.context, undefined, 2)}`,
+                message: () => `expected Result to be Err: ${error.message}\nContext: ${JSON.stringify(error.context, undefined, 2)}`,
                 pass: true,
             };
         } else {
             return {
-                message: () => `expected Err, but got Ok`,
+                message: () => `expected Err, but got ok(${JSON.stringify(value, undefined, 2)})`,
                 pass: false,
             };
         }
