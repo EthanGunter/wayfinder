@@ -110,6 +110,7 @@
 				</div>
 			{/if}
 
+			<!-- TODO:TEMP social auth disabled until we figure out why Vercel blocks it... -->
 			<!-- <div class="mb-4">
 				<Button
 					class="w-full gap-2 px-3 py-3 font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"

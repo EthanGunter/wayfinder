@@ -1,4 +1,5 @@
-import type { ITasksLocal, Task } from '$domain/models/task';
+import type { Task } from '$domain/models/task';
+import type { ITasksLocal } from '$lib/API/Tasks/seam-interfaces';
 import type { Node, Edge } from '@xyflow/svelte';
 
 /**

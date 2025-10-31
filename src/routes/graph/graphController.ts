@@ -1,4 +1,5 @@
-import type { ITasksLocal, Task } from '$domain/models/task';
+import type { Task } from '$domain/models/task';
+import type { ITasksLocal } from '$lib/API/Tasks/seam-interfaces';
 import { Err } from '$domain/errors';
 import type { Node, Edge, OnConnectEnd, OnReconnectEnd, Connection } from '@xyflow/svelte';
 import { authState } from '$lib/API/Auth';

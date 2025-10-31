@@ -15,30 +15,23 @@
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
+	import { ResizablePaneGroup, ResizablePane, ResizableHandle } from '$lib/components/ui/resizable';
 	import { createGraphController, type DrawerTrigger } from './graphController';
 	import TaskEditor from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
 	import type { Task } from '$domain/models/task';
+	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
 
 	let nodes = $state<Node[]>([]);
 	let edges = $state<Edge[]>([]);
+	let selectedTask = $state<Task | null>(null);
 
 	// UI State
 	let drawerOpen = $state(false);
 	let triggerTaskForNew = $state<DrawerTrigger>(null);
 
-	let screenToFlowPosition: ((point: { x: number; y: number }) => { x: number; y: number }) | null =
-		null;
-
-const controller = createGraphController();
-
-	// Right panel selection
-	let selectedTaskId = $state<string | null>(null);
-	const selectedTask = () =>
-		selectedTaskId
-			? ((nodes.find((n) => n.id === selectedTaskId)?.data as Task | undefined) ?? null)
-			: null;
+	const controller = createGraphController();
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
 		const [_, error] = await tasksAPI.updateTask({ id: original.id, data: update });
@@ -48,7 +41,7 @@ const controller = createGraphController();
 	async function onDelete(task: Task) {
 		const [_, error] = await tasksAPI.deleteTask({ id: task.id });
 		if (error) Err.UNHANDLED(error, 'Failed to delete task');
-		selectedTaskId = null;
+		selectedTask = null;
 	}
 
 	$effect(() => {
@@ -58,10 +51,10 @@ const controller = createGraphController();
 		controller.replaceEdgesFromView(edges);
 	});
 
-let unsubNodes: (() => void) | null = null;
-let unsubEdges: (() => void) | null = null;
-let unsubDrawer: (() => void) | null = null;
-let unsubTrigger: (() => void) | null = null;
+	let unsubNodes: (() => void) | null = null;
+	let unsubEdges: (() => void) | null = null;
+	let unsubDrawer: (() => void) | null = null;
+	let unsubTrigger: (() => void) | null = null;
 
 	onMount(() => {
 		controller.init();
@@ -91,58 +84,72 @@ let unsubTrigger: (() => void) | null = null;
 
 <div class="graph-root page page-root">
 	<AppHeader>{#snippet center()}{/snippet}</AppHeader>
-	<div class="flex">
-		<SvelteFlowProvider>
-			<SvelteFlow
-				bind:nodes
-				bind:edges
-				fitView
-				nodeTypes={{ task: TaskNode }}
-				nodeOrigin={[0.5, 0.5]}
-				edgeTypes={{ task: TaskEdge }}
-				defaultEdgeOptions={{ type: 'task' }}
-				oninit={() => {
-					const { screenToFlowPosition } = useSvelteFlow();
-					controller.setScreenToFlowPosition(screenToFlowPosition);
-				}}
-				ondelete={controller.handlers.handleDelete}
-				onconnectstart={controller.handlers.handleConnectStart}
-				onreconnectstart={controller.handlers.handleReconnectStart}
-				onconnect={controller.handlers.handleConnect}
-				onbeforereconnect={controller.handlers.handleBeforeReconnect}
-				onreconnect={controller.handlers.handleReconnect}
-				onconnectend={controller.handlers.handleConnectEnd}
-				onreconnectend={controller.handlers.handleReconnectEnd}
-				isValidConnection={controller.handlers.isValidConnection}
-				onnodeclick={({ node, event }) => {
-					// Only change if it's a plain single click (no multi-select modifiers)
-					if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
-					selectedTaskId = node.id;
-				}}
-				onpaneclick={() => {
-					selectedTaskId = null;
-				}}
-			>
-				<Background />
-			</SvelteFlow>
-			<Button
-				variant="outline"
-				class="fixed right-7 bottom-24 rounded-full border-2"
-				onclick={() => {
-					controller.setTriggerTaskForNew(null);
-					controller.setDrawerOpen(true);
-				}}
-			>
-				+
-			</Button>
-		</SvelteFlowProvider>
-		{#if selectedTaskId}
-			{#if selectedTask()}
-				<div class="editor-panel">
-					<TaskEditor task={selectedTask()!} {onTaskChange} {onDelete} />
-				</div>
+	<div class="flex min-h-0 flex-1">
+		<ResizablePaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
+			<ResizablePane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
+				<SvelteFlowProvider>
+					<div class="relative flex h-full w-full">
+						<SvelteFlow
+							class="h-full w-full"
+							bind:nodes
+							bind:edges
+							fitView
+							nodeTypes={{ task: TaskNode }}
+							nodeOrigin={[0.5, 0.5]}
+							edgeTypes={{ task: TaskEdge }}
+							defaultEdgeOptions={{ type: 'task' }}
+							oninit={() => {
+								const { screenToFlowPosition } = useSvelteFlow();
+								controller.setScreenToFlowPosition(screenToFlowPosition);
+							}}
+							ondelete={controller.handlers.handleDelete}
+							onconnectstart={controller.handlers.handleConnectStart}
+							onreconnectstart={controller.handlers.handleReconnectStart}
+							onconnect={controller.handlers.handleConnect}
+							onbeforereconnect={controller.handlers.handleBeforeReconnect}
+							onreconnect={controller.handlers.handleReconnect}
+							onconnectend={controller.handlers.handleConnectEnd}
+							onreconnectend={controller.handlers.handleReconnectEnd}
+							isValidConnection={controller.handlers.isValidConnection}
+							onnodeclick={({ node, event }) => {
+								// Only change if it's a plain single click (no multi-select modifiers)
+								if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
+								selectedTask = node.id
+									? ((nodes.find((n) => n.id === node.id)?.data as Task | undefined) ?? null)
+									: null;
+							}}
+							onpaneclick={() => {
+								selectedTask = null;
+							}}
+						>
+							<Background />
+						</SvelteFlow>
+						<Button
+							variant="outline"
+							class="absolute right-6 bottom-6 rounded-full border-2"
+							onclick={() => {
+								controller.setTriggerTaskForNew(null);
+								controller.setDrawerOpen(true);
+							}}
+						>
+							+
+						</Button>
+					</div>
+				</SvelteFlowProvider>
+			</ResizablePane>
+			{#if selectedTask}
+				<ResizableHandle />
+				<ResizablePane
+					class="flex h-full flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
+					defaultSize={30}
+					minSize={24}
+				>
+					<ScrollArea class="h-full">
+						<TaskEditor bind:task={selectedTask} {onTaskChange} {onDelete} />
+					</ScrollArea>
+				</ResizablePane>
 			{/if}
-		{/if}
+		</ResizablePaneGroup>
 	</div>
 	<AppFooter />
 </div>
@@ -158,16 +165,5 @@ let unsubTrigger: (() => void) | null = null;
 	:global(.svelte-flow__edgeupdater) {
 		z-index: 20;
 		pointer-events: all;
-	}
-
-	.editor-panel {
-		/* width: 380px; */
-		/* max-width: 90vw; */
-		background: white;
-		border-left: 1px solid #e5e7eb;
-		box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
-		z-index: 30;
-		display: flex;
-		flex-direction: column;
 	}
 </style>

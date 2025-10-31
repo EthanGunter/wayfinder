@@ -1,10 +1,12 @@
-import { Err, NotImplementedError, type NotAuthorizedError, type NotFoundError, InvalidStateError } from "$domain/errors";
+import { Err, NotImplementedError, type NotAuthorizedError } from "$domain/errors";
 import { err, ok } from "$domain/result";
-import { TaskStatus, type CreateTaskParams, type ITasks, type ITasksLocal, type PopulatedTaskDTO, type Task, type TaskDelta, type UpdateTaskParams } from "$domain/models/task";
+import { TaskStatus, type CreateTaskParams, type PopulatedTaskDTO, type Task, type TaskDelta, type UpdateTaskParams } from "$domain/models/task";
 import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";
+import { createFetchableReadable } from "$lib/API/fetchableStore";
 import { writable, type Readable } from "svelte/store";
+import type { ITasks, ITasksLocal } from "./seam-interfaces";
 
 /* type TaskRow = Doc<"tasks">;
 type TaskId = Id<"tasks">;
@@ -39,22 +41,71 @@ export const api: ITasks = {
 		return err(res.error as NotAuthorizedError);
 	},
 
-	getTask: async ({ id }) => {
-		const res = await client.query(convexApi.tasks.getTask, { id: id as Id<'tasks'> });
-		if (isConvexOk(res)) return ok(rowToTask(res.value));
-		return err(res.error);
-	},
+    getTask: ({ id }) =>
+        createFetchableReadable<Task>((set) => {
+            set({ status: "loading" });
+            const unsubscribe = client.onUpdate(
+                convexApi.tasks.getTask,
+                { id: id as Id<'tasks'> },
+                (result: ConvexResponse<Doc<'tasks'>, Err>) => {
+                    if (isConvexOk(result)) {
+                        set({ status: "resolved", data: rowToTask(result.value) });
+                    } else {
+                        set({ status: "error", error: result.error });
+                    }
+                },
+                (error: Error) => {
+                    set({ status: "error", error: Err.wrap(error) });
+                }
+            );
+            return () => {
+                unsubscribe();
+            };
+        }),
 
-	getTasks: async ({ ids }) => {
-		const res = await client.query(convexApi.tasks.getTasks, { ids: ids as Id<'tasks'>[] });
-		if (isConvexOk(res)) return ok(res.value.map(rowToTask));
-		return err(res.error);
-	},
+    getTasks: ({ ids }) =>
+        createFetchableReadable<Task[]>((set) => {
+            set({ status: "loading" });
+            const unsubscribe = client.onUpdate(
+                convexApi.tasks.getTasks,
+                { ids: ids as Id<'tasks'>[] },
+                (result: ConvexResponse<Doc<'tasks'>[], Err>) => {
+                    if (isConvexOk(result)) {
+                        set({ status: "resolved", data: result.value.map(rowToTask) });
+                    } else {
+                        set({ status: "error", error: result.error });
+                    }
+                },
+                (error: Error) => {
+                    set({ status: "error", error: Err.wrap(error) });
+                }
+            );
+            return () => {
+                unsubscribe();
+            };
+        }),
 
-	getAllUserTasks: async ({ userId }) => {
-		const res = await client.query(convexApi.tasks.getAllUserTasks, { userId });
-		return ok(res.value.map(rowToTask));
-	},
+    getAllUserTasks: ({ userId }) =>
+        createFetchableReadable<Task[]>((set) => {
+            set({ status: "loading" });
+            const unsubscribe = client.onUpdate(
+                convexApi.tasks.getAllUserTasks,
+                { userId },
+                (result: ConvexResponse<Doc<'tasks'>[], Err>) => {
+                    if (isConvexOk(result)) {
+                        set({ status: "resolved", data: result.value.map(rowToTask) });
+                    } else {
+                        set({ status: "error", error: result.error });
+                    }
+                },
+                (error: Error) => {
+                    set({ status: "error", error: Err.wrap(error) });
+                }
+            );
+            return () => {
+                unsubscribe();
+            };
+        }),
 
 	updateTask: async (update: UpdateTaskParams) => {
 		const res = await client.mutation(convexApi.tasks.updateTask, { update: { ...update, id: update.id as Id<'tasks'> } });
@@ -79,32 +130,115 @@ export const api: ITasks = {
 		return ok();
 	},
 
-	getChildrenOf: async ({ id }) => {
-		const res = await client.query(convexApi.tasks.getChildrenOf, { id: id as Id<'tasks'> });
-		if (isConvexOk(res)) return ok(res.value.map(rowToTask));
-		return err(res.error);
-	},
+	getChildrenOf: ({ id }) =>
+		createFetchableReadable<Task[]>((set) => {
+			set({ status: "loading" });
+			const unsubscribe = client.onUpdate(
+				convexApi.tasks.getChildrenOf,
+				{ id: id as Id<'tasks'> },
+				(result) => {
+					if (isConvexOk(result)) {
+						set({ status: "resolved", data: result.value.map(rowToTask) });
+					} else {
+						set({ status: "error", error: result.error });
+					}
+				},
+				(error: Error) => {
+					set({ status: "error", error: Err.wrap(error) });
+				}
+			);
+			return () => {
+				unsubscribe();
+			};
+		}),
 
-	getParentsOf: async ({ id }) => {
-		const res = await client.query(convexApi.tasks.getParentsOf, { id: id as Id<'tasks'> });
-		if (isConvexOk(res)) return ok(res.value.map(rowToTask));
-		return err(res.error);
-	},
+    getParentsOf: ({ id }) =>
+        createFetchableReadable<Task[]>((set) => {
+            set({ status: "loading" });
+            const unsubscribe = client.onUpdate(
+                convexApi.tasks.getParentsOf,
+                { id: id as Id<'tasks'> },
+                (result: ConvexResponse<Doc<'tasks'>[], Err>) => {
+                    if (isConvexOk(result)) {
+                        set({ status: "resolved", data: result.value.map(rowToTask) });
+                    } else {
+                        set({ status: "error", error: result.error });
+                    }
+                },
+                (error: Error) => {
+                    set({ status: "error", error: Err.wrap(error) });
+                }
+            );
+            return () => {
+                unsubscribe();
+            };
+        }),
 
-	getRootTasks: async () => {
-		const res = await client.query(convexApi.tasks.getRootTasks, {});
-		return ok(res.value.map(rowToTask));
-	},
+    getRootTasks: () =>
+        createFetchableReadable<Task[]>((set) => {
+            set({ status: "loading" });
+            const unsubscribe = client.onUpdate(
+                convexApi.tasks.getRootTasks,
+                {},
+                (result: ConvexResponse<Doc<'tasks'>[], Err>) => {
+                    if (isConvexOk(result)) {
+                        set({ status: "resolved", data: result.value.map(rowToTask) });
+                    } else {
+                        set({ status: "error", error: result.error });
+                    }
+                },
+                (error: Error) => {
+                    set({ status: "error", error: Err.wrap(error) });
+                }
+            );
+            return () => {
+                unsubscribe();
+            };
+        }),
 
-	getTodaysTasks: async () => {
-		const res = await client.query(convexApi.tasks.getTodaysTasks, {});
-		return ok(res.value.map(rowToTask));
-	},
+    getTodaysTasks: () =>
+        createFetchableReadable<Task[]>((set) => {
+            set({ status: "loading" });
+            const unsubscribe = client.onUpdate(
+                convexApi.tasks.getTodaysTasks,
+                {},
+                (result: ConvexResponse<Doc<'tasks'>[], Err>) => {
+                    if (isConvexOk(result)) {
+                        set({ status: "resolved", data: result.value.map(rowToTask) });
+                    } else {
+                        set({ status: "error", error: result.error });
+                    }
+                },
+                (error: Error) => {
+                    set({ status: "error", error: Err.wrap(error) });
+                }
+            );
+            return () => {
+                unsubscribe();
+            };
+        }),
 
-	getPrioritizedTasks: async (limit: number) => {
-		const res = await client.query(convexApi.tasks.getPrioritizedTasks, { limit });
-		return ok(res.value.map(rowToTask));
-	},
+    getPrioritizedTasks: (limit: number) =>
+        createFetchableReadable<Task[]>((set) => {
+            set({ status: "loading" });
+            const unsubscribe = client.onUpdate(
+                convexApi.tasks.getPrioritizedTasks,
+                { limit },
+                (result: ConvexResponse<Doc<'tasks'>[], Err>) => {
+                    if (isConvexOk(result)) {
+                        set({ status: "resolved", data: result.value.map(rowToTask) });
+                    } else {
+                        set({ status: "error", error: result.error });
+                    }
+                },
+                (error: Error) => {
+                    set({ status: "error", error: Err.wrap(error) });
+                }
+            );
+            return () => {
+                unsubscribe();
+            };
+        }),
 
 	searchTasks: async (_searchTerm: string) => {
 		// const res = await client.query(api.tasks.searchTasks, { searchTerm });
@@ -131,9 +265,9 @@ export const localApi: ITasksLocal = {
 		return ok(mappedIds);
 	},
 
-	getTask: async (params) => api.getTask(params),
-	getTasks: async (params) => api.getTasks(params),
-	getAllUserTasks: async (params) => api.getAllUserTasks(params),
+	getTask: (params) => api.getTask(params),
+	getTasks: (params) => api.getTasks(params),
+	getAllUserTasks: (params) => api.getAllUserTasks(params),
 
 	updateTask: async (params: UpdateTaskParams) => api.updateTask(params),
 	updateTasks: async (params) => api.updateTasks(params),
@@ -146,95 +280,95 @@ export const localApi: ITasksLocal = {
 	handleCreateTasksResponse: async (_response) => { /* no-op */ },
 	handleMigrateResponse: async (_response) => { /* no-op */ },
 
-	getChildrenOf: async (params) => api.getChildrenOf(params),
-	getParentsOf: async (params) => api.getParentsOf(params),
-	getRootTasks: async () => api.getRootTasks(),
-	getTodaysTasks: async () => api.getTodaysTasks(),
-	getPrioritizedTasks: async (limit: number) => api.getPrioritizedTasks(limit),
+	getChildrenOf: (params) => api.getChildrenOf(params),
+	getParentsOf: (params) => api.getParentsOf(params),
+	getRootTasks: () => api.getRootTasks(),
+	getTodaysTasks: () => api.getTodaysTasks(),
+	getPrioritizedTasks: (limit: number) => api.getPrioritizedTasks(limit),
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 
 	// Store-based subscription API
-	subscribeTasks: function (
-		params:
-			| {
-				userId: string;
-				ids?: never;
-			}
-			| {
-				ids: string[];
-				ancestorDepth: number;
-				descendantDepth: number;
-				userId?: never;
-			}
-	): { unsubscribe: () => void; tasks: Readable<Task[]> } {
-		const tasksStore = writable<Task[]>([]);
-		let prevMap: Map<string, Task> = new Map();
-		const toMap = (list: Task[]) => new Map(list.map((t) => [t.id, t] as [string, Task]));
-		const sameTask = (a: Task, b: Task) => new Date(a.lastEdit).getTime() === new Date(b.lastEdit).getTime();
-		const updateStore = (list: Task[]) => {
-			const nextMap = toMap(list);
-			let changed = nextMap.size !== prevMap.size;
-			if (!changed) {
-				for (const [id, next] of nextMap) {
-					const prev = prevMap.get(id);
-					if (!prev || !sameTask(prev, next)) {
-						changed = true;
-						break;
-					}
-				}
-			}
-			if (changed) {
-				tasksStore.set(list);
-				prevMap = nextMap;
-			}
-		};
+	// subscribeTasks: function (
+	// 	params:
+	// 		| {
+	// 			userId: string;
+	// 			ids?: never;
+	// 		}
+	// 		| {
+	// 			ids: string[];
+	// 			ancestorDepth: number;
+	// 			descendantDepth: number;
+	// 			userId?: never;
+	// 		}
+	// ): { unsubscribe: () => void; tasks: Readable<Task[]> } {
+	// 	const tasksStore = writable<Task[]>([]);
+	// 	let prevMap: Map<string, Task> = new Map();
+	// 	const toMap = (list: Task[]) => new Map(list.map((t) => [t.id, t] as [string, Task]));
+	// 	const sameTask = (a: Task, b: Task) => new Date(a.lastEdit).getTime() === new Date(b.lastEdit).getTime();
+	// 	const updateStore = (list: Task[]) => {
+	// 		const nextMap = toMap(list);
+	// 		let changed = nextMap.size !== prevMap.size;
+	// 		if (!changed) {
+	// 			for (const [id, next] of nextMap) {
+	// 				const prev = prevMap.get(id);
+	// 				if (!prev || !sameTask(prev, next)) {
+	// 					changed = true;
+	// 					break;
+	// 				}
+	// 			}
+	// 		}
+	// 		if (changed) {
+	// 			tasksStore.set(list);
+	// 			prevMap = nextMap;
+	// 		}
+	// 	};
 
-		let innerUnsubscribe: (() => void) | null = null;
+	// 	let innerUnsubscribe: (() => void) | null = null;
 
-		const startUserSubscription = () => {
-			innerUnsubscribe = client.onUpdate(
-				convexApi.tasks.getAllUserTasks,
-				{ userId: isUserSubscription(params) ? params.userId : "" },
-				(result) => {
-					const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
-					updateStore(list);
-				},
-				(_error: Error) => { /* no-op */ }
-			);
-		};
+	// 	const startUserSubscription = () => {
+	// 		innerUnsubscribe = client.onUpdate(
+	// 			convexApi.tasks.getAllUserTasks,
+	// 			{ userId: isUserSubscription(params) ? params.userId : "" },
+	// 			(result) => {
+	// 				const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
+	// 				updateStore(list);
+	// 			},
+	// 			(_error: Error) => { /* no-op */ }
+	// 		);
+	// 	};
 
-		const startScopedSubscription = async () => {
-			const { ids, ancestorDepth, descendantDepth } = isScopedSubscription(params)
-				? params
-				: ({ ids: [], ancestorDepth: 0, descendantDepth: 0 } as {
-						ids: string[];
-						ancestorDepth: number;
-						descendantDepth: number;
-					});
-			const included = await computeIncludedIds(ids as string[], ancestorDepth as number, descendantDepth as number);
-			const watchIds = Array.from(included);
-			innerUnsubscribe = client.onUpdate(
-				convexApi.tasks.getTasks,
-				{ ids: watchIds as Id<'tasks'>[] },
-				(result) => {
-					const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
-					updateStore(list);
-				},
-				(_error: Error) => { /* no-op */ }
-			);
-		};
+	// 	const startScopedSubscription = async () => {
+	// 		const { ids, ancestorDepth, descendantDepth } = isScopedSubscription(params)
+	// 			? params
+	// 			: ({ ids: [], ancestorDepth: 0, descendantDepth: 0 } as {
+	// 				ids: string[];
+	// 				ancestorDepth: number;
+	// 				descendantDepth: number;
+	// 			});
+	// 		const included = await computeIncludedIds(ids as string[], ancestorDepth as number, descendantDepth as number);
+	// 		const watchIds = Array.from(included);
+	// 		innerUnsubscribe = client.onUpdate(
+	// 			convexApi.tasks.getTasks,
+	// 			{ ids: watchIds as Id<'tasks'>[] },
+	// 			(result) => {
+	// 				const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
+	// 				updateStore(list);
+	// 			},
+	// 			(_error: Error) => { /* no-op */ }
+	// 		);
+	// 	};
 
-		if (isUserSubscription(params)) startUserSubscription();
-		else if (isScopedSubscription(params)) void startScopedSubscription();
+	// 	if (isUserSubscription(params)) startUserSubscription();
+	// 	else if (isScopedSubscription(params)) void startScopedSubscription();
 
-		return {
-			unsubscribe: () => {
-				if (innerUnsubscribe) innerUnsubscribe();
-			},
-			tasks: tasksStore as Readable<Task[]>,
-		};
-	},
+	// 	return {
+	// 		unsubscribe: () => {
+	// 			if (innerUnsubscribe) innerUnsubscribe();
+	// 		},
+	// 		tasks: tasksStore as Readable<Task[]>,
+	// 	};
+	// },
 
 	exportData: async () => { Err.NotImplemented('exportData'); },
 	importData: async () => { Err.NotImplemented('exportData'); },
@@ -248,9 +382,9 @@ async function computeIncludedIds(seedIds: string[], ancestorDepth: number, desc
 	const included: Set<string> = new Set(seedIds);
 	const getMany = async (ids: string[]) => {
 		if (ids.length === 0) return [] as Task[];
-		const [tasks, e] = await api.getTasks({ ids });
-		if (e) return [] as Task[];
-		return tasks;
+        const res = await client.query(convexApi.tasks.getTasks, { ids: ids as Id<'tasks'>[] });
+        if (isConvexOk(res)) return res.value.map(rowToTask);
+        return [] as Task[];
 	};
 
 	let up = [...seedIds];
@@ -289,7 +423,6 @@ export function convexifyTaskDetails(dto: CreateTaskParams): {
 	userAuthId: string;
 	title: string;
 	content?: string | undefined;
-	priority?: number | undefined;
 	parents?: string[] | undefined;
 	children?: string[] | undefined;
 } {
@@ -297,7 +430,6 @@ export function convexifyTaskDetails(dto: CreateTaskParams): {
 		userAuthId: dto.userAuthId,
 		title: dto.title,
 		content: dto.content,
-		priority: dto.priority ?? 0,
 		parents: dto.parents ?? [],
 		children: dto.children ?? [],
 	};
@@ -311,7 +443,6 @@ function rowToTask(row: Doc<"tasks">): Task {
 		content: row.content ?? undefined,
 		status: row.status,
 		todaysTask: row.todaysTask ? new Date(row.todaysTask) : undefined,
-		priority: row.priority ?? 0,
 		parents: row.parents ?? [],
 		children: row.children ?? [],
 		created: new Date(row._creationTime),

@@ -11,8 +11,8 @@ type DBTask = Doc<'tasks'>;
 const argsCreateTask = v.object({
 	userAuthId: v.string(),
 	title: v.string(),
-	content: v.optional(v.string()),
 	priority: v.optional(v.number()),
+	content: v.optional(v.string()),
 	dueDate: v.optional(v.number()),
 	parents: v.optional(v.array(v.string())),
 	children: v.optional(v.array(v.string())),
@@ -44,7 +44,6 @@ export const createTask = mutation({
 			content: createDetail.content,
 			status: 0,
 			todaysTask: undefined,
-			priority: createDetail.priority ?? 0,
 			parents: createDetail.parents ?? [],
 			children: createDetail.children ?? [],
 			lastEdit: now,
@@ -109,7 +108,6 @@ export const createTasks = mutation({
 				content: d.content,
 				status: 0,
 				todaysTask: undefined,
-				priority: d.priority ?? 0,
 				parents: d.parents ?? [],
 				children: d.children ?? [],
 				lastEdit: now,
@@ -356,9 +354,14 @@ export const getChildrenOf = query({
 		if (!parent) return { ok: false as const, error: serializeError(new NotFoundError("Task not found", "" + id)) };
 		const childIds = parent.children ?? [];
 		if (childIds.length === 0) return { ok: true as const, value: [] };
+		
+		// Fetch all tasks and create a lookup map
 		const tasks = await ctx.db.query("tasks").collect();
-		const filtered = tasks.filter((t) => childIds.includes("" + t._id));
-		return { ok: true as const, value: filtered };
+		const taskMap = new Map(tasks.map((t) => ["" + t._id, t]));
+		
+		// Return tasks in the order specified by parent.children
+		const ordered = childIds.map((id) => taskMap.get(id)).filter((t) => t !== undefined);
+		return { ok: true as const, value: ordered };
 	},
 });
 
@@ -408,7 +411,8 @@ export const getPrioritizedTasks = query({
 		const roots = tasks.filter((t) => (t.parents?.length ?? 0) === 0);
 		const tasksMap = new Map(tasks.map((t) => [t._id, t] as [string, DBTask]));
 		const sorter = (a?: DBTask, b?: DBTask) => {
-			if (!a) return -1; if (!b) return 1; return (b.priority ?? 0) - (a.priority ?? 0);
+			// TODO This is going to need context from the parent to determine sibling priority...
+			if (!a) return -1; if (!b) return 1; return 0; // (b.priority ?? 0) - (a.priority ?? 0);
 		};
 		const todo: DBTask[] = [];
 		const walk = (task: DBTask) => {
@@ -452,7 +456,6 @@ function convertToTaskBase(task: DBTask): SystemAgnosticTask<number> {
 		status: task.status,
 
 		todaysTask: task.todaysTask,
-		priority: task.priority,
 		dueDate: task.dueDate,
 		parents: task.parents,
 		children: task.children,
@@ -489,7 +492,11 @@ async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Parti
 	if ("content" in d) patch.content = d.content;
 	if ("status" in d) patch.status = d.status!;
 	if ("todaysTask" in d && d.todaysTask !== undefined) patch.todaysTask = d.todaysTask;
-	if ("priority" in d) patch.priority = d.priority;
+	// Allow stable reordering of children without emitting relation add/remove churn
+	// Only accept explicit children arrays (membership-preserving reorder is expected here)
+	if (Array.isArray(d.children)) {
+		patch.children = d.children!;
+	}
 	if ((update.relations ?? []).length > 0) { patch.parents = parents; patch.children = children; }
 
 	await ctx.db.patch(update.id, patch);

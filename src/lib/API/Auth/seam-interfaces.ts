@@ -1,13 +1,8 @@
-import type { ArgumentError, Err, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from "$domain/errors";
+import type { ArgumentError, InputRequiredError, InvalidStateError, NotFoundError, NotImplementedError } from "$domain/errors";
+import type { Fetchable } from "$domain/fetchable";
 import type { SessionUser, LoginCredentials, RegistrationRequirements, User } from "$domain/models/user";
 import type { Result } from "$domain/result";
 import type { Readable } from "svelte/store";
-
-
-export type Fetchable<T> =
-	| { status: "loading" }
-	| { status: "error", error: Err }
-	| { status: "resolved", data: T }
 
 export type AuthState = Exclude<Fetchable<SessionUser>, { status: "resolved" }>
 	| { status: "signed-in", user: SessionUser/* , anonymous: boolean */ }
