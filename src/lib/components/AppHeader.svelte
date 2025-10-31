@@ -95,6 +95,7 @@
 	}
 
 	async function gotoTask(task: Task | string) {
+		// TODO This function should direct to the graph view with a query arg
 		if (typeof task === 'string') {
 			// Create a new task with this title
 			if ($authState.status === 'signed-in') {
@@ -110,17 +111,17 @@
 				}
 
 				if (newTaskId) {
-					goto(`/tasks/?id=${newTaskId}`);
+					// goto(`/tasks/?id=${newTaskId}`);
 				}
 			}
 		} else {
-			goto(`/tasks/?id=${task.id}`);
+			// goto(`/tasks/?id=${task.id}`);
 		}
 	}
 </script>
 
 <div
-	class="page-header flex items-center justify-between gap-4 bg-white p-4 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
+	class="page-header flex items-center justify-between gap-4 bg-gray p-2 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
 >
 	{#if left}
 		{@render left()}

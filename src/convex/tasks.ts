@@ -2,17 +2,18 @@ import { Err, NotAuthorizedError, NotFoundError, NotImplementedError } from "$do
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SharedTask } from "$domain/models/task";
+import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SharedTask as SystemAgnosticTask } from "$domain/models/task";
 
 
 //#region Utility
 
-type Task = Doc<'tasks'>;
+type DBTask = Doc<'tasks'>;
 const argsCreateTask = v.object({
 	userAuthId: v.string(),
 	title: v.string(),
 	content: v.optional(v.string()),
 	priority: v.optional(v.number()),
+	dueDate: v.optional(v.number()),
 	parents: v.optional(v.array(v.string())),
 	children: v.optional(v.array(v.string())),
 })
@@ -242,7 +243,7 @@ export const updateTasks = mutation({
 	},
 	handler: async (ctx, { updates }) => {
 		// Collect old states
-		const oldStates = new Map<string, Task>();
+		const oldStates = new Map<string, DBTask>();
 		for (const u of updates) {
 			const oldTask = await ctx.db.get(u.id);
 			if (oldTask) {
@@ -251,7 +252,7 @@ export const updateTasks = mutation({
 		}
 
 		// Apply all main updates
-		const results: Task[] = [];
+		const results: DBTask[] = [];
 		for (const u of updates) {
 			const res = await applyTaskUpdate(ctx, u);
 			if (!res.ok) return res;
@@ -316,7 +317,7 @@ export const deleteTasks = mutation({
 		}
 
 		// Collect tasks to delete
-		const tasksToDelete: Task[] = [];
+		const tasksToDelete: DBTask[] = [];
 		for (const id of ids) {
 			const row = await ctx.db.get(id);
 			if (row && row.userAuthId === identity.subject) {
@@ -405,12 +406,12 @@ export const getPrioritizedTasks = query({
 		const rows = await ctx.db.query("tasks").collect();
 		const tasks = rows;
 		const roots = tasks.filter((t) => (t.parents?.length ?? 0) === 0);
-		const tasksMap = new Map(tasks.map((t) => [t._id, t] as [string, Task]));
-		const sorter = (a?: Task, b?: Task) => {
+		const tasksMap = new Map(tasks.map((t) => [t._id, t] as [string, DBTask]));
+		const sorter = (a?: DBTask, b?: DBTask) => {
 			if (!a) return -1; if (!b) return 1; return (b.priority ?? 0) - (a.priority ?? 0);
 		};
-		const todo: Task[] = [];
-		const walk = (task: Task) => {
+		const todo: DBTask[] = [];
+		const walk = (task: DBTask) => {
 			if (todo.length === limit) return;
 			if (task.children.length === 0) {
 				if (task.status === 0) todo.push(task);
@@ -441,23 +442,27 @@ function serializeError<T extends Err>(err: T): T {
 	return JSON.parse(JSON.stringify(err, Object.getOwnPropertyNames(err)));
 }
 
-function convertToTaskBase(task: Task): SharedTask<number> {
+function convertToTaskBase(task: DBTask): SystemAgnosticTask<number> {
 	return {
-		id: "" + task._id,
+		id: task._id,
 		userAuthId: task.userAuthId,
+
 		title: task.title,
 		content: task.content,
 		status: task.status,
+
 		todaysTask: task.todaysTask,
 		priority: task.priority,
+		dueDate: task.dueDate,
 		parents: task.parents,
 		children: task.children,
+
 		created: task._creationTime,
 		lastEdit: task.lastEdit
 	};
 }
 
-async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Partial<Task>; relations?: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[]; }) {
+async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Partial<DBTask>; relations?: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[]; }) {
 	const current = await ctx.db.get(update.id);
 	if (!current) {
 		return { ok: false as const, error: serializeError(new NotFoundError("Task not found for update", "" + update.id)) };
@@ -479,7 +484,7 @@ async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Parti
 	}
 	const now = Date.now();
 	const patch: Partial<Doc<"tasks">> = { lastEdit: now };
-	const d = (update.data ?? {}) as Partial<Task>;
+	const d = (update.data ?? {}) as Partial<DBTask>;
 	if ("title" in d) patch.title = d.title!;
 	if ("content" in d) patch.content = d.content;
 	if ("status" in d) patch.status = d.status!;

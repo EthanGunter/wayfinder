@@ -19,6 +19,7 @@ export const ConvexTaskDef = {
   status: v.number(), // keep your numeric enum as-is
   todaysTask: v.optional(v.number()), // unix milliseconds or undefined
   priority: v.number(),
+  dueDate: v.optional(v.number()),
   parents: v.array(v.string()),  // store task ids as strings
   children: v.array(v.string()),
   lastEdit: v.number(),  // unix milliseconds

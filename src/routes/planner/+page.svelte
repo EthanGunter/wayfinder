@@ -10,8 +10,6 @@
 	import tasksAPI from '$lib/API/Tasks';
 	import { page } from '$app/state';
 	import { Err } from '$domain/errors';
-	import TutorialWelcome from './TutorialWelcome.svelte';
-	import TutorialPlanner from './TutorialPlanner.svelte';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 
 	let todaysList = $state<Task[]>([]);
@@ -118,8 +116,6 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<TutorialWelcome />
-	<TutorialPlanner />
 	<div class="page page-root">
 		<AppHeader class="grid-area-header z-10 h-16">{#snippet center()}{/snippet}</AppHeader>
 		<div

@@ -130,7 +130,7 @@
 @layer layout {
   .page-root {
     grid-template-areas: "header" "content" "footer";
-    grid-template-rows: auto 1fr 4rem;
+    grid-template-rows: auto 1fr auto;
     @apply relative grid h-full w-full bg-gray-200 overflow-hidden;
   }
 

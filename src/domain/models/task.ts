@@ -1,21 +1,24 @@
 import type { NotFoundError, Err, ArgumentError, NotAuthorizedError, InvalidStateError } from "$domain/errors";
-import { ParseError } from "$domain/errors";
-import yaml from 'js-yaml'
-import { v4 } from "uuid";
-import { err, ok, type Result } from "$domain/result";
+import { type Result } from "$domain/result";
+import type { Readable } from "svelte/store";
 
 
 //#region Task Interface and Utilities
 
-export interface Task {
+export type Task = TaskBase
+export interface TaskBase {
+    // Indexing
     id: string,
     userAuthId: string,
-    // filepath?: string // TODO I'd eventually like to make Wayfinder local-plain-text-first, but that's a future feature
+
+
+    // Content
     title: string,
     content?: string,
     status: TaskStatus,
-    todaysTask?: Date, // Time of assignment
-    priority?: number,
+
+
+    // Prioritization Fields
     /** 
      * Tasks that depend on this one's completion.
     */
@@ -24,6 +27,12 @@ export interface Task {
      * This task's prequisite[s].
     */
     children: string[]
+    todaysTask?: Date, // Time of assignment
+    dueDate?: Date,
+    priority?: number,
+
+
+    // Metadata
     created: Date,
     lastEdit: Date,
 }
@@ -33,51 +42,11 @@ export enum TaskStatus {
     complete = 1,
 }
 
-export function isTask(value: any): value is Task {
-    return typeof value === 'object'
-        && typeof value.id === 'string'
-        // && typeof value.filepath === 'string'
-        && typeof value.title === 'string'
-        && typeof value.created === 'string'
-        && typeof value.last_edit === 'string'
-        && (value.todays_task === undefined || typeof value.todays_task === 'string')
-        && typeof value.parents === 'object'
-        && typeof value.children === 'object'
-        ;
-}
 
 export function isTaskCompleted(task: Task): boolean {
     return task.status === TaskStatus.complete;
 }
 
-export function createTask(params: CreateTaskParams): Task {
-    const {
-        id,
-        userAuthId: user_id,
-        title,
-        content,
-        status = TaskStatus.incomplete,
-        todaysTask: todays_task,
-        priority = 0,
-        created = new Date(),
-        lastEdit: last_edit = new Date(),
-        parents = [],
-        children = [],
-    } = params;
-    return {
-        id: id ?? v4(),
-        userAuthId: user_id,
-        title: title,
-        content,
-        status,
-        todaysTask: todays_task,
-        priority,
-        created,
-        lastEdit: last_edit,
-        parents,
-        children,
-    };
-}
 
 export function taskEquals(a: Task, b: Task, ignoreId: boolean = false): boolean {
     if (!ignoreId && a.id !== b.id) return false;
@@ -92,43 +61,6 @@ export function taskEquals(a: Task, b: Task, ignoreId: boolean = false): boolean
     // && a.last_edit === b.last_edit // This might cause change between checks on server and local
 }
 
-export function populateTaskDTO(dto: CreateTaskParams): PopulatedTaskDTO {
-    const populated: PopulatedTaskDTO = {
-        id: dto.id ?? v4(),
-        userAuthId: dto.userAuthId,
-        priority: dto.priority ?? 0,
-        title: dto.title,
-        content: dto.content,
-        // filepath: dto.filepath ?? `${dto.title}.md`,
-        status: dto.status ?? TaskStatus.incomplete,
-        todaysTask: dto.todaysTask,
-        created: dto.created ?? new Date(),
-        lastEdit: dto.lastEdit ?? new Date(),
-        parents: dto.parents ?? [],
-        children: dto.children ?? [],
-    };
-    if (!dto.id)
-        delete (populated as any).id;
-    return populated;
-}
-
-export function toMarkdown(task: Task): string {
-    const { content, /* filepath, */ ...meta } = task;
-    return `---\n${yaml.dump(meta)}---\n${content ?? ''}`;
-}
-
-/**
- * @error {@link ParseError} if the yaml frontmatter can't be read. This doesn't guarantee that the data is correct, just that it's legal yaml.
- */
-export function fromMarkdown(md: string, filepath: string): Result<Task, ParseError> {
-    const match = md.match(/^---\n([\s\S]+?)---\n([\s\S]*)$/);
-    if (!match) {
-        return err(new ParseError(md, "TaskNode"));
-    }
-    const meta = yaml.load(match[1]) as Omit<Task, 'content'>;
-    return ok({ ...(meta as any), filepath, content: match[2].trim() });
-}
-
 //#endregion
 
 
@@ -137,8 +69,9 @@ export function fromMarkdown(md: string, filepath: string): Result<Task, ParseEr
 /**
  * System-agnostic task type that works with both Date (client) and number (Convex) timestamps
  */
-export type SharedTask<T = Date> = Omit<Task, 'todaysTask' | 'created' | 'lastEdit'> & {
+export type SharedTask<T = Date> = Omit<Task, 'todaysTask' | 'created' | 'lastEdit' | 'dueDate'> & {
     todaysTask?: T;
+    dueDate?: T;
     created: T;
     lastEdit: T;
 };
@@ -181,23 +114,23 @@ export function calculateRelationshipChanges<T = Date>(
     updates: RelationshipUpdate<T> | RelationshipUpdate<T>[]
 ): RelationshipChange[] {
     const updateArray = Array.isArray(updates) ? updates : [updates];
-    
+
     // Track all changes needed per task ID
     const changeMap = new Map<string, RelationshipChange>();
-    
+
     const ensureChange = (taskId: string): RelationshipChange => {
         if (!changeMap.has(taskId)) {
             changeMap.set(taskId, { taskId });
         }
         return changeMap.get(taskId)!;
     };
-    
+
     const addToSet = (target: string[] | undefined, ...values: string[]): string[] => {
         const set = new Set(target || []);
         values.forEach(v => set.add(v));
         return Array.from(set);
     };
-    
+
     // Process each update
     for (const { oldTask, newTask } of updateArray) {
         if (!oldTask && newTask) {
@@ -228,7 +161,7 @@ export function calculateRelationshipChanges<T = Date>(
             const removedParents = oldTask.parents.filter(p => !newTask.parents.includes(p));
             const addedChildren = newTask.children.filter(c => !oldTask.children.includes(c));
             const removedChildren = oldTask.children.filter(c => !newTask.children.includes(c));
-            
+
             for (const parentId of addedParents) {
                 const change = ensureChange(parentId);
                 change.addChildren = addToSet(change.addChildren, newTask.id);
@@ -247,7 +180,7 @@ export function calculateRelationshipChanges<T = Date>(
             }
         }
     }
-    
+
     return Array.from(changeMap.values());
 }
 
@@ -257,12 +190,12 @@ export function calculateRelationshipChanges<T = Date>(
 export function relationshipChangesToUpdateParams(changes: RelationshipChange[]): UpdateTaskParams[] {
     return changes.map(change => {
         const relations: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[] = [];
-        
+
         change.addParents?.forEach(id => relations.push({ id, operation: 'addParent' }));
         change.removeParents?.forEach(id => relations.push({ id, operation: 'removeParent' }));
         change.addChildren?.forEach(id => relations.push({ id, operation: 'addChild' }));
         change.removeChildren?.forEach(id => relations.push({ id, operation: 'removeChild' }));
-        
+
         return {
             id: change.taskId,
             data: {},
@@ -397,18 +330,18 @@ export interface ITasksLocal {
             | {
                 userId: string;
                 ids?: never;
-                onInitialize: (tasks: Task[]) => void;
-                onChange: (changes: TaskDelta[]) => void;
+                // onInitialize: (tasks: Task[]) => void;
+                // onChange: (changes: TaskDelta[]) => void;
             }
             | {
                 ids: string[];
                 ancestorDepth: number;
                 descendantDepth: number;
                 userId?: never;
-                onInitialize: (tasks: Task[]) => void;
-                onChange: (changes: TaskDelta[]) => void;
+                // onInitialize: (tasks: Task[]) => void;
+                // onChange: (changes: TaskDelta[]) => void;
             }
-    ): () => void;
+    ): { unsubscribe: () => void, tasks: Readable<Task[]> };
 
     exportData(): Promise<string>;
     importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<number>;

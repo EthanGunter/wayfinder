@@ -50,22 +50,6 @@
 		<Separator orientation="vertical" class="h-6 bg-gray-300/60" />
 		<Button
 			id="btn-nav-tasks"
-			onclick={() => goto('/tasks')}
-			aria-label="Go to tasks"
-			class="{btnClass} {page.url.pathname.startsWith('/tasks') ? 'bg-gray-200 text-gray-900' : ''}"
-		>
-			<span class="flex items-center gap-4">
-				<Icon icon="grommet-icons:tree" class="size-4" />
-				<span
-					class="font-extralight {page.url.pathname.startsWith('/tasks')
-						? 'text-gray-900'
-						: 'text-gray-600'}">Browser</span
-				>
-			</span>
-		</Button>
-		<Separator orientation="vertical" class="h-6 bg-gray-300/60" />
-		<Button
-			id="btn-nav-tasks"
 			onclick={() => goto('/graph')}
 			aria-label="Go to tasks"
 			class="{btnClass} {page.url.pathname.startsWith('/graph') ? 'bg-gray-200 text-gray-900' : ''}"

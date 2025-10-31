@@ -4,6 +4,7 @@ import { TaskStatus, type CreateTaskParams, type ITasks, type ITasksLocal, type 
 import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";
+import { writable, type Readable } from "svelte/store";
 
 /* type TaskRow = Doc<"tasks">;
 type TaskId = Id<"tasks">;
@@ -153,87 +154,86 @@ export const localApi: ITasksLocal = {
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 
-	// Minimal placeholder subscription; initialize once and return a no-op unsubscribe
-	subscribeTasks: function (params: {
-		userId: string;
-		ids?: never;
-		onInitialize: (tasks: Task[]) => void;
-		onChange: (changes: TaskDelta[]) => void;
-	} | {
-		ids: string[];
-		ancestorDepth: number;
-		descendantDepth: number;
-		userId?: never;
-		onInitialize: (tasks: Task[]) => void;
-		onChange: (changes: TaskDelta[]) => void;
-	}): () => void {
+	// Store-based subscription API
+	subscribeTasks: function (
+		params:
+			| {
+				userId: string;
+				ids?: never;
+			}
+			| {
+				ids: string[];
+				ancestorDepth: number;
+				descendantDepth: number;
+				userId?: never;
+			}
+	): { unsubscribe: () => void; tasks: Readable<Task[]> } {
+		const tasksStore = writable<Task[]>([]);
 		let prevMap: Map<string, Task> = new Map();
-		const toMap = (list: Task[]) => new Map(list.map(t => [t.id, t] as [string, Task]));
-		const equals = (a: Task, b: Task) => new Date(a.lastEdit).getTime() === new Date(b.lastEdit).getTime();
-		const computeDeltas = (oldMap: Map<string, Task>, newMap: Map<string, Task>): TaskDelta[] => {
-			const deltas: TaskDelta[] = [];
-			for (const [id, next] of newMap) {
-				const prev = oldMap.get(id);
-				if (!prev) deltas.push({ oldTask: null, newTask: next });
-				else if (!equals(prev, next)) deltas.push({ oldTask: prev, newTask: next });
+		const toMap = (list: Task[]) => new Map(list.map((t) => [t.id, t] as [string, Task]));
+		const sameTask = (a: Task, b: Task) => new Date(a.lastEdit).getTime() === new Date(b.lastEdit).getTime();
+		const updateStore = (list: Task[]) => {
+			const nextMap = toMap(list);
+			let changed = nextMap.size !== prevMap.size;
+			if (!changed) {
+				for (const [id, next] of nextMap) {
+					const prev = prevMap.get(id);
+					if (!prev || !sameTask(prev, next)) {
+						changed = true;
+						break;
+					}
+				}
 			}
-			for (const [id, prev] of oldMap) {
-				if (!newMap.has(id)) deltas.push({ oldTask: prev, newTask: null });
+			if (changed) {
+				tasksStore.set(list);
+				prevMap = nextMap;
 			}
-			return deltas;
 		};
 
-	let unsubscribe: (() => void) | null = null;
+		let innerUnsubscribe: (() => void) | null = null;
 
-	const startUserSubscription = () => {
-			unsubscribe = client.onUpdate(
+		const startUserSubscription = () => {
+			innerUnsubscribe = client.onUpdate(
 				convexApi.tasks.getAllUserTasks,
 				{ userId: isUserSubscription(params) ? params.userId : "" },
 				(result) => {
 					const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
-					if (prevMap.size === 0) {
-						prevMap = toMap(list);
-						params.onInitialize(list);
-						return;
-					}
-					const nextMap = toMap(list);
-					const deltas = computeDeltas(prevMap, nextMap);
-					if (deltas.length > 0) params.onChange(deltas);
-					prevMap = nextMap;
+					updateStore(list);
 				},
-				(error: Error) => {
-					// Surface as no-op; calling sites already handle errors on mutations/queries
-				}
+				(_error: Error) => { /* no-op */ }
 			);
 		};
 
 		const startScopedSubscription = async () => {
-			const { ids, ancestorDepth, descendantDepth } = isScopedSubscription(params) ? params : { ids: [], ancestorDepth: 0, descendantDepth: 0 } as { ids: string[]; ancestorDepth: number; descendantDepth: number };
+			const { ids, ancestorDepth, descendantDepth } = isScopedSubscription(params)
+				? params
+				: ({ ids: [], ancestorDepth: 0, descendantDepth: 0 } as {
+						ids: string[];
+						ancestorDepth: number;
+						descendantDepth: number;
+					});
 			const included = await computeIncludedIds(ids as string[], ancestorDepth as number, descendantDepth as number);
 			const watchIds = Array.from(included);
-			unsubscribe = client.onUpdate(
+			innerUnsubscribe = client.onUpdate(
 				convexApi.tasks.getTasks,
 				{ ids: watchIds as Id<'tasks'>[] },
 				(result) => {
 					const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
-					if (prevMap.size === 0) {
-						prevMap = toMap(list);
-						params.onInitialize(list);
-						return;
-					}
-					const nextMap = toMap(list);
-					const deltas = computeDeltas(prevMap, nextMap);
-					if (deltas.length > 0) params.onChange(deltas);
-					prevMap = nextMap;
+					updateStore(list);
 				},
-				(_error: Error) => { }
+				(_error: Error) => { /* no-op */ }
 			);
 		};
 
 		if (isUserSubscription(params)) startUserSubscription();
 		else if (isScopedSubscription(params)) void startScopedSubscription();
 
-		return () => { if (unsubscribe) unsubscribe(); };
+		return {
+			unsubscribe: () => {
+				if (innerUnsubscribe) innerUnsubscribe();
+			},
+			tasks: tasksStore as Readable<Task[]>,
+		};
 	},
 
 	exportData: async () => { Err.NotImplemented('exportData'); },

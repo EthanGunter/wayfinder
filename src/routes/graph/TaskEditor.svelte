@@ -49,7 +49,7 @@
 	}
 </script>
 
-<div class="task-editor flex flex-col p-3">
+<div class="task-editor flex flex-col p-3 h-full w-full">
 	<!-- Task Header -->
 	<div class="mb-3 flex items-start gap-4 border-b-1 border-gray-200 pb-2">
 		<Checkbox
@@ -67,16 +67,7 @@
 				oninput={handleInput}
 			/>
 		</div>
-		<button
-			class="mt-1 flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-gray-50 hover:text-gray-600"
-			onclick={(e) => {
-				goto(`tasks?id=${task.id}`);
-			}}
-			title="Go to task"
-		>
-			<Icon icon="majesticons:open" />
-		</button>
-		<span class="text-gray-200">|</span>
+
 		<button
 			onclick={openDeleteDialog}
 			class="mt-1 flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
@@ -94,7 +85,7 @@
 		placeholder="Add notes or description..."
 		bind:value={task.content}
 		oninput={handleInput}
-		class="w-full resize-none border-0 bg-transparent text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
+		class="w-full resize-none border-1 p-1 h-full bg-transparent text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
 		rows="3"
 	></textarea>
 
