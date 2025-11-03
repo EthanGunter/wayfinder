@@ -1,57 +1,28 @@
 <script lang="ts">
 	import { DropEvent, droppable } from '$lib/actions/dnd';
-	import { goto } from '$app/navigation';
 	import TaskListItem from './TaskListItem.svelte';
-	import { onMount } from 'svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { authState } from '$lib/API/Auth';
 	import tasksAPI from '$lib/API/Tasks';
-	import { page } from '$app/state';
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 
-	let todaysList = $state<Task[]>([]);
-	let suggestedTasks = $state<Task[]>([]);
-	let hasAnyTasksExplicit = $state(false);
+	let todaysList = tasksAPI.getTodaysTasks();
+	let suggestedTasks = tasksAPI.getPrioritizedTasks(15);
 
-	function refreshTasks() {
-		tasksAPI!.getTodaysTasks().then(([todaysTasks, error]) => {
-			if (error) {
-				Err.UNHANDLED(error);
-			}
-			todaysList = todaysTasks;
-		});
-		tasksAPI!.getPrioritizedTasks(15).then(([tasks, error]) => {
-			if (error) {
-				Err.UNHANDLED(error);
-			}
-			suggestedTasks = tasks;
-		});
-
-		// Check if the user has any tasks at all (even if none are actionable)
-		if ($authState.status === 'signed-in') {
-			tasksAPI!.getAllUserTasks({ userId: $authState.user.id }).then(([userTasks, error]) => {
-				if (error) {
-					Err.UNHANDLED(error);
-				}
-				hasAnyTasksExplicit = userTasks.length > 0;
-			});
-		}
-	}
 
 	async function handleTodaysTaskDrop(e: DropEvent<Task>) {
 		const task = e.detail.data;
 		if (!task) return;
+		if ($todaysList.status !== 'resolved') return;
 
-		if (!todaysList.includes(task)) {
-			todaysList = [...todaysList, task];
-			await tasksAPI!.updateTask({
+		if (!$todaysList.data.includes(task)) {
+			await tasksAPI.updateTask({
 				id: task.id,
 				data: { todaysTask: new Date() }
 			});
-			refreshTasks();
 		}
 	}
 
@@ -59,7 +30,6 @@
 		const task = e.detail.data;
 		if (!task) return;
 
-		todaysList = todaysList.filter((t) => t.id !== task.id);
 		const [_, error] = await tasksAPI!.updateTask({
 			id: task.id,
 			data: { todaysTask: undefined }
@@ -67,7 +37,6 @@
 		if (error) {
 			Err.UNHANDLED(error);
 		}
-		refreshTasks();
 	}
 
 	async function onTaskChange(task: Task, changes: Partial<Task>) {
@@ -77,41 +46,31 @@
 		if (error) {
 			Err.UNHANDLED(error);
 		}
-
-		refreshTasks();
-	}
-
-	async function startProject() {
-		// TODO:UX Navigate to /tasks/ and open the create project drawer
-		alert(
-			'Button temporarily disabled. Please click the "Browser" button at the bottom of the page instead.'
-		);
 	}
 
 	// Filter completed tasks and duplicates
 	let filteredDaysTasks = $derived(
 		// TODO:UX this should sort by priority, but the tasks' priorities are not related to each other... Today's tasks need their own local priority :(
-		[...todaysList].sort((a, b) => {
-			const ac = isTaskCompleted(a);
-			const bc = isTaskCompleted(b);
+		$todaysList.status === 'resolved'
+			? $todaysList.data.sort((a, b) => {
+					const ac = isTaskCompleted(a);
+					const bc = isTaskCompleted(b);
 
-			// If both or neither are completed, sort by title
-			if ((ac && bc) || !(ac || bc)) return a.title < b.title ? -1 : 1;
-			// Otherwise move completed lower
-			else if (isTaskCompleted(a)) return 1;
-			else return -1;
-		})
+					// If both or neither are completed, sort by title
+					if ((ac && bc) || !(ac || bc)) return a.title < b.title ? -1 : 1;
+					// Otherwise move completed lower
+					else if (isTaskCompleted(a)) return 1;
+					else return -1;
+				})
+			: []
 	);
 	let firstCompletedIndex = $derived(filteredDaysTasks.findIndex((t) => isTaskCompleted(t)));
 	let filteredSuggestedTasks = $derived(
-		suggestedTasks.filter(
-			(task) => !isTaskCompleted(task) && !todaysList.find((t) => task.id === t.id)
-		)
-	);
-
-	// Check if user has any tasks at all
-	let hasAnyTasks = $derived(
-		hasAnyTasksExplicit || todaysList.length > 0 || suggestedTasks.length > 0
+		$suggestedTasks.status === 'resolved' && $todaysList.status === 'resolved'
+			? $suggestedTasks.data.filter(
+					(task) => !isTaskCompleted(task) && !$todaysList.data.find((t) => task.id === t.id)
+				)
+			: []
 	);
 </script>
 
@@ -136,6 +95,7 @@
 					{/if}
 					<div class="tasks-list">
 						{#each filteredDaysTasks as task, index (task.id)}
+							<!-- {#each filteredDaysTasks as task, index} -->
 							{#if index === firstCompletedIndex && firstCompletedIndex !== -1}
 								<div class="completed-separator" aria-hidden="true">Completed</div>
 							{/if}
@@ -154,15 +114,11 @@
 					<h2>Suggested Tasks</h2>
 
 					{#if filteredSuggestedTasks.length === 0}
-						<div>
-							<h4>There's nothing to suggest!</h4>
-							{#if !hasAnyTasks}
-								<Button id="add-task-button" onclick={startProject}>Start a Project</Button>
-							{/if}
-						</div>
+						<h4>There's nothing to suggest!</h4>
 					{/if}
 
 					<div class="tasks-list">
+						<!-- {#each filteredSuggestedTasks as task} -->
 						{#each filteredSuggestedTasks as task (task.id)}
 							<TaskListItem {task} {onTaskChange} />
 						{/each}
