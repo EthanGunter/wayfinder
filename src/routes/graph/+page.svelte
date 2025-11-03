@@ -20,7 +20,10 @@
 
 	// UI State
 	let editorLayoutState: TaskEditorLayoutState = $state({ accordionValues: [] });
-
+	$effect(() => {
+		editorLayoutState;
+		console.log(editorLayoutState);
+	});
 
 	const controller = createGraphController();
 	let drawerOpenStore = controller.drawerOpen;

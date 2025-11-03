@@ -31,12 +31,18 @@
 	}
 
 	// Props
-	let { task = $bindable(), layoutState = $bindable(), onTaskChange, onDelete }: Props = $props();
+	let {
+		task = $bindable(),
+		layoutState = $bindable({ accordionValues: [] }),
+		onTaskChange,
+		onDelete
+	}: Props = $props();
 
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
 	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
 	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
+
 	$effect(() => {
 		task.id;
 		siblingsStore.updateQuery({ id: task.id });
@@ -50,7 +56,7 @@
 
 	// Internals
 	let showDeleteDialog = $state(false);
-	let accordionValues = $state<string[]>(layoutState?.accordionValues ?? []);
+	let accordionValues = $derived(layoutState.accordionValues);
 
 	// Complete status mirrors task.status; no redundant state held
 	function toggleCompleted(next: boolean) {
@@ -344,7 +350,13 @@
 	></textarea>
 
 	{#if $siblingsStore.status === 'resolved' && $childTasksStore.status === 'resolved'}
-		<Accordion.Root type="multiple" bind:value={accordionValues}>
+		<Accordion.Root
+			type="multiple"
+			value={accordionValues}
+			onValueChange={(e) => {
+				layoutState.accordionValues = e;
+			}}
+		>
 			{#if $siblingsStore.data.size > 0}
 				<Accordion.Item value="parent-order">
 					<Accordion.Trigger
@@ -355,6 +367,20 @@
 					<Accordion.Content>
 						<div class="flex flex-col gap-4">
 							{#each Array.from($siblingsStore.data.entries()) as [parent, siblings] (parent.id)}
+								{@const sortedChildren = (() => {
+									const ids = parent.children ?? [];
+									const incomplete: string[] = [];
+									const complete: string[] = [];
+									for (const cid of ids) {
+										const sibling = siblings.find((s) => s.id === cid);
+										if (sibling && isTaskCompleted(sibling)) {
+											complete.push(cid);
+										} else {
+											incomplete.push(cid);
+										}
+									}
+									return { incomplete, complete };
+								})()}
 								<div class="flex flex-col gap-2">
 									<div class="flex gap-2 text-sm text-gray-600">
 										<button
@@ -366,25 +392,29 @@
 									</div>
 									<ul
 										data-parent-container={parent.id}
-										class="relative divide-y divide-gray-200 rounded border border-gray-200"
+										class="relative rounded border border-gray-200"
 									>
-										{#each parent.children ?? [] as cid (cid)}
+										{#each sortedChildren.incomplete as cid (cid)}
 											<li class="flex items-center gap-2 px-2 py-1 text-sm" data-sibling-id={cid}>
 												{#if cid === task.id}
 													<div
-														class="cursor-grab rounded border border-gray-300 bg-white px-2 py-1 shadow-sm select-none active:cursor-grabbing"
+														class="flex-1 cursor-grab rounded border border-gray-300 bg-white px-2 py-1 select-none hover:border-gray-400 active:cursor-grabbing"
 														data-draggable
 														title="Drag to reorder within this parent"
 													>
 														<Icon
 															icon="lucide:grip-vertical"
-															class="mr-1 inline size-3 opacity-70"
+															class="mr-1 inline size-3 text-gray-400"
 														/>
 														<span>{task.title}</span>
 													</div>
 												{:else}
-													<div class="flex-1 opacity-50">
-														{siblings.find((s) => s.id === cid)?.title ?? cid}
+													<div
+														class="flex-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-gray-500"
+													>
+														<span class="ml-5"
+															>{siblings.find((s) => s.id === cid)?.title ?? cid}</span
+														>
 													</div>
 												{/if}
 											</li>
@@ -402,22 +432,44 @@
 					<Accordion.Trigger
 						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 					>
-						Child Priority
+						Children
 					</Accordion.Trigger>
 					<Accordion.Content>
-						<ul
-							data-children-container
-							class="relative divide-y divide-gray-200 rounded border border-gray-200"
-						>
-							{#each $childTasksStore.data as child (child.id)}
+						{@const sortedChildren = (() => {
+							const incomplete = $childTasksStore.data.filter((c) => !isTaskCompleted(c));
+							const complete = $childTasksStore.data.filter((c) => isTaskCompleted(c));
+							return { incomplete, complete };
+						})()}
+						<ul data-children-container class="relative rounded border border-gray-200">
+							{#each sortedChildren.incomplete as child (child.id)}
 								<li class="flex items-center gap-2 px-2 py-1 text-sm" data-child-id={child.id}>
 									<div
-										class="cursor-grab rounded border border-gray-300 bg-white px-2 py-1 shadow-sm select-none active:cursor-grabbing"
+										class="flex-1 cursor-grab rounded border border-gray-300 bg-white px-2 py-1 select-none hover:border-gray-400 active:cursor-grabbing"
 										data-child-draggable
 										title="Drag to reorder children"
 									>
-										<Icon icon="lucide:grip-vertical" class="mr-1 inline size-3 opacity-70" />
+										<Icon icon="lucide:grip-vertical" class="mr-1 inline size-3 text-gray-400" />
 										<span>{child.title}</span>
+									</div>
+								</li>
+							{/each}
+							{#if sortedChildren.complete.length > 0 && sortedChildren.incomplete.length > 0}
+								<div class="flex items-center gap-3 px-2 py-3 text-xs font-medium text-gray-400">
+									<div
+										class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-gray-300"
+									></div>
+									<span class="tracking-wider uppercase">Completed</span>
+									<div
+										class="h-px flex-1 bg-gradient-to-l from-transparent via-gray-300 to-gray-300"
+									></div>
+								</div>
+							{/if}
+							{#each sortedChildren.complete as child (child.id)}
+								<li class="flex items-center gap-2 px-2 py-1 text-sm" data-child-id={child.id}>
+									<div
+										class="flex-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-gray-500"
+									>
+										<span class="ml-5">{child.title}</span>
 									</div>
 								</li>
 							{/each}
