@@ -15,6 +15,7 @@
 	import { Err } from '$domain/errors';
 	import type { Task } from '$domain/models/task';
 	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
+	import { page } from '$app/stores';
 
 	let selectedTask = $state<Task | null>(null);
 
@@ -42,8 +43,28 @@
 		selectedTask = null;
 	}
 
+	function highlightNode(taskId: string, options?: { select?: boolean }) {
+		controller.centerNode(taskId, options);
+		if (options?.select) {
+			const node = $nodesStore.find((n) => n.id === taskId);
+			selectedTask = (node?.data as Task | undefined) ?? null;
+		}
+	}
+
 	onMount(() => {
 		controller.init();
+
+		// Handle URL params for highlighting
+		const params = $page.url.searchParams;
+		const highlightId = params.get('highlight');
+		const shouldSelect = params.get('select') === 'true';
+		
+		if (highlightId) {
+			// Defer until graph is laid out
+			setTimeout(() => {
+				highlightNode(highlightId, { select: shouldSelect });
+			}, 500);
+		}
 	});
 	onDestroy(() => {
 		controller.destroy();
@@ -69,8 +90,9 @@
 							edgeTypes={{ task: TaskEdge }}
 							defaultEdgeOptions={{ type: 'task' }}
 							oninit={() => {
-								const { screenToFlowPosition } = useSvelteFlow();
-								controller.setScreenToFlowPosition(screenToFlowPosition);
+								const instance = useSvelteFlow();
+								controller.setScreenToFlowPosition(instance.screenToFlowPosition);
+								controller.setSvelteFlowInstance(instance);
 							}}
 							ondelete={controller.handlers.handleDelete}
 							onconnectstart={controller.handlers.handleConnectStart}
@@ -120,6 +142,7 @@
 							bind:layoutState={editorLayoutState}
 							{onTaskChange}
 							{onDelete}
+							onHighlightNode={highlightNode}
 						/>
 					</ScrollArea>
 				</ResizablePane>

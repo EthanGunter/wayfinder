@@ -32,6 +32,8 @@ export interface GraphControllerState {
 	setScreenToFlowPosition: (
 		fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
 	) => void;
+	getSvelteFlowInstance: () => any | null;
+	setSvelteFlowInstance: (instance: any) => void;
 	connectionState: {
 		successful: boolean;
 		sourceNodeId: string | null;
@@ -52,6 +54,8 @@ export interface GraphController {
 	setScreenToFlowPosition: (
 		fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
 	) => void;
+	setSvelteFlowInstance: (instance: any) => void;
+	centerNode: (taskId: string, options?: { select?: boolean }) => void;
 	nodes: Readable<Node[]>;
 	edges: Readable<Edge[]>;
 	drawerOpen: Readable<boolean>;
@@ -90,6 +94,7 @@ export function createGraphController(): GraphController {
 	// Controller-owned state and stores
 	const taskById = new Map<string, Task>();
 	let screenToFlowPosition: ((point: { x: number; y: number }) => { x: number; y: number }) | null = null;
+	let svelteFlowInstance: any = null;
 
 	const nodesStore = writable<Node[]>([]);
 	const edgesStore = writable<Edge[]>([]);
@@ -135,6 +140,10 @@ export function createGraphController(): GraphController {
 		getScreenToFlowPosition: () => screenToFlowPosition,
 		setScreenToFlowPosition: (fn) => {
 			screenToFlowPosition = fn;
+		},
+		getSvelteFlowInstance: () => svelteFlowInstance,
+		setSvelteFlowInstance: (instance) => {
+			svelteFlowInstance = instance;
 		},
 		connectionState,
 		reconnectionState
@@ -362,6 +371,19 @@ export function createGraphController(): GraphController {
 		}
 	}
 
+	function centerNode(taskId: string, options?: { select?: boolean }) {
+		const node = state.getNodes().find((n) => n.id === taskId);
+		if (!node) return;
+
+		const instance = state.getSvelteFlowInstance();
+		if (!instance?.setCenter) return;
+
+		// Pan to node center with animation
+		instance.setCenter(node.position.x, node.position.y, { duration: 250 });
+
+		// Note: selection handled by caller (page component) to avoid circular deps
+	}
+
 	return {
 		init: () => {
 			initTutorialRedirect();
@@ -372,6 +394,8 @@ export function createGraphController(): GraphController {
 			unsubscribeAuth?.();
 		},
 		setScreenToFlowPosition: (fn) => state.setScreenToFlowPosition(fn),
+		setSvelteFlowInstance: (instance) => state.setSvelteFlowInstance(instance),
+		centerNode,
 		nodes: nodesStore,
 		edges: edgesStore,
 		drawerOpen: drawerOpenStore,
