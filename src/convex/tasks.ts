@@ -2,7 +2,7 @@ import { Err, NotAuthorizedError, NotFoundError, NotImplementedError } from "$do
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SharedTask as SystemAgnosticTask } from "$domain/models/task";
+import { calculateRelationshipChanges, relationshipChangesToUpdateParams, Task, TaskBase, type SharedTask as SystemAgnosticTask } from "$domain/models/task";
 
 
 //#region Utility
@@ -354,13 +354,12 @@ export const getChildrenOf = query({
 		if (!parent) return { ok: false as const, error: serializeError(new NotFoundError("Task not found", "" + id)) };
 		const childIds = parent.children ?? [];
 		if (childIds.length === 0) return { ok: true as const, value: [] };
-		
-		// Fetch all tasks and create a lookup map
-		const tasks = await ctx.db.query("tasks").collect();
-		const taskMap = new Map(tasks.map((t) => ["" + t._id, t]));
-		
-		// Return tasks in the order specified by parent.children
-		const ordered = childIds.map((id) => taskMap.get(id)).filter((t) => t !== undefined);
+
+		// Fetch only the children we need, preserving order
+		const childDocs = await Promise.all(childIds.map((cid) => ctx.db.get(cid as Id<"tasks">)));
+		const ordered = childDocs.filter(
+			(t): t is NonNullable<typeof t> => !!t
+		);
 		return { ok: true as const, value: ordered };
 	},
 });
@@ -372,17 +371,85 @@ export const getParentsOf = query({
 		if (!child) return { ok: false as const, error: serializeError(new NotFoundError("Task not found", "" + id)) };
 		const parentIds = child.parents ?? [];
 		if (parentIds.length === 0) return { ok: true as const, value: [] };
-		const tasks = await ctx.db.query("tasks").collect();
-		const filtered = tasks.filter((t) => parentIds.includes("" + t._id));
+		const parentDocs = await Promise.all(parentIds.map((pid) => ctx.db.get(pid as Id<"tasks">)));
+		const filtered = parentDocs.filter((t): t is NonNullable<typeof t> => !!t);
 		return { ok: true as const, value: filtered };
+	},
+});
+
+export const getSiblingsOf = query({
+	args: { id: v.id("tasks") },
+	handler: async (ctx, { id }) => {
+		// 1) Load the task
+		const self = await ctx.db.get(id);
+		if (!self) {
+			return {
+				ok: false as const,
+				error: serializeError(new NotFoundError("Task not found", "" + id)),
+			};
+		}
+
+		const parentIds = self.parents ?? [];
+		if (parentIds.length === 0) {
+			return { ok: true as const, value: [] };
+		}
+
+		// 2) Fetch only the parents we need
+		const parentFetches = parentIds.map((pid) => ctx.db.get(pid as Id<"tasks">));
+		const parents = await Promise.all(parentFetches);
+		const existingParents = parents.filter(
+			(p): p is NonNullable<typeof p> => !!p
+		);
+
+		if (existingParents.length === 0) {
+			// Parents list references missing docs -> no siblings we can resolve
+			return { ok: true as const, value: [] };
+		}
+
+		// 3) Compute de-duplicated sibling ids from parents' children arrays
+		const selfKey = "" + id;
+		const seen = new Map<string, Doc<'tasks'> | null>();
+		const siblings = new Map<Doc<'tasks'>, Doc<'tasks'>[]>();
+
+		const addSibling = (parent: Doc<'tasks'>, sibling: Doc<'tasks'>) => {
+			if (siblings.has(parent)) {
+				siblings.get(parent)!.push(sibling);
+			} else {
+				siblings.set(parent, [sibling]);
+			}
+		}
+
+		for (const parent of existingParents) {
+			const childIds = parent.children ?? [];
+			if (!Array.isArray(childIds) || childIds.length === 0) continue;
+
+			for (const cid of childIds as Array<string | { _id?: unknown }>) {
+				const key = "" + cid; // convex ids stringify fine
+				if (key === selfKey) continue; // exclude self
+				if (seen.has(key)) {
+					addSibling(parent, seen.get(key)!);
+					continue; // dedupe across parents
+				}
+				const sibling = await ctx.db.get(key as Id<'tasks'>);
+				seen.set(key, sibling);
+				if (sibling) addSibling(parent, sibling);
+			}
+		}
+
+		return { ok: true as const, value: Array.from(siblings) };
 	},
 });
 
 export const getRootTasks = query({
 	args: {},
 	handler: async (ctx) => {
-		const tasks = await ctx.db.query("tasks").collect();
-		const roots = tasks.filter((t) => t.parents.length === 0);
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) return { ok: true as const, value: [] }; // TODO:UX/DX Log and error
+		const rows = await ctx.db
+			.query("tasks")
+			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
+			.collect();
+		const roots = rows.filter((t) => (t.parents?.length ?? 0) === 0);
 		return { ok: true as const, value: roots };
 	},
 });
@@ -406,10 +473,14 @@ export const getTodaysTasks = query({
 export const getPrioritizedTasks = query({
 	args: { limit: v.number() },
 	handler: async (ctx, { limit }) => {
-		const rows = await ctx.db.query("tasks").collect();
-		const tasks = rows;
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) return { ok: true as const, value: [] }; // TODO:UX/DX Log and error
+		const tasks = await ctx.db
+			.query("tasks")
+			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
+			.collect();
 		const roots = tasks.filter((t) => (t.parents?.length ?? 0) === 0);
-		const tasksMap = new Map(tasks.map((t) => [t._id, t] as [string, DBTask]));
+		const tasksMap = new Map(tasks.map((t) => ["" + t._id, t] as [string, DBTask]));
 		const sorter = (a?: DBTask, b?: DBTask) => {
 			// TODO This is going to need context from the parent to determine sibling priority...
 			if (!a) return -1; if (!b) return 1; return 0; // (b.priority ?? 0) - (a.priority ?? 0);

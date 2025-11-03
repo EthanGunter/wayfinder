@@ -1,5 +1,4 @@
 import type { Task } from '$domain/models/task';
-import type { ITasksLocal } from '$lib/API/Tasks/seam-interfaces';
 import { Err } from '$domain/errors';
 import type { Node, Edge, OnConnectEnd, OnReconnectEnd, Connection } from '@xyflow/svelte';
 import { authState } from '$lib/API/Auth';
@@ -50,17 +49,17 @@ export interface GraphControllerState {
 export interface GraphController {
 	init: () => void;
 	destroy: () => void;
-    setScreenToFlowPosition: (
-        fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
-    ) => void;
-    nodes: Readable<Node[]>;
-    edges: Readable<Edge[]>;
-    drawerOpen: Readable<boolean>;
-    triggerTaskForNew: Readable<DrawerTrigger>;
-    replaceNodesFromView: (nodes: Node[]) => void;
-    replaceEdgesFromView: (edges: Edge[]) => void;
-    setDrawerOpen: (open: boolean) => void;
-    setTriggerTaskForNew: (trigger: DrawerTrigger) => void;
+	setScreenToFlowPosition: (
+		fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
+	) => void;
+	nodes: Readable<Node[]>;
+	edges: Readable<Edge[]>;
+	drawerOpen: Readable<boolean>;
+	triggerTaskForNew: Readable<DrawerTrigger>;
+	replaceNodesFromView: (nodes: Node[]) => void;
+	replaceEdgesFromView: (edges: Edge[]) => void;
+	setDrawerOpen: (open: boolean) => void;
+	setTriggerTaskForNew: (trigger: DrawerTrigger) => void;
 	handlers: {
 		isValidConnection: (connection: { source?: string; target?: string }) => boolean;
 		handleConnectStart: (
@@ -85,7 +84,6 @@ export interface GraphController {
 }
 
 export function createGraphController(): GraphController {
-	let unsubscribeRemote: (() => void) | null = null;
 	let unsubscribeStore: (() => void) | null = null;
 	let unsubscribeAuth: (() => void) | null = null;
 
@@ -120,7 +118,7 @@ export function createGraphController(): GraphController {
 	const getNodes = () => get(nodesStore);
 	const getEdges = () => get(edgesStore);
 	const setDrawerOpen = (open: boolean) => {
-		if (get(drawerOpenStore) !== open) drawerOpenStore.set(open);
+		drawerOpenStore.set(open);
 	};
 	const setTriggerTaskForNew = (trigger: DrawerTrigger) => {
 		if (get(triggerStore) !== trigger) triggerStore.set(trigger);
@@ -162,19 +160,15 @@ export function createGraphController(): GraphController {
 			if (auth.status === 'signed-in') {
 				unsubscribeStore?.();
 				unsubscribeStore = null;
-				unsubscribeRemote?.();
-				unsubscribeRemote = null;
-				const { tasks, unsubscribe } = tasksAPI.subscribeTasks({ userId: auth.user.id });
-				unsubscribeRemote = unsubscribe;
-				unsubscribeStore = tasks.subscribe(async (list) => {
-					resetTaskMap(list);
-					await rebuildLayoutFromMap();
+				unsubscribeStore = tasksAPI.getAllUserTasks({ userId: auth.user.id }).subscribe(async taskSub => {
+					if (taskSub.status === 'resolved') {
+						resetTaskMap(taskSub.data);
+						await rebuildLayoutFromMap();
+					}
 				});
 			} else {
 				unsubscribeStore?.();
 				unsubscribeStore = null;
-				unsubscribeRemote?.();
-				unsubscribeRemote = null;
 				(state.taskById as Map<string, Task>).clear();
 				state.setNodes([]);
 				state.setEdges([]);
@@ -375,7 +369,6 @@ export function createGraphController(): GraphController {
 		},
 		destroy: () => {
 			unsubscribeStore?.();
-			unsubscribeRemote?.();
 			unsubscribeAuth?.();
 		},
 		setScreenToFlowPosition: (fn) => state.setScreenToFlowPosition(fn),

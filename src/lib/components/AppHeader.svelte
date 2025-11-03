@@ -27,60 +27,9 @@
 		feature:
 			'https://docs.google.com/forms/d/e/1FAIpQLScP4Yz3kHHbCFVR4ogsTSB9_XJ_rVGPNuQcS71T4LsV0lSsmw/viewform?usp=sf_link'
 	};
-	let multipleUsers = $state(false);
-	let recentTasks = $state<Task[]>([]);
+	let recentTasks = $derived(tasksAPI.getTodaysTasks());
 
 	let authSheetOpen = $state(false);
-
-	onMount(() => {
-		// Subscribe to auth stores
-		const unsubscribeAuthState = authState.subscribe(() => {
-			// Load recent tasks when user changes
-			loadRecentTasks();
-		});
-
-		const unsubscribeUsers = authUsers.subscribe((userList) => {
-			multipleUsers = userList.length > 1;
-		});
-
-		loadRecentTasks();
-
-		return () => {
-			unsubscribeAuthState();
-			unsubscribeUsers();
-		};
-	});
-
-	async function loadRecentTasks() {
-		if ($authState.status !== 'signed-in') return;
-		const [todaysTasks, error] = await tasksAPI.getTodaysTasks();
-		if (error) {
-			Err.UNHANDLED(error);
-		}
-
-		if (todaysTasks) {
-			recentTasks = todaysTasks.slice(0, 5); // Show up to 5 recent tasks
-		}
-	}
-
-	async function resetWalkthrough() {
-		if ($authState.status !== 'signed-in') return;
-		const confirmed = confirm(
-			'This will permanently delete all your tasks and reset all tutorials. Continue?'
-		);
-		if (!confirmed) return;
-		const [userTasks, error] = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
-		if (error) {
-			Err.UNHANDLED(error);
-		}
-		if (userTasks && userTasks.length > 0) {
-			await tasksAPI.deleteTasks({ ids: userTasks.map((task) => task.id) });
-		}
-		try {
-			localStorage.removeItem('wf.tutorials.v1');
-		} catch {}
-		location.reload();
-	}
 
 	async function search(query: string): Promise<Task[]> {
 		try {
@@ -121,7 +70,7 @@
 </script>
 
 <div
-	class="page-header flex items-center justify-between gap-4 bg-gray p-2 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
+	class="page-header bg-gray flex items-center justify-between gap-4 p-2 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
 >
 	{#if left}
 		{@render left()}
@@ -166,19 +115,6 @@
 							<div class="text-sm text-gray-500">Share your ideas</div>
 						</div>
 					</Button>
-
-					<!-- Reset Walkthrough -->
-					<Button
-						variant="outline"
-						class="flex h-16 items-center justify-start gap-3"
-						onclick={resetWalkthrough}
-					>
-						<Icon icon="material-symbols:refresh" class="size-6 text-gray-700" />
-						<div class="text-left">
-							<div class="font-medium">Reset Walkthrough</div>
-							<div class="text-sm text-gray-500">Deletes tasks and resets tutorials</div>
-						</div>
-					</Button>
 				</div>
 			</Sheet.Content>
 		</Sheet.Root>
@@ -191,7 +127,7 @@
 			handleQuery={search}
 			onItemSelected={gotoTask}
 			placeholder="Search tasks..."
-			defaultOptions={recentTasks}
+			defaultOptions={$recentTasks.status === 'resolved' ? $recentTasks.data : []}
 		>
 			{#snippet children(task)}
 				{#if typeof task === 'string'}

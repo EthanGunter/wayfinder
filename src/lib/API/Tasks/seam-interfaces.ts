@@ -40,6 +40,11 @@ export interface ITasks {
 	 */
 	getParentsOf(params: { id: string }): FetchableReadable<Task[]>;
 	/**
+	 * Gets all tasks that are children of the same parents as `id`
+	 * @note keyed by parent
+	 */
+	getSiblingsOf(params: { id: string }): FetchableReadable<Map<Task, Task[]>>;
+	/**
 	 * Gets all tasks that nothing depends on
 	 */
 	getRootTasks(): FetchableReadable<Task[]>;
@@ -92,6 +97,12 @@ export interface ITasksLocal {
 	 * Gets all tasks that are waiting for `id`
 	 */
 	getParentsOf(params: { id: string }): FetchableReadable<Task[]>;
+	/**
+	 * Gets all tasks that are children of the same parents as `id`
+	 * @note keyed by parent
+	 */
+	getSiblingsOf(params: { id: string }): FetchableReadable<Map<Task, Task[]>>;
+
 	/**
 	 * Gets all tasks that nothing depends on
 	 */

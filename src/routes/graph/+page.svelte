@@ -1,13 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import {
-		SvelteFlow,
-		SvelteFlowProvider,
-		Background,
-		type Node,
-		type Edge,
-		useSvelteFlow
-	} from '@xyflow/svelte';
+	import { SvelteFlow, SvelteFlowProvider, Background, useSvelteFlow } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import AppFooter from '$lib/components/AppFooter.svelte';
@@ -17,21 +10,23 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { ResizablePaneGroup, ResizablePane, ResizableHandle } from '$lib/components/ui/resizable';
 	import { createGraphController, type DrawerTrigger } from './graphController';
-	import TaskEditor from './TaskEditor.svelte';
+	import TaskEditor, { type TaskEditorLayoutState } from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
 	import type { Task } from '$domain/models/task';
 	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
 
-	let nodes = $state<Node[]>([]);
-	let edges = $state<Edge[]>([]);
 	let selectedTask = $state<Task | null>(null);
 
 	// UI State
-	let drawerOpen = $state(false);
-	let triggerTaskForNew = $state<DrawerTrigger>(null);
+	let editorLayoutState: TaskEditorLayoutState = $state({ accordionValues: [] });
+
 
 	const controller = createGraphController();
+	let drawerOpenStore = controller.drawerOpen;
+	let nodesStore = controller.nodes;
+	let edgesStore = controller.edges;
+	let triggerTaskForNewStore = controller.triggerTaskForNew;
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
 		const [_, error] = await tasksAPI.updateTask({ id: original.id, data: update });
@@ -44,38 +39,10 @@
 		selectedTask = null;
 	}
 
-	$effect(() => {
-		controller.replaceNodesFromView(nodes);
-	});
-	$effect(() => {
-		controller.replaceEdgesFromView(edges);
-	});
-
-	let unsubNodes: (() => void) | null = null;
-	let unsubEdges: (() => void) | null = null;
-	let unsubDrawer: (() => void) | null = null;
-	let unsubTrigger: (() => void) | null = null;
-
 	onMount(() => {
 		controller.init();
-		unsubNodes = controller.nodes.subscribe((n) => {
-			nodes = n;
-		});
-		unsubEdges = controller.edges.subscribe((e) => {
-			edges = e;
-		});
-		unsubDrawer = controller.drawerOpen.subscribe((v) => {
-			drawerOpen = v;
-		});
-		unsubTrigger = controller.triggerTaskForNew.subscribe((t) => {
-			triggerTaskForNew = t;
-		});
 	});
 	onDestroy(() => {
-		unsubNodes?.();
-		unsubEdges?.();
-		unsubDrawer?.();
-		unsubTrigger?.();
 		controller.destroy();
 	});
 
@@ -91,8 +58,8 @@
 					<div class="relative flex h-full w-full">
 						<SvelteFlow
 							class="h-full w-full"
-							bind:nodes
-							bind:edges
+							bind:nodes={$nodesStore}
+							bind:edges={$edgesStore}
 							fitView
 							nodeTypes={{ task: TaskNode }}
 							nodeOrigin={[0.5, 0.5]}
@@ -115,7 +82,7 @@
 								// Only change if it's a plain single click (no multi-select modifiers)
 								if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
 								selectedTask = node.id
-									? ((nodes.find((n) => n.id === node.id)?.data as Task | undefined) ?? null)
+									? (($nodesStore.find((n) => n.id === node.id)?.data as Task | undefined) ?? null)
 									: null;
 							}}
 							onpaneclick={() => {
@@ -145,7 +112,12 @@
 					minSize={24}
 				>
 					<ScrollArea class="h-full">
-						<TaskEditor bind:task={selectedTask} {onTaskChange} {onDelete} />
+						<TaskEditor
+							bind:task={selectedTask}
+							bind:layoutState={editorLayoutState}
+							{onTaskChange}
+							{onDelete}
+						/>
 					</ScrollArea>
 				</ResizablePane>
 			{/if}
@@ -154,7 +126,7 @@
 	<AppFooter />
 </div>
 
-<TaskCreationDrawer bind:open={drawerOpen} relation={triggerTaskForNew} />
+<TaskCreationDrawer bind:open={$drawerOpenStore} relation={$triggerTaskForNewStore} />
 
 <style>
 	:global(.svelte-flow__attribution) {
