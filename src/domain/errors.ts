@@ -118,11 +118,10 @@ export class NotAuthorizedError extends Err {
 }
 
 export class ParseError extends Err {
-    constructor(content: any, targetType: string) {
+    constructor(content: any, targetType: string, public start: number, public end: number) {
         super("ParseError", `Failed to parse content to ${targetType}`, content);
     }
 }
-
 export class IOError extends Err {
     constructor(message: string, internalError: any, context?: any) {
         const internal =

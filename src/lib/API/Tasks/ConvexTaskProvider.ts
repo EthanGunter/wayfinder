@@ -5,14 +5,9 @@ import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";
 import { createFetchableReadable as createFetchable, createQueryable } from "$lib/API/fetchableStore";
-import { writable, type Readable } from "svelte/store";
 import type { ITasks, ITasksLocal } from "./seam-interfaces";
 
-/* type TaskRow = Doc<"tasks">;
-type TaskId = Id<"tasks">;
-function toTaskId(id: string): TaskId { return id as TaskId; }
-function toTaskIds(ids: string[]): TaskId[] { return ids.map(toTaskId); }
- */
+
 export const api: ITasks = {
 	createTask: async ({ createDetail }) => {
 		const res = await client.mutation(convexApi.tasks.createTask, { createDetail: convexifyTaskDetails(createDetail) });
@@ -108,13 +103,13 @@ export const api: ITasks = {
 			}),
 
 	updateTask: async (update: UpdateTaskParams) => {
-		const res = await client.mutation(convexApi.tasks.updateTask, { update: { ...update, id: update.id as Id<'tasks'> } });
+		const res = await client.mutation(convexApi.tasks.updateTask, { update: convexifyTaskUpdate(update) });
 		if (isConvexOk(res)) return ok(rowToTask(res.value));
 		return err(res.error);
 	},
 
 	updateTasks: async ({ updates }) => {
-		const res = await client.mutation(convexApi.tasks.updateTasks, { updates: updates.map(u => ({ ...u, id: u.id as Id<'tasks'> })) });
+		const res = await client.mutation(convexApi.tasks.updateTasks, { updates: updates.map(u => convexifyTaskUpdate(u)) });
 		if (isConvexOk(res)) return ok(res.value.map(rowToTask));
 		return err(res.error);
 	},
@@ -316,88 +311,6 @@ export const localApi: ITasksLocal = {
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 
-	// Store-based subscription API
-	// subscribeTasks: function (
-	// 	params:
-	// 		| {
-	// 			userId: string;
-	// 			ids?: never;
-	// 		}
-	// 		| {
-	// 			ids: string[];
-	// 			ancestorDepth: number;
-	// 			descendantDepth: number;
-	// 			userId?: never;
-	// 		}
-	// ): { unsubscribe: () => void; tasks: Readable<Task[]> } {
-	// 	const tasksStore = writable<Task[]>([]);
-	// 	let prevMap: Map<string, Task> = new Map();
-	// 	const toMap = (list: Task[]) => new Map(list.map((t) => [t.id, t] as [string, Task]));
-	// 	const sameTask = (a: Task, b: Task) => new Date(a.lastEdit).getTime() === new Date(b.lastEdit).getTime();
-	// 	const updateStore = (list: Task[]) => {
-	// 		const nextMap = toMap(list);
-	// 		let changed = nextMap.size !== prevMap.size;
-	// 		if (!changed) {
-	// 			for (const [id, next] of nextMap) {
-	// 				const prev = prevMap.get(id);
-	// 				if (!prev || !sameTask(prev, next)) {
-	// 					changed = true;
-	// 					break;
-	// 				}
-	// 			}
-	// 		}
-	// 		if (changed) {
-	// 			tasksStore.set(list);
-	// 			prevMap = nextMap;
-	// 		}
-	// 	};
-
-	// 	let innerUnsubscribe: (() => void) | null = null;
-
-	// 	const startUserSubscription = () => {
-	// 		innerUnsubscribe = client.onUpdate(
-	// 			convexApi.tasks.getAllUserTasks,
-	// 			{ userId: isUserSubscription(params) ? params.userId : "" },
-	// 			(result) => {
-	// 				const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
-	// 				updateStore(list);
-	// 			},
-	// 			(_error: Error) => { /* no-op */ }
-	// 		);
-	// 	};
-
-	// 	const startScopedSubscription = async () => {
-	// 		const { ids, ancestorDepth, descendantDepth } = isScopedSubscription(params)
-	// 			? params
-	// 			: ({ ids: [], ancestorDepth: 0, descendantDepth: 0 } as {
-	// 				ids: string[];
-	// 				ancestorDepth: number;
-	// 				descendantDepth: number;
-	// 			});
-	// 		const included = await computeIncludedIds(ids as string[], ancestorDepth as number, descendantDepth as number);
-	// 		const watchIds = Array.from(included);
-	// 		innerUnsubscribe = client.onUpdate(
-	// 			convexApi.tasks.getTasks,
-	// 			{ ids: watchIds as Id<'tasks'>[] },
-	// 			(result) => {
-	// 				const list: Task[] = isConvexOk(result) ? result.value.map(rowToTask) : [];
-	// 				updateStore(list);
-	// 			},
-	// 			(_error: Error) => { /* no-op */ }
-	// 		);
-	// 	};
-
-	// 	if (isUserSubscription(params)) startUserSubscription();
-	// 	else if (isScopedSubscription(params)) void startScopedSubscription();
-
-	// 	return {
-	// 		unsubscribe: () => {
-	// 			if (innerUnsubscribe) innerUnsubscribe();
-	// 		},
-	// 		tasks: tasksStore as Readable<Task[]>,
-	// 	};
-	// },
-
 	exportData: async () => { Err.NotImplemented('exportData'); },
 	importData: async () => { Err.NotImplemented('exportData'); },
 };
@@ -434,14 +347,6 @@ async function computeIncludedIds(seedIds: string[], ancestorDepth: number, desc
 	return included;
 }
 
-function isUserSubscription(params: { userId: string; ids?: never } | { ids: string[]; ancestorDepth: number; descendantDepth: number; userId?: never }): params is { userId: string; ids?: never } {
-	return (params as { userId?: string }).userId !== undefined;
-}
-
-function isScopedSubscription(params: { userId: string; ids?: never } | { ids: string[]; ancestorDepth: number; descendantDepth: number; userId?: never }): params is { ids: string[]; ancestorDepth: number; descendantDepth: number; userId?: never } {
-	return (params as { ids?: string[] }).ids !== undefined;
-}
-
 type ConvexResponse<T, E = unknown> = { ok: true; value: T } | { ok: false; error: E };
 function isConvexOk<T, E>(res: ConvexResponse<T, E>): res is { ok: true; value: T } {
 	return (res as any).ok === true;
@@ -476,4 +381,28 @@ function rowToTask(row: Doc<"tasks">): Task {
 		created: new Date(row._creationTime),
 		lastEdit: new Date(row.lastEdit),
 	};
+}
+
+function convexifyTaskUpdate(update: UpdateTaskParams)/* : {
+	update:
+	{
+		data?: any;
+		relations?:
+		{
+			id: string;
+			operation: "addChild" | "removeChild" | "addParent" | "removeParent";
+		}[] | undefined;
+		id: Id<"tasks">;
+	};
+} */ {
+	return {
+		...update,
+		id: update.id as Id<'tasks'>,
+		data: update.data ? {
+			...update.data,
+			todaysTask: update.data?.todaysTask ? update.data.todaysTask.getTime() : undefined,
+			lastEdit: update.data?.lastEdit?.getTime(),
+		} : undefined
+	}
+
 }
