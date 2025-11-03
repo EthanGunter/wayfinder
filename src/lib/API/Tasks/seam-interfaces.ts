@@ -1,8 +1,7 @@
 import type { InvalidStateError, ArgumentError, NotAuthorizedError } from "$domain/errors";
 import type { CreateTaskParams, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
-import type { Readable } from "svelte/store";
-import type { FetchableReadable } from "../fetchableStore";
+import type { FetchableStore, QueryableStore } from "../fetchableStore";
 
 export interface ITasks {
 	/**
@@ -16,9 +15,9 @@ export interface ITasks {
 	/**
 	 * Fetches a task's data by its ID
 	 */
-	getTask(params: { id: string }): FetchableReadable<Task>;
-	getTasks(params: { ids: string[] }): FetchableReadable<Task[]>;
-	getAllUserTasks(params: { userId: string }): FetchableReadable<Task[]>;
+	getTask(params: { id: string }): QueryableStore<{ id: string }, Task>;
+	getTasks(params: { ids: string[] }): QueryableStore<{ ids: string[] }, Task[]>;
+	getAllUserTasks(params: { userId: string }): QueryableStore<{ userId: string }, Task[]>;
 	/**
 	 * @param task can be passed as an id
 	 */
@@ -34,31 +33,31 @@ export interface ITasks {
 	/**
 	 * Finds all tasks that must be completed before `id`
 	 */
-	getChildrenOf(params: { id: string }): FetchableReadable<Task[]>;
+	getChildrenOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are waiting for `id`
 	 */
-	getParentsOf(params: { id: string }): FetchableReadable<Task[]>;
+	getParentsOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are children of the same parents as `id`
 	 * @note keyed by parent
 	 */
-	getSiblingsOf(params: { id: string }): FetchableReadable<Map<Task, Task[]>>;
+	getSiblingsOf(params: { id: string }): QueryableStore<{ id: string }, Map<Task, Task[]>>;
 	/**
 	 * Gets all tasks that nothing depends on
 	 */
-	getRootTasks(): FetchableReadable<Task[]>;
+	getRootTasks(): FetchableStore<Task[]>;
 
 	/**
 	 * Gets all tasks that are on the "Today's List"
 	 */
-	getTodaysTasks(): FetchableReadable<Task[]>;
+	getTodaysTasks(): FetchableStore<Task[]>;
 	/**
 	 * Gets the top N tasks based on priority
 	 */
 	getPrioritizedTasks(limit: number /* , weights: WeightParams = {
       deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
-  } */): FetchableReadable<Task[]>;
+  } */): QueryableStore<{ limit: number }, Task[]>;
 
 	searchTasks(searchTerm: string): Promise<Task[]>;
 };
@@ -72,9 +71,9 @@ export interface ITasksLocal {
 	/**
 	 * Fetches a task's data by its ID
 	 */
-	getTask(params: { id: string }): FetchableReadable<Task>;
-	getTasks(params: { ids: string[] }): FetchableReadable<Task[]>;
-	getAllUserTasks(params: { userId: string }): FetchableReadable<Task[]>;
+	getTask(params: { id: string }): QueryableStore<{ id: string }, Task>;
+	getTasks(params: { ids: string[] }): QueryableStore<{ ids: string[] }, Task[]>;
+	getAllUserTasks(params: { userId: string }): QueryableStore<{ userId: string }, Task[]>;
 
 	/**
 	 * @param task can be passed as an id
@@ -92,32 +91,32 @@ export interface ITasksLocal {
 	/**
 	 * Finds all tasks that must be completed before `id`
 	 */
-	getChildrenOf(params: { id: string }): FetchableReadable<Task[]>;
+	getChildrenOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are waiting for `id`
 	 */
-	getParentsOf(params: { id: string }): FetchableReadable<Task[]>;
+	getParentsOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are children of the same parents as `id`
 	 * @note keyed by parent
 	 */
-	getSiblingsOf(params: { id: string }): FetchableReadable<Map<Task, Task[]>>;
+	getSiblingsOf(params: { id: string }): QueryableStore<{ id: string }, Map<Task, Task[]>>;
 
 	/**
 	 * Gets all tasks that nothing depends on
 	 */
-	getRootTasks(): FetchableReadable<Task[]>;
+	getRootTasks(): FetchableStore<Task[]>;
 
 	/**
 	 * Gets all tasks that are on the "Today's List"
 	 */
-	getTodaysTasks(): FetchableReadable<Task[]>;
+	getTodaysTasks(): FetchableStore<Task[]>;
 	/**
 	 * Gets the top N tasks based on priority
 	 */
 	getPrioritizedTasks(limit: number /* , weights: WeightParams = {
       deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
-  } */): FetchableReadable<Task[]>;
+  } */): QueryableStore<{ limit: number }, Task[]>;
 
 	searchTasks(searchTerm: string): Promise<Task[]>;
 
@@ -152,3 +151,4 @@ export interface ITasksLocal {
 
 	// hydrateForUser(params: { user: User }): Promise<void>;
 };
+

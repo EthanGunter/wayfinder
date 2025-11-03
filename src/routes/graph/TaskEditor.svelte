@@ -1,18 +1,4 @@
 <script lang="ts">
-	/**
-	 * TaskEditor.svelte (refactor)
-	 * Goals:
-	 * - Use stores as the single source of truth; no divergent local caches.
-	 * - Simplify DnD wiring using pragmatic-dnd as intended: one monitor + per-item drop targets.
-	 * - Keep behavior: edit title/content; toggle complete; delete; reorder among parents and among children.
-	 * - Minimize code; rely on derived stores and simple DOM queries with data-* attributes.
-	 *
-	 * Notes:
-	 * - Sibling and child reorders only persist via tasksAPI.updateTask; rendering reacts via stores.
-	 * - No new features or APIs introduced.
-	 */
-
-	import { type Snippet } from 'svelte';
 	import Icon from '@iconify/svelte';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
@@ -49,13 +35,12 @@
 
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
-	const siblingsStore = $derived.by(() => {
-		task.id; // explicit dependency
-		return tasksAPI.getSiblingsOf({ id: task.id });
-	});
-	const childTasksStore = $derived.by(() => {
-		task.id; // explicit dependency
-		return tasksAPI.getChildrenOf({ id: task.id });
+	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
+	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
+	$effect(() => {
+		task.id;
+		siblingsStore.updateQuery({ id: task.id });
+		childTasksStore.updateQuery({ id: task.id });
 	});
 
 	$effect(() => {
@@ -114,18 +99,18 @@
 		const siblingsMap = $siblingsStore;
 		if (siblingsMap.status !== 'resolved') return;
 
-        let parentTask: Task | undefined;
-        let siblings: Task[] | undefined;
-        for (const [p, arr] of siblingsMap.data.entries()) {
-            if (p.id === parentId) {
-                parentTask = p;
-                siblings = arr;
-                break;
-            }
-        }
-        if (!parentTask) return;
+		let parentTask: Task | undefined;
+		let siblings: Task[] | undefined;
+		for (const [p, arr] of siblingsMap.data.entries()) {
+			if (p.id === parentId) {
+				parentTask = p;
+				siblings = arr;
+				break;
+			}
+		}
+		if (!parentTask) return;
 
-        const currentIds = (parentTask.children ?? []).slice();
+		const currentIds = (parentTask.children ?? []).slice();
 		const movingId = task.id;
 
 		const from = currentIds.indexOf(movingId);
@@ -227,8 +212,8 @@
 			) as HTMLElement | null;
 			if (!container) continue;
 
-            const items = Array.from(container.querySelectorAll<HTMLElement>('[data-sibling-id]'));
-            const ids = (parent.children ?? []).slice();
+			const items = Array.from(container.querySelectorAll<HTMLElement>('[data-sibling-id]'));
+			const ids = (parent.children ?? []).slice();
 			for (const el of items) {
 				const sibId = el.dataset.siblingId!;
 				const index = ids.indexOf(sibId);
@@ -383,25 +368,27 @@
 										data-parent-container={parent.id}
 										class="relative divide-y divide-gray-200 rounded border border-gray-200"
 									>
-                                        {#each parent.children ?? [] as cid (cid)}
-                                            <li class="flex items-center gap-2 px-2 py-1 text-sm" data-sibling-id={cid}>
-                                                {#if cid === task.id}
-                                                    <div
-                                                        class="cursor-grab rounded border border-gray-300 bg-white px-2 py-1 shadow-sm select-none active:cursor-grabbing"
-                                                        data-draggable
-                                                        title="Drag to reorder within this parent"
-                                                    >
-                                                        <Icon
-                                                            icon="lucide:grip-vertical"
-                                                            class="mr-1 inline size-3 opacity-70"
-                                                        />
-                                                        <span>{task.title}</span>
-                                                    </div>
-                                                {:else}
-                                                    <div class="flex-1 opacity-50">{(siblings.find((s) => s.id === cid)?.title) ?? cid}</div>
-                                                {/if}
-                                            </li>
-                                        {/each}
+										{#each parent.children ?? [] as cid (cid)}
+											<li class="flex items-center gap-2 px-2 py-1 text-sm" data-sibling-id={cid}>
+												{#if cid === task.id}
+													<div
+														class="cursor-grab rounded border border-gray-300 bg-white px-2 py-1 shadow-sm select-none active:cursor-grabbing"
+														data-draggable
+														title="Drag to reorder within this parent"
+													>
+														<Icon
+															icon="lucide:grip-vertical"
+															class="mr-1 inline size-3 opacity-70"
+														/>
+														<span>{task.title}</span>
+													</div>
+												{:else}
+													<div class="flex-1 opacity-50">
+														{siblings.find((s) => s.id === cid)?.title ?? cid}
+													</div>
+												{/if}
+											</li>
+										{/each}
 									</ul>
 								</div>
 							{/each}

@@ -3,7 +3,7 @@
 	import tasksAPI from '$lib/API/Tasks';
 	import TaskEditor from '../../graph/TaskEditor.svelte';
 	import { authState } from '$lib/API/Auth';
-	import type { FetchableReadable } from '$lib/API/fetchableStore';
+	import type { QueryableStore } from '$lib/API/fetchableStore';
 	import { onMount } from 'svelte';
 	import type { Readable } from 'svelte/store';
 
