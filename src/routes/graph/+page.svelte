@@ -3,7 +3,6 @@
 	import { SvelteFlow, SvelteFlowProvider, Background, useSvelteFlow } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import AppHeader from '$lib/components/AppHeader.svelte';
-	import AppFooter from '$lib/components/AppFooter.svelte';
 	import TaskCreationDrawer from '../../lib/components/TaskCreationDrawer.svelte';
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
@@ -21,10 +20,6 @@
 
 	// UI State
 	let editorLayoutState: TaskEditorLayoutState = $state({ accordionValues: [] });
-	$effect(() => {
-		editorLayoutState;
-		console.log(editorLayoutState);
-	});
 
 	const controller = createGraphController();
 	let drawerOpenStore = controller.drawerOpen;
@@ -58,7 +53,7 @@
 		const params = $page.url.searchParams;
 		const highlightId = params.get('highlight');
 		const shouldSelect = params.get('select') === 'true';
-		
+
 		if (highlightId) {
 			// Defer until graph is laid out
 			setTimeout(() => {
@@ -75,7 +70,7 @@
 
 <div class="graph-root page page-root">
 	<AppHeader>{#snippet center()}{/snippet}</AppHeader>
-	<div class="flex min-h-0 flex-1">
+	<div class="flex min-h-0 flex-1 flex-col">
 		<ResizablePaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
 			<ResizablePane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
 				<SvelteFlowProvider>
@@ -149,7 +144,6 @@
 			{/if}
 		</ResizablePaneGroup>
 	</div>
-	<AppFooter />
 </div>
 
 <TaskCreationDrawer bind:open={$drawerOpenStore} relation={$triggerTaskForNewStore} />

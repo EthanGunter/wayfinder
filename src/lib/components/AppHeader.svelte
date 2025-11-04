@@ -1,192 +1,41 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { onMount, type Snippet } from 'svelte';
-	import UserAccountMenu from './UserAccountPulloutMenu.svelte';
-	import { Button } from './ui/button';
-	import SearchBar from './SearchBar.svelte';
-	import Icon from '@iconify/svelte';
-	import * as Sheet from './ui/sheet';
-	import UserAvatar from './UserAvatar.svelte';
-	import { authState, cachedUsers as authUsers } from '$lib/API/Auth';
-	import tasksAPI from '$lib/API/Tasks';
-	import { v4 } from 'uuid';
-	import { Err } from '$domain/errors';
-	import { isTaskCompleted, type Task } from '$domain/models/task';
+	import type { Snippet } from 'svelte';
+	import * as Sidebar from './ui/sidebar/index.js';
 
 	interface Props {
 		left?: Snippet;
 		right?: Snippet;
 		center?: Snippet;
 		class?: string;
+		position?: 'top' | 'bottom';
+		showSidebarTrigger?: boolean;
 	}
-	const { left, right, center, class: className }: Props = $props();
-
-	// Google Forms URLs
-	const FORMS = {
-		bug: 'https://docs.google.com/forms/d/e/1FAIpQLSfG_C9I54vHhHgFM0xF2Je9fUgEGvmPDceNhSwOI_3oGU8SdA/viewform?usp=sf_link',
-		feature:
-			'https://docs.google.com/forms/d/e/1FAIpQLScP4Yz3kHHbCFVR4ogsTSB9_XJ_rVGPNuQcS71T4LsV0lSsmw/viewform?usp=sf_link'
-	};
-	let recentTasks = $derived(tasksAPI.getTodaysTasks());
-
-	let authSheetOpen = $state(false);
-
-	async function search(query: string): Promise<Task[]> {
-		try {
-			if (!query.trim()) {
-				return [];
-			}
-			return await tasksAPI.searchTasks(query.trim());
-		} catch (error) {
-			console.error('Error searching tasks:', error);
-			return [];
-		}
-	}
-
-	async function gotoTask(task: Task | string) {
-		// TODO This function should direct to the graph view with a query arg
-		if (typeof task === 'string') {
-			// Create a new task with this title
-			if ($authState.status === 'signed-in') {
-				const [newTaskId, error] = await tasksAPI.createTask({
-					createDetail: {
-						id: v4(),
-						userAuthId: $authState.user.id,
-						title: task
-					}
-				});
-				if (error) {
-					Err.UNHANDLED(error);
-				}
-
-				if (newTaskId) {
-					// goto(`/tasks/?id=${newTaskId}`);
-				}
-			}
-		} else {
-			// goto(`/tasks/?id=${task.id}`);
-		}
-	}
+	const {
+		left,
+		right,
+		center,
+		class: className,
+		position = 'top',
+		showSidebarTrigger = false
+	}: Props = $props();
 </script>
 
 <div
-	class="page-header bg-gray flex items-center justify-between gap-4 p-2 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
+	class="page-bar bg-gray flex items-center justify-between gap-4 p-2 text-gray-600 shadow-[0px_0px_20px_0px_rgba(25,24,24,0.32)] {className}"
+	data-position={position}
+	style="height: var(--header-height);"
 >
 	{#if left}
 		{@render left()}
-	{:else}
-		<Sheet.Root>
-			<Sheet.Trigger>
-				<Button id="btn-feedback" class="size-12">
-					<Icon icon="material-symbols:feedback-outline" class="size-5" />
-				</Button>
-			</Sheet.Trigger>
-			<Sheet.Content side="left" class="w-80">
-				<Sheet.Header>
-					<Sheet.Title>Help & Feedback</Sheet.Title>
-					<Sheet.Description>
-						Report bugs or suggest features to help improve Wayfinder
-					</Sheet.Description>
-				</Sheet.Header>
-
-				<div class="mt-6 flex flex-col gap-4">
-					<!-- TODO:MOBILE can't open new webpages from a mobile app... -->
-					<Button
-						variant="outline"
-						class="flex h-16 items-center justify-start gap-3"
-						onclick={() => window.open(FORMS.bug, '_blank')}
-					>
-						<Icon icon="material-symbols:bug-report" class="size-6 text-red-600" />
-						<div class="text-left">
-							<div class="font-medium">Report a Bug</div>
-							<div class="text-sm text-gray-500">Found something broken?</div>
-						</div>
-					</Button>
-
-					<!-- TODO:MOBILE can't open new webpages from a mobile app... -->
-					<Button
-						variant="outline"
-						class="flex h-16 items-center justify-start gap-3"
-						onclick={() => window.open(FORMS.feature, '_blank')}
-					>
-						<Icon icon="material-symbols:lightbulb" class="size-6 text-blue-600" />
-						<div class="text-left">
-							<div class="font-medium">Suggest a Feature</div>
-							<div class="text-sm text-gray-500">Share your ideas</div>
-						</div>
-					</Button>
-				</div>
-			</Sheet.Content>
-		</Sheet.Root>
+	{:else if showSidebarTrigger && position === 'top'}
+		<Sidebar.Trigger />
 	{/if}
-
 	{#if center}
-		{@render center()}
-	{:else}
-		<SearchBar
-			handleQuery={search}
-			onItemSelected={gotoTask}
-			placeholder="Search tasks..."
-			defaultOptions={$recentTasks.status === 'resolved' ? $recentTasks.data : []}
-		>
-			{#snippet children(task)}
-				{#if typeof task === 'string'}
-					<div class="flex w-full items-center gap-2">
-						<Icon icon="material-symbols:add" class="size-4 text-green-600" />
-						<span
-							class="flex-1 overflow-hidden text-left font-medium text-ellipsis whitespace-nowrap"
-						>
-							Create: {task}
-						</span>
-					</div>
-				{:else}
-					<div class="flex w-full items-center gap-2">
-						<div class="flex items-center gap-1">
-							{#if isTaskCompleted(task)}
-								<Icon icon="material-symbols:check-circle" class="size-4 text-green-600" />
-							{:else}
-								<Icon icon="material-symbols:radio-button-unchecked" class="size-4 text-gray-400" />
-							{/if}
-							{#if task.todaysTask}
-								<Icon icon="material-symbols:today" class="size-3 text-blue-600" />
-							{/if}
-						</div>
-						<div class="min-w-0 flex-1">
-							<div class="overflow-hidden font-medium text-ellipsis whitespace-nowrap">
-								{task.title}
-							</div>
-							{#if task.content}
-								<div class="overflow-hidden text-xs text-ellipsis whitespace-nowrap text-gray-500">
-									{task.content.slice(0, 60)}{task.content.length > 60 ? '...' : ''}
-								</div>
-							{/if}
-						</div>
-						{#if task.priority && task.priority > 0}
-							<span class="rounded bg-orange-100 px-1 text-xs text-orange-700">
-								P{task.priority}
-							</span>
-						{/if}
-					</div>
-				{/if}
-			{/snippet}
-		</SearchBar>
+		<div class="flex-1">
+			{@render center()}
+		</div>
 	{/if}
-
 	{#if right}
 		{@render right()}
-	{:else if $authState.status === 'signed-in'}
-		<Sheet.Root bind:open={authSheetOpen}>
-			<Sheet.Trigger>
-				<div id="account-menu-btn" class="btn flex h-12 w-12 overflow-hidden rounded-full p-0">
-					<UserAvatar
-						avatarUrl={$authState.user.avatarUrl}
-						displayName={$authState.user.displayName}
-					/>
-				</div>
-			</Sheet.Trigger>
-			<Sheet.Content side="right" class="w-80">
-				<UserAccountMenu onClose={() => (authSheetOpen = false)} />
-			</Sheet.Content>
-		</Sheet.Root>
 	{/if}
 </div>

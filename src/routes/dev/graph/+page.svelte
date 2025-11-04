@@ -13,7 +13,6 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { runElkLayout, type ElkLayoutOptions } from './ELKlayout';
 	import AppHeader from '$lib/components/AppHeader.svelte';
-	import AppFooter from '$lib/components/AppFooter.svelte';
 	import '@xyflow/svelte/dist/style.css';
 
 	let shouldlog = $state(false);
@@ -389,8 +388,6 @@
 			<Background variant={BackgroundVariant.Lines} />
 		</SvelteFlow>
 	</SvelteFlowProvider>
-
-	<AppFooter />
 </div>
 
 <style>

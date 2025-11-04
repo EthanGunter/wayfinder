@@ -3,6 +3,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import Icon from '@iconify/svelte';
 	import UserAvatar from './UserAvatar.svelte';
+	import { Err } from '$domain/errors';
 
 	interface Props {
 		user: SessionUser;
@@ -84,11 +85,7 @@
 <Dialog.Root>
 	<Dialog.Trigger type="button">
 		<div class="group relative cursor-pointer {className}">
-			<UserAvatar
-				avatarUrl={user.avatarUrl}
-				displayName={user.displayName}
-				class="transition-transform sm:group-hover:scale-105"
-			/>
+			<UserAvatar class="transition-transform sm:group-hover:scale-105" />
 
 			<!-- Edit Icon - Always visible on mobile, hover-only on larger screens -->
 			<div
@@ -118,11 +115,7 @@
 		<div class="space-y-6 py-4">
 			<!-- Current Avatar Preview -->
 			<div class="flex flex-col items-center space-y-4">
-				<UserAvatar
-					avatarUrl={user.avatarUrl}
-					displayName={user.displayName}
-					class="h-full max-h-[50vh] w-full max-w-[50vw]"
-				/>
+				<UserAvatar class="h-full max-h-[50vh] w-full max-w-[50vw]" />
 				{#if isUploading}
 					<div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
 						<div class="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>

@@ -22,8 +22,6 @@ export const api: ITasks = {
 	},
 
 	createTasks: async ({ createDetails }) => {
-		console.log('createTasks');
-
 		const res = await client.mutation(convexApi.tasks.createTasks, { createDetails: createDetails.map(convexifyTaskDetails) });
 		if (isConvexOk(res)) {
 			const v = res.value;

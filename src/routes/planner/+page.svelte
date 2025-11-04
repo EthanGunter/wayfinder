@@ -2,7 +2,6 @@
 	import { DropEvent, droppable } from '$lib/actions/dnd';
 	import TaskListItem from './TaskListItem.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
-	import AppFooter from '$lib/components/AppFooter.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { authState } from '$lib/API/Auth';
 	import tasksAPI from '$lib/API/Tasks';
@@ -126,7 +125,6 @@
 				</div>
 			</div>
 		</div>
-		<AppFooter className="grid-area-footer z-10" />
 	</div>
 {/if}
 
