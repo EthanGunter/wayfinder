@@ -28,7 +28,7 @@ export async function layoutTasksWithElk(
 
     const nodeWidth = opts.nodeWidth ?? DEFAULT_NODE_WIDTH;
     const nodeHeight = opts.nodeHeight ?? DEFAULT_NODE_HEIGHT;
-    const direction = opts.direction ?? 'DOWN';
+    const direction = opts.direction ?? 'RIGHT';
 
     // Measure actual sizes in the browser (fallback to defaults on SSR)
     const measured = measureTaskNodeSizes(tasks) ?? new Map<string, { width: number; height: number }>();
@@ -69,8 +69,8 @@ export async function layoutTasksWithElk(
         layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': direction,
-            'elk.layered.spacing.nodeNodeBetweenLayers': 80, // increased vertical spacing
-            'elk.spacing.nodeNode': 40, // increased horizontal spacing  
+            'elk.layered.spacing.nodeNodeBetweenLayers': direction === 'RIGHT' ? 150 : 80, // horizontal spacing for RIGHT, vertical for DOWN
+            'elk.spacing.nodeNode': 40, // spacing between nodes in same layer
             'elk.layered.nodePlacement.strategy': 'LINEAR_SEGMENTS', // better for balanced layouts
             'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED', // balanced alignment
             'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP', // better crossing reduction
@@ -99,15 +99,17 @@ export async function layoutTasksWithElk(
         height: n.height ?? nodeHeight,
         // data is filled by caller after layout; keep minimal here
         data: {} as Record<string, unknown>,
-        sourcePosition: Position.Bottom,
-        targetPosition: Position.Top
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left
     }));
 
     const edges: Edge[] = elkEdges.map((e) => ({
         id: e.id,
         source: e.sources[0],
         target: e.targets[0],
-        type: 'task'
+        type: 'task',
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left
     }));
 
     // Attach task data to nodes

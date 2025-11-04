@@ -3,31 +3,30 @@
 		BaseEdge,
 		EdgeReconnectAnchor,
 		getBezierPath,
-		EdgeLabel,
-		type EdgeProps
+		type EdgeProps,
+		Position
 	} from '@xyflow/svelte';
 
-	let { sourceX, sourceY, targetX, targetY, selected, data }: EdgeProps = $props();
+	let { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected, data }: EdgeProps = $props();
 
 	const [edgePath, labelX, labelY] = $derived(
 		getBezierPath({
 			sourceX,
 			sourceY,
 			targetX,
-			targetY
+			targetY,
+			sourcePosition: sourcePosition ?? Position.Right,
+			targetPosition: targetPosition ?? Position.Left
 		})
 	);
 
 	let reconnecting = $state(false);
-	let style = $derived(!reconnecting ? 'border-radius: 100%;' : '');
+	let style = $derived(reconnecting ? '' : 'border-radius: 100%;');
 </script>
 
 <!-- We want to hide the initial edge while reconnecting -->
 {#if !reconnecting}
 	<BaseEdge path={edgePath} />
-	<!-- <EdgeLabel x={labelX} y={labelY} selectEdgeOnClick>
-	  Select the edge and drag the ends to reconnect
-	</EdgeLabel> -->
 {/if}
 
 <EdgeReconnectAnchor

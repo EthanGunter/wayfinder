@@ -157,7 +157,7 @@ export function createGraphController(): GraphController {
 
 	async function rebuildLayoutFromMap() {
 		const allTasks = Array.from(state.taskById.values());
-		const graph = await layoutTasksWithElk(allTasks, { direction: 'DOWN' });
+		const graph = await layoutTasksWithElk(allTasks, { direction: 'RIGHT' });
 		state.setNodes(graph.nodes);
 		state.setEdges(graph.edges);
 	}
