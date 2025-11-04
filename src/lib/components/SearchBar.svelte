@@ -9,6 +9,8 @@
 		placeholder?: string;
 		inverted?: boolean;
 		children?: Snippet<[T | string]>;
+		htmlName?: string;
+		className?: string;
 	}
 
 	const {
@@ -17,7 +19,9 @@
 		defaultOptions = [],
 		placeholder = 'Search...',
 		inverted = false,
-		children
+		children,
+		htmlName = 'searchbar',
+		className
 	}: Props = $props();
 
 	let query = $state('');
@@ -81,9 +85,10 @@
 	let displayResults = $derived<(T | string)[]>(query.length > 0 ? searchResults : defaultOptions);
 </script>
 
-<div class="relative flex-1 rounded border-1 border-gray-300">
+<div class="relative flex-1 rounded border-1 border-gray-300 h-full {className}">
 	{#if !inverted}
 		<input
+			name={htmlName}
 			type="text"
 			bind:value={query}
 			oninput={handleInput}
@@ -92,7 +97,7 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
-			class="z-[101] h-9 w-full p-2"
+			class="z-[101] h-full w-full p-2"
 		/>
 	{/if}
 
@@ -127,6 +132,7 @@
 
 	{#if inverted}
 		<input
+			name={htmlName}
 			type="text"
 			bind:value={query}
 			oninput={handleInput}
@@ -135,7 +141,7 @@
 			onblur={handleBlur}
 			{placeholder}
 			aria-label={placeholder}
-			class="z-[101] h-9 w-full"
+			class="z-[101] h-full w-full"
 		/>
 	{/if}
 </div>

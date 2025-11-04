@@ -2,7 +2,6 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { SvelteFlow, SvelteFlowProvider, Background, useSvelteFlow } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TaskCreationDrawer from '../../lib/components/TaskCreationDrawer.svelte';
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
@@ -15,6 +14,7 @@
 	import type { Task } from '$domain/models/task';
 	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
 	import { page } from '$app/stores';
+	import SearchBar from '$lib/components/SearchBar.svelte';
 
 	let selectedTask = $state<Task | null>(null);
 
@@ -69,7 +69,9 @@
 </script>
 
 <div class="graph-root page page-root">
-	<AppHeader>{#snippet center()}{/snippet}</AppHeader>
+	<div class="h-header p-2">
+		<SearchBar placeholder="Enter query here..." handleQuery={() => Err.NotImplemented('SearchBar.handleQuery')} />
+	</div>
 	<div class="flex min-h-0 flex-1 flex-col">
 		<ResizablePaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
 			<ResizablePane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>

@@ -2,7 +2,7 @@ import { Err, NotAuthorizedError, NotFoundError, NotImplementedError } from "$do
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { calculateRelationshipChanges, relationshipChangesToUpdateParams, Task, TaskBase, type SharedTask as SystemAgnosticTask } from "$domain/models/task";
+import { calculateRelationshipChanges, relationshipChangesToUpdateParams, SystemAgnosticTask } from "$domain/models/task";
 
 
 //#region Utility

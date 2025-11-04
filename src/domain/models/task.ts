@@ -66,7 +66,7 @@ export function taskEquals(a: Task, b: Task, ignoreId: boolean = false): boolean
 /**
  * System-agnostic task type that works with both Date (client) and number (Convex) timestamps
  */
-export type SharedTask<T = Date> = Omit<Task, 'todaysTask' | 'created' | 'lastEdit' | 'dueDate'> & {
+export type SystemAgnosticTask<T = Date> = Omit<Task, 'todaysTask' | 'created' | 'lastEdit' | 'dueDate'> & {
     todaysTask?: T;
     dueDate?: T;
     created: T;
@@ -88,8 +88,8 @@ export interface RelationshipChange {
  * Input for calculating relationship updates
  */
 export interface RelationshipUpdate<T = Date> {
-    oldTask: SharedTask<T> | null;
-    newTask: SharedTask<T> | null;
+    oldTask: SystemAgnosticTask<T> | null;
+    newTask: SystemAgnosticTask<T> | null;
 }
 
 /**
