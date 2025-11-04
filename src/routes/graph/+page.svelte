@@ -11,21 +11,29 @@
 	import TaskEditor, { type TaskEditorLayoutState } from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
-	import type { Task } from '$domain/models/task';
+	import { TaskStatus, type Task, type TaskBase } from '$domain/models/task';
 	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
 	import { page } from '$app/stores';
 	import SearchBar from '$lib/components/SearchBar.svelte';
+	import { authState } from '$lib/API/Auth';
+	import { TaskSearchService } from '$lib/API/Tasks/TaskSearchService';
+	import { tokenize } from '../dev/search/tokenizer';
+	import { Parser } from '../dev/search/parser';
+	import SearchTaskListItem from './SearchTaskListItem.svelte';
 
 	let selectedTask = $state<Task | null>(null);
+	let allTasks = $state<Task[]>([]);
+	let searchService: TaskSearchService | null = $state(null);
 
 	// UI State
-	let editorLayoutState: TaskEditorLayoutState = $state({ accordionValues: [] });
+	let editorLayoutState: TaskEditorLayoutState = $state({ accordionValues: ['tasks'] });
 
 	const controller = createGraphController();
 	let drawerOpenStore = controller.drawerOpen;
 	let nodesStore = controller.nodes;
 	let edgesStore = controller.edges;
 	let triggerTaskForNewStore = controller.triggerTaskForNew;
+	let unsubscribeTasksStore: (() => void) | null = null;
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
 		const [_, error] = await tasksAPI.updateTask({ id: original.id, data: update });
@@ -46,8 +54,71 @@
 		}
 	}
 
+	function isPlainTextQuery(query: string): boolean {
+		const trimmed = query.trim();
+		if (!trimmed) return false;
+
+		try {
+			const tokens = tokenize(trimmed);
+			const parser = new Parser(tokens);
+			parser.parse();
+			// If parsing succeeds and we have structured elements, not plain text
+			return false;
+		} catch {
+			// Parse error means it's plain text
+			return true;
+		}
+	}
+
+	async function handleSearch(query: string): Promise<Task[]> {
+		if (!searchService || !query.trim()) return [];
+
+		if (isPlainTextQuery(query)) {
+			const results = searchService.searchTasks(query);
+			return results;
+		}
+
+		// Structured queries not yet implemented
+		console.log('Structured query not yet supported:', query);
+		return [];
+	}
+
+	$effect(() => {
+		// Sync search service when tasks change
+		if (allTasks.length > 0) {
+			if (!searchService) {
+				searchService = new TaskSearchService();
+			}
+			// Re-index all tasks
+			allTasks.forEach((task) => searchService!.indexTask(task));
+		}
+	});
+
+	function handleSearchResultSelected(task: Task) {
+		highlightNode(task.id, { select: true }); // TODO:Test should we select the task?
+	}
+
 	onMount(() => {
 		controller.init();
+
+		// Subscribe to tasks for the authenticated user
+		const unsubAuth = authState.subscribe((auth) => {
+			if (auth.status === 'signed-in') {
+				unsubscribeTasksStore?.();
+				unsubscribeTasksStore = tasksAPI
+					.getAllUserTasks({ userId: auth.user.id })
+					.subscribe(async (taskSub) => {
+						if (taskSub.status === 'resolved') {
+							allTasks = taskSub.data;
+							await controller.updateTasks(taskSub.data);
+						}
+					});
+			} else {
+				unsubscribeTasksStore?.();
+				unsubscribeTasksStore = null;
+				allTasks = [];
+			}
+		});
 
 		// Handle URL params for highlighting
 		const params = $page.url.searchParams;
@@ -60,17 +131,42 @@
 				highlightNode(highlightId, { select: shouldSelect });
 			}, 500);
 		}
+
+		return () => {
+			unsubAuth();
+		};
 	});
+
 	onDestroy(() => {
+		unsubscribeTasksStore?.();
 		controller.destroy();
 	});
 
 	// no utility functions; inline SvelteFlow init below
 </script>
 
-<div class="graph-root page page-root">
-	<div class="h-header p-2">
-		<SearchBar placeholder="Enter query here..." handleQuery={() => Err.NotImplemented('SearchBar.handleQuery')} />
+<div class="graph-root page-root">
+	<div class="h-header bg-white p-2">
+		<SearchBar
+			placeholder="Enter query here..."
+			handleQuery={handleSearch}
+			onItemSelected={handleSearchResultSelected}
+			autocomplete={false}
+			sorter={(a, b) => {
+				if (a.status == TaskStatus.complete) return 1;
+				else if (b.status == TaskStatus.complete) return -1;
+				else return 0;
+			}}
+		>
+			{#snippet children(task: TaskBase)}
+				<SearchTaskListItem
+					{task}
+					onLocate={() => {
+						highlightNode(task.id, { select: false });
+					}}
+				/>
+			{/snippet}
+		</SearchBar>
 	</div>
 	<div class="flex min-h-0 flex-1 flex-col">
 		<ResizablePaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
@@ -111,11 +207,11 @@
 								selectedTask = null;
 							}}
 						>
-							<Background />
+							<Background bgColor="var(--background)"/>
 						</SvelteFlow>
 						<Button
 							variant="outline"
-							class="absolute right-6 bottom-6 rounded-full border-2"
+							class="absolute right-6 bottom-6 rounded-full border-1 border-border w-10 h-9 bg-white"
 							onclick={() => {
 								controller.setTriggerTaskForNew(null);
 								controller.setDrawerOpen(true);

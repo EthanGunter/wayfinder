@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
@@ -62,14 +61,7 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<div id="account-page" class="page-root relative h-full w-full bg-gray-200">
-		<AppHeader>
-			{#snippet left()}
-				<Button onclick={goBack}>Back</Button>
-			{/snippet}
-			{#snippet center()}{/snippet}
-			{#snippet right()}{/snippet}
-		</AppHeader>
+	<div id="account-page" class="page-root relative h-full w-full bg-gray-200 mt-header">
 		<div
 			class="page-content mx-auto flex w-full min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
 		>

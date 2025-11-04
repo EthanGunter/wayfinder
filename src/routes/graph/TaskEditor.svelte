@@ -15,7 +15,7 @@
 	import TaskListItem from './TaskListItem.svelte';
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	export interface TaskEditorLayoutState {
-		accordionValues: string[];
+		accordionValues: ('tasks' | 'parent-order')[];
 	}
 	interface Props {
 		task: Task;
@@ -28,12 +28,12 @@
 	// Props
 	let {
 		task = $bindable(),
-		layoutState = $bindable({ accordionValues: [] }),
+		layoutState = $bindable({ accordionValues: ['tasks'] }),
 		onTaskChange,
 		onDelete,
 		onHighlightNode
 	}: Props = $props();
-
+	
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
 	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
@@ -202,13 +202,6 @@
 				value={task.title}
 				oninput={handleInput}
 			/>
-			<button
-				onclick={() => onHighlightNode?.(task.id, { select: false })}
-				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-blue-50 hover:text-blue-600"
-				title="Center this task in graph view"
-			>
-				<Icon icon="lucide:locate-fixed" class="size-4" />
-			</button>
 			<Separator orientation="vertical" />
 			<button
 				onclick={confirmDelete}
@@ -235,9 +228,58 @@
 			type="multiple"
 			value={accordionValues}
 			onValueChange={(e) => {
-				layoutState.accordionValues = e;
+				layoutState.accordionValues = e as any;
 			}}
 		>
+			{#if $childTasksStore.data.length > 0}
+				<Accordion.Item value="tasks">
+					<Accordion.Trigger
+						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+					>
+						Tasks
+					</Accordion.Trigger>
+					<Accordion.Content>
+						{@const sortedChildren = (() => {
+							const incomplete = $childTasksStore.data.filter((c) => !isTaskCompleted(c));
+							const complete = $childTasksStore.data.filter((c) => isTaskCompleted(c));
+							return { incomplete, complete };
+						})()}
+						<ul class="relative rounded border border-gray-200">
+							{#each sortedChildren.incomplete as child, index (child.id)}
+								<TaskListItem
+									task={child}
+									parentId={task.id}
+									listType="child"
+									{index}
+									isDraggable={true}
+									onHighlight={(id) => onHighlightNode?.(id, { select: false })}
+								/>
+							{/each}
+							{#if sortedChildren.complete.length > 0}
+								<div class="flex items-center gap-3 px-2 pt-3 text-xs font-medium text-gray-400">
+									<div
+										class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-gray-300"
+									></div>
+									<span class="tracking-wider uppercase">Completed</span>
+									<div
+										class="h-px flex-1 bg-gradient-to-l from-transparent via-gray-300 to-gray-300"
+									></div>
+								</div>
+							{/if}
+							{#each sortedChildren.complete as child, index (child.id)}
+								<TaskListItem
+									task={child}
+									parentId={task.id}
+									listType="child"
+									index={sortedChildren.incomplete.length + index}
+									isDraggable={false}
+									onHighlight={(id) => onHighlightNode?.(id, { select: false })}
+								/>
+							{/each}
+						</ul>
+					</Accordion.Content>
+				</Accordion.Item>
+			{/if}
 			{#if $siblingsStore.data.size > 0}
 				<Accordion.Item value="parent-order">
 					<Accordion.Trigger
@@ -288,56 +330,6 @@
 								</div>
 							{/each}
 						</div>
-					</Accordion.Content>
-				</Accordion.Item>
-			{/if}
-
-			{#if $childTasksStore.data.length > 0}
-				<Accordion.Item value="children">
-					<Accordion.Trigger
-						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
-					>
-						Children
-					</Accordion.Trigger>
-					<Accordion.Content>
-						{@const sortedChildren = (() => {
-							const incomplete = $childTasksStore.data.filter((c) => !isTaskCompleted(c));
-							const complete = $childTasksStore.data.filter((c) => isTaskCompleted(c));
-							return { incomplete, complete };
-						})()}
-						<ul class="relative rounded border border-gray-200">
-							{#each sortedChildren.incomplete as child, index (child.id)}
-								<TaskListItem
-									task={child}
-									parentId={task.id}
-									listType="child"
-									{index}
-									isDraggable={true}
-									onHighlight={(id) => onHighlightNode?.(id, { select: false })}
-								/>
-							{/each}
-							{#if sortedChildren.complete.length > 0}
-								<div class="flex items-center gap-3 px-2 pt-3 text-xs font-medium text-gray-400">
-									<div
-										class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-gray-300"
-									></div>
-									<span class="tracking-wider uppercase">Completed</span>
-									<div
-										class="h-px flex-1 bg-gradient-to-l from-transparent via-gray-300 to-gray-300"
-									></div>
-								</div>
-							{/if}
-							{#each sortedChildren.complete as child, index (child.id)}
-								<TaskListItem
-									task={child}
-									parentId={task.id}
-									listType="child"
-									index={sortedChildren.incomplete.length + index}
-									isDraggable={false}
-									onHighlight={(id) => onHighlightNode?.(id, { select: false })}
-								/>
-							{/each}
-						</ul>
 					</Accordion.Content>
 				</Accordion.Item>
 			{/if}

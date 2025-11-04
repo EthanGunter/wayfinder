@@ -6,7 +6,7 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  --background: oklch(.95 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
@@ -21,7 +21,7 @@
   --accent: oklch(0.967 0.001 286.375);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
+  --border: oklch(0.85 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
   --chart-1: oklch(0.646 0.222 41.116);
@@ -29,21 +29,34 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: #fff;
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  /*   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
   --sidebar-primary: oklch(0.21 0.006 285.885);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.967 0.001 286.375);
   --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
   --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
-  
+  --sidebar-ring: oklch(0.705 0.015 286.067); */
+
   /* Layout heights for consistent header/footer alignment */
   --header-height: 3rem;
   --footer-height: 3rem;
 }
-@utility h-header {
-  height: var(--header-height);
+
+@theme inline {
+  --size-header: var(--header-height);
+  --spacing-header: var(--header-height);
+  --size-footer: var(--footer-height);
+  --spacing-footer: var(--footer-height);
 }
 
 .dark {
@@ -136,28 +149,7 @@
 
 @layer layout {
   .page-root {
-    grid-template-areas: "header" "content" "footer";
-    grid-template-rows: auto 1fr auto;
-    @apply relative grid h-full w-full bg-gray-200 overflow-hidden;
-  }
-
-  .page-header {
-    grid-area: header;
-  }
-
-  .page-content {
-    grid-area: content;
-
-    overflow-y: scroll;
-    overflow-x: hidden;
-
-    >* {
-      max-width: 50rem;
-    }
-  }
-
-  .page-footer {
-    grid-area: footer;
+    @apply flex flex-col h-full w-full overflow-hidden bg-background;
   }
 }
 
@@ -170,7 +162,9 @@
     background-color: rgb(201, 255, 201);
   }
 
+  button,
   .btn {
     cursor: pointer;
+    border-color: var(--border);
   }
 }

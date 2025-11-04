@@ -1,6 +1,6 @@
 import type { Task } from '$domain/models/task';
 import { Err } from '$domain/errors';
-import type { Node, Edge, OnConnectEnd, OnReconnectEnd, Connection } from '@xyflow/svelte';
+import type { Node, Edge, OnConnectEnd, OnReconnectEnd, Connection, SvelteFlowInstance } from '@xyflow/svelte';
 import { authState } from '$lib/API/Auth';
 import tasksAPI from '$lib/API/Tasks';
 import { tutorials } from '$lib/tutorials/store';
@@ -32,8 +32,8 @@ export interface GraphControllerState {
 	setScreenToFlowPosition: (
 		fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
 	) => void;
-	getSvelteFlowInstance: () => any | null;
-	setSvelteFlowInstance: (instance: any) => void;
+	getSvelteFlowInstance: () => SvelteFlowInstance | null;
+	setSvelteFlowInstance: (instance: SvelteFlowInstance) => void;
 	connectionState: {
 		successful: boolean;
 		sourceNodeId: string | null;
@@ -51,10 +51,11 @@ export interface GraphControllerState {
 export interface GraphController {
 	init: () => void;
 	destroy: () => void;
+	updateTasks: (tasks: Task[]) => Promise<void>;
 	setScreenToFlowPosition: (
 		fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
 	) => void;
-	setSvelteFlowInstance: (instance: any) => void;
+	setSvelteFlowInstance: (instance: SvelteFlowInstance) => void;
 	centerNode: (taskId: string, options?: { select?: boolean }) => void;
 	nodes: Readable<Node[]>;
 	edges: Readable<Edge[]>;
@@ -88,13 +89,12 @@ export interface GraphController {
 }
 
 export function createGraphController(): GraphController {
-	let unsubscribeStore: (() => void) | null = null;
 	let unsubscribeAuth: (() => void) | null = null;
 
 	// Controller-owned state and stores
 	const taskById = new Map<string, Task>();
 	let screenToFlowPosition: ((point: { x: number; y: number }) => { x: number; y: number }) | null = null;
-	let svelteFlowInstance: any = null;
+	let svelteFlowInstance: SvelteFlowInstance | null = null;
 
 	const nodesStore = writable<Node[]>([]);
 	const edgesStore = writable<Edge[]>([]);
@@ -164,20 +164,14 @@ export function createGraphController(): GraphController {
 
 	// Deltas removed; full rebuild from store emissions
 
+	async function updateTasks(tasks: Task[]) {
+		resetTaskMap(tasks);
+		await rebuildLayoutFromMap();
+	}
+
 	function initAuthSubscription() {
 		unsubscribeAuth = authState.subscribe((auth) => {
-			if (auth.status === 'signed-in') {
-				unsubscribeStore?.();
-				unsubscribeStore = null;
-				unsubscribeStore = tasksAPI.getAllUserTasks({ userId: auth.user.id }).subscribe(async taskSub => {
-					if (taskSub.status === 'resolved') {
-						resetTaskMap(taskSub.data);
-						await rebuildLayoutFromMap();
-					}
-				});
-			} else {
-				unsubscribeStore?.();
-				unsubscribeStore = null;
+			if (auth.status !== 'signed-in') {
 				(state.taskById as Map<string, Task>).clear();
 				state.setNodes([]);
 				state.setEdges([]);
@@ -379,7 +373,16 @@ export function createGraphController(): GraphController {
 		if (!instance?.setCenter) return;
 
 		// Pan to node center with animation
-		instance.setCenter(node.position.x, node.position.y, { duration: 250 });
+		instance.setCenter(node.position.x, node.position.y, { duration: 250, zoom: 1.5 });
+
+		// Dispatch highlight event to node DOM element
+		// Use setTimeout to ensure DOM is ready after potential layout updates
+		// setTimeout(() => {
+			const nodeElement = document.querySelector(`[data-tasknodeid="${taskId}"]`) as HTMLElement;
+			if (nodeElement) {
+				nodeElement.dispatchEvent(new CustomEvent('highlight', { bubbles: false }));
+			}
+		// }, 0);
 
 		// Note: selection handled by caller (page component) to avoid circular deps
 	}
@@ -390,9 +393,9 @@ export function createGraphController(): GraphController {
 			initAuthSubscription();
 		},
 		destroy: () => {
-			unsubscribeStore?.();
 			unsubscribeAuth?.();
 		},
+		updateTasks,
 		setScreenToFlowPosition: (fn) => state.setScreenToFlowPosition(fn),
 		setSvelteFlowInstance: (instance) => state.setSvelteFlowInstance(instance),
 		centerNode,

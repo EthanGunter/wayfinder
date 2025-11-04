@@ -22,7 +22,10 @@
 
 	onMount(() => {
 		sidebar = Sidebar.useSidebar();
-		
+		sidebar.setOpen(false);
+		// TODO:BUG mobile doesn't have access to the sidebar. It's always closed...
+		sidebar.setOpenMobile(false);
+
 		let cleanup: (() => void) | undefined;
 
 		// Wait for DOM to be ready, then set up handlers
@@ -42,7 +45,7 @@
 				if (sidebar.state !== 'collapsed') return;
 
 				const target = e.target as HTMLElement;
-				
+
 				// Don't open if clicking on interactive elements (buttons, links, etc.)
 				if (
 					target.closest('button') ||
@@ -137,12 +140,12 @@
 	}); */
 </script>
 
-<Sidebar.Root {collapsible} {...restProps} variant="sidebar">
+<Sidebar.Root {collapsible} {...restProps} variant="sidebar" class="border-border">
 	<Sidebar.Header class="h-[var(--header-height)] group-data-[collapsible=icon]:justify-center">
 		<div
-			class="flex h-full w-full items-center group-data-[collapsible=icon]:justify-center gap-3 px-2 group-data-[collapsible=icon]:px-0 aspect-square"
+			class="flex aspect-square h-full w-full items-center gap-3 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
 		>
-			<div class="flex gap-2 group-data-[collapsible=icon]:gap-0 items-center aspect-square">
+			<div class="flex aspect-square items-center gap-2 group-data-[collapsible=icon]:gap-0">
 				<img
 					src="images/android-chrome-192x192.png"
 					alt="Wayfinder"

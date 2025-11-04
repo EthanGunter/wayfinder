@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { DropEvent, droppable } from '$lib/actions/dnd';
 	import TaskListItem from './TaskListItem.svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
-	import { Button } from '$lib/components/ui/button';
 	import { authState } from '$lib/API/Auth';
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
@@ -10,7 +8,6 @@
 
 	let todaysList = tasksAPI.getTodaysTasks();
 	let suggestedTasks = tasksAPI.getPrioritizedTasks(15);
-
 
 	async function handleTodaysTaskDrop(e: DropEvent<Task>) {
 		const task = e.detail.data;
@@ -74,69 +71,56 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<div class="page page-root">
-		<AppHeader class="grid-area-header z-10 h-16">{#snippet center()}{/snippet}</AppHeader>
+	<div
+		class="page-root mx-auto m-header mb-footer flex w-full max-w-[35rem] min-w-80 flex-col overflow-hidden p-4 gap-5"
+	>
 		<div
-			class="grid-area-content mx-auto flex w-full max-w-[35rem] min-w-80 flex-col overflow-hidden p-4"
+			id="todays-tasks-list"
+			class="droppable-zone todays-tasks"
+			use:droppable={{
+				accepts: ['task'],
+				onDrop: handleTodaysTaskDrop
+			}}
 		>
-			<div class="drop-zones-container">
-				<div
-					id="todays-tasks-list"
-					class="droppable-zone todays-tasks"
-					use:droppable={{
-						accepts: ['task'],
-						onDrop: handleTodaysTaskDrop
-					}}
-				>
-					<h1>Today's Tasks</h1>
-					{#if filteredSuggestedTasks.length > 0}
-						<h4>Nothing here. Drag some suggestions in!</h4>
+			<h1>Today's Tasks</h1>
+			{#if filteredSuggestedTasks.length > 0}
+				<h4>Nothing here. Drag some suggestions in!</h4>
+			{/if}
+			<div class="tasks-list">
+				{#each filteredDaysTasks as task, index (task.id)}
+					<!-- {#each filteredDaysTasks as task, index} -->
+					{#if index === firstCompletedIndex && firstCompletedIndex !== -1}
+						<div class="completed-separator" aria-hidden="true">Completed</div>
 					{/if}
-					<div class="tasks-list">
-						{#each filteredDaysTasks as task, index (task.id)}
-							<!-- {#each filteredDaysTasks as task, index} -->
-							{#if index === firstCompletedIndex && firstCompletedIndex !== -1}
-								<div class="completed-separator" aria-hidden="true">Completed</div>
-							{/if}
-							<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
-						{/each}
-					</div>
-				</div>
-				<div
-					id="suggested-tasks-list"
-					class="droppable-zone suggested-tasks"
-					use:droppable={{
-						accepts: ['task'],
-						onDrop: handleSuggestedTaskDrop
-					}}
-				>
-					<h2>Suggested Tasks</h2>
+					<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
+				{/each}
+			</div>
+		</div>
+		<div
+			id="suggested-tasks-list"
+			class="droppable-zone suggested-tasks"
+			use:droppable={{
+				accepts: ['task'],
+				onDrop: handleSuggestedTaskDrop
+			}}
+		>
+			<h2>Suggested Tasks</h2>
 
-					{#if filteredSuggestedTasks.length === 0}
-						<h4>There's nothing to suggest!</h4>
-					{/if}
+			{#if filteredSuggestedTasks.length === 0}
+				<h4>There's nothing to suggest!</h4>
+			{/if}
 
-					<div class="tasks-list">
-						<!-- {#each filteredSuggestedTasks as task} -->
-						{#each filteredSuggestedTasks as task (task.id)}
-							<TaskListItem {task} {onTaskChange} />
-						{/each}
-					</div>
-				</div>
+			<div class="tasks-list">
+				<!-- {#each filteredSuggestedTasks as task} -->
+				{#each filteredSuggestedTasks as task (task.id)}
+					<TaskListItem {task} {onTaskChange} />
+				{/each}
 			</div>
 		</div>
 	</div>
 {/if}
 
 <style lang="scss">
-	.drop-zones-container {
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		gap: 1rem;
-		flex: 1;
-	}
-
 	.tasks-list {
 		display: flex;
 		flex-direction: column;

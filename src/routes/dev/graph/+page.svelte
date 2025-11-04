@@ -103,7 +103,7 @@
 	}
 </script>
 
-<div class="graph-root page page-root">
+<div class="graph-root page-root">
 	<div class='h-[var(--header-height)]'>
 		<SearchBar handleQuery={() => Err.NotImplemented('SearchBar.handleQuery')} />
 	</div>

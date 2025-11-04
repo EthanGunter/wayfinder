@@ -2,7 +2,7 @@ import { Err, NotAuthorizedError, NotFoundError, NotImplementedError } from "$do
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { calculateRelationshipChanges, relationshipChangesToUpdateParams, SystemAgnosticTask } from "$domain/models/task";
+import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SystemAgnosticTask } from "$domain/models/task";
 
 
 //#region Utility
@@ -496,6 +496,13 @@ export const getPrioritizedTasks = query({
 			} else {
 				const children = task.children.map((id) => tasksMap.get(id)).sort(sorter);
 				for (const c of children) { if (c && c.status === 0) walk(c); }
+
+				/* TODO:discuss This allows "tasks" that may be used for grouping
+				to show up in the planner's suggestions. This should probably have
+				some form of configuration, because it's awkward having to manually
+				"complete" a task that isn't really a task at all.
+				This will likely play into the node-type system if we every get there...
+				*/
 				if (children.every((c) => !c || c.status !== 0) && task.status === 0) todo.push(task);
 			}
 		};
