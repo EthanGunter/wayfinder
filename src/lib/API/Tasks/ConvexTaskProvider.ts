@@ -150,7 +150,6 @@ export const api: ITasks = {
 		createQueryable(
 			{ id },
 			(params, set) => {
-				set({ status: "loading" });
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getParentsOf,
 					{ id: params.id as Id<'tasks'> },

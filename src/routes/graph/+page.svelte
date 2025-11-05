@@ -46,8 +46,8 @@
 		selectedTask = null;
 	}
 
-	function highlightNode(taskId: string, options?: { select?: boolean }) {
-		controller.centerNode(taskId, options);
+	function highlightNode(taskId: string, options: { select?: boolean } = { select: true }) {
+		controller.centerNode(taskId);
 		if (options?.select) {
 			const node = $nodesStore.find((n) => n.id === taskId);
 			selectedTask = (node?.data as Task | undefined) ?? null;
@@ -209,11 +209,11 @@
 								selectedTask = null;
 							}}
 						>
-							<Background bgColor="var(--background)"/>
+							<Background bgColor="var(--background)" />
 						</SvelteFlow>
 						<Button
 							variant="outline"
-							class="absolute right-6 bottom-6 rounded-full border-1 border-border w-10 h-9 bg-white"
+							class="absolute right-6 bottom-6 h-9 w-10 rounded-full border-1 border-border bg-white"
 							onclick={() => {
 								controller.setTriggerTaskForNew(null);
 								controller.setDrawerOpen(true);

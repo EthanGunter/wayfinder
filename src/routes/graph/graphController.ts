@@ -56,7 +56,7 @@ export interface GraphController {
 		fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
 	) => void;
 	setSvelteFlowInstance: (instance: SvelteFlowInstance) => void;
-	centerNode: (taskId: string, options?: { select?: boolean }) => void;
+	centerNode: (taskId: string) => void;
 	nodes: Readable<Node[]>;
 	edges: Readable<Edge[]>;
 	drawerOpen: Readable<boolean>;
@@ -365,7 +365,7 @@ export function createGraphController(): GraphController {
 		}
 	}
 
-	function centerNode(taskId: string, options?: { select?: boolean }) {
+	function centerNode(taskId: string, options: { select?: boolean } = { select: true }) {
 		const node = state.getNodes().find((n) => n.id === taskId);
 		if (!node) return;
 
@@ -378,10 +378,10 @@ export function createGraphController(): GraphController {
 		// Dispatch highlight event to node DOM element
 		// Use setTimeout to ensure DOM is ready after potential layout updates
 		// setTimeout(() => {
-			const nodeElement = document.querySelector(`[data-tasknodeid="${taskId}"]`) as HTMLElement;
-			if (nodeElement) {
-				nodeElement.dispatchEvent(new CustomEvent('highlight', { bubbles: false }));
-			}
+		const nodeElement = document.querySelector(`[data-tasknodeid="${taskId}"]`) as HTMLElement;
+		if (nodeElement) {
+			nodeElement.dispatchEvent(new CustomEvent('highlight', { bubbles: false }));
+		}
 		// }, 0);
 
 		// Note: selection handled by caller (page component) to avoid circular deps

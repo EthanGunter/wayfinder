@@ -33,16 +33,18 @@
 		onDelete,
 		onHighlightNode
 	}: Props = $props();
-	
+
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
 	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
 	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
+	const parentsStore = tasksAPI.getParentsOf({ id: task.id });
 
 	$effect(() => {
 		task.id;
 		siblingsStore.updateQuery({ id: task.id });
 		childTasksStore.updateQuery({ id: task.id });
+		parentsStore.updateQuery({ id: task.id });
 	});
 
 	$effect(() => {
@@ -263,7 +265,7 @@
 									listType="child"
 									{index}
 									isDraggable={true}
-									onHighlight={(id) => onHighlightNode?.(id, { select: false })}
+									onHighlight={(id) => onHighlightNode?.(id)}
 								/>
 							{/each}
 							{#if sortedChildren.complete.length > 0}
@@ -284,14 +286,14 @@
 									listType="child"
 									index={sortedChildren.incomplete.length + index}
 									isDraggable={false}
-									onHighlight={(id) => onHighlightNode?.(id, { select: false })}
+									onHighlight={(id) => onHighlightNode?.(id)}
 								/>
 							{/each}
 						</ul>
 					</Accordion.Content>
 				</Accordion.Item>
 			{/if}
-			{#if $siblingsStore.data.size > 0}
+			{#if $parentsStore.status === 'resolved' && $parentsStore.data.length > 0}
 				<Accordion.Item value="parent-order">
 					<Accordion.Trigger
 						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
@@ -300,13 +302,14 @@
 					</Accordion.Trigger>
 					<Accordion.Content>
 						<div class="flex flex-col gap-4">
-							{#each Array.from($siblingsStore.data.entries()) as [parent, siblings] (parent.id)}
+							{#each $parentsStore.data as parent (parent.id)}
+								{@const siblings = $siblingsStore.data.get(parent)}
 								{@const sortedChildren = (() => {
 									const ids = parent.children ?? [];
 									const incomplete: string[] = [];
 									const complete: string[] = [];
 									for (const cid of ids) {
-										const sibling = siblings.find((s) => s.id === cid);
+										const sibling = cid === task.id ? task : siblings?.find((s) => s.id === cid);
 										if (sibling && isTaskCompleted(sibling)) {
 											complete.push(cid);
 										} else {
@@ -324,7 +327,8 @@
 									</button>
 									<ul class="relative rounded-lg rounded-tl-none border border-gray-200 bg-gray-50">
 										{#each sortedChildren.incomplete as cid, index (cid)}
-											{@const sibling = cid === task.id ? task : siblings.find((s) => s.id === cid)}
+											{@const sibling =
+												cid === task.id ? task : siblings?.find((s) => s.id === cid)}
 											{#if sibling}
 												<TaskListItem
 													task={sibling}
@@ -333,7 +337,33 @@
 													{index}
 													isCurrent={cid === task.id}
 													isDraggable={cid === task.id}
-													onHighlight={(id) => onHighlightNode?.(id, { select: false })}
+													onHighlight={(id) => onHighlightNode?.(id)}
+												/>
+											{/if}
+										{/each}
+										{#if sortedChildren.complete.length > 0}
+											<div class="flex items-center gap-3 px-2 pt-3 text-xs font-medium text-gray-400">
+												<div
+													class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-gray-300"
+												></div>
+												<span class="tracking-wider uppercase">Completed</span>
+												<div
+													class="h-px flex-1 bg-gradient-to-l from-transparent via-gray-300 to-gray-300"
+												></div>
+											</div>
+										{/if}
+										{#each sortedChildren.complete as cid, index (cid)}
+											{@const sibling =
+												cid === task.id ? task : siblings?.find((s) => s.id === cid)}
+											{#if sibling}
+												<TaskListItem
+													task={sibling}
+													parentId={parent.id}
+													listType="sibling"
+													index={sortedChildren.incomplete.length + index}
+													isCurrent={cid === task.id}
+													isDraggable={false}
+													onHighlight={(id) => onHighlightNode?.(id)}
 												/>
 											{/if}
 										{/each}
