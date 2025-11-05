@@ -9,6 +9,8 @@
 
 	let { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected, data }: EdgeProps = $props();
 
+	const isDimmed = $derived(data?.dimmed ?? false);
+
 	const [edgePath, labelX, labelY] = $derived(
 		getBezierPath({
 			sourceX,
@@ -26,7 +28,7 @@
 
 <!-- We want to hide the initial edge while reconnecting -->
 {#if !reconnecting}
-	<BaseEdge path={edgePath} />
+	<BaseEdge path={edgePath} class={isDimmed ? 'dimmed-edge' : ''} />
 {/if}
 
 <EdgeReconnectAnchor
@@ -41,3 +43,10 @@
 	position={{ x: targetX, y: targetY }}
 	{style}
 />
+
+<style>
+	:global(.dimmed-edge .svelte-flow__edge-path) {
+		opacity: 0.3;
+		stroke-dasharray: 5, 5;
+	}
+</style>

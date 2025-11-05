@@ -4,11 +4,12 @@
 	import { devEnabled } from '$lib/user-settings';
 
 	interface Props {
-		data: Task;
+		data: Task & { dimmed?: boolean };
 		selected: boolean;
 	}
 
 	let { data, selected }: Props = $props();
+	const isDimmed = $derived(data.dimmed ?? false);
 
 	// Track animation state for one-time fade-out effect
 	let isAnimating = $state(false);
@@ -62,6 +63,7 @@
 	class="task-node relative max-w-[280px] min-w-[100px] rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
 	{isTaskCompleted(data) ? 'bg-green-100' : 'bg-white'}"
 	class:highlighted={isAnimating}
+	class:dimmed={isDimmed}
 >
 	<div class="flex items-start gap-2 px-3 py-2">
 		<div class="min-w-0 flex-1">
@@ -116,6 +118,11 @@
 
 	.task-node.highlighted {
 		animation: highlight-glow 2s ease-out forwards;
+	}
+
+	.task-node.dimmed {
+		opacity: 0.4;
+		filter: grayscale(0.3);
 	}
 
 	@keyframes highlight-glow {

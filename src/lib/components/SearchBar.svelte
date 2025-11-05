@@ -37,11 +37,11 @@
 		const target = e.target as HTMLInputElement;
 		query = target.value;
 
-		if (onQueryUpdate && query.trim()) {
+		if (onQueryUpdate) {
 			isLoading = true;
 			try {
-				searchResults = await onQueryUpdate(query.trim());
-				showResults = true;
+				searchResults = await onQueryUpdate(query);
+				showResults = query.trim().length > 0 || defaultOptions.length > 0;
 			} catch (error) {
 				searchResults = [];
 				Err.UNHANDLED(error, 'Search error:');

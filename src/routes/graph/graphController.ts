@@ -52,6 +52,10 @@ export interface GraphController {
 	init: () => void;
 	destroy: () => void;
 	updateTasks: (tasks: Task[]) => Promise<void>;
+	setVisibleTaskIds: (
+		matchingIds: Set<string> | null,
+		options?: { includeRelated?: boolean; relatedDepth?: number }
+	) => void;
 	setScreenToFlowPosition: (
 		fn: ((point: { x: number; y: number }) => { x: number; y: number }) | null
 	) => void;
@@ -88,6 +92,71 @@ export interface GraphController {
 	};
 }
 
+/**
+ * Computes all ancestors and descendants of a task by walking the graph.
+ * Returns sets of matching task IDs and related (dimmed) task IDs.
+ * @param relatedDepth - Number of levels to traverse: 1 = direct only, -1 = all levels
+ */
+function computeRelatedTasks(
+	matchingIds: Set<string>,
+	taskById: Map<string, Task>,
+	includeRelated: boolean,
+	relatedDepth: number
+): { matching: Set<string>; related: Set<string> } {
+	if (!includeRelated) {
+		return { matching: matchingIds, related: new Set() };
+	}
+
+	const related = new Set<string>();
+	const visited = new Set<string>();
+
+	const walkAncestors = (taskId: string, depth: number) => {
+		if (visited.has(taskId)) return;
+		visited.add(taskId);
+
+		const task = taskById.get(taskId);
+		if (!task) return;
+
+		for (const parentId of task.parents) {
+			if (!matchingIds.has(parentId)) {
+				related.add(parentId);
+			}
+			// Continue if depth is unlimited (-1) or we haven't reached the limit
+			if (relatedDepth === -1 || depth < relatedDepth) {
+				walkAncestors(parentId, depth + 1);
+			}
+		}
+	};
+
+	const walkDescendants = (taskId: string, depth: number) => {
+		if (visited.has(taskId)) return;
+		visited.add(taskId);
+
+		const task = taskById.get(taskId);
+		if (!task) return;
+
+		for (const childId of task.children) {
+			if (!matchingIds.has(childId)) {
+				related.add(childId);
+			}
+			// Continue if depth is unlimited (-1) or we haven't reached the limit
+			if (relatedDepth === -1 || depth < relatedDepth) {
+				walkDescendants(childId, depth + 1);
+			}
+		}
+	};
+
+	// Walk from each matching task
+	for (const taskId of matchingIds) {
+		visited.clear();
+		walkAncestors(taskId, 1);
+		visited.clear();
+		walkDescendants(taskId, 1);
+	}
+
+	return { matching: matchingIds, related };
+}
+
 export function createGraphController(): GraphController {
 	let unsubscribeAuth: (() => void) | null = null;
 
@@ -95,6 +164,12 @@ export function createGraphController(): GraphController {
 	const taskById = new Map<string, Task>();
 	let screenToFlowPosition: ((point: { x: number; y: number }) => { x: number; y: number }) | null = null;
 	let svelteFlowInstance: SvelteFlowInstance | null = null;
+
+	// Visibility filter state
+	let visibilityFilter: {
+		matching: Set<string>;
+		related: Set<string>;
+	} | null = null;
 
 	const nodesStore = writable<Node[]>([]);
 	const edgesStore = writable<Edge[]>([]);
@@ -151,15 +226,75 @@ export function createGraphController(): GraphController {
 
 	function resetTaskMap(tasks: Task[]) {
 		// Mutate provided Map instance to preserve Svelte reactivity
-		(state.taskById as Map<string, Task>).clear();
+		state.taskById.clear();
 		for (const t of tasks) state.taskById.set(t.id, t);
 	}
 
 	async function rebuildLayoutFromMap() {
 		const allTasks = Array.from(state.taskById.values());
 		const graph = await layoutTasksWithElk(allTasks, { direction: 'RIGHT' });
-		state.setNodes(graph.nodes);
-		state.setEdges(graph.edges);
+
+		// Apply visibility filtering
+		if (visibilityFilter) {
+			const visibleIds = new Set([...visibilityFilter.matching, ...visibilityFilter.related]);
+
+			// Mark nodes as hidden or dimmed
+			const filteredNodes = graph.nodes.map((node) => {
+				const isVisible = visibleIds.has(node.id);
+				const isDimmed = visibilityFilter!.related.has(node.id);
+
+				return {
+					...node,
+					hidden: !isVisible,
+					data: {
+						...node.data,
+						dimmed: isDimmed
+					}
+				};
+			});
+
+			// Hide edges where either endpoint is hidden; mark as dimmed if either endpoint is dimmed
+			const filteredEdges = graph.edges.map((edge) => {
+				const sourceHidden = !visibleIds.has(edge.source);
+				const targetHidden = !visibleIds.has(edge.target);
+				const sourceDimmed = visibilityFilter!.related.has(edge.source);
+				const targetDimmed = visibilityFilter!.related.has(edge.target);
+
+				return {
+					...edge,
+					hidden: sourceHidden || targetHidden,
+					data: {
+						...edge.data,
+						dimmed: sourceDimmed || targetDimmed
+					}
+				};
+			});
+
+			state.setNodes(filteredNodes);
+			state.setEdges(filteredEdges);
+		} else {
+			// No filter: show all nodes normally, explicitly clear hidden/dimmed
+			const clearedNodes = graph.nodes.map((node) => ({
+				...node,
+				hidden: false,
+				data: {
+					...node.data,
+					dimmed: false
+				}
+			}));
+
+			const clearedEdges = graph.edges.map((edge) => ({
+				...edge,
+				hidden: false,
+				data: {
+					...edge.data,
+					dimmed: false
+				}
+			}));
+
+			state.setNodes(clearedNodes);
+			state.setEdges(clearedEdges);
+		}
 	}
 
 	// Deltas removed; full rebuild from store emissions
@@ -167,6 +302,44 @@ export function createGraphController(): GraphController {
 	async function updateTasks(tasks: Task[]) {
 		resetTaskMap(tasks);
 		await rebuildLayoutFromMap();
+	}
+
+	let visibilityUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function setVisibleTaskIds(
+		matchingIds: Set<string> | null,
+		options?: { includeRelated?: boolean; relatedDepth?: number }
+	) {
+		const includeRelated = options?.includeRelated ?? false;
+		const relatedDepth = options?.relatedDepth ?? -1;
+
+		// Check if we're clearing the filter
+		const isClearing = !matchingIds || matchingIds.size === 0;
+
+		if (!matchingIds) {
+			// Clear filter: show all nodes
+			visibilityFilter = null;
+		} else {
+			// Compute related tasks if requested
+			const result = computeRelatedTasks(matchingIds, state.taskById, includeRelated, relatedDepth);
+			visibilityFilter = result;
+		}
+
+		// Clear any pending timer
+		if (visibilityUpdateTimer) {
+			clearTimeout(visibilityUpdateTimer);
+			visibilityUpdateTimer = null;
+		}
+
+		// Immediate update when clearing filter (better UX), debounced otherwise
+		if (isClearing) {
+			rebuildLayoutFromMap();
+		} else {
+			visibilityUpdateTimer = setTimeout(() => {
+				rebuildLayoutFromMap();
+				visibilityUpdateTimer = null;
+			}, 150);
+		}
 	}
 
 	function initAuthSubscription() {
@@ -394,8 +567,13 @@ export function createGraphController(): GraphController {
 		},
 		destroy: () => {
 			unsubscribeAuth?.();
+			if (visibilityUpdateTimer) {
+				clearTimeout(visibilityUpdateTimer);
+				visibilityUpdateTimer = null;
+			}
 		},
 		updateTasks,
+		setVisibleTaskIds,
 		setScreenToFlowPosition: (fn) => state.setScreenToFlowPosition(fn),
 		setSvelteFlowInstance: (instance) => state.setSvelteFlowInstance(instance),
 		centerNode,

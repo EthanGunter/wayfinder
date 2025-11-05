@@ -24,6 +24,10 @@
 	let selectedTask = $state<Task | null>(null);
 	let allTasks = $state<Task[]>([]);
 	let searchService: TaskSearchService | null = $state(null);
+	let activeSearchResults = $state<Task[]>([]);
+	let searchQuery = $state<string>(''); // Track current search query
+	let showRelatedNodes = $state(false); // Stage 2: toggle for showing related nodes
+	let relatedDepth = $state(-1); // -1 = unlimited, 1 = direct only, 2 = 2 levels, etc. TODO: Wire to user settings
 
 	// UI State
 	let editorLayoutState: TaskEditorLayoutState = $state({ 
@@ -75,15 +79,22 @@
 	}
 
 	async function handleSearch(query: string): Promise<Task[]> {
-		if (!searchService || !query.trim()) return [];
+		searchQuery = query; // Track current query
+		
+		if (!searchService || !query.trim()) {
+			activeSearchResults = [];
+			showRelatedNodes = false; // Reset toggle when search is cleared
+			return [];
+		}
 
 		if (isPlainTextQuery(query)) {
 			const results = searchService.searchTasks(query);
+			activeSearchResults = results;
 			return results;
 		}
 
 		// Structured queries not yet implemented
-		console.log('Structured query not yet supported:', query);
+		activeSearchResults = [];
 		return [];
 	}
 
@@ -95,6 +106,29 @@
 			}
 			// Re-index all tasks
 			allTasks.forEach((task) => searchService!.indexTask(task));
+		}
+	});
+
+	$effect(() => {
+		// Update graph visibility when search query, results, or showRelatedNodes changes
+		const hasActiveSearch = searchQuery.trim().length > 0;
+		
+		if (hasActiveSearch && activeSearchResults.length > 0) {
+			// Search with results: filter to matching nodes (+ related if enabled)
+			const matchingIds = new Set(activeSearchResults.map((t) => t.id));
+			controller.setVisibleTaskIds(matchingIds, {
+				includeRelated: showRelatedNodes,
+				relatedDepth
+			});
+		} else if (hasActiveSearch && activeSearchResults.length === 0) {
+			// Search with no results: hide all nodes
+			controller.setVisibleTaskIds(new Set(), {
+				includeRelated: false,
+				relatedDepth
+			});
+		} else {
+			// No active search: show all nodes
+			controller.setVisibleTaskIds(null);
 		}
 	});
 
@@ -151,26 +185,41 @@
 
 <div class="graph-root page-root">
 	<div class="h-header bg-white p-2">
-		<SearchBar
-			placeholder="Enter query here..."
-			handleQuery={handleSearch}
-			onItemSelected={handleSearchResultSelected}
-			autocomplete={false}
-			sorter={(a, b) => {
-				if (a.status == TaskStatus.complete) return 1;
-				else if (b.status == TaskStatus.complete) return -1;
-				else return 0;
-			}}
-		>
-			{#snippet children(task: TaskBase)}
-				<SearchTaskListItem
-					{task}
-					onLocate={() => {
-						highlightNode(task.id, { select: false });
+		<div class="flex items-center gap-2">
+			<div class="flex-1">
+				<SearchBar
+					placeholder="Enter query here..."
+					handleQuery={handleSearch}
+					onItemSelected={handleSearchResultSelected}
+					autocomplete={false}
+					sorter={(a, b) => {
+						if (a.status == TaskStatus.complete) return 1;
+						else if (b.status == TaskStatus.complete) return -1;
+						else return 0;
 					}}
-				/>
-			{/snippet}
-		</SearchBar>
+				>
+					{#snippet children(task: TaskBase)}
+						<SearchTaskListItem
+							{task}
+							onLocate={() => {
+								highlightNode(task.id, { select: false });
+							}}
+						/>
+					{/snippet}
+				</SearchBar>
+			</div>
+			{#if searchQuery.trim().length > 0 && activeSearchResults.length > 0}
+				<Button
+					variant={showRelatedNodes ? 'default' : 'outline'}
+					size="sm"
+					onclick={() => {
+						showRelatedNodes = !showRelatedNodes;
+					}}
+				>
+					{showRelatedNodes ? 'Hide' : 'Show'} Related
+				</Button>
+			{/if}
+		</div>
 	</div>
 	<div class="flex min-h-0 flex-1 flex-col">
 		<ResizablePaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
