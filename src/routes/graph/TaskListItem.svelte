@@ -11,19 +11,29 @@
 	} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 
 	type ItemData = { taskId: string; parentId: string; index: number; listType: 'sibling' | 'child' };
-	const ITEM_KEY = Symbol('item');
 
 	function makeItemData(
 		taskId: string,
 		parentId: string,
 		index: number,
 		listType: ItemData['listType']
-	): ItemData & { [ITEM_KEY]: true } {
-		return { [ITEM_KEY]: true, taskId, parentId, index, listType };
+	): ItemData {
+		return { taskId, parentId, index, listType };
 	}
 
-	function isItemData(d: unknown): d is ItemData & { [ITEM_KEY]: true } {
-		return !!d && typeof d === 'object' && (d as any)[ITEM_KEY] === true;
+	function isItemData(d: unknown): d is ItemData {
+		return (
+			!!d &&
+			typeof d === 'object' &&
+			'taskId' in d &&
+			'parentId' in d &&
+			'index' in d &&
+			'listType' in d &&
+			typeof (d as any).taskId === 'string' &&
+			typeof (d as any).parentId === 'string' &&
+			typeof (d as any).index === 'number' &&
+			((d as any).listType === 'sibling' || (d as any).listType === 'child')
+		);
 	}
 
 	interface Props {
@@ -69,10 +79,12 @@
 		cleanups.push(
 			dropTargetForElements({
 				element: itemEl,
-				canDrop: ({ source }) =>
-					isItemData(source.data) &&
-					source.data.parentId === parentId &&
-					source.data.listType === listType,
+				canDrop: ({ source }) => {
+					if (!isItemData(source.data)) {
+						return false;
+					}
+					return source.data.parentId === parentId && source.data.listType === listType;
+				},
 				getData: ({ element, input }) =>
 					attachClosestEdge(makeItemData(task.id, parentId, index, listType), {
 						element,

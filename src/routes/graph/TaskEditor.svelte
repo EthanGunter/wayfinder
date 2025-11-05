@@ -86,9 +86,20 @@
 		index: number;
 		listType: 'sibling' | 'child';
 	};
-	const ITEM_KEY = Symbol('item');
-	function isItemData(d: unknown): d is ItemData & { [ITEM_KEY]: true } {
-		return !!d && typeof d === 'object' && (d as any)[ITEM_KEY] === true;
+
+	function isItemData(d: unknown): d is ItemData {
+		return (
+			!!d &&
+			typeof d === 'object' &&
+			'taskId' in d &&
+			'parentId' in d &&
+			'index' in d &&
+			'listType' in d &&
+			typeof (d as any).taskId === 'string' &&
+			typeof (d as any).parentId === 'string' &&
+			typeof (d as any).index === 'number' &&
+			((d as any).listType === 'sibling' || (d as any).listType === 'child')
+		);
 	}
 
 	// --- Persist reorder operations

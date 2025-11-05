@@ -178,6 +178,8 @@
 							bind:nodes={$nodesStore}
 							bind:edges={$edgesStore}
 							fitView
+							minZoom={0.1}
+							maxZoom={2}
 							nodeTypes={{ task: TaskNode }}
 							nodeOrigin={[0.5, 0.5]}
 							edgeTypes={{ task: TaskEdge }}
