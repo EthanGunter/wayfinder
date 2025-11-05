@@ -146,11 +146,6 @@ export class TaskSearchService {
 				additionalScore += 3;
 			}
 
-			// Boost higher priority tasks
-			if (result.task.priority) {
-				additionalScore += Math.min(result.task.priority / 10, 2);
-			}
-
 			// Boost recently edited tasks
 			const daysSinceEdit = (Date.now() - new Date(result.task.lastEdit).getTime()) / (1000 * 60 * 60 * 24);
 			if (daysSinceEdit < 7) {

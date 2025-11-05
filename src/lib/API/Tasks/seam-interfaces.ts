@@ -17,7 +17,7 @@ export interface ITasks {
 	 */
 	getTask(params: { id: string }): QueryableStore<{ id: string }, Task>;
 	getTasks(params: { ids: string[] }): QueryableStore<{ ids: string[] }, Task[]>;
-	getAllUserTasks(params: { userId: string }): QueryableStore<{ userId: string }, Task[]>;
+	getAllUserTasks(params: { userId?: string }): QueryableStore<{ userId?: string }, Task[]>;
 	/**
 	 * @param task can be passed as an id
 	 */
@@ -73,7 +73,7 @@ export interface ITasksLocal {
 	 */
 	getTask(params: { id: string }): QueryableStore<{ id: string }, Task>;
 	getTasks(params: { ids: string[] }): QueryableStore<{ ids: string[] }, Task[]>;
-	getAllUserTasks(params: { userId: string }): QueryableStore<{ userId: string }, Task[]>;
+	getAllUserTasks(params: { userId?: string }): QueryableStore<{ userId?: string }, Task[]>;
 
 	/**
 	 * @param task can be passed as an id

@@ -27,7 +27,6 @@ export interface TaskBase {
     children: string[]
     todaysTask?: Date, // Time of assignment
     dueDate?: Date,
-    priority?: number,
 
 
     // Metadata

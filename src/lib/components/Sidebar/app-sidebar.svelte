@@ -11,6 +11,7 @@
 	import NavMain from './nav-main.svelte';
 	import NavUser from './nav-user.svelte';
 	import Separator from '../ui/separator/separator.svelte';
+	import { devEnabled } from '$lib/user-settings';
 
 	let {
 		ref = $bindable(null),
@@ -92,7 +93,7 @@
 		};
 	});
 
-	let sidebarItems = $derived([
+	let sidebarItems = [
 		{
 			header: 'Navigation',
 			items: [
@@ -112,7 +113,7 @@
 				}
 			]
 		}
-	]);
+	];
 
 	let user = $derived($authState.status === 'signed-in' ? $authState.user : null);
 
@@ -147,7 +148,7 @@
 		>
 			<div class="flex aspect-square items-center gap-2 group-data-[collapsible=icon]:gap-0">
 				<img
-					src="images/android-chrome-192x192.png"
+					src="/images/android-chrome-192x192.png"
 					alt="Wayfinder"
 					class="h-7 w-7 flex-shrink-0 group-data-[collapsible=icon]:mx-auto"
 				/>

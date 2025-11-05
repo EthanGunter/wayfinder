@@ -48,14 +48,8 @@ export async function layoutTasksWithElk(
     const elkEdges: { id: string; sources: string[]; targets: string[] }[] = [];
     for (const t of tasks) {
         const parentId = t.id;
-        // Sort children by priority DESC so higher priority appears leftmost
-        const childrenSorted = (t.children || [])
-            .map((cid) => byId.get(cid))
-            .filter((c): c is Task => Boolean(c))
-            .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-            .map((c) => c.id);
 
-        for (const childId of childrenSorted) {
+        for (const childId of t.children) {
             if (!byId.has(childId)) continue;
             const key = parentId + '->' + childId;
             if (seen.has(key)) continue;

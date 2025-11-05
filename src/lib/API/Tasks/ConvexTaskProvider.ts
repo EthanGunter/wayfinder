@@ -1,4 +1,4 @@
-import { Err, NotImplementedError, type NotAuthorizedError } from "$domain/errors";
+import { Err, NotImplementedError, NotAuthorizedError } from "$domain/errors";
 import { err, ok } from "$domain/result";
 import { TaskStatus, type CreateTaskParams, type PopulatedTaskDTO, type Task, type TaskDelta, type UpdateTaskParams } from "$domain/models/task";
 import { api as convexApi } from "$convex/_generated/api";
@@ -78,25 +78,63 @@ export const api: ITasks = {
 			}),
 
 	getAllUserTasks: ({ userId }) =>
-		createQueryable<{ userId: string }, Task[]>(
+		createQueryable<{ userId?: string }, Task[]>(
 			{ userId },
 			(params, set) => {
-				const unsubscribe = client.onUpdate(
-					convexApi.tasks.getAllUserTasks,
-					{ userId: params.userId },
-					(result: ConvexResponse<Doc<'tasks'>[], Err>) => {
-						if (isConvexOk(result)) {
-							set({ status: "resolved", data: result.value.map(rowToTask) });
-						} else {
-							set({ status: "error", error: result.error });
-						}
-					},
-					(error: Error) => {
-						set({ status: "error", error: Err.wrap(error) });
+				let unsubscribe: (() => void) | null = null;
+				let cancelled = false;
+
+				// If userId is not provided, get current authenticated user
+				const resolveUserId = async (): Promise<string | null> => {
+					if (params.userId) {
+						return params.userId;
 					}
-				);
+					try {
+						const whoamiResult = await client.query(convexApi.users.whoami, {});
+						if (whoamiResult && whoamiResult.authId) {
+							return whoamiResult.authId;
+						}
+						return null;
+					} catch (error) {
+						return null;
+					}
+				};
+
+				// Start async resolution of userId
+				resolveUserId().then((resolvedUserId) => {
+					if (cancelled || !resolvedUserId) {
+						if (!resolvedUserId && !cancelled) {
+							set({ status: "error", error: new NotAuthorizedError("Not authenticated") });
+						}
+						return;
+					}
+
+					unsubscribe = client.onUpdate(
+						convexApi.tasks.getAllUserTasks,
+						{ userId: resolvedUserId },
+						(result: ConvexResponse<Doc<'tasks'>[], Err>) => {
+							if (cancelled) return;
+							if (isConvexOk(result)) {
+								set({ status: "resolved", data: result.value.map(rowToTask) });
+							} else {
+								set({ status: "error", error: result.error });
+							}
+						},
+						(error: Error) => {
+							if (cancelled) return;
+							set({ status: "error", error: Err.wrap(error) });
+						}
+					);
+				}).catch((error) => {
+					if (cancelled) return;
+					set({ status: "error", error: Err.wrap(error) });
+				});
+
 				return () => {
-					unsubscribe();
+					cancelled = true;
+					if (unsubscribe) {
+						unsubscribe();
+					}
 				};
 			}),
 
@@ -377,6 +415,7 @@ function rowToTask(row: Doc<"tasks">): Task {
 		children: row.children ?? [],
 		created: new Date(row._creationTime),
 		lastEdit: new Date(row.lastEdit),
+		dueDate: row.dueDate ? new Date(row.dueDate) : undefined,
 	};
 }
 

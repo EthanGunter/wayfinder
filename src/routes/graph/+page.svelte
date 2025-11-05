@@ -19,6 +19,7 @@
 	import { TaskSearchService } from '$lib/API/Tasks/TaskSearchService';
 	import { tokenize } from '../dev/search/tokenizer';
 	import { Parser } from '../dev/search/parser';
+	import { QueryEvaluator } from '../dev/search/evaluator';
 	import SearchTaskListItem from './SearchTaskListItem.svelte';
 
 	let selectedTask = $state<Task | null>(null);
@@ -93,9 +94,22 @@
 			return results;
 		}
 
-		// Structured queries not yet implemented
-		activeSearchResults = [];
-		return [];
+		// Structured query - parse and evaluate
+		try {
+			const tokens = tokenize(query);
+			const parser = new Parser(tokens);
+			const ast = parser.parse();
+			const evaluator = new QueryEvaluator();
+			const results = evaluator.evaluate(allTasks, ast);
+			activeSearchResults = results;
+			return results;
+		} catch (error) {
+			// Parse/evaluation error - return empty results for now
+			// TODO: Show error to user in UI
+			console.error('Query evaluation error:', error);
+			activeSearchResults = [];
+			return [];
+		}
 	}
 
 	$effect(() => {
@@ -133,7 +147,7 @@
 	});
 
 	function handleSearchResultSelected(task: Task) {
-		highlightNode(task.id, { select: true }); // TODO:Test should we select the task?
+		highlightNode(task.id, { select: true });
 	}
 
 	onMount(() => {

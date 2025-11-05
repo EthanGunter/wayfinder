@@ -1,34 +1,41 @@
 <script lang="ts">
+	import { authState } from '$lib/API/Auth';
+	import tasksAPI from '$lib/API/Tasks';
 	import { Parser } from './parser';
 	import { tokenize } from './tokenizer';
+	import { QueryEvaluator } from './evaluator';
+	import type { Task } from '$domain/models/task';
 
-	let query = $state('status:complete AND (priority:>2 OR dueDate:"last week")');
-	let result: string = $state('');
+	let query = $state('status:incomplete');
+	let astResult: string = $state('');
+	let matchedTasks = $state<Task[]>([]);
 	let error: string = $state('');
 	let errorStart: number = $state(-1);
 	let errorEnd: number = $state(-1);
+	const allTasksStore = tasksAPI.getAllUserTasks({});
 
-	const examples = [
-		'status:complete',
-		'priority:>2 AND status:incomplete',
-		'(priority:>3 OR dueDate:<2025-01-01) AND -status:complete',
-		'title:"sprint planning" status:incomplete',
-		'isTodaysTask:true AND priority:>=3',
-		'(status:complete OR status:incomplete) AND priority:5'
-	];
-
-	function parseQuery() {
+	function evaluateQuery() {
 		try {
+			if (query.length === 0) return;
 			const tokens = tokenize(query);
 			const parser = new Parser(tokens);
 			const ast = parser.parse();
 
-			result = JSON.stringify(ast, null, 2);
+			astResult = JSON.stringify(ast, null, 2);
 			error = '';
 			errorStart = -1;
 			errorEnd = -1;
+
+			// Evaluate query against tasks if we have tasks
+			if ($allTasksStore.status === 'resolved') {
+				const evaluator = new QueryEvaluator();
+				matchedTasks = evaluator.evaluate($allTasksStore.data, ast);
+			} else {
+				matchedTasks = [];
+			}
 		} catch (e: any) {
-			result = '';
+			astResult = '';
+			matchedTasks = [];
 			if (e.start !== undefined && e.end !== undefined) {
 				error = e.message;
 				errorStart = e.start;
@@ -43,25 +50,24 @@
 
 	function loadExample(ex: string) {
 		query = ex;
-		parseQuery();
+		evaluateQuery();
 	}
 
-	// Parse on mount
+	// Evaluate on query change
 	$effect(() => {
-		if (query !== undefined) parseQuery();
+		if (query !== undefined) evaluateQuery();
+	});
+
+	// Re-evaluate when tasks change
+	$effect(() => {
+		if ($allTasksStore.status === 'resolved' && query.trim()) {
+			evaluateQuery();
+		}
 	});
 </script>
 
 <div class="container">
 	<h1>Query Parser Tester</h1>
-
-	<div class="examples">
-		<strong>Examples:</strong>
-		{#each examples as ex}
-			<button onclick={() => loadExample(ex)}>{ex}</button>
-		{/each}
-	</div>
-
 	<div class="input-section">
 		<label for="query">Query:</label>
 		<div class="input-wrapper">
@@ -92,10 +98,52 @@
 		</div>
 	{/if}
 
-	{#if result}
+	{#if astResult}
 		<div class="result-box">
 			<strong>AST:</strong>
-			<pre>{result}</pre>
+			<pre>{astResult}</pre>
+		</div>
+	{/if}
+
+	{#if $allTasksStore.status === 'resolved'}
+		<div class="result-box">
+			<strong>Tasks ({$allTasksStore.data.length} total):</strong>
+			<div class="tasks-info">
+				{#if query.trim() && matchedTasks.length > 0}
+					<p class="matched-count">{matchedTasks.length} task(s) matched</p>
+					<ul class="task-list">
+						{#each matchedTasks as task}
+							<li>
+								<strong>{task.title}</strong>
+								{#if task.dueDate}
+									<span class="task-meta"> • Due: {task.dueDate.toLocaleDateString()}</span>
+								{/if}
+								<div class="task-meta flex flex-col">
+									<span>
+										• Status: {task.status === 1 ? 'complete' : 'incomplete'}
+									</span>
+									<span>
+										• Due Date: {task.dueDate?.toDateString()}
+									</span>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{:else if query.trim()}
+					<p class="no-results">No tasks matched the query</p>
+				{:else}
+					<p class="task-count">Enter a query to see matching tasks</p>
+				{/if}
+			</div>
+		</div>
+	{:else if $allTasksStore.status === 'error'}
+		<div class="error-box">
+			<strong>Error loading tasks:</strong>
+			{$allTasksStore.error?.message || 'Unknown error'}
+		</div>
+	{:else}
+		<div class="result-box">
+			<strong>Loading tasks...</strong>
 		</div>
 	{/if}
 </div>
@@ -114,36 +162,6 @@
 	h1 {
 		margin-bottom: 1.5rem;
 		color: #333;
-	}
-
-	.examples {
-		margin-bottom: 1.5rem;
-		padding: 1rem;
-		background: #f5f5f5;
-		border-radius: 6px;
-	}
-
-	.examples strong {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #666;
-		font-size: 0.9rem;
-	}
-
-	.examples button {
-		margin: 0.25rem;
-		padding: 0.4rem 0.8rem;
-		background: white;
-		border: 1px solid #ddd;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.85rem;
-		transition: all 0.2s;
-	}
-
-	.examples button:hover {
-		background: #e9ecef;
-		border-color: #999;
 	}
 
 	.input-section {
@@ -232,5 +250,42 @@
 		font-family: 'Courier New', monospace;
 		font-size: 0.9rem;
 		line-height: 1.4;
+	}
+
+	.tasks-info {
+		margin-top: 0.5rem;
+	}
+
+	.matched-count {
+		margin: 0.5rem 0;
+		font-weight: 600;
+		color: #28a745;
+	}
+
+	.no-results {
+		margin: 0.5rem 0;
+		color: #666;
+		font-style: italic;
+	}
+
+	.task-count {
+		margin: 0.5rem 0;
+		color: #666;
+	}
+
+	.task-list {
+		margin: 0.5rem 0;
+		padding-left: 1.5rem;
+		list-style: disc;
+	}
+
+	.task-list li {
+		margin: 0.5rem 0;
+		padding: 0.25rem 0;
+	}
+
+	.task-meta {
+		color: #666;
+		font-size: 0.9rem;
 	}
 </style>
