@@ -9,10 +9,7 @@
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
 
-	import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-	import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
-	import { getReorderDestinationIndex } from '@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index';
-	import TaskListItem from './TaskListItem.svelte';
+	import TaskList from './TaskList.svelte';
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
@@ -81,30 +78,7 @@
 		showDeleteDialog = false;
 	}
 
-	// --- DnD data shape (aligned with TaskListItem)
-	type ItemData = {
-		taskId: string;
-		parentId: string;
-		index: number;
-		listType: 'sibling' | 'child';
-	};
-
-	function isItemData(d: unknown): d is ItemData {
-		return (
-			!!d &&
-			typeof d === 'object' &&
-			'taskId' in d &&
-			'parentId' in d &&
-			'index' in d &&
-			'listType' in d &&
-			typeof (d as any).taskId === 'string' &&
-			typeof (d as any).parentId === 'string' &&
-			typeof (d as any).index === 'number' &&
-			((d as any).listType === 'sibling' || (d as any).listType === 'child')
-		);
-	}
-
-	// --- Persist reorder operations
+	// --- Reorder operations (passed as callbacks to TaskList)
 	async function reorderWithinParent(
 		parentId: string,
 		movingId: string,
@@ -116,6 +90,7 @@
 		const siblingsMap = $siblingsStore;
 		if (siblingsMap.status !== 'resolved') return;
 
+		// Find parent task by ID (Map keys are object references)
 		let parentTask: Task | undefined;
 		for (const [p] of siblingsMap.data.entries()) {
 			if (p.id === parentId) {
@@ -165,37 +140,6 @@
 		const [_, e] = await tasksAPI.updateTask({ id: task.id, data: { children: currentIds } });
 		if (e) Err.UNHANDLED(e, 'Failed to reorder children');
 	}
-
-	// --- DnD coordination (global monitor only; items self-manage)
-	$effect(() => {
-		const cleanup = monitorForElements({
-			canMonitor: ({ source }) => isItemData(source.data),
-			onDrop: ({ location, source }) => {
-				const target = location.current.dropTargets[0];
-				if (!target) return;
-				const src = source.data;
-				const dst = target.data;
-				if (!isItemData(src) || !isItemData(dst)) return;
-				if (src.parentId !== dst.parentId || src.listType !== dst.listType) return;
-
-				const closest = extractClosestEdge(dst);
-				const finishIndex = getReorderDestinationIndex({
-					startIndex: src.index,
-					indexOfTarget: dst.index,
-					closestEdgeOfTarget: closest,
-					axis: 'vertical'
-				});
-
-				if (dst.listType === 'sibling') {
-					void reorderWithinParent(src.parentId, src.taskId, src.index, finishIndex);
-				} else {
-					void reorderChildren(src.taskId, src.index, finishIndex);
-				}
-			}
-		});
-
-		return cleanup;
-	});
 </script>
 
 <div class="task-editor flex h-full w-full flex-col p-3" class:bg-[#efe]={checked}>
@@ -236,146 +180,78 @@
 		></textarea>
 	</div>
 
-	{#if $siblingsStore.status === 'resolved' && $childTasksStore.status === 'resolved'}
-		<Accordion.Root
-			type="multiple"
-			value={accordionValues}
-			onValueChange={(e) => {
-				layoutState.accordionValues = e as any;
-			}}
-		>
-			{#if $childTasksStore.data.length > 0}
-				<Accordion.Item value="tasks">
-					<Accordion.Trigger
-						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
-					>
-						Tasks
-					</Accordion.Trigger>
-					<Accordion.Content>
-						{@const sortedChildren = (() => {
-							const incomplete = $childTasksStore.data.filter((c) => !isTaskCompleted(c));
-							const complete = $childTasksStore.data.filter((c) => isTaskCompleted(c));
-							return { incomplete, complete };
-						})()}
-						<ul class="relative rounded border border-gray-200">
-							{#each sortedChildren.incomplete as child, index (child.id)}
-								<TaskListItem
-									task={child}
-									parentId={task.id}
-									listType="child"
-									{index}
-									isDraggable={true}
-									onHighlight={(id) => onHighlightNode?.(id)}
-								/>
-							{/each}
-							{#if sortedChildren.complete.length > 0}
-								<div class="flex items-center gap-3 px-2 pt-3 text-xs font-medium text-gray-400">
-									<div
-										class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-gray-300"
-									></div>
-									<span class="tracking-wider uppercase">Completed</span>
-									<div
-										class="h-px flex-1 bg-gradient-to-l from-transparent via-gray-300 to-gray-300"
-									></div>
-								</div>
-							{/if}
-							{#each sortedChildren.complete as child, index (child.id)}
-								<TaskListItem
-									task={child}
-									parentId={task.id}
-									listType="child"
-									index={sortedChildren.incomplete.length + index}
-									isDraggable={false}
-									onHighlight={(id) => onHighlightNode?.(id)}
-								/>
-							{/each}
-						</ul>
-					</Accordion.Content>
-				</Accordion.Item>
-			{/if}
-			{#if $parentsStore.status === 'resolved' && $parentsStore.data.length > 0}
-				<Accordion.Item value="parent-order">
-					<Accordion.Trigger
-						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
-					>
-						Priority
-					</Accordion.Trigger>
-					<Accordion.Content>
-						<div class="flex flex-col gap-4">
-							{#each $parentsStore.data as parent (parent.id)}
-								{@const siblings = $siblingsStore.data.get(parent)}
-								{@const sortedChildren = (() => {
-									const ids = parent.children ?? [];
-									const incomplete: string[] = [];
-									const complete: string[] = [];
-									for (const cid of ids) {
-										const sibling = cid === task.id ? task : siblings?.find((s) => s.id === cid);
-										if (sibling && isTaskCompleted(sibling)) {
-											complete.push(cid);
-										} else {
-											incomplete.push(cid);
-										}
+	<Accordion.Root
+		type="multiple"
+		value={accordionValues}
+		onValueChange={(e) => {
+			layoutState.accordionValues = e as any;
+		}}
+	>
+		{#if $childTasksStore.status === 'resolved' && $childTasksStore.data.length > 0}
+			<Accordion.Item value="tasks">
+				<Accordion.Trigger
+					class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+				>
+					Tasks
+				</Accordion.Trigger>
+				<Accordion.Content>
+					<TaskList
+						tasks={$childTasksStore.data}
+						parentId={task.id}
+						id={`child-${task.id}`}
+						onHighlight={(id) => onHighlightNode?.(id)}
+						onReorder={(taskId, startIndex, finishIndex) =>
+							reorderChildren(taskId, startIndex, finishIndex)}
+					/>
+				</Accordion.Content>
+			</Accordion.Item>
+		{/if}
+		{#if $siblingsStore.status === 'resolved' && $parentsStore.status === 'resolved' && $parentsStore.data.length > 0}
+			<Accordion.Item value="parent-order">
+				<Accordion.Trigger
+					class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+				>
+					Priority
+				</Accordion.Trigger>
+				<Accordion.Content>
+					<div class="flex flex-col gap-4">
+						{#each $parentsStore.data as parent (parent.id)}
+							{@const siblings = (() => {
+								// Find parent in siblings Map by ID (Map keys are object references)
+								if ($siblingsStore.status !== 'resolved') return undefined;
+								for (const [mapParent, mapSiblings] of $siblingsStore.data.entries()) {
+									if (mapParent.id === parent.id) {
+										return mapSiblings;
 									}
-									return { incomplete, complete };
-								})()}
-								<div class="ml-3 flex flex-col">
-									<button
-										class="w-fit rounded-t-lg border border-b-0 border-gray-200 bg-gray-50 px-3 py-1.5 text-left text-sm text-gray-700 hover:cursor-pointer hover:bg-gray-100"
-										onclick={() => onHighlightNode?.(parent.id)}
-									>
-										<h2>{parent.title}</h2>
-									</button>
-									<ul class="relative rounded-lg rounded-tl-none border border-gray-200 bg-gray-50">
-										{#each sortedChildren.incomplete as cid, index (cid)}
-											{@const sibling =
-												cid === task.id ? task : siblings?.find((s) => s.id === cid)}
-											{#if sibling}
-												<TaskListItem
-													task={sibling}
-													parentId={parent.id}
-													listType="sibling"
-													{index}
-													isCurrent={cid === task.id}
-													isDraggable={cid === task.id}
-													onHighlight={(id) => onHighlightNode?.(id)}
-												/>
-											{/if}
-										{/each}
-										{#if sortedChildren.complete.length > 0}
-											<div class="flex items-center gap-3 px-2 pt-3 text-xs font-medium text-gray-400">
-												<div
-													class="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-gray-300"
-												></div>
-												<span class="tracking-wider uppercase">Completed</span>
-												<div
-													class="h-px flex-1 bg-gradient-to-l from-transparent via-gray-300 to-gray-300"
-												></div>
-											</div>
-										{/if}
-										{#each sortedChildren.complete as cid, index (cid)}
-											{@const sibling =
-												cid === task.id ? task : siblings?.find((s) => s.id === cid)}
-											{#if sibling}
-												<TaskListItem
-													task={sibling}
-													parentId={parent.id}
-													listType="sibling"
-													index={sortedChildren.incomplete.length + index}
-													isCurrent={cid === task.id}
-													isDraggable={false}
-													onHighlight={(id) => onHighlightNode?.(id)}
-												/>
-											{/if}
-										{/each}
-									</ul>
-								</div>
-							{/each}
-						</div>
-					</Accordion.Content>
-				</Accordion.Item>
-			{/if}
-		</Accordion.Root>
-	{/if}
+								}
+								return undefined;
+							})()}
+							{@const siblingTasks = (() => {
+								const ids = parent.children ?? [];
+								const tasks: Task[] = [];
+								for (const cid of ids) {
+									const sibling =
+										cid === task.id ? task : siblings?.find((s: Task) => s.id === cid);
+									if (sibling) tasks.push(sibling);
+								}
+								return tasks;
+							})()}
+							<TaskList
+								tasks={siblingTasks}
+								parentId={parent.id}
+								id={`sibling-${parent.id}`}
+								title={parent.title}
+								currentTaskId={task.id}
+								onHighlight={(id) => onHighlightNode?.(id)}
+								onReorder={(taskId, startIndex, finishIndex) =>
+									reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
+							/>
+						{/each}
+					</div>
+				</Accordion.Content>
+			</Accordion.Item>
+		{/if}
+	</Accordion.Root>
 </div>
 
 <Dialog.Root bind:open={showDeleteDialog}>

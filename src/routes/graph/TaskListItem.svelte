@@ -10,36 +10,31 @@
 		type Edge as ClosestEdge
 	} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 
-	type ItemData = { taskId: string; parentId: string; index: number; listType: 'sibling' | 'child' };
+	type ItemData = { taskId: string; parentId: string; index: number; listId: string };
 
-	function makeItemData(
-		taskId: string,
-		parentId: string,
-		index: number,
-		listType: ItemData['listType']
-	): ItemData {
-		return { taskId, parentId, index, listType };
+	function makeItemData(taskId: string, parentId: string, index: number, listId: string): ItemData {
+		return { taskId, parentId, index, listId };
 	}
 
-	function isItemData(d: unknown): d is ItemData {
+	function isItemData(d: any): d is ItemData {
 		return (
 			!!d &&
 			typeof d === 'object' &&
 			'taskId' in d &&
 			'parentId' in d &&
 			'index' in d &&
-			'listType' in d &&
-			typeof (d as any).taskId === 'string' &&
-			typeof (d as any).parentId === 'string' &&
-			typeof (d as any).index === 'number' &&
-			((d as any).listType === 'sibling' || (d as any).listType === 'child')
+			'listId' in d &&
+			typeof d.taskId === 'string' &&
+			typeof d.parentId === 'string' &&
+			typeof d.index === 'number' &&
+			typeof d.listId === 'string'
 		);
 	}
 
 	interface Props {
 		task: Task;
 		parentId: string;
-		listType: 'sibling' | 'child';
+		listType: string;
 		index: number;
 		isCurrent?: boolean;
 		isDraggable?: boolean;
@@ -83,7 +78,7 @@
 					if (!isItemData(source.data)) {
 						return false;
 					}
-					return source.data.parentId === parentId && source.data.listType === listType;
+					return source.data.parentId === parentId && source.data.listId === listType;
 				},
 				getData: ({ element, input }) =>
 					attachClosestEdge(makeItemData(task.id, parentId, index, listType), {
@@ -98,48 +93,23 @@
 	});
 </script>
 
-<li class="flex items-center gap-2 px-2 py-1 text-sm" bind:this={itemEl}>
-	{#if isCurrent}
-		<!-- Current task: draggable with grip, clickable to center -->
+<li class="flex w-full items-center gap-2 text-sm" bind:this={itemEl}>
+	<div class="w-full {isDraggable && !isCurrent ? 'group flex w-full items-center gap-2' : ''}">
 		<button
 			bind:this={handleEl}
-			class="flex-1 cursor-grab rounded border border-gray-300 bg-white px-2 py-1 text-left select-none hover:border-gray-400 active:cursor-grabbing"
-			title="Drag to reorder | Click to center in graph"
+			class="w-full rounded border px-2 py-1 text-left {isDraggable
+				? 'cursor-grab border-gray-300 bg-white select-none hover:border-gray-400 active:cursor-grabbing'
+				: 'border-gray-200 hover:cursor-pointer hover:border-blue-300 hover:bg-blue-50'} 
+				{!isDraggable ? (isCompleted ? 'text-gray-500' : 'bg-white') : ''}"
+			title={isDraggable
+				? 'Drag to reorder | Click to center in graph'
+				: 'Center this task in graph view'}
 			onclick={() => onHighlight?.(task.id)}
 		>
-			<Icon icon="lucide:grip-vertical" class="mr-1 inline size-3 text-gray-400" />
+			{#if isDraggable}
+				<Icon icon="lucide:grip-vertical" class="mr-1 inline size-3 text-gray-400" />
+			{/if}
 			<span>{task.title}</span>
 		</button>
-	{:else if isDraggable}
-		<!-- Other draggable item: clickable with grip + locate button on hover -->
-		<div class="group flex flex-1 items-center gap-2">
-			<button
-				bind:this={handleEl}
-				class="flex-1 cursor-grab rounded border border-gray-300 bg-white px-2 py-1 text-left select-none hover:border-gray-400 active:cursor-grabbing"
-				title="Drag to reorder | Click to center in graph"
-				onclick={() => onHighlight?.(task.id)}
-			>
-				<Icon icon="lucide:grip-vertical" class="mr-1 inline size-3 text-gray-400" />
-				<span>{task.title}</span>
-			</button>
-		</div>
-	{:else}
-		<!-- Non-draggable (completed or sibling): clickable or with locate button -->
-		{#if !isCurrent}
-			<button
-				class="flex-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-left text-gray-500 hover:cursor-pointer hover:border-blue-300 hover:bg-blue-50"
-				onclick={() => onHighlight?.(task.id)}
-				title="Center this task in graph view"
-			>
-				<span class="ml-5">{task.title}</span>
-			</button>
-		{:else}
-			<div class="group flex flex-1 items-center gap-2">
-				<div class="flex-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-gray-500">
-					<span class="ml-5">{task.title}</span>
-				</div>
-			</div>
-		{/if}
-	{/if}
+	</div>
 </li>
-

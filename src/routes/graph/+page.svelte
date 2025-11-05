@@ -26,7 +26,11 @@
 	let searchService: TaskSearchService | null = $state(null);
 
 	// UI State
-	let editorLayoutState: TaskEditorLayoutState = $state({ accordionValues: ['tasks'] });
+	let editorLayoutState: TaskEditorLayoutState = $state({ 
+		accordionValues: ['tasks'],
+		showCompletedTasks: false,
+		showCompletedSiblings: false
+	});
 
 	const controller = createGraphController();
 	let drawerOpenStore = controller.drawerOpen;
