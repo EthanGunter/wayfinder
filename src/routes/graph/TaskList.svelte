@@ -65,8 +65,7 @@
 	$effect(() => {
 		const cleanup = monitorForElements({
 			canMonitor: ({ source }) => {
-				if (!isItemData(source.data)) return false;
-				return source.data.listId === id;
+				return isItemData(source.data) &&source.data.listId === id;
 			},
 			onDrop: ({ location, source }) => {
 				const target = location.current.dropTargets[0];
@@ -104,7 +103,7 @@
 	<div
 		class="relative rounded-md border border-gray-200 bg-gray-50 {title ? ' rounded-tl-none' : ''}"
 	>
-		<ul class="flex flex-col gap-1 p-1">
+		<ul class="flex flex-col p-1">
 			{#each sorted.incomplete as task, index (task.id)}
 				<TaskListItem
 					{task}
@@ -136,7 +135,7 @@
 					<div class="h-px flex-1 bg-gradient-to-l from-transparent via-gray-300 to-gray-300"></div>
 				</Collapsible.Trigger>
 				<Collapsible.Content>
-					<ul class="flex flex-col gap-1 p-1">
+					<ul class="flex flex-col p-1">
 						{#each sorted.complete as task, index (task.id)}
 							<TaskListItem
 								{task}

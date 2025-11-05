@@ -7,7 +7,8 @@
 	} from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 	import {
 		attachClosestEdge,
-		type Edge as ClosestEdge
+		extractClosestEdge,
+		type Edge
 	} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 
 	type ItemData = { taskId: string; parentId: string; index: number; listId: string };
@@ -53,6 +54,7 @@
 
 	let itemEl: HTMLElement | undefined = $state();
 	let handleEl: HTMLElement | undefined = $state();
+	let closestEdge = $state<Edge | null>(null);
 
 	const isCompleted = $derived(isTaskCompleted(task));
 
@@ -75,17 +77,68 @@
 			dropTargetForElements({
 				element: itemEl,
 				canDrop: ({ source }) => {
-					if (!isItemData(source.data)) {
-						return false;
-					}
-					return source.data.parentId === parentId && source.data.listId === listType;
+					return (
+						isItemData(source.data) &&
+						source.data.parentId === parentId &&
+						source.data.listId === listType
+					);
 				},
-				getData: ({ element, input }) =>
-					attachClosestEdge(makeItemData(task.id, parentId, index, listType), {
+				getData: ({ element, input }) => {
+					return attachClosestEdge(makeItemData(task.id, parentId, index, listType), {
 						element,
 						input,
 						allowedEdges: ['top', 'bottom']
-					})
+					});
+				},
+				onDragEnter: ({ source, self }) => {
+					// TODO:debug
+					const isSource = source.element === (handleEl ?? itemEl);
+					if (isSource) {
+						closestEdge = null;
+						return;
+					}
+					const edge = extractClosestEdge(self.data);
+					// Hide indicator if adjacent to source (prevents flickering)
+					if (isItemData(source.data)) {
+						const sourceIndex = source.data.index;
+						const isItemBeforeSource = index === sourceIndex - 1;
+						const isItemAfterSource = index === sourceIndex + 1;
+						const isDropIndicatorHidden =
+							(isItemBeforeSource && edge === 'bottom') || (isItemAfterSource && edge === 'top');
+						if (isDropIndicatorHidden) {
+							closestEdge = null;
+							return;
+						}
+					}
+					closestEdge = edge;
+				},
+				onDrag: ({ source, self }) => {
+					const isSource = source.element === (handleEl ?? itemEl);
+					if (isSource) {
+						closestEdge = null;
+						return;
+					}
+					const edge = extractClosestEdge(self.data);
+					// Hide indicator if adjacent to source
+					if (isItemData(source.data)) {
+						const sourceIndex = source.data.index;
+						const isItemBeforeSource = index === sourceIndex - 1;
+						const isItemAfterSource = index === sourceIndex + 1;
+						const isDropIndicatorHidden =
+							(isItemBeforeSource && edge === 'bottom') || (isItemAfterSource && edge === 'top');
+						if (isDropIndicatorHidden) {
+							closestEdge = null;
+							return;
+						}
+					}
+					closestEdge = edge;
+				},
+				onDragLeave: () => {
+					closestEdge = null;
+				},
+				onDrop: () => {
+					closestEdge = null;
+				}
 			})
 		);
 
@@ -93,7 +146,10 @@
 	});
 </script>
 
-<li class="flex w-full items-center gap-2 text-sm" bind:this={itemEl}>
+{#if closestEdge === 'top'}
+	<div class="z-10 h-0 w-full outline-1 outline-blue-500"></div>
+{/if}
+<li class="relative flex w-full items-center gap-2 py-[.125rem] text-sm" bind:this={itemEl}>
 	<div class="w-full {isDraggable && !isCurrent ? 'group flex w-full items-center gap-2' : ''}">
 		<button
 			bind:this={handleEl}
@@ -113,3 +169,6 @@
 		</button>
 	</div>
 </li>
+{#if closestEdge === 'bottom'}
+	<div class="relative z-10 h-0 w-full outline-1 outline-blue-500"></div>
+{/if}
