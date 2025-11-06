@@ -1,11 +1,6 @@
 import { ParseError } from "$domain/errors";
-import { tokenize, type Token, type TokenType } from "./tokenizer";
-
-export type ASTNode =
-	| { type: 'kvp'; key: string; op: string; value: string; negated: boolean; start: number; end: number }
-	| { type: 'and'; left: ASTNode; right: ASTNode }
-	| { type: 'or'; left: ASTNode; right: ASTNode }
-	| { type: 'group'; child: ASTNode };
+import { tokenize } from "./tokenizer";
+import type { ASTNode, Token, TokenType } from "./types";
 
 export class Parser {
 	private tokens: Token[];
@@ -59,9 +54,12 @@ export class Parser {
 		let left = this.andExpr();
 
 		while (this.peek('OR')) {
-			this.consume('OR');
+			const orToken = this.consume('OR');
 			const right = this.andExpr();
-			left = { type: 'or', left, right };
+
+			const start = left.start;
+			const end = right.end;
+			left = { type: 'or', left, right, start, end };
 		}
 
 		return left;
@@ -71,11 +69,11 @@ export class Parser {
 		let left = this.term();
 
 		while (!this.peek('EOF') && !this.peek('RPAREN') && !this.peek('OR')) {
-			if (this.peek('AND')) {
-				this.consume('AND');
-			}
+			if (this.peek('AND')) this.consume('AND');
 			const right = this.term();
-			left = { type: 'and', left, right };
+			const start = left.start;
+			const end = right.end;
+			left = { type: 'and', left, right, start, end };
 		}
 
 		return left;
@@ -83,10 +81,10 @@ export class Parser {
 
 	private term(): ASTNode {
 		if (this.peek('LPAREN')) {
-			this.consume('LPAREN');
+			const l = this.consume('LPAREN');
 			const child = this.expr();
-			this.consume('RPAREN');
-			return { type: 'group', child };
+			const r = this.consume('RPAREN');
+			return { type: 'group', child, start: l.start, end: r.end };
 		}
 
 		if (this.peek('KVP')) {
@@ -95,7 +93,7 @@ export class Parser {
 				type: 'kvp',
 				key: token.key!,
 				op: token.op!,
-				value: (token as any).kvValue,
+				value: token.value,
 				negated: token.negated || false,
 				start: token.start,
 				end: token.end,

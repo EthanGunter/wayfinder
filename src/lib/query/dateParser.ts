@@ -1,4 +1,4 @@
-import type { ParsedValue } from './types';
+import type { DateValue, ParsedValue } from './types';
 
 /**
  * Parses date values from query strings.
@@ -7,7 +7,7 @@ import type { ParsedValue } from './types';
  * - Absolute dates: "2025-01-01", ISO dates
  * - Special keywords: "today", "tomorrow", "yesterday"
  */
-export function parseDateValue(value: string): ParsedValue {
+export function parseDateValue(value: string): DateValue {
 	const trimmed = value.trim().toLowerCase();
 
 	// Special keywords
@@ -30,11 +30,30 @@ export function parseDateValue(value: string): ParsedValue {
 	if (relativeMatch) {
 		const amount = parseInt(relativeMatch[1], 10);
 		const unit = relativeMatch[2].toLowerCase() as 'day' | 'week' | 'month' | 'year';
-		return { type: 'relative', amount, unit };
+		// Convert relative date to absolute Date
+		const now = new Date();
+		const date = new Date(now);
+
+		switch (unit) {
+			case 'day':
+				date.setDate(date.getDate() + amount);
+				break;
+			case 'week':
+				date.setDate(date.getDate() + amount * 7);
+				break;
+			case 'month':
+				date.setMonth(date.getMonth() + amount);
+				break;
+			case 'year':
+				date.setFullYear(date.getFullYear() + amount);
+				break;
+		}
+
+		return date;
 	}
 
 	// Absolute dates: ISO format "2025-01-01" or full ISO string
-	const dateMatch = value.match(/^\d{4}-\d{2}-\d{2}/);
+	const dateMatch = value.match(/^\d{4}\d{2}\d{2}/);
 	if (dateMatch) {
 		const parsed = new Date(value);
 		if (!isNaN(parsed.getTime())) {
@@ -51,28 +70,4 @@ export function parseDateValue(value: string): ParsedValue {
 	throw new Error(`Invalid date value: ${value}`);
 }
 
-/**
- * Converts relative date to absolute Date for comparison
- */
-export function resolveRelativeDate(relative: { type: 'relative'; amount: number; unit: 'day' | 'week' | 'month' | 'year' }): Date {
-	const now = new Date();
-	const date = new Date(now);
-
-	switch (relative.unit) {
-		case 'day':
-			date.setDate(date.getDate() + relative.amount);
-			break;
-		case 'week':
-			date.setDate(date.getDate() + relative.amount * 7);
-			break;
-		case 'month':
-			date.setMonth(date.getMonth() + relative.amount);
-			break;
-		case 'year':
-			date.setFullYear(date.getFullYear() + relative.amount);
-			break;
-	}
-
-	return date;
-}
 

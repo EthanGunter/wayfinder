@@ -1,11 +1,9 @@
 import { TaskStatus } from '$domain/models/task';
 import type { Task } from '$domain/models/task';
-import type { FieldRegistry, FieldHandler, ParsedValue } from '$lib/query/types';
-import { fieldHandler } from '$lib/query/types';
+import type { FieldRegistry, ParsedValue, DateValue, FieldHandler } from '$lib/query/types';
+import { fieldHandler as fh } from '$lib/query/types';
 import { parseDateValue } from '$lib/query/dateParser';
-import { compareDate } from '$lib/query/matchers';
-
-type DateValue = Date | { type: 'relative'; amount: number; unit: 'day' | 'week' | 'month' | 'year' };
+import { compareDate, compareString } from '$lib/query/matchers';
 
 /**
  * PLANNED HANDLERS
@@ -34,8 +32,30 @@ type DateValue = Date | { type: 'relative'; amount: number; unit: 'day' | 'week'
  * 		'(' & ')': group expressions
  */
 
+const fieldHandler = <T extends ParsedValue>(handler: FieldHandler<Task, T>) => fh<Task, T>(handler);
+
 export const taskQueryFieldRegistry: FieldRegistry<Task> = {
-	status: fieldHandler<Task, TaskStatus>({
+	/* TODO: allow searching by username/role/email whatever.
+	This is a complicated one, and relies on an expansion of the user system
+	*/
+	// user: fieldHandler({} as any),
+
+	// Content
+	title: fieldHandler<string>({
+		parseValue: value => {
+			console.log('[title parseValue()]:', value);
+			return value;
+		},
+		matches: (task, op, parsed) => compareString(task.title, op, parsed),
+	}),
+	content: fieldHandler<string>({
+		parseValue: (value) => {
+			console.log('[content parseValue()]:', value);
+			return value;
+		},
+		matches: (task, op, parsed) => compareString(task.content, op, parsed),
+	}),
+	status: fieldHandler<TaskStatus>({
 		parseValue: (value) => {
 			const normalized = value.toLowerCase();
 			if (normalized === 'complete') return TaskStatus.complete;
@@ -53,11 +73,26 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 		}
 	}),
 
-	dueDate: fieldHandler<Task, DateValue>({
-		parseValue: parseDateValue as (value: string) => DateValue,
-		matches: (task, op, parsedValue) => {
-			return compareDate(task.dueDate, op, parsedValue);
-		}
+	/* TODO: Need to implement array-based queries
+	* `parents.name:any:~design` 
+	* supported - any:, all:, none:, size:
+	* This is task-specific, and will require a refactor of the query system to support non-standard fields...
+	*/
+	// parents: fieldHandler({} as any),
+	// children: fieldHandler({} as any),
+
+	// TODO: todaysTask should also handle no operator, and be treated as a boolean
+	todaysTask: fieldHandler<DateValue>({
+		parseValue: parseDateValue,
+		matches: (task, op, parsedValue) => compareDate(task.dueDate, op, parsedValue)
 	}),
+	dueDate: fieldHandler<DateValue>({
+		parseValue: parseDateValue,
+		matches: (task, op, parsedValue) => compareDate(task.dueDate, op, parsedValue)
+	}),
+
+	// Metadata
+	created: fieldHandler({} as any),
+	lastEdit: fieldHandler({} as any),
 };
 

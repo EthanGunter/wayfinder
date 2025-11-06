@@ -1,11 +1,31 @@
-export type QueryOperator = '=' | '>' | '<' | '>=' | '<=';
+export type ASTNode = { start: number; end: number } &
+	(
+		| { type: 'kvp'; key: string; op: string; value: ParsedValue | ParsedValue[]; negated: boolean; }
+		| { type: 'and'; left: ASTNode; right: ASTNode; }
+		| { type: 'or'; left: ASTNode; right: ASTNode; }
+		| { type: 'group'; child: ASTNode; }
+	);
 
+export type TokenType = 'LPAREN' | 'RPAREN' | 'AND' | 'OR' | 'KVP' | 'EOF';
+
+export interface Token {
+	type: TokenType;
+	value: ParsedValue | ParsedValue[];
+	key?: string;
+	op?: string;
+	negated?: boolean;  // For !value
+	start: number;
+	end: number;
+}
+
+export type QueryOperator = '=' | '>' | '<' | '>=' | '<=' | '~' | '/' | '?';
+export type DateValue = Date | { type: 'date-range'; rangeTop: Date; rangeBottom: Date }
+export type NumberValue = number | { type: 'number-range'; rangeTop: number; rangeBottom: number }
 export type ParsedValue =
 	| string
-	| number
-	| Date
+	| NumberValue
+	| DateValue
 	| boolean
-	| { type: 'relative'; amount: number; unit: 'day' | 'week' | 'month' | 'year' };
 
 export type ValueParser<T extends ParsedValue> = (value: string) => T;
 

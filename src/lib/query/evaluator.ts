@@ -1,5 +1,4 @@
-import type { ASTNode } from './parser';
-import type { QueryOperator, FieldRegistry } from './types';
+import type { ASTNode, QueryOperator, FieldRegistry, ParsedValue } from './types';
 import { ParseError } from '$domain/errors';
 
 /**
@@ -30,8 +29,16 @@ export class QueryEvaluator<TEntity> {
 		}
 
 		try {
-			// Parse the value
-			const parsedValue = handler.parseValue(node.value);
+			// Value is already parsed by tokenizer, but handlers expect ParsedValue (not array)
+			// For arrays, we need to handle them specially
+			let parsedValue: ParsedValue;
+			if (Array.isArray(node.value)) {
+				// For arrays, we'll need to check if any element matches
+				// This is a simplified approach - handlers may need array support
+				parsedValue = node.value[0];
+			} else {
+				parsedValue = node.value;
+			}
 
 			// Check if entity matches
 			const matches = handler.matches(entity, node.op as QueryOperator, parsedValue);
@@ -42,7 +49,7 @@ export class QueryEvaluator<TEntity> {
 			// Re-throw parse errors with position info
 			if (error instanceof Error) {
 				throw new ParseError(
-					`Error evaluating ${node.key}:${node.value}: ${error.message}`,
+					`Error evaluating ${node.key}: ${error.message}`,
 					'search expression',
 					node.start,
 					node.end
