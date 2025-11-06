@@ -17,21 +17,23 @@
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import { authState } from '$lib/API/Auth';
 	import { TaskSearchService } from '$lib/API/Tasks/TaskSearchService';
-	import { tokenize } from '../dev/search/tokenizer';
-	import { Parser } from '../dev/search/parser';
-	import { QueryEvaluator } from '../dev/search/evaluator';
+	import { tokenize } from '$lib/query/tokenizer';
+	import { parseQuery, Parser } from '$lib/query/parser';
+	import { QueryEvaluator } from '$lib/query/evaluator';
+	import { taskQueryFieldRegistry } from '$lib/API/Tasks/taskQueryHandlers';
 	import SearchTaskListItem from './SearchTaskListItem.svelte';
 
 	let selectedTask = $state<Task | null>(null);
 	let allTasks = $state<Task[]>([]);
 	let searchService: TaskSearchService | null = $state(null);
 	let activeSearchResults = $state<Task[]>([]);
-	let searchQuery = $state<string>(''); // Track current search query
-	let showRelatedNodes = $state(false); // Stage 2: toggle for showing related nodes
+	let searchQuery = $state<string>('');
+	let isStructuredQuery = $state(false); // Track if current query is structured (uses QueryEvaluator)
+	let showRelatedNodes = $state(true);
 	let relatedDepth = $state(-1); // -1 = unlimited, 1 = direct only, 2 = 2 levels, etc. TODO: Wire to user settings
 
 	// UI State
-	let editorLayoutState: TaskEditorLayoutState = $state({ 
+	let editorLayoutState: TaskEditorLayoutState = $state({
 		accordionValues: ['tasks'],
 		showCompletedTasks: false,
 		showCompletedSiblings: false
@@ -63,6 +65,7 @@
 		}
 	}
 
+	// TODO:refactor This should be derived from the result of parsing, not duplicated here
 	function isPlainTextQuery(query: string): boolean {
 		const trimmed = query.trim();
 		if (!trimmed) return false;
@@ -80,35 +83,41 @@
 	}
 
 	async function handleSearch(query: string): Promise<Task[]> {
-		searchQuery = query; // Track current query
-		
 		if (!searchService || !query.trim()) {
+			// Clear search state when query is empty
+			searchQuery = '';
 			activeSearchResults = [];
-			showRelatedNodes = false; // Reset toggle when search is cleared
+			isStructuredQuery = false;
 			return [];
 		}
+
+		let results: Task[] = [];
 
 		if (isPlainTextQuery(query)) {
-			const results = searchService.searchTasks(query);
-			activeSearchResults = results;
+			// Plain text query - just return results for dropdown, don't affect graph
+			results = searchService.searchTasks(query);
+			isStructuredQuery = false;
 			return results;
-		}
-
-		// Structured query - parse and evaluate
-		try {
-			const tokens = tokenize(query);
-			const parser = new Parser(tokens);
-			const ast = parser.parse();
-			const evaluator = new QueryEvaluator();
-			const results = evaluator.evaluate(allTasks, ast);
-			activeSearchResults = results;
-			return results;
-		} catch (error) {
-			// Parse/evaluation error - return empty results for now
-			// TODO: Show error to user in UI
-			console.error('Query evaluation error:', error);
-			activeSearchResults = [];
-			return [];
+		} else {
+			// Structured query - parse and evaluate
+			try {
+				const ast = parseQuery(query);
+				const evaluator = new QueryEvaluator(taskQueryFieldRegistry);
+				results = evaluator.evaluate(allTasks, ast);
+				// Only update graph state for structured queries with results
+				searchQuery = query;
+				activeSearchResults = results;
+				isStructuredQuery = true;
+				return results;
+			} catch (error) {
+				// Parse/evaluation error - clear graph state, return empty results
+				// TODO: Show error to user in UI
+				console.error('Query evaluation error:', error);
+				searchQuery = '';
+				activeSearchResults = [];
+				isStructuredQuery = false;
+				return [];
+			}
 		}
 	}
 
@@ -124,24 +133,16 @@
 	});
 
 	$effect(() => {
-		// Update graph visibility when search query, results, or showRelatedNodes changes
-		const hasActiveSearch = searchQuery.trim().length > 0;
-		
-		if (hasActiveSearch && activeSearchResults.length > 0) {
-			// Search with results: filter to matching nodes (+ related if enabled)
+		// Only update graph visibility for structured queries (QueryEvaluator) with results
+		if (isStructuredQuery && activeSearchResults.length > 0) {
+			// Structured query with results: filter to matching nodes (+ related if enabled)
 			const matchingIds = new Set(activeSearchResults.map((t) => t.id));
 			controller.setVisibleTaskIds(matchingIds, {
 				includeRelated: showRelatedNodes,
 				relatedDepth
 			});
-		} else if (hasActiveSearch && activeSearchResults.length === 0) {
-			// Search with no results: hide all nodes
-			controller.setVisibleTaskIds(new Set(), {
-				includeRelated: false,
-				relatedDepth
-			});
 		} else {
-			// No active search: show all nodes
+			// Plain text query or no structured query results: show all nodes
 			controller.setVisibleTaskIds(null);
 		}
 	});
@@ -222,7 +223,7 @@
 					{/snippet}
 				</SearchBar>
 			</div>
-			{#if searchQuery.trim().length > 0 && activeSearchResults.length > 0}
+			{#if isStructuredQuery && activeSearchResults.length > 0}
 				<Button
 					variant={showRelatedNodes ? 'default' : 'outline'}
 					size="sm"

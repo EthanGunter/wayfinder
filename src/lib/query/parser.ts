@@ -112,8 +112,9 @@ export class Parser {
 	}
 }
 
-function parseQuery(input: string): ASTNode {
+export function parseQuery(input: string): ASTNode {
 	const tokens = tokenize(input);
 	const parser = new Parser(tokens);
 	return parser.parse();
 }
+

@@ -1,8 +1,10 @@
+import type { ParsedValue } from "./types";
+
 export type TokenType = 'LPAREN' | 'RPAREN' | 'AND' | 'OR' | 'KVP' | 'EOF';
 
 export interface Token {
   type: TokenType;
-  value: string;
+  value: ParsedValue | ParsedValue[];
   key?: string;
   op?: string;
   negated?: boolean;  // For !value
@@ -26,7 +28,6 @@ export function tokenize(input: string): Token[] {
     rparen: /^\)/,
     and: /^AND\b/i,
     or: /^OR\b/i,
-    // KVP: key:value or key:>value or key:!value or key:!"quoted value"
     kvp: /^(\w+):(>|<|>=|<=|=)?(!)?(?:"([^"]*)"|([^\s()]+))/,
   };
 
@@ -94,3 +95,4 @@ export function tokenize(input: string): Token[] {
   tokens.push({ type: 'EOF', value: '', start: pos, end: pos });
   return tokens;
 }
+

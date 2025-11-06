@@ -1,5 +1,3 @@
-import type { Task } from '$domain/models/task';
-
 export type QueryOperator = '=' | '>' | '<' | '>=' | '<=';
 
 export type ParsedValue =
@@ -11,11 +9,11 @@ export type ParsedValue =
 
 export type ValueParser<T extends ParsedValue> = (value: string) => T;
 
-export type FieldMatcher<T extends ParsedValue> = (task: Task, op: QueryOperator, parsedValue: T) => boolean;
+export type FieldMatcher<TEntity, T extends ParsedValue> = (entity: TEntity, op: QueryOperator, parsedValue: T) => boolean;
 
-export interface FieldHandler<T extends ParsedValue> {
+export interface FieldHandler<TEntity, T extends ParsedValue> {
 	parseValue: ValueParser<T>;
-	matches: FieldMatcher<T>;
+	matches: FieldMatcher<TEntity, T>;
 	autocomplete?: (value: string) => string[];
 }
 
@@ -23,7 +21,7 @@ export interface FieldHandler<T extends ParsedValue> {
  * Helper function to create a type-safe field handler.
  * Ensures parseValue returns the same type that matches expects.
  */
-export function fieldHandler<T extends ParsedValue>(handler: FieldHandler<T>): FieldHandler<any> {
+export function fieldHandler<TEntity, T extends ParsedValue>(handler: FieldHandler<TEntity, T>): FieldHandler<TEntity, any> {
 	return handler;
 }
 
@@ -32,4 +30,5 @@ export function fieldHandler<T extends ParsedValue>(handler: FieldHandler<T>): F
  * Individual handlers are type-safe via fieldHandler<T>, but the registry
  * accepts any FieldHandler<ParsedValue> to allow heterogeneous collections.
  */
-export type FieldRegistry = Record<string, FieldHandler<ParsedValue>>;
+export type FieldRegistry<TEntity> = Record<string, FieldHandler<TEntity, ParsedValue>>;
+
