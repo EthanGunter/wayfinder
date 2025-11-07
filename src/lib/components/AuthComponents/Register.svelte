@@ -90,7 +90,7 @@
 			}
 			const [_, registerError] = await authAPI.register({ creds, userData });
 			if (registerError) {
-				errorMessage = registerError.message || 'Registration failed';
+				errorMessage = registerError.messageForUser || 'Registration failed';
 			} else {
 				goto(redir || '/planner');
 			}

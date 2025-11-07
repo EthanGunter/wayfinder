@@ -1,8 +1,8 @@
 import { TaskStatus } from '$domain/models/task';
 import type { Task } from '$domain/models/task';
-import type { FieldRegistry, ParsedValue, DateValue, FieldHandler } from '$lib/query/types';
-import { fieldHandler as fh } from '$lib/query/types';
-import { parseDateValue } from '$lib/query/dateParser';
+import type { FieldRegistry } from '$lib/query/types';
+import { fieldHandler, compareOps, valueOps, ValueTransformError } from '$lib/query/types';
+import { parseDateValue } from '$lib/query/valueTransformers';
 import { compareDate, compareString } from '$lib/query/matchers';
 
 /**
@@ -32,8 +32,12 @@ import { compareDate, compareString } from '$lib/query/matchers';
  * 		'(' & ')': group expressions
  */
 
-const fieldHandler = <T extends ParsedValue>(handler: FieldHandler<Task, T>) => fh<Task, T>(handler);
+// const fieldHandler = <T extends ParsedValue>(handler: Parameters<typeof fh<Task, T>>[0]) => fh<Task, T>(handler);
 
+// TODO I didn't know where to put this so it's going here
+// We should support transforming custom value variable, similar to how today (in `date==today`) is handled.
+// I don't know what these values would be based on if not universal values like today's date
+// but it would make the tolerance values more meaningful (1+-5 is always -4..6)
 export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 	/* TODO: allow searching by username/role/email whatever.
 	This is a complicated one, and relies on an expansion of the user system
@@ -41,29 +45,35 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 	// user: fieldHandler({} as any),
 
 	// Content
-	title: fieldHandler<string>({
-		parseValue: value => {
-			console.log('[title parseValue()]:', value);
-			return value;
+	title: fieldHandler({
+		operators: compareOps('==', '!=', '~='),
+		valueOps: valueOps(),
+		transformValue: raw => {
+			console.log('[title parseValue()]:', raw);
+			return raw;
 		},
-		matches: (task, op, parsed) => compareString(task.title, op, parsed),
+		matches: (task, op, value) => compareString(task.title, op, value),
 	}),
-	content: fieldHandler<string>({
-		parseValue: (value) => {
+	content: fieldHandler({
+		operators: compareOps('==', '!=', '~='),
+		valueOps: valueOps(),
+		transformValue: (value) => {
 			console.log('[content parseValue()]:', value);
 			return value;
 		},
-		matches: (task, op, parsed) => compareString(task.content, op, parsed),
+		matches: (task, op, value) => compareString(task.content, op, value),
 	}),
-	status: fieldHandler<TaskStatus>({
-		parseValue: (value) => {
-			const normalized = value.toLowerCase();
+	status: fieldHandler({
+		operators: compareOps('==', '!='),
+		valueOps: valueOps(),
+		transformValue: (raw) => {
+			const normalized = raw.toLowerCase();
 			if (normalized === 'complete') return TaskStatus.complete;
 			else if (normalized === 'incomplete') return TaskStatus.incomplete;
-			throw new Error('Invalid status: ${value}. Must be `complete` or `incomplete`');
+			throw new ValueTransformError(`Invalid status: ${raw}. Must be 'complete' or 'incomplete'`);
 		},
-		matches: (task, op, parsedValue) => {
-			return task.status === parsedValue;
+		matches: (task, op, value) => {
+			return task.status === value.data;
 		},
 		autocomplete: (value) => {
 			const normalized = value.toLowerCase();
@@ -82,17 +92,52 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 	// children: fieldHandler({} as any),
 
 	// TODO: todaysTask should also handle no operator, and be treated as a boolean
-	todaysTask: fieldHandler<DateValue>({
-		parseValue: parseDateValue,
-		matches: (task, op, parsedValue) => compareDate(task.dueDate, op, parsedValue)
+	todaysTask: fieldHandler({
+		operators: compareOps('==', '!=', '>=', '<=', '>', '<'),
+		valueOps: valueOps('..', '+', '-'),
+		cardinality: 'single',
+		arith: {
+			// For tolerance, the second Date represents a duration
+			// We calculate the difference from epoch to get milliseconds
+			add: (a: Date, b: Date) => {
+				const result = new Date(a);
+				const durationMs = b.getTime(); // Duration stored as ms since epoch
+				result.setTime(result.getTime() + durationMs);
+				return result;
+			},
+			sub: (a: Date, b: Date) => {
+				const result = new Date(a);
+				const durationMs = b.getTime();
+				result.setTime(result.getTime() - durationMs);
+				return result;
+			}
+		},
+		transformValue: parseDateValue,
+		matches: (task, op, value) => compareDate(task.dueDate, op, value)
 	}),
-	dueDate: fieldHandler<DateValue>({
-		parseValue: parseDateValue,
-		matches: (task, op, parsedValue) => compareDate(task.dueDate, op, parsedValue)
+	dueDate: fieldHandler({
+		operators: compareOps('==', '!=', '>=', '<=', '>', '<'),
+		valueOps: valueOps('..', '+', '-'),
+		cardinality: 'single',
+		arith: {
+			add: (a: Date, b: Date) => {
+				const result = new Date(a);
+				const durationMs = b.getTime();
+				result.setTime(result.getTime() + durationMs);
+				return result;
+			},
+			sub: (a: Date, b: Date) => {
+				const result = new Date(a);
+				const durationMs = b.getTime();
+				result.setTime(result.getTime() - durationMs);
+				return result;
+			}
+		},
+		transformValue: parseDateValue,
+		matches: (task, op, value) => compareDate(task.dueDate, op, value)
 	}),
 
 	// Metadata
 	created: fieldHandler({} as any),
 	lastEdit: fieldHandler({} as any),
 };
-

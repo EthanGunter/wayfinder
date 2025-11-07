@@ -1,6 +1,6 @@
 import { ParseError } from "$domain/errors";
 import { tokenize } from "./tokenizer";
-import type { ASTNode, Token, TokenType } from "./types";
+import type { ASTNode, Token, TokenType, ComparisonOperator } from "./types";
 
 export class Parser {
 	private tokens: Token[];
@@ -92,9 +92,8 @@ export class Parser {
 			return {
 				type: 'kvp',
 				key: token.key!,
-				op: token.op!,
+				op: token.op! as ComparisonOperator,
 				value: token.value,
-				negated: token.negated || false,
 				start: token.start,
 				end: token.end,
 			};

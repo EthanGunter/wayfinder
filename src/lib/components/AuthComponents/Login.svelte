@@ -36,7 +36,7 @@
 		try {
 			const [_, error] = await authAPI.login({ type: 'external' });
 			if (error) {
-				errorMessage = error.message || 'Login failed';
+				errorMessage = error.messageForUser || 'Login failed';
 				onError?.(errorMessage, error);
 			}
 			// OAuth flow will handle redirect via provider/callback
@@ -58,7 +58,7 @@
 		try {
 			const [_, error] = await authAPI.login({ type: 'email_password', email, password });
 			if (error) {
-				errorMessage = error.message || 'Login failed';
+				errorMessage = error.messageForUser || 'Login failed';
 				onError?.(errorMessage, error);
 				return;
 			}

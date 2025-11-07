@@ -1,249 +1,153 @@
 <script lang="ts">
+	import type { Task } from '$domain/models/task';
+	import { authState } from '$lib/API/Auth';
+	import tasksAPI from '$lib/API/Tasks';
+	import { taskQueryFieldRegistry } from '$lib/API/Tasks/taskQueryHandlers';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { parseQuery } from '$lib/query/parser';
-	import type { ASTNode, FieldRegistry } from '$lib/query/types';
+	import { QueryEvaluator } from '$lib/query/evaluator';
+	import type { ASTNode } from '$lib/query/types';
 	import { onMount } from 'svelte';
-	import { taskQueryFieldRegistry } from '$lib/API/Tasks/taskQueryHandlers';
 
-	let input = '';
-	let ast: ASTNode | null = null;
+	let allTasks = $state<Task[]>([]);
+	let matchingTasks = $state<Task[]>([]);
+	let evaluator = new QueryEvaluator<Task>(taskQueryFieldRegistry);
 
-	let parseError: string | null = null;
-	let handlerError: string | null = null;
+	onMount(() => {
+		authState.subscribe((state) => {
+			if (state.status === 'signed-in') {
+				tasksAPI.getAllUserTasks({ userId: state.user.id }).subscribe((tasks) => {
+					if (tasks.status === 'resolved') {
+						allTasks = tasks.data;
+					}
+				});
+			}
+		});
+	});
 
+	let testQueryLibraryOpen = $state(false);
+	let input = $state('');
+	let ast: ASTNode | null = $state(null);
+	let parseError: string | null = $state(null);
+	let evalError: string | null = $state(null);
 	let source = '';
 
-	// Categorized test queries with coverage
 	type Section = { title: string; items: string[] };
-
 	const TEST_SECTIONS: Section[] = [
 		{
-			title: 'Strings: contains, fuzzy, regex, empty, arrays, negation',
+			title: 'Parser basics: grouping, AND/OR precedence, implicit AND, errors',
 			items: [
-				'title:bug',
-				'title=bug',
-				'title:Bug',
-				'content:"New Feature"',
-				'content = "Some exact phrase"',
-				'title = "  leading and trailing  "',
-				'title:~bug',
-				'title:~"bg"',
-				'content:~fix',
-				'title:/^bug/i',
-				'content:/feature[s]?/i',
-				'title:/\\d{3,}/',
-				'title:?',
-				'content:?',
-				'title:[bug,fix,"new feature"]',
-				'title:~[bug,fix,"new feature"]',
-				'title:!bug',
-				'content:!~fix',
-				'title:!/bug/i',
-				'title:!?',
-				'content:!?'
+				'(title == bug) AND (status == 0)',
+				'title == bug OR status == 0',
+				'(title == bug OR status == 1) AND (title == test)',
+				'title==bug status==0',
+				'title==bug && status==0',
+				'title==bug || status==0',
+				'(status==0 AND (title==bug OR title==test))',
 			]
 		},
 		{
-			title: 'Status enum (valid/invalid)',
-			items: ['status:complete', 'status=incomplete', 'status = COMPLETE', 'status:done']
-		},
-		{
-			title: 'Invalid numeric ops on strings (should error)',
-			items: ['title:>10', 'content:>=2']
-		},
-		{
-			title: 'Dates: absolute, ISO, relative, compares, ranges, null',
+			title: 'Strings: contains, fuzzy, negation, arrays',
 			items: [
-				'dueDate:2025-01-31',
-				'dueDate:2025-01-31T10:00:00Z',
-				'dueDate<=10/31/1998',
-				'dueDate:tomorrow',
-				'todaysTask:yesterday',
-				'dueDate:1week',
-				'dueDate:3days',
-				'dueDate:2months',
-				'dueDate:1year',
-				'dueDate<2025-01-01',
-				'dueDate>2024-12-31',
-				'todaysTask>=2025-02-01',
-				'todaysTask<=2025-02-28',
-				'dueDate:2025-01-01..2025-01-31',
-				'todaysTask:2024-12-01..2025-01-15',
-				'dueDate:?',
-				'todaysTask:?',
-				'dueDate:!?',
-				'todaysTask:!?'
+				'title == bug',
+				'title == "Bug report"',
+				'title != bug',
+				'title ~= bg',
+				'title == ""',
+				'title != ""',
+				'title == ["bug","fix"]',
+				'title != ["bug","fix"]',
+				'title == ["bug|fix", "test"]',
+				'content == test',
+				'content != ""',
 			]
 		},
 		{
-			title: 'Tolerance (expected failures on dates for now)',
+			title: 'Status enum queries',
 			items: [
-				'dueDate:2025-01-01±3',
-				'dueDate:2025-01-01+/-3',
-				'dueDate:2025-01-01-/+3',
-				'dueDate:2025-01-01±3days'
+				'status == 0',
+				'status == 1',
+				'status != 0',
+				'status != 1',
 			]
 		},
 		{
-			title: 'Arrays / homogeneity checks / unsupported combinations',
+			title: 'Dates: equality, inequality, ranges, relative keywords',
 			items: [
-				'title:[1, "two", 3]',
-				'title:[]',
-				'dueDate:[2025-01-01,2025-01-02]'
+				'created == 2025-01-01',
+				'created != 2025-01-01',
+				'created >= 2025-01-01',
+				'created <= 2025-12-31',
+				'created > 2025-06-01',
+				'created < 2025-06-01',
+				'created == 2025-01-01..2025-01-31',
+				'created != 2025-01-01..2025-01-31',
+				'lastEdit == today',
+				'lastEdit >= yesterday',
+				'lastEdit <= tomorrow',
 			]
 		},
 		{
-			title: 'Logical operators and grouping',
+			title: 'Collections: OR/AND inside items',
 			items: [
-				'title:bug content:fix',
-				'title:bug AND content:fix',
-				'title:bug && content:fix',
-				'title:bug & content:fix',
-				'title:bug OR title:fix',
-				'title:bug || title:fix',
-				'title:bug | title:fix',
-				'(title:bug && content:fix) | status:complete',
-				'title:bug && (content:fix | status:complete)',
-				'(title:bug & content:fix) | (status:complete || dueDate:tomorrow)',
-				'((title:bug && content:fix) && (status:complete | status:incomplete)) | (dueDate:today)',
-				'title:bug content:fix )',
-				'(title:bug content:fix',
-				'()',
-				'title:bug AND',
-				'OR title:bug'
+				'parents == []',
+				'children == []',
+				'parents != []',
+				'children != []',
 			]
 		},
 		{
-			title: 'Regex edge cases',
+			title: 'Tokenizer: quoted strings, spaces, operators inside quotes',
 			items: [
-				'title:/(/',
-				'title:/foo/uuz',
-				'title:/foo/',
-				'title:/^path\\/to\\/file$/',
-				'title:[/^bug/i, /^fix/i]'
+				'title   ==   " spaced value "',
+				'title=="value with spaces"',
+				'title == "a && b || c"',
+				'status==0 title==bug',
 			]
 		},
 		{
-			title: 'Fuzzy/contains edge cases',
-			items: ['title:~""', 'title:""', 'title:"   "', 'content:~"   "']
-		},
-		{
-			title: 'Negation edge cases',
-			items: ['title:![bug,fix]', 'title:!~bug', 'title:!/bug/i', 'title:!>=10']
-		},
-		{
-			title: 'Unknown / unsupported fields',
+			title: 'Combined queries',
 			items: [
-				'foobar:baz',
-				'priority:>=2',
-				'parents.any:status=complete',
-				'children.all:status=incomplete',
-				'epic:"x"'
-			]
-		},
-		{
-			title: 'Date parser edge cases',
-			items: [
-				'dueDate:20250101',
-				'dueDate:2025-13-01',
-				'dueDate:2025-02-30',
-				'dueDate:not-a-date',
-				'dueDate:1day',
-				'dueDate:2days',
-				'dueDate:1week',
-				'dueDate:2weeks',
-				'dueDate:1month',
-				'dueDate:2months',
-				'dueDate:1year',
-				'dueDate:2years'
-			]
-		},
-		{
-			title: 'Complex mixes',
-			items: [
-				'(title:/^bug/i && content:~"crsh") | (status:complete && dueDate:2025-01-01..2025-01-31)',
-				'title:bug | title:fix | title:"new feature"',
-				'title:/feature/i content:~"rqmt"',
-				'(dueDate:? AND todaysTask:!?) | (todaysTask>=2025-02-01 && status:complete)',
-				'status:done OR dueDate:2025-02-01±3days OR title:[1, "two"]'
+				'title == bug AND status == 0',
+				'title == bug OR title == fix',
+				'(title == bug OR title == fix) AND status == 0',
+				'title ~= bg AND created >= 2025-01-01',
+				'status == 0 AND (title == bug OR content == test)',
 			]
 		}
 	];
 
-	// Preferred parsing + handler validation
-	function tryParseAndValidate(q: string) {
+	function tryParseAndEvaluate(q: string) {
 		parseError = null;
-		handlerError = null;
+		evalError = null;
 		ast = null;
 		source = q;
+		matchingTasks = [];
 
 		try {
 			const parsed = parseQuery(q);
 			ast = parsed;
-		} catch (e) {
-			parseError = e instanceof Error ? e.message : String(e);
+		} catch (e: any) {
+			parseError = e.messageForUser || e.message || String(e);
 			return;
 		}
 
-		// Dry-run handler checks
 		try {
 			if (!ast) return;
-			validateWithHandlers(ast, taskQueryFieldRegistry);
-		} catch (e) {
-			// Show full stack for dev clarity if present
-			handlerError =
-				e instanceof Error ? e.stack ?? e.message : String(e);
-		}
-	}
-
-	function validateWithHandlers(node: ASTNode, registry: FieldRegistry<any>) {
-		switch (node.type) {
-			case 'kvp': {
-				const handler = registry[node.key];
-				if (!handler) {
-					throw new Error(
-						`Unknown field "${node.key}" at [${node.start}..${node.end}]`
-					);
-				}
-				try {
-					// Call matches with a super-minimal dummy entity to surface type errors.
-					handler.matches({}, node.op as any, node.value as any);
-				} catch (err) {
-					const span = `[${node.start}..${node.end}]`;
-					const msg =
-						err instanceof Error ? err.message : String(err);
-					throw new Error(
-						`Handler failure key="${node.key}" op="${node.op}" at ${span}: ${msg}`
-					);
-				}
-				return;
+			
+			if (allTasks.length > 0) {
+				matchingTasks = evaluator.evaluate(allTasks, ast);
 			}
-			case 'and':
-				validateWithHandlers(node.left, registry);
-				validateWithHandlers(node.right, registry);
-				return;
-			case 'or':
-				validateWithHandlers(node.left, registry);
-				validateWithHandlers(node.right, registry);
-				return;
-			case 'group':
-				validateWithHandlers(node.child, registry);
-				return;
+		} catch (e: any) {
+			evalError = e.messageForUser || e.message || String(e);
 		}
 	}
-
-	onMount(() => {
-		// Seed with a helpful example
-		input = '(team:alpha && sprint:12) | epic:!?';
-		tryParseAndValidate(input);
-	});
 
 	function slice(start?: number, end?: number): string {
 		if (start == null || end == null) return '';
 		return source.slice(start, end);
 	}
 
-	// Split a root into top-level OR parts. If not OR, return single.
 	function splitOr(root: ASTNode): ASTNode[] {
 		if (!root || root.type !== 'or') return root ? [root] : [];
 		const out: ASTNode[] = [];
@@ -258,7 +162,6 @@
 		return out;
 	}
 
-	// If a node is AND (or group containing AND), return children flattened.
 	function splitAnd(n: ASTNode): ASTNode[] {
 		const target = n.type === 'group' ? n.child : n;
 		if (target.type !== 'and') return [];
@@ -276,29 +179,25 @@
 		return out;
 	}
 
-	// Exact header from source for all nodes now that every node has start/end
 	function headerFor(node: ASTNode): string {
-		// All nodes now have start/end; quote headers for KVPs per your spec
-		const text = slice((node as any).start, (node as any).end);
+		const text = slice(node.start, node.end);
 		if (node.type === 'kvp') return `"${text}"`;
 		return text;
 	}
 
 	function details(n: ASTNode): Record<string, unknown> {
-		// Show minimal node type plus spans; KVPs add key/op/value
 		switch (n.type) {
 			case 'kvp':
 				return {
 					type: n.type,
 					key: n.key,
 					op: n.op,
-					negated: n.negated,
 					value: n.value,
 					start: n.start,
 					end: n.end
 				};
 			default: {
-				const any = n as any;
+				const any = n;
 				return { type: n.type, start: any.start, end: any.end };
 			}
 		}
@@ -306,33 +205,32 @@
 
 	function onSubmit(e: Event) {
 		e.preventDefault();
-		tryParseAndValidate(input);
+		tryParseAndEvaluate(input);
 	}
 </script>
 
-<form class="max-w-4xl mx-auto p-4 flex flex-col gap-3" on:submit={onSubmit}>
+<form class="mx-auto flex max-w-4xl flex-col gap-3 p-4" onsubmit={onSubmit}>
 	<div class="flex gap-2">
 		<input
 			type="text"
 			placeholder="Type a query..."
-			class="flex-1 px-3 py-2 border border-neutral-300 rounded-md text-sm"
+			class="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
 			bind:value={input}
-			on:input={() => tryParseAndValidate(input)}
+			oninput={() => tryParseAndEvaluate(input)}
 		/>
 		<button
 			type="submit"
-			class="px-3 py-2 border border-neutral-400 rounded-md bg-neutral-50 text-sm"
+			class="rounded-md border border-neutral-400 bg-neutral-50 px-3 py-2 text-sm"
 		>
 			Parse
 		</button>
 	</div>
 
-	<!-- Test Query Library (collapsible, categorized) -->
-	<Collapsible.Root class="border border-neutral-200 rounded-md">
-		<Collapsible.Trigger class="px-3 py-2 bg-neutral-100 text-sm font-medium">
+	<Collapsible.Root class="rounded-md border border-neutral-200" bind:open={testQueryLibraryOpen}>
+		<Collapsible.Trigger class="bg-neutral-100 px-3 py-2 text-sm font-medium">
 			Test Query Library
 		</Collapsible.Trigger>
-		<Collapsible.Content class="px-3 py-2 bg-white">
+		<Collapsible.Content class="bg-white px-3 py-2">
 			<div class="flex flex-col gap-3">
 				{#each TEST_SECTIONS as sec}
 					<div class="flex flex-col gap-2">
@@ -341,10 +239,11 @@
 							{#each sec.items as q}
 								<button
 									type="button"
-									class="px-2 py-1 border border-neutral-300 rounded-md bg-neutral-50 text-xs font-mono"
-									on:click={() => {
+									class="rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 font-mono text-xs"
+									onclick={() => {
+										testQueryLibraryOpen = false;
 										input = q;
-										tryParseAndValidate(input);
+										tryParseAndEvaluate(input);
 									}}
 								>
 									{q}
@@ -357,56 +256,91 @@
 		</Collapsible.Content>
 	</Collapsible.Root>
 
-	<!-- Restated query -->
 	{#if input}
-		<div class="px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-md font-mono whitespace-pre overflow-x-auto">
+		<div class="overflow-x-auto rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 font-mono whitespace-pre">
 			{input}
 		</div>
 	{/if}
 
 	{#if parseError}
-		<div class="px-3 py-2 border border-red-300 bg-red-50 text-red-800 rounded-md whitespace-pre-wrap">
-			Parse error:
-			{parseError}
+		<div class="rounded-md border border-red-300 bg-red-50 px-3 py-2 whitespace-pre-wrap text-red-800">
+			Parse error: {parseError}
 		</div>
 	{/if}
 
-	{#if handlerError}
-		<div class="px-3 py-2 border border-amber-300 bg-amber-50 text-amber-900 rounded-md whitespace-pre-wrap">
-			Handler error:
-			{handlerError}
+	{#if evalError}
+		<div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 whitespace-pre-wrap text-amber-900">
+			Evaluation error: {evalError}
+		</div>
+	{/if}
+
+	{#if allTasks.length > 0}
+		<div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm">
+			<div class="font-semibold mb-1">Available Tasks: {allTasks.length}</div>
+			<div class="text-xs space-y-1">
+				{#each allTasks.slice(0, 3) as task}
+					<div class="truncate">
+						{task.title} - {task.status === 0 ? 'incomplete' : 'complete'} - created: {new Date(task.created).toLocaleDateString()}
+					</div>
+				{/each}
+				{#if allTasks.length > 3}
+					<div class="text-neutral-500">...and {allTasks.length - 3} more</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
+	{#if ast && matchingTasks.length > 0}
+		<div class="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm">
+			<div class="font-semibold mb-2">Matching Tasks: {matchingTasks.length}</div>
+			<div class="space-y-2 max-h-60 overflow-y-auto">
+				{#each matchingTasks as task}
+					<div class="border border-green-300 rounded px-2 py-1 bg-white text-xs">
+						<div class="font-medium">{task.title}</div>
+						<div class="text-neutral-600">
+							Status: {task.status === 0 ? 'incomplete' : 'complete'} | 
+							Created: {new Date(task.created).toLocaleDateString()}
+							{#if task.content}
+								| Content: {task.content.slice(0, 50)}{task.content.length > 50 ? '...' : ''}
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{:else if ast && matchingTasks.length === 0 && allTasks.length > 0}
+		<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+			No tasks match this query
 		</div>
 	{/if}
 
 	{#if ast}
 		{@const top = splitOr(ast)}
 
-		<!-- Top-level OR parts: side-by-side collapsibles, horizontal scroll -->
 		<div class="flex gap-2 overflow-x-auto py-1">
 			{#each top as n}
-				<Collapsible.Root class="min-w-max border border-neutral-200 rounded-md">
-					<Collapsible.Trigger class="px-2 py-1 bg-neutral-100 font-mono text-sm">
+				<Collapsible.Root class="min-w-max rounded-md border border-neutral-200">
+					<Collapsible.Trigger class="bg-neutral-100 px-2 py-1 font-mono text-sm">
 						{headerFor(n)}
 					</Collapsible.Trigger>
-					<Collapsible.Content class="px-2 py-1 bg-white">
-						<pre class="text-xs whitespace-pre-wrap break-words">{JSON.stringify(details(n), null, 2)}</pre>
+					<Collapsible.Content class="bg-white px-2 py-1">
+						<pre class="text-xs break-words whitespace-pre-wrap">{JSON.stringify(details(n), null, 2)}</pre>
 					</Collapsible.Content>
 				</Collapsible.Root>
 			{/each}
 		</div>
 
-		<!-- For each top-level item: if AND (or group containing AND), show children with inline AND -->
 		{#each top as n}
 			{#if n.type === 'and' || (n.type === 'group' && n.child.type === 'and')}
 				{@const children = n.type === 'and' ? splitAnd(n) : splitAnd(n.child)}
 				<div class="flex items-center gap-2 overflow-x-auto">
 					{#each children as c, idx}
-						<Collapsible.Root class="min-w-max border border-neutral-200 rounded-md">
-							<Collapsible.Trigger class="px-2 py-1 bg-neutral-100 font-mono text-sm">
+						<Collapsible.Root class="min-w-max rounded-md border border-neutral-200">
+							<Collapsible.Trigger class="bg-neutral-100 px-2 py-1 font-mono text-sm">
 								{headerFor(c)}
 							</Collapsible.Trigger>
-							<Collapsible.Content class="px-2 py-1 bg-white">
-								<pre class="text-xs whitespace-pre-wrap break-words">{JSON.stringify(details(c), null, 2)}</pre>
+							<Collapsible.Content class="bg-white px-2 py-1">
+								<pre class="text-xs break-words whitespace-pre-wrap">{JSON.stringify(details(c), null, 2)}</pre>
 							</Collapsible.Content>
 						</Collapsible.Root>
 

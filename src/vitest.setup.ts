@@ -13,7 +13,7 @@ expect.extend({
             };
         } else {
             return {
-                message: () => `expected Ok, but got Err: ${error.message}\nContext: ${JSON.stringify(error.context, undefined, 2)}`,
+                message: () => `expected Ok, but got Err: ${error.messageForUser}\nContext: ${JSON.stringify(error.context, undefined, 2)}`,
                 pass: false,
             };
         }
@@ -21,7 +21,7 @@ expect.extend({
     toErr([value, error]: Result<any, Err>) {
         if (error) {
             return {
-                message: () => `expected Result to be Err: ${error.message}\nContext: ${JSON.stringify(error.context, undefined, 2)}`,
+                message: () => `expected Result to be Err: ${error.messageForUser}\nContext: ${JSON.stringify(error.context, undefined, 2)}`,
                 pass: true,
             };
         } else {

@@ -24,7 +24,7 @@ export class Err extends Error {
     }
 
     static wrap(nativeError: Error): Err {
-        const e = new Err(nativeError.name || "Error", nativeError.message, {
+        const e = new Err(nativeError.name || "Error", nativeError.messageForUser, {
             wrapped: true,
         });
         e.cause = nativeError;
@@ -36,7 +36,7 @@ export class Err extends Error {
     static UNHANDLED(error: unknown, message?: string): never {
         const baseMsg =
             (message ? message + " - " : "") +
-            (error instanceof Error ? error.message : String(error));
+            (error instanceof Error ? error.messageForUser : String(error));
 
         const e =
             error instanceof Err
@@ -48,9 +48,9 @@ export class Err extends Error {
         e.cause = error instanceof Error ? error : undefined;
 
         if (e.context) {
-            e.message += "\nContext: " + JSON.stringify(e.context, undefined, 2) + "\n";
+            e.messageForUser += "\nContext: " + JSON.stringify(e.context, undefined, 2) + "\n";
         }
-        e.message += "\nHANDLER NOT IMPLEMENTED";
+        e.messageForUser += "\nHANDLER NOT IMPLEMENTED";
 
         // Exclude UNHANDLED itself from the stack; preserves mapping
         captureHere(e, Err.UNHANDLED);
@@ -64,7 +64,7 @@ export class Err extends Error {
     static throw(error: unknown, message?: string): never {
         const baseMsg =
             (message ? message + " - " : "") +
-            (error instanceof Error ? error.message : String(error));
+            (error instanceof Error ? error.messageForUser : String(error));
 
         const e =
             error instanceof Err
@@ -128,7 +128,7 @@ export class IOError extends Err {
             typeof internalError === "string"
                 ? internalError
                 : internalError instanceof Error
-                    ? internalError.message
+                    ? internalError.messageForUser
                     : internalError;
 
         super("IOError", message, { internalError: internal, dataToWrite: context });

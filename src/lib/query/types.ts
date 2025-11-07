@@ -1,54 +1,110 @@
 export type ASTNode = { start: number; end: number } &
 	(
-		| { type: 'kvp'; key: string; op: string; value: ParsedValue | ParsedValue[]; negated: boolean; }
-		| { type: 'and'; left: ASTNode; right: ASTNode; }
-		| { type: 'or'; left: ASTNode; right: ASTNode; }
-		| { type: 'group'; child: ASTNode; }
+		| { type: 'kvp'; key: string; op: ComparisonOperator; value: string | string[] }
+		| { type: 'and'; left: ASTNode; right: ASTNode }
+		| { type: 'or'; left: ASTNode; right: ASTNode }
+		| { type: 'group'; child: ASTNode }
 	);
 
+// Tokenization types (also raw strings)
 export type TokenType = 'LPAREN' | 'RPAREN' | 'AND' | 'OR' | 'KVP' | 'EOF';
 
 export interface Token {
 	type: TokenType;
-	value: ParsedValue | ParsedValue[];
+	value: string | string[];
 	key?: string;
 	op?: string;
-	negated?: boolean;  // For !value
 	start: number;
 	end: number;
 }
 
-export type QueryOperator = '=' | '>' | '<' | '>=' | '<=' | '~' | '/' | '?';
-export type DateValue = Date | { type: 'date-range'; rangeTop: Date; rangeBottom: Date }
-export type NumberValue = number | { type: 'number-range'; rangeTop: number; rangeBottom: number }
-export type ParsedValue =
-	| string
-	| NumberValue
-	| DateValue
-	| boolean
+// Operators
+export type ComparisonOperator = '==' | '!=' | '>=' | '<=' | '>' | '<' | '~=';
+export type ValueOperator = '[]' | '..' | '+' | '-';
 
-export type ValueParser<T extends ParsedValue> = (value: string) => T;
-
-export type FieldMatcher<TEntity, T extends ParsedValue> = (entity: TEntity, op: QueryOperator, parsedValue: T) => boolean;
-
-export interface FieldHandler<TEntity, T extends ParsedValue> {
-	parseValue: ValueParser<T>;
-	matches: FieldMatcher<TEntity, T>;
-	autocomplete?: (value: string) => string[];
+export function compareOps<const T extends readonly ComparisonOperator[]>(...o: T): T {
+	return o;
 }
 
-/**
- * Helper function to create a type-safe field handler.
- * Ensures parseValue returns the same type that matches expects.
- */
-export function fieldHandler<TEntity, T extends ParsedValue>(handler: FieldHandler<TEntity, T>): FieldHandler<TEntity, any> {
+export function valueOps<const T extends readonly ValueOperator[]>(...o: T): T {
+	return o;
+}
+
+// Value types
+export type Single<T> = { kind: 'single'; data: T };
+export type Range<T> = { kind: 'range'; lower: T; upper: T; inclusive?: boolean };
+export type MultiValue<T> = Single<T> | Range<T>;
+
+// Check if '..' OR '[]' exists in the tuple
+type HasMultiOps<VOps extends readonly ValueOperator[]> =
+	'..' extends VOps[number] ? true :
+	'[]' extends VOps[number] ? true :
+	false;
+
+// Check if '+' OR '-' exists in the tuple
+type HasArithOps<VOps extends readonly ValueOperator[]> =
+	'+' extends VOps[number] ? true :
+	'-' extends VOps[number] ? true :
+	false;
+
+// Determine value type based on operators
+type ValueType<VOps extends readonly ValueOperator[] | undefined, T> =
+	VOps extends readonly ValueOperator[]
+	? HasMultiOps<VOps> extends true
+	? MultiValue<T>
+	: Single<T>
+	: Single<T>;
+
+export type FieldMatcher<
+	TEntity,
+	T,
+	TOp extends ComparisonOperator,
+	VOps extends readonly ValueOperator[] | undefined
+> = (
+	entity: TEntity,
+	op: TOp,
+	value: ValueType<VOps, T>
+) => boolean;
+
+type ArithRequirement<VOps extends readonly ValueOperator[] | undefined, T> =
+	VOps extends readonly ValueOperator[]
+	? HasArithOps<VOps> extends true
+	? { arith: { add: (a: T, b: T) => T; sub: (a: T, b: T) => T } }
+	: { arith?: { add?: (a: T, b: T) => T; sub?: (a: T, b: T) => T } }
+	: { arith?: { add?: (a: T, b: T) => T; sub?: (a: T, b: T) => T } };
+
+export type FieldHandler<
+	TEntity,
+	COps extends readonly ComparisonOperator[],
+	VOps extends readonly ValueOperator[] | undefined,
+	T = unknown
+> = {
+	operators: COps;
+	valueOps: VOps;
+	cardinality?: 'single' | 'array';
+	transformValue: (raw: string) => T;
+	matches: FieldMatcher<TEntity, T, COps[number], VOps>;
+	autocomplete?: (value: string) => string[];
+} & ArithRequirement<VOps, T>;
+
+export function fieldHandler<
+	TEntity,
+	COps extends readonly ComparisonOperator[],
+	VOps extends readonly ValueOperator[] | undefined,
+	T
+>(handler: FieldHandler<TEntity, COps, VOps, T>): FieldHandler<TEntity, COps, VOps, T> {
 	return handler;
 }
 
-/**
- * Registry type that allows each field to have its own specific ParsedValue type.
- * Individual handlers are type-safe via fieldHandler<T>, but the registry
- * accepts any FieldHandler<ParsedValue> to allow heterogeneous collections.
- */
-export type FieldRegistry<TEntity> = Record<string, FieldHandler<TEntity, ParsedValue>>;
+// Registry accepts handlers with any valid operator subsets
+export type FieldRegistry<TEntity> = Record<
+	string,
+	FieldHandler<TEntity, any, any, any>
+>;
 
+/** Value transform error */
+export class ValueTransformError extends Error {
+	constructor(public messageForUser: string, devMessage?: string, cause?: unknown) {
+		super(devMessage, { cause });
+	}
+}
