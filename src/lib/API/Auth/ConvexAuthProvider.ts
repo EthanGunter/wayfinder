@@ -1,7 +1,6 @@
 import { derived, get, readable, writable } from "svelte/store";
 import {
 	type AuthState,
-	type Fetchable,
 	type IAuthRemote,
 	type IAuthSessionCapable,
 	type LiveStore,
@@ -27,6 +26,7 @@ import { page } from "$app/state";
 import { cachedUsers } from ".";
 import { sharedConvexClient } from "../ConvexClient";
 import { PUBLIC_SITE_URL } from "$env/static/public";
+import type { Fetchable } from "$domain/fetchable";
 
 const authClient = createAuthClient({
 	plugins: [convexPlugin(), multiSessionClient()],
@@ -192,6 +192,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 	register: async ({ creds, userData }) => {
 		if (creds.type === 'external') {
 			// Social registration
+			Err.NotImplemented('Social auth temporarily disabled');
 			await authClient.signIn.social({ provider: 'github', callbackURL: page.url.pathname });
 		} else if (creds.type === 'email_password') {
 			// Email/password registration — BetterAuth requires name in some configs; keep to sign-in only for now
@@ -232,6 +233,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		try {
 			if (creds.type === 'external') {
 				// GitHub OAuth login
+				Err.NotImplemented('Social auth temporarily disabled');
 				const res = await authClient.signIn.social({ provider: 'github' });
 				if (res.error) throw res.error;
 			} else if (creds.type === 'email_password') {

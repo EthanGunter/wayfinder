@@ -12,9 +12,9 @@
 	} from '@xyflow/svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { runElkLayout, type ElkLayoutOptions } from './ELKlayout';
-	import AppHeader from '$lib/components/AppHeader.svelte';
-	import AppFooter from '$lib/components/AppFooter.svelte';
 	import '@xyflow/svelte/dist/style.css';
+	import SearchBar from '$lib/components/SearchBar.svelte';
+	import { Err } from '$domain/errors';
 
 	let shouldlog = $state(false);
 	let isLayingOut = $state(false);
@@ -103,9 +103,10 @@
 	}
 </script>
 
-<div class="graph-root page page-root">
-	<AppHeader />
-
+<div class="graph-root page-root">
+	<div class='h-[var(--header-height)]'>
+		<SearchBar handleQuery={() => Err.NotImplemented('SearchBar.handleQuery')} />
+	</div>
 	<SvelteFlowProvider>
 		<SvelteFlow
 			bind:nodes
@@ -389,8 +390,6 @@
 			<Background variant={BackgroundVariant.Lines} />
 		</SvelteFlow>
 	</SvelteFlowProvider>
-
-	<AppFooter />
 </div>
 
 <style>

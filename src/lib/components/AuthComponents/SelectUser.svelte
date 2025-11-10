@@ -71,8 +71,6 @@
 					: ''}"
 			>
 				<UserAvatar
-					avatarUrl={user.avatarUrl ?? fallbackAvatars.get(user.id)}
-					displayName={user.displayName}
 					class="h-10 w-10"
 				/>
 				<div class="flex-1">

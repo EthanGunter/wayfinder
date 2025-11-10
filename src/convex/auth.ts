@@ -30,12 +30,13 @@ export const createAuth = (
       requireEmailVerification: false,
     },
     // Register social providers used by the client
-    socialProviders: {
+    // TODO:TEMP social auth disabled until we figure out why Vercel blocks it...
+    /* socialProviders: {
       github: {
         clientId: process.env.AUTH_GITHUB_CLIENT_ID!,
         clientSecret: process.env.AUTH_GITHUB_SECRET!,
       },
-    },
+    }, */
     plugins: [
       // The Convex plugin is required for Convex compatibility
       convex(),

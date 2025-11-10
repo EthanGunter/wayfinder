@@ -2,17 +2,18 @@ import { Err, NotAuthorizedError, NotFoundError, NotImplementedError } from "$do
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SharedTask } from "$domain/models/task";
+import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SystemAgnosticTask } from "$domain/models/task";
 
 
 //#region Utility
 
-type Task = Doc<'tasks'>;
+type DBTask = Doc<'tasks'>;
 const argsCreateTask = v.object({
 	userAuthId: v.string(),
 	title: v.string(),
-	content: v.optional(v.string()),
 	priority: v.optional(v.number()),
+	content: v.optional(v.string()),
+	dueDate: v.optional(v.number()),
 	parents: v.optional(v.array(v.string())),
 	children: v.optional(v.array(v.string())),
 })
@@ -43,7 +44,6 @@ export const createTask = mutation({
 			content: createDetail.content,
 			status: 0,
 			todaysTask: undefined,
-			priority: createDetail.priority ?? 0,
 			parents: createDetail.parents ?? [],
 			children: createDetail.children ?? [],
 			lastEdit: now,
@@ -108,7 +108,6 @@ export const createTasks = mutation({
 				content: d.content,
 				status: 0,
 				todaysTask: undefined,
-				priority: d.priority ?? 0,
 				parents: d.parents ?? [],
 				children: d.children ?? [],
 				lastEdit: now,
@@ -242,7 +241,7 @@ export const updateTasks = mutation({
 	},
 	handler: async (ctx, { updates }) => {
 		// Collect old states
-		const oldStates = new Map<string, Task>();
+		const oldStates = new Map<string, DBTask>();
 		for (const u of updates) {
 			const oldTask = await ctx.db.get(u.id);
 			if (oldTask) {
@@ -251,7 +250,7 @@ export const updateTasks = mutation({
 		}
 
 		// Apply all main updates
-		const results: Task[] = [];
+		const results: DBTask[] = [];
 		for (const u of updates) {
 			const res = await applyTaskUpdate(ctx, u);
 			if (!res.ok) return res;
@@ -316,7 +315,7 @@ export const deleteTasks = mutation({
 		}
 
 		// Collect tasks to delete
-		const tasksToDelete: Task[] = [];
+		const tasksToDelete: DBTask[] = [];
 		for (const id of ids) {
 			const row = await ctx.db.get(id);
 			if (row && row.userAuthId === identity.subject) {
@@ -355,9 +354,13 @@ export const getChildrenOf = query({
 		if (!parent) return { ok: false as const, error: serializeError(new NotFoundError("Task not found", "" + id)) };
 		const childIds = parent.children ?? [];
 		if (childIds.length === 0) return { ok: true as const, value: [] };
-		const tasks = await ctx.db.query("tasks").collect();
-		const filtered = tasks.filter((t) => childIds.includes("" + t._id));
-		return { ok: true as const, value: filtered };
+
+		// Fetch only the children we need, preserving order
+		const childDocs = await Promise.all(childIds.map((cid) => ctx.db.get(cid as Id<"tasks">)));
+		const ordered = childDocs.filter(
+			(t): t is NonNullable<typeof t> => !!t
+		);
+		return { ok: true as const, value: ordered };
 	},
 });
 
@@ -368,17 +371,85 @@ export const getParentsOf = query({
 		if (!child) return { ok: false as const, error: serializeError(new NotFoundError("Task not found", "" + id)) };
 		const parentIds = child.parents ?? [];
 		if (parentIds.length === 0) return { ok: true as const, value: [] };
-		const tasks = await ctx.db.query("tasks").collect();
-		const filtered = tasks.filter((t) => parentIds.includes("" + t._id));
+		const parentDocs = await Promise.all(parentIds.map((pid) => ctx.db.get(pid as Id<"tasks">)));
+		const filtered = parentDocs.filter((t): t is NonNullable<typeof t> => !!t);
 		return { ok: true as const, value: filtered };
+	},
+});
+
+export const getSiblingsOf = query({
+	args: { id: v.id("tasks") },
+	handler: async (ctx, { id }) => {
+		// 1) Load the task
+		const self = await ctx.db.get(id);
+		if (!self) {
+			return {
+				ok: false as const,
+				error: serializeError(new NotFoundError("Task not found", "" + id)),
+			};
+		}
+
+		const parentIds = self.parents ?? [];
+		if (parentIds.length === 0) {
+			return { ok: true as const, value: [] };
+		}
+
+		// 2) Fetch only the parents we need
+		const parentFetches = parentIds.map((pid) => ctx.db.get(pid as Id<"tasks">));
+		const parents = await Promise.all(parentFetches);
+		const existingParents = parents.filter(
+			(p): p is NonNullable<typeof p> => !!p
+		);
+
+		if (existingParents.length === 0) {
+			// Parents list references missing docs -> no siblings we can resolve
+			return { ok: true as const, value: [] };
+		}
+
+		// 3) Compute de-duplicated sibling ids from parents' children arrays
+		const selfKey = "" + id;
+		const seen = new Map<string, Doc<'tasks'> | null>();
+		const siblings = new Map<Doc<'tasks'>, Doc<'tasks'>[]>();
+
+		const addSibling = (parent: Doc<'tasks'>, sibling: Doc<'tasks'>) => {
+			if (siblings.has(parent)) {
+				siblings.get(parent)!.push(sibling);
+			} else {
+				siblings.set(parent, [sibling]);
+			}
+		}
+
+		for (const parent of existingParents) {
+			const childIds = parent.children ?? [];
+			if (!Array.isArray(childIds) || childIds.length === 0) continue;
+
+			for (const cid of childIds as Array<string | { _id?: unknown }>) {
+				const key = "" + cid; // convex ids stringify fine
+				if (key === selfKey) continue; // exclude self
+				if (seen.has(key)) {
+					addSibling(parent, seen.get(key)!);
+					continue; // dedupe across parents
+				}
+				const sibling = await ctx.db.get(key as Id<'tasks'>);
+				seen.set(key, sibling);
+				if (sibling) addSibling(parent, sibling);
+			}
+		}
+
+		return { ok: true as const, value: Array.from(siblings) };
 	},
 });
 
 export const getRootTasks = query({
 	args: {},
 	handler: async (ctx) => {
-		const tasks = await ctx.db.query("tasks").collect();
-		const roots = tasks.filter((t) => t.parents.length === 0);
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) return { ok: true as const, value: [] }; // TODO:UX/DX Log and error
+		const rows = await ctx.db
+			.query("tasks")
+			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
+			.collect();
+		const roots = rows.filter((t) => (t.parents?.length ?? 0) === 0);
 		return { ok: true as const, value: roots };
 	},
 });
@@ -402,21 +473,36 @@ export const getTodaysTasks = query({
 export const getPrioritizedTasks = query({
 	args: { limit: v.number() },
 	handler: async (ctx, { limit }) => {
-		const rows = await ctx.db.query("tasks").collect();
-		const tasks = rows;
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) return { ok: true as const, value: [] }; // TODO:UX/DX Log and error
+		const tasks = await ctx.db
+			.query("tasks")
+			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
+			.collect();
 		const roots = tasks.filter((t) => (t.parents?.length ?? 0) === 0);
-		const tasksMap = new Map(tasks.map((t) => [t._id, t] as [string, Task]));
-		const sorter = (a?: Task, b?: Task) => {
-			if (!a) return -1; if (!b) return 1; return (b.priority ?? 0) - (a.priority ?? 0);
+		const tasksMap = new Map(tasks.map((t) => ["" + t._id, t] as [string, DBTask]));
+		const sorter = (a?: DBTask, b?: DBTask) => {
+			// TODO This is going to need context from the parent to determine sibling priority...
+			if (!a) return -1; if (!b) return 1; return 0; // (b.priority ?? 0) - (a.priority ?? 0);
 		};
-		const todo: Task[] = [];
-		const walk = (task: Task) => {
+		const todo: DBTask[] = [];
+		const seen = new Set<string>();
+		const walk = (task: DBTask) => {
 			if (todo.length === limit) return;
 			if (task.children.length === 0) {
+				if (seen.has("" + task._id)) return;
+				seen.add("" + task._id);
 				if (task.status === 0) todo.push(task);
 			} else {
 				const children = task.children.map((id) => tasksMap.get(id)).sort(sorter);
 				for (const c of children) { if (c && c.status === 0) walk(c); }
+
+				/* TODO:discuss This allows "tasks" that may be used for grouping
+				to show up in the planner's suggestions. This should probably have
+				some form of configuration, because it's awkward having to manually
+				"complete" a task that isn't really a task at all.
+				This will likely play into the node-type system if we every get there...
+				*/
 				if (children.every((c) => !c || c.status !== 0) && task.status === 0) todo.push(task);
 			}
 		};
@@ -441,23 +527,26 @@ function serializeError<T extends Err>(err: T): T {
 	return JSON.parse(JSON.stringify(err, Object.getOwnPropertyNames(err)));
 }
 
-function convertToTaskBase(task: Task): SharedTask<number> {
+function convertToTaskBase(task: DBTask): SystemAgnosticTask<number> {
 	return {
-		id: "" + task._id,
+		id: task._id,
 		userAuthId: task.userAuthId,
+
 		title: task.title,
 		content: task.content,
 		status: task.status,
+
 		todaysTask: task.todaysTask,
-		priority: task.priority,
+		dueDate: task.dueDate,
 		parents: task.parents,
 		children: task.children,
+
 		created: task._creationTime,
 		lastEdit: task.lastEdit
 	};
 }
 
-async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Partial<Task>; relations?: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[]; }) {
+async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Partial<DBTask>; relations?: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[]; }) {
 	const current = await ctx.db.get(update.id);
 	if (!current) {
 		return { ok: false as const, error: serializeError(new NotFoundError("Task not found for update", "" + update.id)) };
@@ -479,12 +568,16 @@ async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Parti
 	}
 	const now = Date.now();
 	const patch: Partial<Doc<"tasks">> = { lastEdit: now };
-	const d = (update.data ?? {}) as Partial<Task>;
+	const d = (update.data ?? {}) as Partial<DBTask>;
 	if ("title" in d) patch.title = d.title!;
 	if ("content" in d) patch.content = d.content;
 	if ("status" in d) patch.status = d.status!;
 	if ("todaysTask" in d && d.todaysTask !== undefined) patch.todaysTask = d.todaysTask;
-	if ("priority" in d) patch.priority = d.priority;
+	// Allow stable reordering of children without emitting relation add/remove churn
+	// Only accept explicit children arrays (membership-preserving reorder is expected here)
+	if (Array.isArray(d.children)) {
+		patch.children = d.children!;
+	}
 	if ((update.relations ?? []).length > 0) { patch.parents = parents; patch.children = children; }
 
 	await ctx.db.patch(update.id, patch);

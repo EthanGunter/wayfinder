@@ -8,6 +8,8 @@
 	import RegisterView from '$lib/components/AuthComponents/Register.svelte';
 	import { InputRequiredError, type Err } from '$domain/errors';
 	import * as Accordion from '$lib/components/ui/accordion';
+	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import AppSidebar from '$lib/components/Sidebar/app-sidebar.svelte';
 
 	const { children } = $props();
 	let mode = $state</* 'select' | */ 'login' | 'register'>('login');
@@ -122,6 +124,11 @@
 			</div>
 		</div>
 	{:else}
-		{@render children?.()}
+		<Sidebar.Provider>
+			<AppSidebar />
+			<Sidebar.Inset>
+				{@render children?.()}
+			</Sidebar.Inset>
+		</Sidebar.Provider>
 	{/if}
 </div>

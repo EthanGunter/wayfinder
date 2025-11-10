@@ -1,5 +1,5 @@
 import ConvexTaskProvider from './ConvexTaskProvider';
-import { type ITasksLocal } from '$domain/models/task';
+import type { ITasksLocal } from './seam-interfaces';
 
 let tasksAPI: ITasksLocal;
 

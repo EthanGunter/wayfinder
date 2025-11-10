@@ -23,8 +23,5 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Paraglide
-src/lib/paraglide
-/src/old-react-code
 /Documentation/.obsidian
 /src/convex/_generated
