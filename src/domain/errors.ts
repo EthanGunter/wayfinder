@@ -10,13 +10,13 @@ function captureHere(err: Error, excludeFn: Function) {
         (Error as any).captureStackTrace(err, excludeFn);
     }
 }
-
+type ErrContext = { messageForDev?: string, [key: string]: any };
 export class Err extends Error {
-    context?: any;
+    context?: ErrContext;
     cause?: unknown;
 
-    constructor(name: string, message: string, context?: any) {
-        super(message);
+    constructor(name: string, public messageForUser: string, context?: ErrContext) {
+        super(messageForUser);
         this.name = name;
         this.context = context;
         // Important: pass the concrete constructor to exclude it from the stack
@@ -48,9 +48,9 @@ export class Err extends Error {
         e.cause = error instanceof Error ? error : undefined;
 
         if (e.context) {
-            e.message += "\nContext: " + JSON.stringify(e.context, undefined, 2) + "\n";
+            e.messageForUser += "\nContext: " + JSON.stringify(e.context, undefined, 2) + "\n";
         }
-        e.message += "\nHANDLER NOT IMPLEMENTED";
+        e.messageForUser += "\nHANDLER NOT IMPLEMENTED";
 
         // Exclude UNHANDLED itself from the stack; preserves mapping
         captureHere(e, Err.UNHANDLED);
@@ -118,11 +118,10 @@ export class NotAuthorizedError extends Err {
 }
 
 export class ParseError extends Err {
-    constructor(content: any, targetType: string) {
+    constructor(content: any, targetType: string, public start: number, public end: number) {
         super("ParseError", `Failed to parse content to ${targetType}`, content);
     }
 }
-
 export class IOError extends Err {
     constructor(message: string, internalError: any, context?: any) {
         const internal =

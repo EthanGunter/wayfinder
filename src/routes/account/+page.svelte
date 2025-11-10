@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import AppFooter from '$lib/components/AppFooter.svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
 	import debounce from '$lib/debounce';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
@@ -12,6 +10,7 @@
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import { Err } from '$domain/errors';
 	import UserSettings from '$lib/user-settings/UserSettings.svelte';
+	import { get } from 'svelte/store';
 
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
@@ -21,42 +20,30 @@
 
 	const debouncedUpdateUser = debounce(authAPI.updateUser, 200);
 
-	async function loadTaskCount() {
-		if ($authState.status !== 'signed-in') return;
-
-		const [userTasks, error] = await tasksAPI.getAllUserTasks({ userId: $authState.user.id });
-		if (userTasks) {
-			taskCount = userTasks.length;
-		} else {
-			taskCount = 0;
-			Err.UNHANDLED(error, 'Failed to load task count:');
-		}
-	}
-
 	async function handleDeleteUser() {
 		if ($authState.status !== 'signed-in' || isDeleting) return;
 
 		isDeleting = true;
 		try {
-			const [roots, getRootsError] = await tasksAPI.getRootTasks();
-			if (getRootsError) Err.UNHANDLED(getRootsError);
+			tasksAPI.getAllUserTasks({ userId: $authState.user.id }).subscribe(async (allTasks) => {
+				if (allTasks.status === 'error') {
+					Err.UNHANDLED(allTasks.error);
+				} else if (allTasks.status === 'resolved') {
+					await tasksAPI.deleteTasks({
+						ids: allTasks.data.map((r) => r.id)
+					});
 
-			await tasksAPI.deleteTasks({
-				ids: roots.map((r) => r.id)
+					// Delete the user account
+					const [_, deleteUserError] = await authAPI.deleteUser({ userId: $authState.user.id });
+					if (deleteUserError) Err.UNHANDLED(deleteUserError);
+				}
 			});
-
-			// Delete the user account
-			const [_, deleteUserError] = await authAPI.deleteUser({ userId: $authState.user.id });
-			if (deleteUserError) Err.UNHANDLED(deleteUserError);
 
 			// TODO:Temp anonymous accounts disabled
 			/* const defaultUserResult = await auth.getDefaultUser();
 			if (defaultUserResult.isOk()) {
 				await auth.switchUser(defaultUserResult.value.id);
 			} */
-
-			// Redirect to login page since current user is deleted
-			// goto('/login');
 		} catch (error) {
 			isDeleting = false;
 			Err.UNHANDLED(error, 'Failed to delete user:');
@@ -74,14 +61,7 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<div id="account-page" class="page-root relative h-full w-full bg-gray-200">
-		<AppHeader>
-			{#snippet left()}
-				<Button onclick={goBack}>Back</Button>
-			{/snippet}
-			{#snippet center()}{/snippet}
-			{#snippet right()}{/snippet}
-		</AppHeader>
+	<div id="account-page" class="page-root relative h-full w-full bg-gray-200 mt-header">
 		<div
 			class="page-content mx-auto flex w-full min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
 		>
@@ -196,6 +176,5 @@
 				<UserSettings />
 			</div>
 		</div>
-		<AppFooter />
 	</div>
 {/if}

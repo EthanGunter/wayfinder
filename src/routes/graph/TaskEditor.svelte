@@ -1,122 +1,259 @@
 <script lang="ts">
-	import { type Snippet } from 'svelte';
-	import Checkbox from '../../lib/components/ui/checkbox/checkbox.svelte';
 	import Icon from '@iconify/svelte';
-	import * as Dialog from '../../lib/components/ui/dialog';
-	import Button from '../../lib/components/ui/button/button.svelte';
-	import { goto } from '$app/navigation';
+	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Accordion from '$lib/components/ui/accordion';
+
+	import tasksAPI from '$lib/API/Tasks';
+	import { Err } from '$domain/errors';
 	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
 
+	import TaskList from './TaskList.svelte';
+	import Separator from '$lib/components/ui/separator/separator.svelte';
+	export interface TaskEditorLayoutState {
+		accordionValues: ('tasks' | 'parent-order')[];
+	}
 	interface Props {
 		task: Task;
 		onTaskChange: (original: Task, update: Partial<Task>) => void;
 		onDelete: (task: Task) => void;
-		children?: Snippet;
+		onHighlightNode?: (taskId: string, options?: { select?: boolean }) => void;
+		layoutState?: TaskEditorLayoutState;
 	}
-	let { task = $bindable(), onTaskChange, onDelete, children }: Props = $props();
-	let checked = $state(isTaskCompleted(task));
+
+	// Props
+	let {
+		task = $bindable(),
+		layoutState = $bindable({ accordionValues: ['tasks'] }),
+		onTaskChange,
+		onDelete,
+		onHighlightNode
+	}: Props = $props();
+
+	// Derived live data from server as single sources of truth
+	let checked = $derived(isTaskCompleted(task));
+	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
+	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
+	const parentsStore = tasksAPI.getParentsOf({ id: task.id });
+
+	$effect(() => {
+		task.id;
+		siblingsStore.updateQuery({ id: task.id });
+		childTasksStore.updateQuery({ id: task.id });
+		parentsStore.updateQuery({ id: task.id });
+	});
+
+	$effect(() => {
+		if ($siblingsStore.status === 'error')
+			Err.UNHANDLED($siblingsStore.error, 'Failed to get siblings');
+	});
+
+	// Internals
 	let showDeleteDialog = $state(false);
+	let accordionValues = $derived(layoutState.accordionValues);
 
-	// First, keep isCompleted in sync with external changes to task.status
-	$effect(() => {
-		checked = isTaskCompleted(task);
-	});
-
-	// Then watch for changes to isCompleted and update the task
-	$effect(() => {
-		const newStatus = checked ? TaskStatus.complete : TaskStatus.incomplete;
-		if (task.status !== newStatus) {
-			task.status = newStatus;
-			onTaskChange?.(task, { status: newStatus });
-		}
-	});
+	// Complete status mirrors task.status; no redundant state held
+	function toggleCompleted(next: boolean) {
+		const newStatus = next ? TaskStatus.complete : TaskStatus.incomplete;
+		if (task.status === newStatus) return;
+		task.status = newStatus;
+		onTaskChange?.(task, { status: newStatus });
+	}
 
 	function handleInput(event: Event) {
-		const target = event.target as HTMLInputElement;
-		if (target.name === 'content') {
-			task.content = target.value;
-		}
-		onTaskChange?.(task, { [target.name]: target.value });
+		const el = event.target as HTMLInputElement | HTMLTextAreaElement;
+		if (!el?.name) return;
+		const patch: Partial<Task> = { [el.name]: el.value };
+		Object.assign(task, patch);
+		onTaskChange?.(task, patch);
 	}
 
-	function openDeleteDialog() {
+	function confirmDelete() {
 		showDeleteDialog = true;
 	}
 
-	function handleDelete() {
+	function performDelete() {
 		onDelete?.(task);
 		showDeleteDialog = false;
 	}
+
+	// --- Reorder operations (passed as callbacks to TaskList)
+	async function reorderWithinParent(
+		parentId: string,
+		movingId: string,
+		startIndex: number,
+		finishIndex: number
+	) {
+		if (finishIndex === startIndex) return;
+
+		const siblingsMap = $siblingsStore;
+		if (siblingsMap.status !== 'resolved') return;
+
+		// Find parent task by ID (Map keys are object references)
+		let parentTask: Task | undefined;
+		for (const [p] of siblingsMap.data.entries()) {
+			if (p.id === parentId) {
+				parentTask = p;
+				break;
+			}
+		}
+		if (!parentTask) return;
+
+		const currentIds = (parentTask.children ?? []).slice();
+		const from = currentIds.indexOf(movingId);
+		if (from < 0) return;
+
+		const targetId = currentIds[Math.min(finishIndex, currentIds.length - 1)];
+		let to = targetId ? currentIds.indexOf(targetId) : currentIds.length;
+		if (to < 0) to = currentIds.length;
+		if (finishIndex > startIndex && to >= 0) to = to + 1;
+
+		currentIds.splice(from, 1);
+		const adjustedTo = from < to ? to - 1 : to;
+		currentIds.splice(adjustedTo, 0, movingId);
+
+		const [_, e] = await tasksAPI.updateTask({ id: parentId, data: { children: currentIds } });
+		if (e) Err.UNHANDLED(e, 'Failed to reorder siblings');
+	}
+
+	async function reorderChildren(movingId: string, startIndex: number, finishIndex: number) {
+		if (finishIndex === startIndex) return;
+		const children = $childTasksStore;
+		if (children.status !== 'resolved') return;
+
+		const currentIds = (task.children ?? []).slice();
+		const from = currentIds.indexOf(movingId);
+		if (from < 0) return;
+
+		const list = children.data;
+		const target = list[Math.min(finishIndex, list.length - 1)];
+		let to = target ? currentIds.indexOf(target.id) : currentIds.length;
+		if (to < 0) to = currentIds.length;
+		if (finishIndex > startIndex && to >= 0) to = to + 1;
+
+		currentIds.splice(from, 1);
+		const adjustedTo = from < to ? to - 1 : to;
+		currentIds.splice(adjustedTo, 0, movingId);
+
+		task.children = currentIds;
+		const [_, e] = await tasksAPI.updateTask({ id: task.id, data: { children: currentIds } });
+		if (e) Err.UNHANDLED(e, 'Failed to reorder children');
+	}
 </script>
 
-<div class="task-editor flex flex-col p-3">
-	<!-- Task Header -->
-	<div class="mb-3 flex items-start gap-4 border-b-1 border-gray-200 pb-2">
-		<Checkbox
-			class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
-			bind:checked
-			aria-label={checked ? 'Mark as incomplete' : 'Mark as complete'}
-		/>
-		<div class="flex-1">
+<div class="task-editor flex h-full w-full flex-col p-3" class:bg-[#efe]={checked}>
+	<div class="flex h-full w-full resize-none flex-col rounded-xl border-1 bg-white p-1">
+		<div class="flex items-start gap-2 px-2 py-2">
+			<Checkbox
+				class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
+				aria-label="Toggle complete"
+				bind:checked
+				onCheckedChange={(status) => toggleCompleted(status)}
+			/>
 			<input
 				id="input-task-title"
 				name="title"
-				class="w-full border-0 border-r-1 bg-transparent text-xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+				class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
 				placeholder="Task title"
-				bind:value={task.title}
+				value={task.title}
 				oninput={handleInput}
 			/>
+			<Separator orientation="vertical" />
+			<button
+				onclick={confirmDelete}
+				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+				title="Delete task"
+			>
+				<Icon icon="lucide:trash-2" class="size-4" />
+			</button>
 		</div>
-		<button
-			class="mt-1 flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-gray-50 hover:text-gray-600"
-			onclick={(e) => {
-				goto(`tasks?id=${task.id}`);
-			}}
-			title="Go to task"
-		>
-			<Icon icon="majesticons:open" />
-		</button>
-		<span class="text-gray-200">|</span>
-		<button
-			onclick={openDeleteDialog}
-			class="mt-1 flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
-			title="Delete task"
-		>
-			<Icon icon="lucide:trash-2" class="size-4" />
-		</button>
+
+		<textarea
+			name="content"
+			id="task-editor-notes"
+			placeholder="Add notes or description..."
+			value={task.content}
+			oninput={handleInput}
+			class=" h-full resize-none p-2 text-sm text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
+			rows="3"
+		></textarea>
 	</div>
 
-	<!-- Task Description -->
-
-	<textarea
-		name="content"
-		id="task-editor-notes"
-		placeholder="Add notes or description..."
-		bind:value={task.content}
-		oninput={handleInput}
-		class="w-full resize-none border-0 bg-transparent text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
-		rows="3"
-	></textarea>
-
-	<!-- Future: Expandable Details Section -->
-	<!-- This will house additional fields like due date, priority, tags, etc. -->
-	<!--
-	<div class="pb-6">
-		<button class="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
-			<span>Show more details</span>
-			<Icon icon="lucide:chevron-down" />
-		</button>
-	</div>
-	-->
-
-	{#if children}
-		<div class="border-t border-gray-300 pt-6">
-			{@render children()}
-		</div>
-	{/if}
+	<Accordion.Root
+		type="multiple"
+		value={accordionValues}
+		onValueChange={(e) => {
+			layoutState.accordionValues = e as any;
+		}}
+	>
+		{#if $childTasksStore.status === 'resolved' && $childTasksStore.data.length > 0}
+			<Accordion.Item value="tasks">
+				<Accordion.Trigger
+					class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+				>
+					Tasks
+				</Accordion.Trigger>
+				<Accordion.Content>
+					<TaskList
+						tasks={$childTasksStore.data}
+						parentId={task.id}
+						id={`child-${task.id}`}
+						onHighlight={(id) => onHighlightNode?.(id)}
+						onReorder={(taskId, startIndex, finishIndex) =>
+							reorderChildren(taskId, startIndex, finishIndex)}
+					/>
+				</Accordion.Content>
+			</Accordion.Item>
+		{/if}
+		{#if $siblingsStore.status === 'resolved' && $parentsStore.status === 'resolved' && $parentsStore.data.length > 0}
+			<Accordion.Item value="parent-order">
+				<Accordion.Trigger
+					class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+				>
+					Priority
+				</Accordion.Trigger>
+				<Accordion.Content>
+					<div class="flex flex-col gap-4">
+						{#each $parentsStore.data as parent (parent.id)}
+							{@const siblings = (() => {
+								// Find parent in siblings Map by ID (Map keys are object references)
+								if ($siblingsStore.status !== 'resolved') return undefined;
+								for (const [mapParent, mapSiblings] of $siblingsStore.data.entries()) {
+									if (mapParent.id === parent.id) {
+										return mapSiblings;
+									}
+								}
+								return undefined;
+							})()}
+							{@const siblingTasks = (() => {
+								const ids = parent.children ?? [];
+								const tasks: Task[] = [];
+								for (const cid of ids) {
+									const sibling =
+										cid === task.id ? task : siblings?.find((s: Task) => s.id === cid);
+									if (sibling) tasks.push(sibling);
+								}
+								return tasks;
+							})()}
+							<TaskList
+								tasks={siblingTasks}
+								parentId={parent.id}
+								id={`sibling-${parent.id}`}
+								title={parent.title}
+								currentTaskId={task.id}
+								onHighlight={(id) => onHighlightNode?.(id)}
+								onReorder={(taskId, startIndex, finishIndex) =>
+									reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
+							/>
+						{/each}
+					</div>
+				</Accordion.Content>
+			</Accordion.Item>
+		{/if}
+	</Accordion.Root>
 </div>
 
-<!-- Delete Confirmation Dialog -->
 <Dialog.Root bind:open={showDeleteDialog}>
 	<Dialog.Content>
 		<Dialog.Header>
@@ -127,7 +264,7 @@
 		</div>
 		<Dialog.Footer class="flex gap-2">
 			<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Cancel</Button>
-			<Button variant="destructive" onclick={handleDelete}>Delete Task</Button>
+			<Button variant="destructive" onclick={performDelete}>Delete Task</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
