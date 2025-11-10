@@ -7,15 +7,16 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { useSidebar } from '$lib/components/ui/sidebar/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
+	/* 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import DownloadIcon from '@lucide/svelte/icons/download';
-	import UploadIcon from '@lucide/svelte/icons/upload';
+	import UploadIcon from '@lucide/svelte/icons/upload'; */
 	import { authAPI, authState } from '$lib/API/Auth';
 	import tasksAPI from '$lib/API/Tasks';
 	import type { User } from '$domain/models/user';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import Icon from '@iconify/svelte';
 
 	let { user }: { user: User } = $props();
 	const sidebar = useSidebar();
@@ -87,7 +88,8 @@
 								<span class="truncate text-xs">{user.email}</span>
 							{/if} -->
 						</div>
-						<ChevronsUpDownIcon class="ml-auto size-4" />
+						<Icon icon="lucide:chevron-down" class="ml-auto size-4" />
+						<!-- <ChevronsUpDownIcon class="ml-auto size-4" /> -->
 					</Sidebar.MenuButton>
 				{/snippet}
 			</DropdownMenu.Trigger>
@@ -113,24 +115,28 @@
 					<DropdownMenu.Item
 						onclick={() => goto(`/account?redirect=${$page.url.pathname + $page.url.search}`)}
 					>
-						<SettingsIcon class="size-4" />
+						<Icon icon="lucide:settings" class="size-4" />
+						<!-- <SettingsIcon class="size-4" /> -->
 						User Settings
 					</DropdownMenu.Item>
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
 					<DropdownMenu.Item onclick={handleExport}>
-						<DownloadIcon class="size-4" />
+						<Icon icon="lucide:download" class="size-4" />
+						<!-- <DownloadIcon class="size-4" /> -->
 						Export Data
 					</DropdownMenu.Item>
 					<DropdownMenu.Item onclick={handleImport}>
-						<UploadIcon class="size-4" />
+						<Icon icon="lucide:upload" class="size-4" />
+						<!-- <UploadIcon class="size-4" /> -->
 						Import Data
 					</DropdownMenu.Item>
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item onclick={handleSignOut}>
-					<LogOutIcon class="size-4" />
+					<Icon icon="lucide:log-out" class="size-4" />
+					<!-- <LogOutIcon class="size-4" /> -->
 					Sign out
 				</DropdownMenu.Item>
 			</DropdownMenu.Content>

@@ -1,3 +1,5 @@
+import { Err } from "$domain/errors";
+
 export type ASTNode = { start: number; end: number } &
 	(
 		| { type: 'kvp'; key: string; op: ComparisonOperator; value: string | string[] }
@@ -103,8 +105,8 @@ export type FieldRegistry<TEntity> = Record<
 >;
 
 /** Value transform error */
-export class ValueTransformError extends Error {
+export class ValueTransformError extends Err {
 	constructor(public messageForUser: string, devMessage?: string, cause?: unknown) {
-		super(devMessage, { cause });
+		super("ValueTransformError", messageForUser, { messageForDev: devMessage, cause });
 	}
 }

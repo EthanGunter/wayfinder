@@ -10,13 +10,13 @@ function captureHere(err: Error, excludeFn: Function) {
         (Error as any).captureStackTrace(err, excludeFn);
     }
 }
-
+type ErrContext = { messageForDev?: string, [key: string]: any };
 export class Err extends Error {
-    context?: any;
+    context?: ErrContext;
     cause?: unknown;
 
-    constructor(name: string, message: string, context?: any) {
-        super(message);
+    constructor(name: string, public messageForUser: string, context?: ErrContext) {
+        super(messageForUser);
         this.name = name;
         this.context = context;
         // Important: pass the concrete constructor to exclude it from the stack
@@ -24,7 +24,7 @@ export class Err extends Error {
     }
 
     static wrap(nativeError: Error): Err {
-        const e = new Err(nativeError.name || "Error", nativeError.messageForUser, {
+        const e = new Err(nativeError.name || "Error", nativeError.message, {
             wrapped: true,
         });
         e.cause = nativeError;
@@ -36,7 +36,7 @@ export class Err extends Error {
     static UNHANDLED(error: unknown, message?: string): never {
         const baseMsg =
             (message ? message + " - " : "") +
-            (error instanceof Error ? error.messageForUser : String(error));
+            (error instanceof Error ? error.message : String(error));
 
         const e =
             error instanceof Err
@@ -64,7 +64,7 @@ export class Err extends Error {
     static throw(error: unknown, message?: string): never {
         const baseMsg =
             (message ? message + " - " : "") +
-            (error instanceof Error ? error.messageForUser : String(error));
+            (error instanceof Error ? error.message : String(error));
 
         const e =
             error instanceof Err
@@ -128,7 +128,7 @@ export class IOError extends Err {
             typeof internalError === "string"
                 ? internalError
                 : internalError instanceof Error
-                    ? internalError.messageForUser
+                    ? internalError.message
                     : internalError;
 
         super("IOError", message, { internalError: internal, dataToWrite: context });
