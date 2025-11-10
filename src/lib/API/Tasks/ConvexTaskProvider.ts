@@ -1,11 +1,17 @@
-import { Err, NotImplementedError, NotAuthorizedError } from "$domain/errors";
+import { Err, NotImplementedError, NotAuthorizedError, ArgumentError } from "$domain/errors";
 import { err, ok } from "$domain/result";
-import { TaskStatus, type CreateTaskParams, type PopulatedTaskDTO, type Task, type TaskDelta, type UpdateTaskParams } from "$domain/models/task";
+import { TaskStatus, type CreateTaskParams, type PopulatedTaskDTO, type Task, type TaskDelta, type UpdateTaskParams, type SystemAgnosticTask } from "$domain/models/task";
 import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";
 import { createFetchableReadable as createFetchable, createQueryable } from "$lib/API/fetchableStore";
 import type { ITasks, ITasksLocal } from "./seam-interfaces";
+
+interface ExportedData {
+	version: string;
+	exportedAt: string;
+	tasks: SystemAgnosticTask<string>[];
+}
 
 
 export const api: ITasks = {
@@ -346,8 +352,190 @@ export const localApi: ITasksLocal = {
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 
-	exportData: async () => { Err.NotImplemented('exportData'); },
-	importData: async () => { Err.NotImplemented('exportData'); },
+	exportData: async () => {
+		const whoamiResult = await client.query(convexApi.users.whoami, {});
+		if (!whoamiResult?.authId) {
+			throw new NotAuthorizedError("Not authenticated");
+		}
+
+		const tasksResult = await client.query(convexApi.tasks.getAllUserTasks, { userId: whoamiResult.authId });
+		if (!isConvexOk(tasksResult)) {
+			const error = tasksResult as { ok: false; error: Err };
+			throw error.error;
+		}
+
+		const tasks = tasksResult.value.map(rowToTask);
+		const exportedTasks: SystemAgnosticTask<string>[] = tasks.map(task => ({
+			id: task.id,
+			userAuthId: task.userAuthId,
+			title: task.title,
+			content: task.content,
+			status: task.status,
+			parents: task.parents,
+			children: task.children,
+			todaysTask: task.todaysTask?.toISOString(),
+			dueDate: task.dueDate?.toISOString(),
+			created: task.created.toISOString(),
+			lastEdit: task.lastEdit.toISOString(),
+		}));
+
+		const exportedData: ExportedData = {
+			version: "0.0.0",
+			exportedAt: new Date().toISOString(),
+			tasks: exportedTasks,
+		};
+
+		return JSON.stringify(exportedData, null, 2);
+	},
+
+	importData: async ({ data, mode = "add" }) => {
+		const whoamiResult = await client.query(convexApi.users.whoami, {});
+		if (!whoamiResult?.authId) {
+			throw new NotAuthorizedError("Not authenticated");
+		}
+
+		let parsed: ExportedData;
+		try {
+			parsed = JSON.parse(data);
+		} catch (error) {
+			throw new ArgumentError("Invalid JSON format", data, { cause: error });
+		}
+
+		if (!parsed.version || !parsed.tasks || !Array.isArray(parsed.tasks)) {
+			throw new ArgumentError("Invalid export format: missing version or tasks", parsed);
+		}
+
+		// Version migration - currently only support 1.0.0
+		if (parsed.version !== "1.0.0") {
+			throw new ArgumentError(`Unsupported export version: ${parsed.version}. Expected 1.0.0`, parsed);
+		}
+
+		// Convert ISO strings back to Date objects
+		const tasksToImport: Task[] = parsed.tasks.map(task => ({
+			id: task.id,
+			userAuthId: whoamiResult.authId, // Override with current user
+			title: task.title,
+			content: task.content,
+			status: task.status,
+			parents: task.parents,
+			children: task.children,
+			todaysTask: task.todaysTask ? new Date(task.todaysTask) : undefined,
+			dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+			created: new Date(task.created),
+			lastEdit: new Date(task.lastEdit),
+		}));
+
+		if (mode === "replace") {
+			// Get all existing tasks and delete them
+			const existingResult = await client.query(convexApi.tasks.getAllUserTasks, { userId: whoamiResult.authId });
+			if (isConvexOk(existingResult) && existingResult.value.length > 0) {
+				const existingIds = existingResult.value.map(row => row._id);
+				await client.mutation(convexApi.tasks.deleteTasks, { ids: existingIds });
+			}
+		}
+
+		if (tasksToImport.length === 0) {
+			return 0;
+		}
+
+		if (mode === "add") {
+			// Create all tasks with new IDs (remove id from create params)
+			const createDetails = tasksToImport.map(task => ({
+				userAuthId: task.userAuthId,
+				title: task.title,
+				content: task.content,
+				todaysTask: task.todaysTask,
+				dueDate: task.dueDate,
+				parents: task.parents,
+				children: task.children,
+			} as CreateTaskParams));
+
+			const createResult = await api.createTasks({ createDetails });
+			if (createResult[1]) {
+				throw createResult[1];
+			}
+			return createResult[0].affectedTasks.length;
+		}
+
+		if (mode === "attemptMerge") {
+			// Get existing tasks to check which ones exist
+			const existingResult = await client.query(convexApi.tasks.getAllUserTasks, { userId: whoamiResult.authId });
+			const existingIds = isConvexOk(existingResult)
+				? new Set(existingResult.value.map(row => row._id))
+				: new Set<string>();
+
+			const toCreate: CreateTaskParams[] = [];
+			const toUpdate: UpdateTaskParams[] = [];
+
+			for (const task of tasksToImport) {
+				if (existingIds.has(task.id)) {
+					// Update existing task
+					toUpdate.push({
+						id: task.id,
+						data: {
+							title: task.title,
+							content: task.content,
+							status: task.status,
+							todaysTask: task.todaysTask,
+							dueDate: task.dueDate,
+							lastEdit: task.lastEdit,
+						},
+						relations: [
+							...task.parents.map(id => ({ id, operation: "addParent" as const })),
+							...task.children.map(id => ({ id, operation: "addChild" as const })),
+						],
+					});
+				} else {
+					// Create new task
+					toCreate.push({
+						userAuthId: task.userAuthId,
+						title: task.title,
+						content: task.content,
+						todaysTask: task.todaysTask,
+						dueDate: task.dueDate,
+						parents: task.parents,
+						children: task.children,
+					} as CreateTaskParams);
+				}
+			}
+
+			let count = 0;
+			if (toCreate.length > 0) {
+				const createResult = await api.createTasks({ createDetails: toCreate });
+				if (createResult[1]) {
+					throw createResult[1];
+				}
+				count += createResult[0].affectedTasks.length;
+			}
+
+			if (toUpdate.length > 0) {
+				const updateResult = await api.updateTasks({ updates: toUpdate });
+				if (updateResult[1]) {
+					throw updateResult[1];
+				}
+				count += updateResult[0].length;
+			}
+
+			return count;
+		}
+
+		// For "replace" mode, create all tasks after deletion
+		const createDetails = tasksToImport.map(task => ({
+			userAuthId: task.userAuthId,
+			title: task.title,
+			content: task.content,
+			todaysTask: task.todaysTask,
+			dueDate: task.dueDate,
+			parents: task.parents,
+			children: task.children,
+		} as CreateTaskParams));
+
+		const createResult = await api.createTasks({ createDetails });
+		if (createResult[1]) {
+			throw createResult[1];
+		}
+		return createResult[0].affectedTasks.length;
+	},
 };
 
 export default localApi;
