@@ -406,7 +406,7 @@ export const localApi: ITasksLocal = {
 		}
 
 		// Version migration - currently only support 1.0.0
-		if (parsed.version !== "1.0.0") {
+		if (parsed.version !== "0.0.0") {
 			throw new ArgumentError(`Unsupported export version: ${parsed.version}. Expected 1.0.0`, parsed);
 		}
 
