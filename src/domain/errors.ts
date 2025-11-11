@@ -33,10 +33,10 @@ export class Err extends Error {
         return e;
     }
 
-    static UNHANDLED(error: unknown, message?: string): never {
+    static UNHANDLED<T = unknown>(error: T, message?: string): never {
         const baseMsg =
             (message ? message + " - " : "") +
-            (error instanceof Error ? error.message : String(error));
+            (error instanceof Err ? error.message : JSON.stringify(error));
 
         const e =
             error instanceof Err

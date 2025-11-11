@@ -507,35 +507,36 @@ export function createGraphController(): GraphController {
 		if (params.nodes.length > 0) {
 			await tasksAPI.deleteTasks({ ids: params.nodes.map((n) => n.id) });
 		}
-		if (params.edges.length > 0) {
-			const relationChanges = new Map<
-				string,
-				{ id: string; operation: 'removeChild' | 'removeParent' | 'addChild' | 'addParent' }[]
-			>();
-
-			for (const edge of params.edges) {
-				const sourceId = edge.source;
-				const targetId = edge.target;
-
-				if (!relationChanges.has(sourceId)) {
-					relationChanges.set(sourceId, []);
-				}
-				relationChanges.get(sourceId)!.push({ id: targetId, operation: 'removeChild' as const });
-
-				if (!relationChanges.has(targetId)) {
-					relationChanges.set(targetId, []);
-				}
-				relationChanges.get(targetId)!.push({ id: sourceId, operation: 'removeParent' as const });
-			}
-
-			const updates = Array.from(relationChanges.entries()).map(([taskId, relations]) => ({
-				id: taskId,
-				data: {},
-				relations
-			}));
-
-			await tasksAPI.updateTasks({ updates });
-		}
+		// TODO This should be handled by the server
+		/* 		if (params.edges.length > 0) {
+					const relationChanges = new Map<
+						string,
+						{ id: string; operation: 'removeChild' | 'removeParent' | 'addChild' | 'addParent' }[]
+					>();
+		
+					for (const edge of params.edges) {
+						const sourceId = edge.source;
+						const targetId = edge.target;
+		
+						if (!relationChanges.has(sourceId)) {
+							relationChanges.set(sourceId, []);
+						}
+						relationChanges.get(sourceId)!.push({ id: targetId, operation: 'removeChild' as const });
+		
+						if (!relationChanges.has(targetId)) {
+							relationChanges.set(targetId, []);
+						}
+						relationChanges.get(targetId)!.push({ id: sourceId, operation: 'removeParent' as const });
+					}
+		
+					const updates = Array.from(relationChanges.entries()).map(([taskId, relations]) => ({
+						id: taskId,
+						data: {},
+						relations
+					}));
+		
+					await tasksAPI.updateTasks({ updates });
+				} */
 	}
 
 	function centerNode(taskId: string, options: { select?: boolean } = { select: true }) {

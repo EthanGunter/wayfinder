@@ -1,6 +1,6 @@
 import { Err, NotImplementedError, NotAuthorizedError, ArgumentError } from "$domain/errors";
 import { err, ok } from "$domain/result";
-import { TaskStatus, type CreateTaskParams, type PopulatedTaskDTO, type Task, type TaskDelta, type UpdateTaskParams, type SystemAgnosticTask } from "$domain/models/task";
+import { type CreateTaskParams, type Task, type UpdateTaskParams, type SystemAgnosticTask } from "$domain/models/task";
 import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";

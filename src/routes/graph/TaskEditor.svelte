@@ -45,8 +45,9 @@
 	});
 
 	$effect(() => {
-		if ($siblingsStore.status === 'error')
+		if ($siblingsStore.status === 'error') {
 			Err.UNHANDLED($siblingsStore.error, 'Failed to get siblings');
+		}
 	});
 
 	// Internals
@@ -74,8 +75,8 @@
 	}
 
 	function performDelete() {
-		onDelete?.(task);
 		showDeleteDialog = false;
+		onDelete?.(task);
 	}
 
 	// --- Reorder operations (passed as callbacks to TaskList)

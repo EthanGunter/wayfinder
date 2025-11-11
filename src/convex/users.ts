@@ -94,7 +94,6 @@ export const register = mutation({
       throw new Error("Only social login is implemented with Convex + WorkOS");
     }
 
-    console.log("register user", userData);
     // TODO get authId from auth provider registration
     const authId = "TODO:authId";
     ctx.auth.getUserIdentity();
@@ -163,8 +162,6 @@ export const updateUser = mutation({
     settingOverrides: v.optional(v.any()),
   }),
   handler: async (ctx, update) => {
-    console.log('Update: ', update);
-
     const id = await ctx.auth.getUserIdentity();
     if (!id) throw new Error("User identity not available");
 
@@ -187,7 +184,6 @@ export const updateUser = mutation({
     }
 
     const patch = userToPatch(update);
-    console.log('Existing: ', existing, "\nUpdate: ", update, "\nPatch: ", patch);
 
 
     if (Object.keys(patch).length) {
@@ -195,7 +191,6 @@ export const updateUser = mutation({
     }
 
     const refreshed = await ctx.db.get(existing._id);
-    console.log('Refreshed: ', refreshed);
 
     return {
       ok: true as const,
@@ -273,8 +268,8 @@ export const ensureCurrentUser = mutation({
        * TODO: Temp:IMPORTANT - This allows us to skip local optimistic updates, 
        * at the cost of grandfathering in users to our first income source...
        * It's worth it while figuring out the UX, but should change ASAP
-       */ 
-      features: ['task-sync'], 
+       */
+      features: ['task-sync'],
       settingOverrides: undefined,
     });
 

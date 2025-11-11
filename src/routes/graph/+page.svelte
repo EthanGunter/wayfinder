@@ -13,7 +13,7 @@
 	import { Err } from '$domain/errors';
 	import { TaskStatus, type Task, type TaskBase } from '$domain/models/task';
 	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import { authState } from '$lib/API/Auth';
 	import { TaskSearchService } from '$lib/API/Tasks/TaskSearchService';
@@ -52,9 +52,9 @@
 	}
 
 	async function onDelete(task: Task) {
+		selectedTask = null;
 		const [_, error] = await tasksAPI.deleteTask({ id: task.id });
 		if (error) Err.UNHANDLED(error, 'Failed to delete task');
-		selectedTask = null;
 	}
 
 	function highlightNode(taskId: string, options: { select?: boolean } = { select: true }) {
@@ -174,7 +174,7 @@
 		});
 
 		// Handle URL params for highlighting
-		const params = $page.url.searchParams;
+		const params = page.url.searchParams;
 		const highlightId = params.get('highlight');
 		const shouldSelect = params.get('select') === 'true';
 
@@ -257,7 +257,10 @@
 								controller.setScreenToFlowPosition(instance.screenToFlowPosition);
 								controller.setSvelteFlowInstance(instance);
 							}}
-							ondelete={controller.handlers.handleDelete}
+							ondelete={({ nodes, edges }) => {
+								selectedTask = null;
+								controller.handlers.handleDelete({ nodes, edges });
+							}}
 							onconnectstart={controller.handlers.handleConnectStart}
 							onreconnectstart={controller.handlers.handleReconnectStart}
 							onconnect={controller.handlers.handleConnect}
