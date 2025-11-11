@@ -11,6 +11,11 @@ export interface TaskBase {
 
 
     // Content
+    /**
+     * @root an organizational task the all parentless tasks are attached to
+     * @task normal task
+     */
+    type: "task" | "root",
     title: string,
     content?: string,
     status: TaskStatus,

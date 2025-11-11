@@ -60,19 +60,19 @@
 
 	// Self-managed DnD registration
 	$effect(() => {
-		if (!itemEl || !isDraggable) return;
+		if (!itemEl) return;
 
 		const cleanups: (() => void)[] = [];
 
-		// Register as draggable (with drag handle if available)
-		cleanups.push(
-			draggable({
-				element: handleEl ?? itemEl,
-				getInitialData: () => makeItemData(task.id, parentId, index, listType)
-			})
-		);
+		if (isDraggable) {
+			cleanups.push(
+				draggable({
+					element: handleEl ?? itemEl,
+					getInitialData: () => makeItemData(task.id, parentId, index, listType)
+				})
+			);
+		}
 
-		// Register as drop target
 		cleanups.push(
 			dropTargetForElements({
 				element: itemEl,
@@ -91,14 +91,12 @@
 					});
 				},
 				onDragEnter: ({ source, self }) => {
-					// TODO:debug
 					const isSource = source.element === (handleEl ?? itemEl);
 					if (isSource) {
 						closestEdge = null;
 						return;
 					}
 					const edge = extractClosestEdge(self.data);
-					// Hide indicator if adjacent to source (prevents flickering)
 					if (isItemData(source.data)) {
 						const sourceIndex = source.data.index;
 						const isItemBeforeSource = index === sourceIndex - 1;
@@ -119,7 +117,6 @@
 						return;
 					}
 					const edge = extractClosestEdge(self.data);
-					// Hide indicator if adjacent to source
 					if (isItemData(source.data)) {
 						const sourceIndex = source.data.index;
 						const isItemBeforeSource = index === sourceIndex - 1;

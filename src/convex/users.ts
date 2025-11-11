@@ -313,11 +313,15 @@ function serializeError<T extends Err>(err: T): T {
 
 function rowToAuthenticatedUser(row: Doc<"users">): User {
   return {
-    ...row,
     id: row.authId,
-    createdAt: row._creationTime as any, // Dates are not supported in Convex
+    displayName: row.displayName,
+    // Dates are not supported in Convex
+    // TODO:refactor consider SystemAgnosticUser<T>
+    createdAt: row._creationTime as any, 
     status: row.status ?? "active",
     features: row.features ?? [],
+    avatarUrl: row.avatarUrl,
+    settingOverrides: row.settingOverrides,
   };
 }
 function rowToPublicUser(row: Doc<"users">): User {

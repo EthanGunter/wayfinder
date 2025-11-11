@@ -14,16 +14,18 @@ export const UserDef = {
 }
 export const ConvexTaskDef = {
   userAuthId: v.string(), // foreign key to users.authId
+  type: v.optional(v.union(v.literal("task"), v.literal("root"))), // "task" for normal tasks, "root" for hidden root task
   title: v.string(),
   content: v.optional(v.string()),
   status: v.number(), // keep your numeric enum as-is
   todaysTask: v.optional(v.number()), // unix milliseconds or undefined
-  priority: v.optional(v.number()),
   dueDate: v.optional(v.number()),
   parents: v.array(v.string()),  // store task ids as strings
   children: v.array(v.string()),
   lastEdit: v.number(),  // unix milliseconds
   created: v.number(),  // unix milliseconds
+  priority: v.optional(v.number()),
+  isRoot: v.optional(v.boolean()),
 }
 
 
@@ -34,5 +36,6 @@ export default defineSchema({
 
   tasks: defineTable(ConvexTaskDef)
     .index("by_user", ["userAuthId"])
-    .index("by_todays_task", ["userAuthId", "todaysTask"]),
+    .index("by_todays_task", ["userAuthId", "todaysTask"])
+    .index("by_user_type", ["userAuthId", "type"]),
 });

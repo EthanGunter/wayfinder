@@ -368,6 +368,7 @@ export const localApi: ITasksLocal = {
 		const exportedTasks: SystemAgnosticTask<string>[] = tasks.map(task => ({
 			id: task.id,
 			userAuthId: task.userAuthId,
+			type: task.type,
 			title: task.title,
 			content: task.content,
 			status: task.status,
@@ -513,6 +514,7 @@ export function convexifyCreateTaskDetails(dto: CreateTaskParams): Doc<"tasks"> 
 function rowToTask(row: Doc<"tasks">): Task {
 	return {
 		...row,
+		type: row.type!,
 		id: row._id,
 		created: new Date(row._creationTime),
 		lastEdit: new Date(row.lastEdit),

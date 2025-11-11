@@ -1,8 +1,9 @@
-import { Err, NotAuthorizedError, NotFoundError, NotImplementedError } from "$domain/errors";
+import { Err, NotAuthorizedError, NotFoundError, NotImplementedError, InvalidStateError } from "$domain/errors";
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SystemAgnosticTask } from "$domain/models/task";
+import { api } from "./_generated/api";
 
 
 //#region Utility
@@ -56,26 +57,49 @@ export const createTask = mutation({
 		const oldId = raw.id ? String(raw.id) : null;
 		delete (raw as any).id;
 
+		// Handle parentless tasks: attach them to root
+		let finalParents = raw.parents ?? [];
+		let rootTask: DBTask | null = null;
+		if (finalParents.length === 0) {
+			rootTask = await getOrCreateRoot(ctx, raw.userAuthId);
+			finalParents = [String(rootTask._id)];
+		}
+
 		// Insert with Convex-generated _id, using same defaults as createTasks
 		const newGeneratedId = await ctx.db.insert("tasks", {
 			...raw,
+			type: "task",
 			status: raw.status ?? 0,
-			parents: raw.parents ?? [],
+			parents: finalParents,
 			children: raw.children ?? [],
 			lastEdit: now,
 			created: raw.created ?? now,
 		});
 
+		// If attached to root, add this task to root's children
+		if (rootTask) {
+			const rootChildren = [...(rootTask.children ?? [])];
+			if (!rootChildren.includes(String(newGeneratedId))) {
+				rootChildren.push(String(newGeneratedId));
+				await ctx.db.patch(rootTask._id, {
+					children: rootChildren,
+					lastEdit: now,
+				});
+				// rootTask = await ctx.db.get(rootTask._id);
+			}
+		}
+
 		// Local constructed task (avoid extra get)
 		const inserted: TaskWithId = {
 			_id: newGeneratedId as Id<"tasks">,
+			type: "task",
 			status: raw.status ?? 0,
 			userAuthId: raw.userAuthId,
 			title: raw.title,
 			content: raw.content,
 			todaysTask: raw.todaysTask,
 			dueDate: raw.dueDate,
-			parents: raw.parents ?? [],
+			parents: finalParents,
 			children: raw.children ?? [],
 			lastEdit: now,
 			created: raw.created ?? now,
@@ -277,6 +301,10 @@ export const createTasks = mutation({
 
 		const now = Date.now();
 
+		// Get/create root once for the user (all tasks in batch should be same user)
+		let rootTask: DBTask | null = null;
+		const parentlessTaskIds: string[] = [];
+
 		// Outputs
 		const insertedTasks: TaskWithId[] = [];
 		const updatedIds: [string, string][] = [];
@@ -299,25 +327,41 @@ export const createTasks = mutation({
 			const oldId = d.id ? String(d.id) : null;
 			delete (d as any).id;
 
+			// Handle parentless tasks: attach them to root
+			let finalParents = d.parents ?? [];
+			if (finalParents.length === 0) {
+				if (!rootTask) {
+					rootTask = await getOrCreateRoot(ctx, identity.subject);
+				}
+				finalParents = [String(rootTask._id)];
+			}
+
 			const newGeneratedId = await ctx.db.insert("tasks", {
 				...d,
+				type: "task",
 				status: d.status ?? 0,
-				parents: d.parents ?? [],
+				parents: finalParents,
 				children: d.children ?? [],
 				lastEdit: now,
 				created: d.created ?? now,
 			});
 
+			// Track parentless tasks to add to root.children later
+			if (finalParents.length > 0 && rootTask && finalParents[0] === String(rootTask._id)) {
+				parentlessTaskIds.push(String(newGeneratedId));
+			}
+
 			// Build the inserted row locally (avoid get())
 			const row: TaskWithId = {
 				_id: newGeneratedId as Id<"tasks">,
+				type: "task",
 				status: d.status ?? 0,
 				userAuthId: d.userAuthId,
 				title: d.title,
 				content: d.content,
 				todaysTask: d.todaysTask,
 				dueDate: d.dueDate,
-				parents: d.parents ?? [],
+				parents: finalParents,
 				children: d.children ?? [],
 				lastEdit: now,
 				created: d.created ?? now,
@@ -479,6 +523,22 @@ export const createTasks = mutation({
 			}
 		}
 
+		// Update root.children with all parentless tasks from this batch
+		if (rootTask && parentlessTaskIds.length > 0) {
+			const rootChildren = [...(rootTask.children ?? [])];
+			for (const taskId of parentlessTaskIds) {
+				if (!rootChildren.includes(taskId)) {
+					rootChildren.push(taskId);
+				}
+			}
+			await ctx.db.patch(rootTask._id, {
+				children: rootChildren,
+				lastEdit: now,
+			});
+			// Refresh root for relationship calculations
+			rootTask = await ctx.db.get(rootTask._id);
+		}
+
 		// Relationship updates for newly created tasks
 		const relationshipUpdates = calculateRelationshipChanges<number>(
 			insertedTasks.map((task) => ({
@@ -488,6 +548,9 @@ export const createTasks = mutation({
 		);
 		const updateParams = relationshipChangesToUpdateParams(relationshipUpdates);
 		const affectedTasks = [...insertedTasks];
+		if (rootTask) {
+			affectedTasks.push(rootTask);
+		}
 
 		for (const update of updateParams) {
 			const relatedTaskId = update.id as Id<"tasks">;
@@ -541,7 +604,9 @@ export const getAllUserTasks = query({
 			.query("tasks")
 			.withIndex("by_user", (q) => q.eq("userAuthId", userId))
 			.collect();
-		return { ok: true as const, value: rows };
+		// Filter out root tasks - they're hidden from clients
+		const tasks = rows.filter(t => t.type === "task");
+		return { ok: true as const, value: tasks };
 	},
 });
 
@@ -566,6 +631,8 @@ export const updateTask = mutation({
 		}),
 	},
 	handler: async (ctx, { update }) => {
+		console.log('updateTask', update);
+
 		// Get the old state before the update
 		const oldTask = await ctx.db.get(update.id);
 		if (!oldTask) {
@@ -659,6 +726,11 @@ export const deleteTask = mutation({
 			return { ok: false as const, error: serializeError(new NotAuthorizedError("Not owner of task", "" + id)) };
 		}
 
+		// Prevent root deletion
+		if (row.type === "root") {
+			return { ok: false as const, error: serializeError(new InvalidStateError("Root task cannot be deleted", "" + id)) };
+		}
+
 		// Calculate relationship changes before deletion
 		const relationshipChanges = calculateRelationshipChanges<number>({
 			oldTask: convertToTaskBase(row),
@@ -692,6 +764,10 @@ export const deleteTasks = mutation({
 		for (const id of ids) {
 			const row = await ctx.db.get(id);
 			if (row && row.userAuthId === identity.subject) {
+				// Skip root tasks - they cannot be deleted
+				if (row.type === "root") {
+					continue;
+				}
 				tasksToDelete.push(row);
 			}
 		}
@@ -753,77 +829,130 @@ export const getParentsOf = query({
 export const getSiblingsOf = query({
 	args: { id: v.id("tasks") },
 	handler: async (ctx, { id }) => {
-		// 1) Load the task
-		const self = await ctx.db.get(id);
-		if (!self) {
-			return {
-				ok: false as const,
-				error: serializeError(new NotFoundError("Task not found", "" + id)),
-			};
+	  // 0) Load the task
+	  const self = await ctx.db.get(id);
+	  if (!self) {
+		return {
+		  ok: false as const,
+		  error: serializeError(new NotFoundError("Task not found", "" + id)),
+		};
+	  }
+  
+	  // Utility: stable sort siblings according to parent.children order
+	  function sortSiblingsByParentChildren<T extends { _id: unknown }>(
+		parent: Doc<"tasks">,
+		siblings: T[]
+	  ): T[] {
+		const childIds = Array.isArray(parent.children) ? parent.children : [];
+		if (childIds.length === 0) return siblings.slice();
+  
+		// Build index map for O(1) position lookup
+		const pos = new Map<string, number>();
+		for (let i = 0; i < childIds.length; i++) {
+		  pos.set(String(childIds[i] as any), i);
 		}
-
-		const parentIds = self.parents ?? [];
-		if (parentIds.length === 0) {
-			return { ok: true as const, value: [] };
+  
+		return siblings
+		  .map((t, idx) => {
+			const key = String((t as any)._id);
+			const order = pos.has(key) ? (pos.get(key) as number) : Infinity;
+			return { t, order, idx };
+		  })
+		  .sort((a, b) => (a.order === b.order ? a.idx - b.idx : a.order - b.order))
+		  .map((x) => x.t);
+	  }
+  
+	  // Pre-processing data
+	  const selfKey = "" + id;
+	  const seen = new Map<string, Doc<"tasks"> | null>();
+	  const siblings = new Map<Doc<"tasks">, Doc<"tasks">[]>();
+	  const addSibling = (parent: Doc<"tasks">, sibling: Doc<"tasks">) => {
+		const arr = siblings.get(parent);
+		if (arr) arr.push(sibling);
+		else siblings.set(parent, [sibling]);
+	  };
+  
+	  // 2-a) Handle root tasks
+	  let parentIds = self.parents ?? [];
+	  if (parentIds.length === 0) {
+		const root = await getOrCreateRoot(ctx, self.userAuthId);
+		parentIds = [String(root._id)];
+	  }
+  
+	  // 2-b) Fetch only the parents we need
+	  const parentFetches = parentIds.map((pid) =>
+		ctx.db.get(pid as Id<"tasks">)
+	  );
+	  const parents = await Promise.all(parentFetches);
+	  const existingParents = parents.filter(
+		(p): p is NonNullable<typeof p> => !!p
+	  );
+  
+	  if (existingParents.length === 0) {
+		return {
+		  ok: false as const,
+		  error: serializeError(
+			new NotFoundError(
+			  "Task parents not found for sibling calculation",
+			  "" + id
+			)
+		  ),
+		};
+	  }
+  
+	  // 3) Compute de-duplicated sibling ids from parents' children arrays
+	  for (const parent of existingParents) {
+		const childIds = parent.children ?? [];
+		if (!Array.isArray(childIds) || childIds.length === 0) {
+		  // Even if parent has no children array, still include self as the only "sibling" if not root
+		  if (self.type !== "root") addSibling(parent, self);
+		  continue;
 		}
-
-		// 2) Fetch only the parents we need
-		const parentFetches = parentIds.map((pid) => ctx.db.get(pid as Id<"tasks">));
-		const parents = await Promise.all(parentFetches);
-		const existingParents = parents.filter(
-			(p): p is NonNullable<typeof p> => !!p
-		);
-
-		if (existingParents.length === 0) {
-			// Parents list references missing docs -> no siblings we can resolve
-			return { ok: true as const, value: [] };
+  
+		for (const cid of childIds as Array<string | { _id?: unknown }>) {
+		  const key = "" + cid;
+		  if (key === selfKey) continue; // exclude self for now; we’ll add it once per parent below
+		  if (seen.has(key)) {
+			const cached = seen.get(key)!;
+			if (cached) addSibling(parent, cached);
+			continue;
+		  }
+		  const sibling = await ctx.db.get(key as Id<"tasks">);
+		  seen.set(key, sibling);
+		  if (sibling) addSibling(parent, sibling);
 		}
-
-		// 3) Compute de-duplicated sibling ids from parents' children arrays
-		const selfKey = "" + id;
-		const seen = new Map<string, Doc<'tasks'> | null>();
-		const siblings = new Map<Doc<'tasks'>, Doc<'tasks'>[]>();
-
-		const addSibling = (parent: Doc<'tasks'>, sibling: Doc<'tasks'>) => {
-			if (siblings.has(parent)) {
-				siblings.get(parent)!.push(sibling);
-			} else {
-				siblings.set(parent, [sibling]);
-			}
-		}
-
-		for (const parent of existingParents) {
-			const childIds = parent.children ?? [];
-			if (!Array.isArray(childIds) || childIds.length === 0) continue;
-
-			for (const cid of childIds as Array<string | { _id?: unknown }>) {
-				const key = "" + cid; // convex ids stringify fine
-				if (key === selfKey) continue; // exclude self
-				if (seen.has(key)) {
-					addSibling(parent, seen.get(key)!);
-					continue; // dedupe across parents
-				}
-				const sibling = await ctx.db.get(key as Id<'tasks'>);
-				seen.set(key, sibling);
-				if (sibling) addSibling(parent, sibling);
-			}
-		}
-
-		return { ok: true as const, value: Array.from(siblings) };
+  
+		// Include self in each parent's group (unless root)
+		if (self.type !== "root") addSibling(parent, self);
+	  }
+  
+	  // 4) Sort each siblings array to match parent.children order (stable, unknowns last)
+	  const sortedEntries: Array<[Doc<"tasks">, Doc<"tasks">[]]> = [];
+	  for (const [parent, group] of siblings) {
+		const sorted = sortSiblingsByParentChildren(parent, group);
+		sortedEntries.push([parent, sorted]);
+	  }
+  
+	  return { ok: true as const, value: sortedEntries };
 	},
-});
+  });
 
 export const getRootTasks = query({
 	args: {},
 	handler: async (ctx) => {
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity) return { ok: true as const, value: [] }; // TODO:UX/DX Log and error
-		const rows = await ctx.db
-			.query("tasks")
-			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
-			.collect();
-		const roots = rows.filter((t) => (t.parents?.length ?? 0) === 0);
-		return { ok: true as const, value: roots };
+
+		// Get root task for user
+		const root = await getOrCreateRoot(ctx, identity.subject);
+
+		// Return root's children (parentless tasks)
+		const childIds = root.children ?? [];
+		if (childIds.length === 0) return { ok: true as const, value: [] };
+
+		const childDocs = await Promise.all(childIds.map((cid) => ctx.db.get(cid as Id<"tasks">)));
+
+		return { ok: true as const, value: childDocs.filter((t): t is NonNullable<typeof t> => !!t) };
 	},
 });
 
@@ -852,8 +981,11 @@ export const getPrioritizedTasks = query({
 			.query("tasks")
 			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
 			.collect();
-		const roots = tasks.filter((t) => (t.parents?.length ?? 0) === 0);
-		const tasksMap = new Map(tasks.map((t) => ["" + t._id, t] as [string, DBTask]));
+		// Filter out root tasks - they're hidden from clients
+		const taskTasks = tasks.filter(t => t.type !== "root");
+		// Get root to start traversal from root's children
+		const root = await getOrCreateRoot(ctx, identity.subject);
+		const tasksMap = new Map(taskTasks.map((t) => ["" + t._id, t] as [string, DBTask]));
 		const sorter = (a?: DBTask, b?: DBTask) => {
 			// TODO This is going to need context from the parent to determine sibling priority...
 			if (!a) return -1; if (!b) return 1; return 0; // (b.priority ?? 0) - (a.priority ?? 0);
@@ -879,7 +1011,9 @@ export const getPrioritizedTasks = query({
 				if (children.every((c) => !c || c.status !== 0) && task.status === 0) todo.push(task);
 			}
 		};
-		roots.sort(sorter); for (const r of roots) { if (todo.length === limit) break; walk(r); }
+		// Start from root's children (parentless tasks)
+		const rootChildren = (root.children ?? []).map(id => tasksMap.get(id)).filter((t): t is DBTask => !!t).sort(sorter);
+		for (const r of rootChildren) { if (todo.length === limit) break; walk(r); }
 		return { ok: true as const, value: todo };
 	},
 });
@@ -901,15 +1035,60 @@ function serializeError<T extends Err>(err: T): T {
 }
 
 function convertToTaskBase(task: DBTask): SystemAgnosticTask<number> {
-	const t = {
-		...task,
+	const t: SystemAgnosticTask<number> = {
 		id: task._id,
+		userAuthId: task.userAuthId,
+		type: task.type!,
+		title: task.title,
+		content: task.content,
+		status: task.status,
+		parents: task.parents,
+		children: task.children,
+		todaysTask: task.todaysTask,
+		dueDate: task.dueDate,
 		created: task._creationTime,
+		lastEdit: task.lastEdit
 	};
 
-	delete (t as Partial<DBTask>)._id;
-	delete (t as Partial<DBTask>)._creationTime;
 	return t;
+}
+
+/**
+ * Gets or creates the root task for a user. Ensures exactly one root per user.
+ * Root tasks are hidden from clients and serve as the parent for all parentless tasks.
+ */
+async function getOrCreateRoot(ctx: any, userAuthId: string): Promise<DBTask> {
+	// Look for existing root
+	const existingRoots = await ctx.db
+		.query("tasks")
+		.withIndex("by_user_type", (q: any) => q.eq("userAuthId", userAuthId).eq("type", "root"))
+		.collect();
+
+	if (existingRoots.length === 1) {
+		return existingRoots[0];
+	} else if (existingRoots.length > 1) {
+		// TODO: Consider cleanup migration if multiple roots found
+		Err.NotImplemented("Multiple root tasks found for user");
+	} else {
+		// Create root task
+		const now = Date.now();
+		const rootId = await ctx.db.insert("tasks", {
+			userAuthId,
+			type: "root",
+			title: "", // Empty title - root is hidden from clients
+			status: 0, // incomplete
+			parents: [], // Root has no parents
+			children: [], // Will be populated as parentless tasks are attached
+			lastEdit: now,
+			created: now,
+		});
+
+		const root = await ctx.db.get(rootId);
+		if (!root) {
+			throw new Error("Failed to create root task");
+		}
+		return root;
+	}
 }
 
 async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Partial<DBTask>; relations?: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[]; }) {
@@ -922,6 +1101,12 @@ async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Parti
 		return { ok: false as const, error: serializeError(new NotAuthorizedError("Not owner of task", "" + update.id)) };
 	}
 
+	// Root constraints: root cannot have parents added
+	const isRoot = current.type === "root";
+	if (isRoot && (update.relations ?? []).some(r => r.operation === "addParent" || r.operation === "removeParent")) {
+		return { ok: false as const, error: serializeError(new InvalidStateError("Root task cannot have parents modified", "" + update.id)) };
+	}
+
 	let parents = [...(current.parents ?? [])];
 	let children = [...(current.children ?? [])];
 	for (const rel of update.relations ?? []) {
@@ -932,6 +1117,25 @@ async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Parti
 			case "removeParent": parents = parents.filter((id: string) => id !== rel.id); break;
 		}
 	}
+
+	// Handle parent changes for non-root tasks
+	let rootTask: DBTask | null = null;
+	if (!isRoot) {
+		// If task becomes parentless, attach to root
+		if (parents.length === 0) {
+			rootTask = await getOrCreateRoot(ctx, current.userAuthId);
+			parents = [String(rootTask._id)];
+		}
+		// If parents includes both root and non-root, remove root
+		else if (parents.length > 1) {
+			rootTask = await getOrCreateRoot(ctx, current.userAuthId);
+			const rootId = String(rootTask._id);
+			if (parents.includes(rootId)) {
+				parents = parents.filter(id => id !== rootId);
+			}
+		}
+	}
+
 	const now = Date.now();
 	const patch: Partial<Doc<"tasks">> = { lastEdit: now };
 	const d = (update.data ?? {}) as Partial<DBTask>;
@@ -944,9 +1148,35 @@ async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Parti
 	if (Array.isArray(d.children)) {
 		patch.children = d.children!;
 	}
-	if ((update.relations ?? []).length > 0) { patch.parents = parents; patch.children = children; }
+	if ((update.relations ?? []).length > 0 || rootTask) {
+		patch.parents = parents;
+		if (!Array.isArray(d.children)) {
+			patch.children = children;
+		}
+	}
 
 	await ctx.db.patch(update.id, patch);
+
+	// If attached to root, add task to root.children
+	if (rootTask && parents.length === 1 && parents[0] === String(rootTask._id)) {
+		const rootChildren = [...(rootTask.children ?? [])];
+		if (!rootChildren.includes(String(update.id))) {
+			rootChildren.push(String(update.id));
+			await ctx.db.patch(rootTask._id, {
+				children: rootChildren,
+				lastEdit: now,
+			});
+		}
+	}
+	// If removed from root, remove task from root.children
+	else if (rootTask && current.parents?.includes(String(rootTask._id)) && !parents.includes(String(rootTask._id))) {
+		const rootChildren = (rootTask.children ?? []).filter(id => id !== String(update.id));
+		await ctx.db.patch(rootTask._id, {
+			children: rootChildren,
+			lastEdit: now,
+		});
+	}
+
 	const refreshed = await ctx.db.get(update.id);
 	return { ok: true as const, value: refreshed };
 }

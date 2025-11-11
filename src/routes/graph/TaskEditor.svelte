@@ -35,13 +35,19 @@
 	let checked = $derived(isTaskCompleted(task));
 	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
 	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
-	const parentsStore = tasksAPI.getParentsOf({ id: task.id });
 
 	$effect(() => {
 		task.id;
 		siblingsStore.updateQuery({ id: task.id });
 		childTasksStore.updateQuery({ id: task.id });
-		parentsStore.updateQuery({ id: task.id });
+	});
+	$effect(() => {
+		if ($siblingsStore.status === 'resolved') {
+			console.log(
+				'siblingsStore',
+				Array.from($siblingsStore.data).flatMap(([_, siblings]) => siblings.map((s) => s.title))
+			);
+		}
 	});
 
 	$effect(() => {
@@ -86,6 +92,8 @@
 		startIndex: number,
 		finishIndex: number
 	) {
+		console.log('reorderWithinParent', parentId, movingId, startIndex, finishIndex);
+
 		if (finishIndex === startIndex) return;
 
 		const siblingsMap = $siblingsStore;
@@ -207,7 +215,7 @@
 				</Accordion.Content>
 			</Accordion.Item>
 		{/if}
-		{#if $siblingsStore.status === 'resolved' && $parentsStore.status === 'resolved' && $parentsStore.data.length > 0}
+		{#if $siblingsStore.status === 'resolved'}
 			<Accordion.Item value="parent-order">
 				<Accordion.Trigger
 					class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
@@ -216,29 +224,9 @@
 				</Accordion.Trigger>
 				<Accordion.Content>
 					<div class="flex flex-col gap-4">
-						{#each $parentsStore.data as parent (parent.id)}
-							{@const siblings = (() => {
-								// Find parent in siblings Map by ID (Map keys are object references)
-								if ($siblingsStore.status !== 'resolved') return undefined;
-								for (const [mapParent, mapSiblings] of $siblingsStore.data.entries()) {
-									if (mapParent.id === parent.id) {
-										return mapSiblings;
-									}
-								}
-								return undefined;
-							})()}
-							{@const siblingTasks = (() => {
-								const ids = parent.children ?? [];
-								const tasks: Task[] = [];
-								for (const cid of ids) {
-									const sibling =
-										cid === task.id ? task : siblings?.find((s: Task) => s.id === cid);
-									if (sibling) tasks.push(sibling);
-								}
-								return tasks;
-							})()}
+						{#each $siblingsStore.data as [parent, siblings] (parent.id)}
 							<TaskList
-								tasks={siblingTasks}
+								tasks={siblings}
 								parentId={parent.id}
 								id={`sibling-${parent.id}`}
 								title={parent.title}
