@@ -68,8 +68,6 @@
 				return isItemData(source.data) && source.data.listId === id;
 			},
 			onDrop: ({ location, source }) => {
-				console.log('onDrop', location, source);
-
 				const target = location.current.dropTargets[0];
 				if (!target) return;
 				const src = source.data;

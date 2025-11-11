@@ -58,10 +58,12 @@
 	}
 
 	function highlightNode(taskId: string, options: { select?: boolean } = { select: true }) {
-		controller.centerNode(taskId);
-		if (options?.select) {
-			const node = $nodesStore.find((n) => n.id === taskId);
-			selectedTask = (node?.data as Task | undefined) ?? null;
+		const node = $nodesStore.find((n) => n.id === taskId);
+		if (node && node.data.type === 'task') {
+			controller.centerNode(taskId);
+			if (options?.select) {
+				selectedTask = (node.data as unknown as Task | undefined) ?? null;
+			}
 		}
 	}
 

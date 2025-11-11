@@ -41,14 +41,7 @@
 		siblingsStore.updateQuery({ id: task.id });
 		childTasksStore.updateQuery({ id: task.id });
 	});
-	$effect(() => {
-		if ($siblingsStore.status === 'resolved') {
-			console.log(
-				'siblingsStore',
-				Array.from($siblingsStore.data).flatMap(([_, siblings]) => siblings.map((s) => s.title))
-			);
-		}
-	});
+
 
 	$effect(() => {
 		if ($siblingsStore.status === 'error') {

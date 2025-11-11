@@ -631,8 +631,6 @@ export const updateTask = mutation({
 		}),
 	},
 	handler: async (ctx, { update }) => {
-		console.log('updateTask', update);
-
 		// Get the old state before the update
 		const oldTask = await ctx.db.get(update.id);
 		if (!oldTask) {
