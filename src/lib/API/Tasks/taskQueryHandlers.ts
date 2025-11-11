@@ -138,6 +138,6 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 	}),
 
 	// Metadata
-	created: fieldHandler({} as any),
-	lastEdit: fieldHandler({} as any),
+	// created: fieldHandler({} as any),
+	// lastEdit: fieldHandler({} as any),
 };

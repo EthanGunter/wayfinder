@@ -23,6 +23,7 @@ export const ConvexTaskDef = {
   parents: v.array(v.string()),  // store task ids as strings
   children: v.array(v.string()),
   lastEdit: v.number(),  // unix milliseconds
+  created: v.number(),  // unix milliseconds
 }
 
 

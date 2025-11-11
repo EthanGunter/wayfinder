@@ -8,14 +8,20 @@ import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type S
 //#region Utility
 
 type DBTask = Doc<'tasks'>;
+type TaskData = Omit<DBTask, "_id" | "_creationTime">;
+type TaskWithId = Omit<DBTask, "_creationTime">;
 const argsCreateTask = v.object({
+	id: v.optional(v.id("tasks")),
 	userAuthId: v.string(),
 	title: v.string(),
-	priority: v.optional(v.number()),
 	content: v.optional(v.string()),
+	status: v.optional(v.number()),
+	todaysTask: v.optional(v.number()),
 	dueDate: v.optional(v.number()),
+	created: v.optional(v.number()),
 	parents: v.optional(v.array(v.string())),
 	children: v.optional(v.array(v.string())),
+	lastEdit: v.optional(v.number()),
 })
 
 //#endregion
@@ -23,13 +29,12 @@ const argsCreateTask = v.object({
 
 //#region Convex API (queries & mutations)
 
+// TODO:fix update logic to behave like createTasks
 export const createTask = mutation({
 	args: {
 		createDetail: argsCreateTask,
 	},
 	handler: async (ctx, { createDetail }) => {
-		console.log('createTask', createDetail);
-
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity || identity.subject !== createDetail.userAuthId) {
 			console.log(`${identity}, ${identity?.subject}, ${createDetail.userAuthId}`);
@@ -38,21 +43,17 @@ export const createTask = mutation({
 		}
 
 		const now = Date.now();
-		const row: Omit<Doc<"tasks">, "_id" | "_creationTime"> = {
-			userAuthId: createDetail.userAuthId,
-			title: createDetail.title,
-			content: createDetail.content,
-			status: 0,
-			todaysTask: undefined,
+		const row: TaskData = {
+			...createDetail,
+			status: createDetail.status ?? 0,
 			parents: createDetail.parents ?? [],
 			children: createDetail.children ?? [],
+			created: createDetail.created ?? now,
 			lastEdit: now,
 		};
-		console.log('row', row);
 
 		const _id = await ctx.db.insert("tasks", row);
 		const inserted = await ctx.db.get(_id);
-		console.log('inserted', inserted);
 
 		// Handle relationship updates
 		const affectedTasks = [inserted];
@@ -76,14 +77,15 @@ export const createTask = mutation({
 		return {
 			ok: true as const,
 			value: {
-				oldId: "",
-				newId: "" + inserted!._id,
+				oldId: createDetail.id ?? "",
+				newId: inserted?._id ?? "",
 				affectedTasks,
 			},
 		};
 	},
 });
 
+// TODO:refactor clean up this AI slop
 export const createTasks = mutation({
 	args: {
 		createDetails: v.array(argsCreateTask),
@@ -91,36 +93,240 @@ export const createTasks = mutation({
 	handler: async (ctx, { createDetails }) => {
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity) {
-			return { ok: false as const, error: serializeError(new NotAuthorizedError("Not authenticated")) };
+			return {
+				ok: false as const,
+				error: serializeError(new NotAuthorizedError("Not authenticated")),
+			};
 		}
 		for (const d of createDetails) {
 			if (d.userAuthId !== identity.subject) {
-				return { ok: false as const, error: serializeError(new NotAuthorizedError("Invalid user context for batch")) };
+				return {
+					ok: false as const,
+					error: serializeError(
+						new NotAuthorizedError("Invalid user context for batch")
+					),
+				};
 			}
 		}
+		console.log("incoming ids", createDetails.map((x) => x.id));
 
 		const now = Date.now();
-		const insertedTasks = [];
-		for (const d of createDetails) {
-			const _id = await ctx.db.insert("tasks", {
-				userAuthId: d.userAuthId,
-				title: d.title,
-				content: d.content,
-				status: 0,
-				todaysTask: undefined,
+
+		// Outputs
+		const insertedTasks: TaskWithId[] = [];
+		const updatedIds: [string, string][] = [];
+
+		// We always let Convex generate _id; provided `id` is only a legacy hint.
+		const idMap = new Map<string, string>();
+
+		// Collect neighbor patches to apply in one pass
+		const deferredPatches: Array<{
+			id: Id<"tasks">;
+			patch: Partial<DBTask>;
+		}> = [];
+
+		// Keep a lookup of freshly inserted tasks
+		const insertedById = new Map<string, TaskWithId>();
+
+		// Insert all tasks; build mapping and local copies
+		for (const raw of createDetails) {
+			const d = { ...raw };
+			const oldId = d.id ? String(d.id) : null;
+			delete (d as any).id;
+
+			const newGeneratedId = await ctx.db.insert("tasks", {
+				...d,
+				status: d.status ?? 0,
 				parents: d.parents ?? [],
 				children: d.children ?? [],
 				lastEdit: now,
-			} as Omit<Doc<"tasks">, "_id" | "_creationTime">);
-			const row = await ctx.db.get(_id);
+				created: d.created ?? now,
+			});
+
+			// Build the inserted row locally (avoid get())
+			const row: TaskWithId = {
+				_id: newGeneratedId as Id<"tasks">,
+				status: d.status ?? 0,
+				userAuthId: d.userAuthId,
+				title: d.title,
+				content: d.content,
+				todaysTask: d.todaysTask,
+				dueDate: d.dueDate,
+				parents: (d.parents ?? []) as any,
+				children: (d.children ?? []) as any,
+				lastEdit: now,
+				created: d.created ?? now,
+			};
+
 			insertedTasks.push(row);
+			insertedById.set(String(newGeneratedId), row);
+
+			if (oldId) {
+				// Populate both the internal map and the returned updatedIds
+				idMap.set(oldId, String(newGeneratedId));
+				updatedIds.push([oldId, String(newGeneratedId)]);
+			}
+
+			console.log(
+				"inserted task",
+				`${oldId ?? "(auto)"} -> ${String(newGeneratedId)}`,
+				row
+			);
 		}
 
-		// Handle relationship updates for all created tasks
+		console.log("Updated ids", updatedIds);
+
+		// If any id remaps exist, update references:
+		// - inside newly inserted tasks
+		// - on the immediate neighbors (parents/children) listed on those tasks
+		if (idMap.size > 0) {
+			const remapArray = (arr: (string | Id<"tasks">)[] | undefined) => {
+				if (!arr || arr.length === 0) return { out: [] as (string | Id<"tasks">)[], changed: false };
+				let changed = false;
+				const out = arr.map((x) => {
+					const k = String(x);
+					const m = idMap.get(k);
+					if (m) {
+						changed = true;
+						return m as Id<"tasks">;
+					}
+					return x;
+				});
+				return { out: changed ? out : arr, changed };
+			};
+
+			// 1) Remap references inside the newly inserted tasks (local, defer patch)
+			for (const t of insertedTasks) {
+				const { out: newParents, changed: pChanged } = remapArray(t.parents);
+				const { out: newChildren, changed: cChanged } = remapArray(t.children);
+				if (pChanged || cChanged) {
+					(t as any).parents = newParents as any;
+					(t as any).children = newChildren as any;
+					deferredPatches.push({
+						id: t._id,
+						patch: {
+							parents: newParents as any,
+							children: newChildren as any,
+							lastEdit: now,
+						},
+					});
+				}
+			}
+
+			// 2) Targeted neighbor updates
+			const swapInArray = (
+				arr: (string | Id<"tasks">)[],
+				oldId: string,
+				newId: string
+			) => {
+				let changed = false;
+				const out: (string | Id<"tasks">)[] = [];
+				for (const x of arr) {
+					if (String(x) === oldId) {
+						out.push(newId as unknown as Id<"tasks">);
+						changed = true;
+					} else {
+						out.push(x);
+					}
+				}
+				// Dedup
+				const seen = new Set<string>();
+				const dedup: (string | Id<"tasks">)[] = [];
+				for (const x of out) {
+					const k = String(x);
+					if (!seen.has(k)) {
+						seen.add(k);
+						dedup.push(x);
+					} else {
+						changed = true;
+					}
+				}
+				return { arr: dedup, changed };
+			};
+
+			for (const [oldId, newId] of idMap.entries()) {
+				const newTask = insertedById.get(newId);
+				if (!newTask) continue;
+
+				// Update each parent: swap old child id -> new child id in parent's children[]
+				for (const parentId of newTask.parents ?? []) {
+					const pId = parentId as Id<"tasks">;
+					let parentDoc = insertedById.get(String(pId));
+					if (!parentDoc) parentDoc = (await ctx.db.get(pId)) ?? undefined;
+					if (!parentDoc) continue;
+
+					const children = Array.isArray(parentDoc.children)
+						? parentDoc.children
+						: [];
+					const { arr: newChildren, changed } = swapInArray(
+						children,
+						oldId,
+						newId
+					);
+					if (changed) {
+						if (insertedById.has(String(parentDoc._id))) {
+							(parentDoc as any).children = newChildren as any;
+						}
+						deferredPatches.push({
+							id: parentDoc._id,
+							patch: { children: newChildren as any, lastEdit: now },
+						});
+					}
+				}
+
+				// Update each child: swap old parent id -> new parent id in child's parents[]
+				for (const childId of newTask.children ?? []) {
+					const cId = childId as Id<"tasks">;
+					let childDoc = insertedById.get(String(cId));
+					if (!childDoc) childDoc = (await ctx.db.get(cId)) ?? undefined;
+					if (!childDoc) continue;
+
+					const parents = Array.isArray(childDoc.parents)
+						? childDoc.parents
+						: [];
+					const { arr: newParents, changed } = swapInArray(
+						parents,
+						oldId,
+						newId
+					);
+					if (changed) {
+						if (insertedById.has(String(childDoc._id))) {
+							(childDoc as any).parents = newParents as any;
+						}
+						deferredPatches.push({
+							id: childDoc._id,
+							patch: { parents: newParents as any, lastEdit: now },
+						});
+					}
+				}
+			}
+		}
+
+		// Apply all deferred patches in a single pass (coalesce by id)
+		if (deferredPatches.length > 0) {
+			const byId = new Map<string, Partial<DBTask>>();
+			for (const { id, patch } of deferredPatches) {
+				const k = String(id);
+				const existing = byId.get(k) ?? {};
+				Object.assign(existing, patch);
+				byId.set(k, existing);
+			}
+			for (const [idStr, patch] of byId.entries()) {
+				await ctx.db.patch(idStr as unknown as Id<"tasks">, patch);
+			}
+			// sync local copies used for relationship calc
+			for (let i = 0; i < insertedTasks.length; i++) {
+				const t = insertedTasks[i];
+				const merged = { ...t, ...(byId.get(String(t._id)) ?? {}) };
+				insertedTasks[i] = merged as DBTask;
+			}
+		}
+
+		// Relationship updates for newly created tasks
 		const relationshipUpdates = calculateRelationshipChanges<number>(
-			insertedTasks.map(task => ({
+			insertedTasks.map((task) => ({
 				oldTask: null,
-				newTask: convertToTaskBase(task!)
+				newTask: convertToTaskBase(task as DBTask),
 			}))
 		);
 		const updateParams = relationshipChangesToUpdateParams(relationshipUpdates);
@@ -128,15 +334,25 @@ export const createTasks = mutation({
 
 		for (const update of updateParams) {
 			const relatedTaskId = update.id as Id<"tasks">;
-			const result = await applyTaskUpdate(ctx, { id: relatedTaskId, relations: update.relations });
+			const result = await applyTaskUpdate(ctx, {
+				id: relatedTaskId,
+				relations: update.relations,
+			});
 			if (result.ok) {
 				affectedTasks.push(result.value);
 			}
 		}
 
-		return { ok: true as const, value: { updatedIds: [] as [string, string][], affectedTasks } };
+		return {
+			ok: true as const,
+			value: {
+				updatedIds,
+				affectedTasks: affectedTasks as DBTask[],
+			},
+		};
 	},
 });
+
 
 export const getTask = query({
 	args: { id: v.id("tasks") },
@@ -528,22 +744,15 @@ function serializeError<T extends Err>(err: T): T {
 }
 
 function convertToTaskBase(task: DBTask): SystemAgnosticTask<number> {
-	return {
+	const t = {
+		...task,
 		id: task._id,
-		userAuthId: task.userAuthId,
-
-		title: task.title,
-		content: task.content,
-		status: task.status,
-
-		todaysTask: task.todaysTask,
-		dueDate: task.dueDate,
-		parents: task.parents,
-		children: task.children,
-
 		created: task._creationTime,
-		lastEdit: task.lastEdit
 	};
+
+	delete (t as Partial<DBTask>)._id;
+	delete (t as Partial<DBTask>)._creationTime;
+	return t;
 }
 
 async function applyTaskUpdate(ctx: any, update: { id: Id<"tasks">; data?: Partial<DBTask>; relations?: { id: string; operation: "addChild" | "removeChild" | "addParent" | "removeParent" }[]; }) {

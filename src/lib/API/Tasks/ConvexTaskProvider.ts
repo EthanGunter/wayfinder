@@ -16,7 +16,7 @@ interface ExportedData {
 
 export const api: ITasks = {
 	createTask: async ({ createDetail }) => {
-		const res = await client.mutation(convexApi.tasks.createTask, { createDetail: convexifyTaskDetails(createDetail) });
+		const res = await client.mutation(convexApi.tasks.createTask, { createDetail: convexifyCreateTaskDetails(createDetail) });
 
 		if (!isConvexOk(res)) return err(res.error);
 
@@ -28,7 +28,7 @@ export const api: ITasks = {
 	},
 
 	createTasks: async ({ createDetails }) => {
-		const res = await client.mutation(convexApi.tasks.createTasks, { createDetails: createDetails.map(convexifyTaskDetails) });
+		const res = await client.mutation(convexApi.tasks.createTasks, { createDetails: createDetails.map(convexifyCreateTaskDetails) });
 		if (isConvexOk(res)) {
 			const v = res.value;
 			const mapped = (Array.isArray(v.affectedTasks) ? v.affectedTasks : []).map((r) => r ? rowToTask(r) : null).filter((t): t is Task => Boolean(t));
@@ -405,20 +405,17 @@ export const localApi: ITasksLocal = {
 			throw new ArgumentError("Invalid export format: missing version or tasks", parsed);
 		}
 
-		// Version migration - currently only support 1.0.0
+		// Version migration - currently only support 0.0.0
 		if (parsed.version !== "0.0.0") {
-			throw new ArgumentError(`Unsupported export version: ${parsed.version}. Expected 1.0.0`, parsed);
+			throw new ArgumentError(`Unsupported export version: ${parsed.version}. Expected 0.0.0`, parsed);
 		}
+
+		if (parsed.tasks.length == 0) return 0;
 
 		// Convert ISO strings back to Date objects
 		const tasksToImport: Task[] = parsed.tasks.map(task => ({
-			id: task.id,
+			...task,
 			userAuthId: whoamiResult.authId, // Override with current user
-			title: task.title,
-			content: task.content,
-			status: task.status,
-			parents: task.parents,
-			children: task.children,
 			todaysTask: task.todaysTask ? new Date(task.todaysTask) : undefined,
 			dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
 			created: new Date(task.created),
@@ -426,115 +423,40 @@ export const localApi: ITasksLocal = {
 		}));
 
 		if (mode === "replace") {
+
 			// Get all existing tasks and delete them
 			const existingResult = await client.query(convexApi.tasks.getAllUserTasks, { userId: whoamiResult.authId });
 			if (isConvexOk(existingResult) && existingResult.value.length > 0) {
 				const existingIds = existingResult.value.map(row => row._id);
 				await client.mutation(convexApi.tasks.deleteTasks, { ids: existingIds });
 			}
-		}
 
-		if (tasksToImport.length === 0) {
-			return 0;
-		}
-
-		if (mode === "add") {
-			// Create all tasks with new IDs (remove id from create params)
-			const createDetails = tasksToImport.map(task => ({
-				userAuthId: task.userAuthId,
-				title: task.title,
-				content: task.content,
-				todaysTask: task.todaysTask,
-				dueDate: task.dueDate,
-				parents: task.parents,
-				children: task.children,
-			} as CreateTaskParams));
-
-			const createResult = await api.createTasks({ createDetails });
-			if (createResult[1]) {
-				throw createResult[1];
+			const [createResult, err] = await api.createTasks({ createDetails: tasksToImport });
+			if (err) {
+				throw err;
 			}
-			return createResult[0].affectedTasks.length;
-		}
+			return createResult.affectedTasks.length;
 
-		if (mode === "attemptMerge") {
-			// Get existing tasks to check which ones exist
-			const existingResult = await client.query(convexApi.tasks.getAllUserTasks, { userId: whoamiResult.authId });
-			const existingIds = isConvexOk(existingResult)
-				? new Set(existingResult.value.map(row => row._id))
-				: new Set<string>();
-
-			const toCreate: CreateTaskParams[] = [];
-			const toUpdate: UpdateTaskParams[] = [];
-
+		} else if (mode === "add") {
+			// Remove all references to nodes that aren't in the "add" set
+			const allIds = new Set(tasksToImport.map(t => t.id));
 			for (const task of tasksToImport) {
-				if (existingIds.has(task.id)) {
-					// Update existing task
-					toUpdate.push({
-						id: task.id,
-						data: {
-							title: task.title,
-							content: task.content,
-							status: task.status,
-							todaysTask: task.todaysTask,
-							dueDate: task.dueDate,
-							lastEdit: task.lastEdit,
-						},
-						relations: [
-							...task.parents.map(id => ({ id, operation: "addParent" as const })),
-							...task.children.map(id => ({ id, operation: "addChild" as const })),
-						],
-					});
-				} else {
-					// Create new task
-					toCreate.push({
-						userAuthId: task.userAuthId,
-						title: task.title,
-						content: task.content,
-						todaysTask: task.todaysTask,
-						dueDate: task.dueDate,
-						parents: task.parents,
-						children: task.children,
-					} as CreateTaskParams);
-				}
+				task.parents = task.parents?.filter(p => allIds.has(p)) ?? [];
+				task.children = task.children?.filter(c => allIds.has(c)) ?? [];
 			}
 
-			let count = 0;
-			if (toCreate.length > 0) {
-				const createResult = await api.createTasks({ createDetails: toCreate });
-				if (createResult[1]) {
-					throw createResult[1];
-				}
-				count += createResult[0].affectedTasks.length;
+			const [createResult, err] = await api.createTasks({ createDetails: tasksToImport });
+			if (err) {
+				throw err;
 			}
+			return createResult.affectedTasks.length;
 
-			if (toUpdate.length > 0) {
-				const updateResult = await api.updateTasks({ updates: toUpdate });
-				if (updateResult[1]) {
-					throw updateResult[1];
-				}
-				count += updateResult[0].length;
-			}
-
-			return count;
+		} else if (mode === "attemptMerge") {
+			Err.NotImplemented("attemptMerge import mode");
 		}
 
-		// For "replace" mode, create all tasks after deletion
-		const createDetails = tasksToImport.map(task => ({
-			userAuthId: task.userAuthId,
-			title: task.title,
-			content: task.content,
-			todaysTask: task.todaysTask,
-			dueDate: task.dueDate,
-			parents: task.parents,
-			children: task.children,
-		} as CreateTaskParams));
-
-		const createResult = await api.createTasks({ createDetails });
-		if (createResult[1]) {
-			throw createResult[1];
-		}
-		return createResult[0].affectedTasks.length;
+		// Fallback (should never reach here due to type constraints, but satisfies TypeScript)
+		return 0;
 	},
 };
 
@@ -575,34 +497,26 @@ function isConvexOk<T, E>(res: ConvexResponse<T, E>): res is { ok: true; value: 
 	return (res as any).ok === true;
 }
 
-export function convexifyTaskDetails(dto: CreateTaskParams): {
-	userAuthId: string;
-	title: string;
-	content?: string | undefined;
-	parents?: string[] | undefined;
-	children?: string[] | undefined;
-} {
-	return {
-		userAuthId: dto.userAuthId,
-		title: dto.title,
-		content: dto.content,
-		parents: dto.parents ?? [],
-		children: dto.children ?? [],
+export function convexifyCreateTaskDetails(dto: CreateTaskParams): Doc<"tasks"> {
+	const convexified: Partial<Doc<"tasks">> = {
+		...dto,
+		created: dto.created instanceof Date ? dto.created.getTime() : dto.created,
+		todaysTask: dto.todaysTask instanceof Date ? dto.todaysTask.getTime() : dto.todaysTask,
+		dueDate: dto.dueDate instanceof Date ? dto.dueDate.getTime() : dto.dueDate,
+		lastEdit: dto.lastEdit instanceof Date ? dto.lastEdit.getTime() : dto.lastEdit,
 	};
+
+	delete (convexified as Partial<Task>).created; // Remove Date object so we don't crash Convex
+	return convexified as Doc<"tasks">;
 }
 
 function rowToTask(row: Doc<"tasks">): Task {
 	return {
+		...row,
 		id: row._id,
-		userAuthId: row.userAuthId,
-		title: row.title,
-		content: row.content ?? undefined,
-		status: row.status,
-		todaysTask: row.todaysTask ? new Date(row.todaysTask) : undefined,
-		parents: row.parents ?? [],
-		children: row.children ?? [],
 		created: new Date(row._creationTime),
 		lastEdit: new Date(row.lastEdit),
+		todaysTask: row.todaysTask ? new Date(row.todaysTask) : undefined,
 		dueDate: row.dueDate ? new Date(row.dueDate) : undefined,
 	};
 }
