@@ -46,7 +46,7 @@ export const attachParentlessTasksToRoot = migrations.define({
 			const newRootId = await ctx.db.insert("tasks", {
 				userAuthId: doc.userAuthId,
 				type: "root",
-				title: "",
+				title: "Projects",
 				status: 0,
 				parents: [],
 				children: [doc._id],

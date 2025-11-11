@@ -827,113 +827,113 @@ export const getParentsOf = query({
 export const getSiblingsOf = query({
 	args: { id: v.id("tasks") },
 	handler: async (ctx, { id }) => {
-	  // 0) Load the task
-	  const self = await ctx.db.get(id);
-	  if (!self) {
-		return {
-		  ok: false as const,
-		  error: serializeError(new NotFoundError("Task not found", "" + id)),
+		// 0) Load the task
+		const self = await ctx.db.get(id);
+		if (!self) {
+			return {
+				ok: false as const,
+				error: serializeError(new NotFoundError("Task not found", "" + id)),
+			};
+		}
+
+		// Utility: stable sort siblings according to parent.children order
+		function sortSiblingsByParentChildren<T extends { _id: unknown }>(
+			parent: Doc<"tasks">,
+			siblings: T[]
+		): T[] {
+			const childIds = Array.isArray(parent.children) ? parent.children : [];
+			if (childIds.length === 0) return siblings.slice();
+
+			// Build index map for O(1) position lookup
+			const pos = new Map<string, number>();
+			for (let i = 0; i < childIds.length; i++) {
+				pos.set(String(childIds[i] as any), i);
+			}
+
+			return siblings
+				.map((t, idx) => {
+					const key = String((t as any)._id);
+					const order = pos.has(key) ? (pos.get(key) as number) : Infinity;
+					return { t, order, idx };
+				})
+				.sort((a, b) => (a.order === b.order ? a.idx - b.idx : a.order - b.order))
+				.map((x) => x.t);
+		}
+
+		// Pre-processing data
+		const selfKey = "" + id;
+		const seen = new Map<string, Doc<"tasks"> | null>();
+		const siblings = new Map<Doc<"tasks">, Doc<"tasks">[]>();
+		const addSibling = (parent: Doc<"tasks">, sibling: Doc<"tasks">) => {
+			const arr = siblings.get(parent);
+			if (arr) arr.push(sibling);
+			else siblings.set(parent, [sibling]);
 		};
-	  }
-  
-	  // Utility: stable sort siblings according to parent.children order
-	  function sortSiblingsByParentChildren<T extends { _id: unknown }>(
-		parent: Doc<"tasks">,
-		siblings: T[]
-	  ): T[] {
-		const childIds = Array.isArray(parent.children) ? parent.children : [];
-		if (childIds.length === 0) return siblings.slice();
-  
-		// Build index map for O(1) position lookup
-		const pos = new Map<string, number>();
-		for (let i = 0; i < childIds.length; i++) {
-		  pos.set(String(childIds[i] as any), i);
+
+		// 2-a) Handle root tasks
+		let parentIds = self.parents ?? [];
+		if (parentIds.length === 0) {
+			const root = await getOrCreateRoot(ctx, self.userAuthId);
+			parentIds = [String(root._id)];
 		}
-  
-		return siblings
-		  .map((t, idx) => {
-			const key = String((t as any)._id);
-			const order = pos.has(key) ? (pos.get(key) as number) : Infinity;
-			return { t, order, idx };
-		  })
-		  .sort((a, b) => (a.order === b.order ? a.idx - b.idx : a.order - b.order))
-		  .map((x) => x.t);
-	  }
-  
-	  // Pre-processing data
-	  const selfKey = "" + id;
-	  const seen = new Map<string, Doc<"tasks"> | null>();
-	  const siblings = new Map<Doc<"tasks">, Doc<"tasks">[]>();
-	  const addSibling = (parent: Doc<"tasks">, sibling: Doc<"tasks">) => {
-		const arr = siblings.get(parent);
-		if (arr) arr.push(sibling);
-		else siblings.set(parent, [sibling]);
-	  };
-  
-	  // 2-a) Handle root tasks
-	  let parentIds = self.parents ?? [];
-	  if (parentIds.length === 0) {
-		const root = await getOrCreateRoot(ctx, self.userAuthId);
-		parentIds = [String(root._id)];
-	  }
-  
-	  // 2-b) Fetch only the parents we need
-	  const parentFetches = parentIds.map((pid) =>
-		ctx.db.get(pid as Id<"tasks">)
-	  );
-	  const parents = await Promise.all(parentFetches);
-	  const existingParents = parents.filter(
-		(p): p is NonNullable<typeof p> => !!p
-	  );
-  
-	  if (existingParents.length === 0) {
-		return {
-		  ok: false as const,
-		  error: serializeError(
-			new NotFoundError(
-			  "Task parents not found for sibling calculation",
-			  "" + id
-			)
-		  ),
-		};
-	  }
-  
-	  // 3) Compute de-duplicated sibling ids from parents' children arrays
-	  for (const parent of existingParents) {
-		const childIds = parent.children ?? [];
-		if (!Array.isArray(childIds) || childIds.length === 0) {
-		  // Even if parent has no children array, still include self as the only "sibling" if not root
-		  if (self.type !== "root") addSibling(parent, self);
-		  continue;
+
+		// 2-b) Fetch only the parents we need
+		const parentFetches = parentIds.map((pid) =>
+			ctx.db.get(pid as Id<"tasks">)
+		);
+		const parents = await Promise.all(parentFetches);
+		const existingParents = parents.filter(
+			(p): p is NonNullable<typeof p> => !!p
+		);
+
+		if (existingParents.length === 0) {
+			return {
+				ok: false as const,
+				error: serializeError(
+					new NotFoundError(
+						"Task parents not found for sibling calculation",
+						"" + id
+					)
+				),
+			};
 		}
-  
-		for (const cid of childIds as Array<string | { _id?: unknown }>) {
-		  const key = "" + cid;
-		  if (key === selfKey) continue; // exclude self for now; we’ll add it once per parent below
-		  if (seen.has(key)) {
-			const cached = seen.get(key)!;
-			if (cached) addSibling(parent, cached);
-			continue;
-		  }
-		  const sibling = await ctx.db.get(key as Id<"tasks">);
-		  seen.set(key, sibling);
-		  if (sibling) addSibling(parent, sibling);
+
+		// 3) Compute de-duplicated sibling ids from parents' children arrays
+		for (const parent of existingParents) {
+			const childIds = parent.children ?? [];
+			if (!Array.isArray(childIds) || childIds.length === 0) {
+				// Even if parent has no children array, still include self as the only "sibling" if not root
+				if (self.type !== "root") addSibling(parent, self);
+				continue;
+			}
+
+			for (const cid of childIds as Array<string | { _id?: unknown }>) {
+				const key = "" + cid;
+				if (key === selfKey) continue; // exclude self for now; we’ll add it once per parent below
+				if (seen.has(key)) {
+					const cached = seen.get(key)!;
+					if (cached) addSibling(parent, cached);
+					continue;
+				}
+				const sibling = await ctx.db.get(key as Id<"tasks">);
+				seen.set(key, sibling);
+				if (sibling) addSibling(parent, sibling);
+			}
+
+			// Include self in each parent's group (unless root)
+			if (self.type !== "root") addSibling(parent, self);
 		}
-  
-		// Include self in each parent's group (unless root)
-		if (self.type !== "root") addSibling(parent, self);
-	  }
-  
-	  // 4) Sort each siblings array to match parent.children order (stable, unknowns last)
-	  const sortedEntries: Array<[Doc<"tasks">, Doc<"tasks">[]]> = [];
-	  for (const [parent, group] of siblings) {
-		const sorted = sortSiblingsByParentChildren(parent, group);
-		sortedEntries.push([parent, sorted]);
-	  }
-  
-	  return { ok: true as const, value: sortedEntries };
+
+		// 4) Sort each siblings array to match parent.children order (stable, unknowns last)
+		const sortedEntries: Array<[Doc<"tasks">, Doc<"tasks">[]]> = [];
+		for (const [parent, group] of siblings) {
+			const sorted = sortSiblingsByParentChildren(parent, group);
+			sortedEntries.push([parent, sorted]);
+		}
+
+		return { ok: true as const, value: sortedEntries };
 	},
-  });
+});
 
 export const getRootTasks = query({
 	args: {},
