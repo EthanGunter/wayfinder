@@ -69,6 +69,7 @@ export interface GraphController {
 	replaceEdgesFromView: (edges: Edge[]) => void;
 	setDrawerOpen: (open: boolean) => void;
 	setTriggerTaskForNew: (trigger: DrawerTrigger) => void;
+	rebuildLayout: () => Promise<void>;
 	handlers: {
 		isValidConnection: (connection: { source?: string; target?: string }) => boolean;
 		handleConnectStart: (
@@ -224,12 +225,6 @@ export function createGraphController(): GraphController {
 		reconnectionState
 	};
 
-	function resetTaskMap(tasks: Task[]) {
-		// Mutate provided Map instance to preserve Svelte reactivity
-		state.taskById.clear();
-		for (const t of tasks) state.taskById.set(t.id, t);
-	}
-
 	async function rebuildLayoutFromMap() {
 		const allTasks = Array.from(state.taskById.values());
 		const graph = await layoutTasksWithElk(allTasks, { direction: 'RIGHT' });
@@ -300,8 +295,13 @@ export function createGraphController(): GraphController {
 	// Deltas removed; full rebuild from store emissions
 
 	async function updateTasks(tasks: Task[]) {
-		resetTaskMap(tasks);
-		await rebuildLayoutFromMap();
+		// Mutate provided Map instance to preserve Svelte reactivity
+		const firstUpdate = state.taskById.size === 0 && tasks.length > 0;
+
+		state.taskById.clear();
+		for (const t of tasks) state.taskById.set(t.id, t);
+
+		if (firstUpdate) rebuildLayoutFromMap();
 	}
 
 	let visibilityUpdateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -350,12 +350,6 @@ export function createGraphController(): GraphController {
 				state.setEdges([]);
 			}
 		});
-	}
-
-	function initTutorialRedirect() {
-		if (!tutorials.isDone('home.welcome')) {
-			goto('/planner');
-		}
 	}
 
 	function isValidConnection(connection: { source?: string; target?: string }) {
@@ -563,7 +557,6 @@ export function createGraphController(): GraphController {
 
 	return {
 		init: () => {
-			initTutorialRedirect();
 			initAuthSubscription();
 		},
 		destroy: () => {
@@ -586,6 +579,7 @@ export function createGraphController(): GraphController {
 		replaceEdgesFromView: (e) => setEdges(e),
 		setDrawerOpen,
 		setTriggerTaskForNew,
+		rebuildLayout: rebuildLayoutFromMap,
 		handlers: {
 			isValidConnection,
 			handleConnectStart,

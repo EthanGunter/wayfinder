@@ -22,6 +22,7 @@
 	import { QueryEvaluator } from '$lib/query/evaluator';
 	import { taskQueryFieldRegistry } from '$lib/API/Tasks/taskQueryHandlers';
 	import SearchTaskListItem from './SearchTaskListItem.svelte';
+	import Icon from '@iconify/svelte';
 
 	let selectedTask = $state<Task | null>(null);
 	let allTasks = $state<Task[]>([]);
@@ -157,7 +158,7 @@
 		controller.init();
 
 		// Subscribe to tasks for the authenticated user
-		const unsubAuth = authState.subscribe((auth) => {
+		const unsubAuth = authState.subscribe(async (auth) => {
 			if (auth.status === 'signed-in') {
 				unsubscribeTasksStore?.();
 				unsubscribeTasksStore = tasksAPI
@@ -174,6 +175,7 @@
 				allTasks = [];
 			}
 		});
+		controller.rebuildLayout();
 
 		// Handle URL params for highlighting
 		const params = page.url.searchParams;
@@ -293,6 +295,15 @@
 							}}
 						>
 							+
+						</Button>
+						<Button
+							variant="outline"
+							class="absolute top-6 right-6 h-9 w-10 rounded-full border-1 border-border bg-white"
+							onclick={() => {
+								controller.rebuildLayout();
+							}}
+						>
+							<Icon icon="lucide:refresh-cw" />
 						</Button>
 					</div>
 				</SvelteFlowProvider>
