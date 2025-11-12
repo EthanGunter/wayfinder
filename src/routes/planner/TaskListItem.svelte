@@ -44,7 +44,7 @@
 	}
 
 	function navigateToTask() {
-		goto(`/graph/?id=${task.id}`);
+		goto(`/graph/?select=${task.id}`);
 	}
 </script>
 

@@ -47,6 +47,81 @@
 	let triggerTaskForNewStore = controller.triggerTaskForNew;
 	let unsubscribeTasksStore: (() => void) | null = null;
 
+	onMount(() => {
+		controller.init();
+
+		// Subscribe to tasks for the authenticated user
+		const unsubAuth = authState.subscribe(async (auth) => {
+			if (auth.status === 'signed-in') {
+				unsubscribeTasksStore?.();
+				unsubscribeTasksStore = tasksAPI
+					.getAllUserTasks({ userId: auth.user.id })
+					.subscribe(async (taskSub) => {
+						if (taskSub.status === 'resolved') {
+							allTasks = taskSub.data;
+							await controller.updateTasks(taskSub.data);
+						}
+					});
+			} else {
+				unsubscribeTasksStore?.();
+				unsubscribeTasksStore = null;
+				allTasks = [];
+			}
+		});
+		controller.rebuildLayout();
+
+		// Handle URL params for highlighting
+		const params = page.url.searchParams;
+		const selectId = params.get('select'); // TODO: Select single by id
+		const query = params.get('q'); // TODO: Show/Hide query
+		const highlight = params.get('highlight'); // TODO: Highlight query
+
+		if (selectId) {
+			// Defer until graph is laid out
+			// TODO:fix this is fragile, and will break with slow connections.
+			// We should wait for the graph to resolve a completion promise
+			setTimeout(() => {
+				highlightNode(selectId, { select: true });
+			}, 500);
+		}
+
+
+		return () => {
+			unsubAuth();
+		};
+	});
+
+	onDestroy(() => {
+		unsubscribeTasksStore?.();
+		controller.destroy();
+	});
+
+	$effect(() => {
+		// Sync search service when tasks change
+		if (allTasks.length > 0) {
+			if (!searchService) {
+				searchService = new TaskSearchService();
+			}
+			// Re-index all tasks
+			allTasks.forEach((task) => searchService!.indexTask(task));
+		}
+	});
+
+	$effect(() => {
+		// Only update graph visibility for structured queries (QueryEvaluator) with results
+		if (isStructuredQuery && activeSearchResults.length > 0) {
+			// Structured query with results: filter to matching nodes (+ related if enabled)
+			const matchingIds = new Set(activeSearchResults.map((t) => t.id));
+			controller.setVisibleTaskIds(matchingIds, {
+				includeRelated: showRelatedNodes,
+				relatedDepth
+			});
+		} else {
+			// Plain text query or no structured query results: show all nodes
+			controller.setVisibleTaskIds(null);
+		}
+	});
+
 	async function onTaskChange(original: Task, update: Partial<Task>) {
 		const [_, error] = await tasksAPI.updateTask({ id: original.id, data: update });
 		if (error) Err.UNHANDLED(error);
@@ -124,80 +199,9 @@
 		}
 	}
 
-	$effect(() => {
-		// Sync search service when tasks change
-		if (allTasks.length > 0) {
-			if (!searchService) {
-				searchService = new TaskSearchService();
-			}
-			// Re-index all tasks
-			allTasks.forEach((task) => searchService!.indexTask(task));
-		}
-	});
-
-	$effect(() => {
-		// Only update graph visibility for structured queries (QueryEvaluator) with results
-		if (isStructuredQuery && activeSearchResults.length > 0) {
-			// Structured query with results: filter to matching nodes (+ related if enabled)
-			const matchingIds = new Set(activeSearchResults.map((t) => t.id));
-			controller.setVisibleTaskIds(matchingIds, {
-				includeRelated: showRelatedNodes,
-				relatedDepth
-			});
-		} else {
-			// Plain text query or no structured query results: show all nodes
-			controller.setVisibleTaskIds(null);
-		}
-	});
-
 	function handleSearchResultSelected(task: Task) {
 		highlightNode(task.id, { select: true });
 	}
-
-	onMount(() => {
-		controller.init();
-
-		// Subscribe to tasks for the authenticated user
-		const unsubAuth = authState.subscribe(async (auth) => {
-			if (auth.status === 'signed-in') {
-				unsubscribeTasksStore?.();
-				unsubscribeTasksStore = tasksAPI
-					.getAllUserTasks({ userId: auth.user.id })
-					.subscribe(async (taskSub) => {
-						if (taskSub.status === 'resolved') {
-							allTasks = taskSub.data;
-							await controller.updateTasks(taskSub.data);
-						}
-					});
-			} else {
-				unsubscribeTasksStore?.();
-				unsubscribeTasksStore = null;
-				allTasks = [];
-			}
-		});
-		controller.rebuildLayout();
-
-		// Handle URL params for highlighting
-		const params = page.url.searchParams;
-		const highlightId = params.get('highlight');
-		const shouldSelect = params.get('select') === 'true';
-
-		if (highlightId) {
-			// Defer until graph is laid out
-			setTimeout(() => {
-				highlightNode(highlightId, { select: shouldSelect });
-			}, 500);
-		}
-
-		return () => {
-			unsubAuth();
-		};
-	});
-
-	onDestroy(() => {
-		unsubscribeTasksStore?.();
-		controller.destroy();
-	});
 
 	// no utility functions; inline SvelteFlow init below
 </script>
