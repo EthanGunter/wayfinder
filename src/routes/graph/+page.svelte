@@ -19,30 +19,26 @@
 
 	import {
 		allTasks,
-		taskById,
-		nodes,
 		edges,
+		nodes,
+		screenToFlowPosition,
 		svelteFlowInstance,
-		screenToFlowPosition
-	} from './util/core-state';
-	import { selectedTask, drawerOpen, triggerForNew, editorLayoutState } from './util/ui-state';
-
+		taskById
+	} from './logic/shared-state';
+	import { refreshNodesData, updateGraph } from './logic/graph';
+	import { initializeFromUrl, highlightNode, handleShare, centerNode } from './logic/navigation';
 	import {
+		handleSearch,
+		filteredIds,
 		searchQuery,
 		activeSearchResults,
-		isStructuredQuery,
+		isValidQuery,
 		showRelatedNodes,
-		filters,
-		handleSearch,
-		computeSearchFilter,
-		relatedDepth
-	} from './util/search';
-
-	import { updateGraph, handleShare, initializeFromUrl } from './util/page-controller';
-
-	// Flow event handlers
+		relatedDepth,
+		recomputeFilters
+	} from './logic/search';
 	import {
-		isValidConnection,
+		handleDelete,
 		handleConnectStart,
 		handleReconnectStart,
 		handleConnect,
@@ -50,23 +46,27 @@
 		handleReconnect,
 		handleConnectEnd,
 		handleReconnectEnd,
-		handleDelete
-	} from './util/flow-events';
-
-	import { highlightNode } from './util/appearance';
+		isValidConnection
+	} from './logic/svelte-flow';
+	import { selectedTask, editorLayoutState, drawerOpen, triggerForNew } from './logic/ui-state';
+	import type { WFNode, WFEdge } from './types';
 
 	let unsubscribeTasksStore: (() => void) | null = null;
+	let didRunInitialLayout = false;
 
 	onMount(() => {
 		unsubscribeTasksStore = tasksAPI.getAllUserTasks({}).subscribe(async (taskSub) => {
-			if (taskSub.status === 'resolved') {
-				allTasks.set(taskSub.data);
+			if (taskSub.status !== 'resolved') return;
 
-				taskById.clear();
-				for (const t of taskSub.data) taskById.set(t.id, t);
+			// always keep stores current
+			refreshNodesData(taskSub.data);
 
+			// only do layout once on first data load
+			if (!didRunInitialLayout) {
+				didRunInitialLayout = true;
 				await updateGraph(true);
 
+				// conditionally seed search from current URL or query store
 				if ($searchQuery?.trim()) {
 					await handleSearch($searchQuery);
 				}
@@ -74,6 +74,9 @@
 		});
 
 		initializeFromUrl(page.url.searchParams);
+		return () => {
+			unsubscribeTasksStore?.();
+		};
 	});
 
 	onDestroy(() => {
@@ -81,45 +84,42 @@
 	});
 
 	$effect(() => {
-		// Track all dependencies of the computeSearchFilter function
+		// dependencies to recompute filters when search state changes
 		$activeSearchResults;
-		$isStructuredQuery;
+		$isValidQuery;
 		$showRelatedNodes;
 		$relatedDepth;
 
-		if ($allTasks.length === 0) {
-			if ($filters !== null) {
-				filters.set(null);
-				updateGraph(true);
-			}
-			return;
-		}
-
-		const newFilter = computeSearchFilter();
-		const currentFilter = $filters;
-
-		const filterChanged =
-			(currentFilter === null) !== (newFilter === null) ||
-			(currentFilter !== null &&
-				newFilter !== null &&
-				(currentFilter.matching.size !== newFilter.matching.size ||
-					currentFilter.related.size !== newFilter.related.size ||
-					[...currentFilter.matching].some((id) => !newFilter.matching.has(id)) ||
-					[...currentFilter.related].some((id) => !newFilter.related.has(id))));
-
-		if (filterChanged) {
-			filters.set(newFilter);
-			updateGraph(true);
-		}
+		// If you also want filters cleared when there are no tasks, you can check $allTasks here
+		// but do not call updateGraph in this effect.
+		recomputeFilters();
 	});
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
 		(await tasksAPI.updateTask({ id: original.id, data: update }))[1]?.UNHANDLED();
 	}
 
-	async function onDelete(task: Task) {
-		selectedTask.set(null);
+	function onGraphDelete(params: { nodes: WFNode[]; edges: WFEdge[] }): void {
+		if (params.nodes.length === 1) {
+			const task = params.nodes[0].data.task;
+			const parent = taskById.get(task?.parents[0]);
+			$selectedTask = parent ?? null;
+		} else {
+			$selectedTask = null;
+		}
+		handleDelete({ nodes: params.nodes, edges: params.edges });
+	}
+
+	async function onEditorDelete(task: Task) {
+		const parent = taskById.get(task.parents[0]);
+		$selectedTask = parent ?? null;
 		await tasksAPI.deleteTask({ id: task.id });
+	}
+
+	function onSelectNode(taskId: string) {
+		$selectedTask = $allTasks.find((t) => t.id === taskId) ?? null;
+		centerNode(taskId);
+		highlightNode(taskId);
 	}
 </script>
 
@@ -131,7 +131,10 @@
 					bind:query={$searchQuery}
 					placeholder="Enter query here..."
 					handleQuery={handleSearch}
-					onItemSelected={(task) => highlightNode(task.id, { select: true })}
+					onItemSelected={(task) => {
+						$selectedTask = task;
+						highlightNode(task.id);
+					}}
 					autocomplete={false}
 					sorter={(a, b) => {
 						if (a.status == TaskStatus.complete) return 1;
@@ -144,7 +147,7 @@
 							{task}
 							onLocate={() => {
 								$selectedTask = $allTasks.find((t) => t.id === task.id) ?? null;
-								highlightNode(task.id, { select: false });
+								highlightNode(task.id);
 							}}
 						/>
 					{/snippet}
@@ -161,7 +164,7 @@
 				Share
 			</Button>
 
-			{#if $isStructuredQuery && $activeSearchResults.length > 0}
+			{#if $isValidQuery && $activeSearchResults.length > 0}
 				<Button
 					variant={$showRelatedNodes ? 'default' : 'outline'}
 					size="sm"
@@ -195,10 +198,7 @@
 								svelteFlowInstance.set(instance);
 								screenToFlowPosition.set(instance.screenToFlowPosition);
 							}}
-							ondelete={({ nodes, edges }) => {
-								$selectedTask = null;
-								handleDelete({ nodes, edges });
-							}}
+							ondelete={onGraphDelete}
 							onconnectstart={handleConnectStart}
 							onreconnectstart={handleReconnectStart}
 							onconnect={handleConnect}
@@ -210,7 +210,7 @@
 							onnodeclick={({ node, event }) => {
 								if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
 								$selectedTask = node.id
-									? (($nodes.find((n) => n.id === node.id)?.data as Task | undefined) ?? null)
+									? ($nodes.find((n) => n.id === node.id)?.data.task ?? null)
 									: null;
 							}}
 							onpaneclick={() => {
@@ -253,8 +253,8 @@
 							bind:task={$selectedTask}
 							bind:layoutState={$editorLayoutState}
 							{onTaskChange}
-							{onDelete}
-							onHighlightNode={highlightNode}
+							onDelete={onEditorDelete}
+							{onSelectNode}
 						/>
 					</ScrollArea>
 				</ResizablePane>

@@ -2,9 +2,10 @@
 	import { Handle, Position } from '@xyflow/svelte';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 	import { devEnabled } from '$lib/user-settings';
+	import { type WFNode, type FlowData } from './types';
 
 	interface Props {
-		data: Task & { dimmed?: boolean };
+		data: FlowData<Task>;
 		selected: boolean;
 	}
 
@@ -59,36 +60,36 @@
 
 <div
 	bind:this={nodeElement}
-	data-tasknodeid={data.id}
+	data-tasknodeid={data.task.id}
 	class="task-node relative max-w-[280px] min-w-[100px] rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
-	{isTaskCompleted(data) ? 'bg-green-100' : 'bg-white'}"
+	{isTaskCompleted(data.task) ? 'bg-green-100' : 'bg-white'}"
 	class:highlighted={isAnimating}
 	class:dimmed={isDimmed}
 >
 	<div class="flex items-start gap-2 px-3 py-2">
 		<div class="min-w-0 flex-1">
-			<div class="truncate text-sm font-semibold text-gray-900" title={data?.title}>
-				{data?.title}
+			<div class="truncate text-sm font-semibold text-gray-900" title={data.task.title}>
+				{data.task.title}
 			</div>
-			{#if data?.content}
-				<div class="mt-0.5 line-clamp-2 text-xs text-gray-600" title={data?.content}>
-					{data?.content}
+			{#if data.task.content}
+				<div class="mt-0.5 line-clamp-2 text-xs text-gray-600" title={data.task.content}>
+					{data.task.content}
 				</div>
 			{/if}
 			{#if $devEnabled}
 				<div class="text-[7px]">
-					<span>id: {data.id.substring(0, 4)}</span>
-					{#if data.parents.length > 0}
+					<span>id: {data.task.id.substring(0, 4)}</span>
+					{#if data.task.parents.length > 0}
 						<h6>Parents</h6>
 					{/if}
-					{#each data.parents as parent}
+					{#each data.task.parents as parent}
 						<span>- {parent.substring(0, 4)}</span>
 						<br />
 					{/each}
-					{#if data.children.length > 0}
+					{#if data.task.children.length > 0}
 						<h6>Children</h6>
 					{/if}
-					{#each data.children as child}
+					{#each data.task.children as child}
 						<span>- {child.substring(0, 4)}</span>
 						<br />
 					{/each}

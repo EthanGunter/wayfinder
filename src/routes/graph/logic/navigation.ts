@@ -1,31 +1,45 @@
+//#region IMPORTS
 import { get } from 'svelte/store';
 import type { Task } from '$domain/models/task';
-import { allTasks, taskById, nodes, edges } from './core-state';
+import type { SvelteFlowInstance } from '@xyflow/svelte';
+import type { WFNode } from '../types';
+import { nodes, svelteFlowInstance } from './shared-state';
 import { selectedTask } from './ui-state';
-import { searchQuery, showRelatedNodes, filters, handleSearch } from './search';
-import { elkLayoutEngine } from './layout';
-import { buildGraph } from './graph-build';
-import { centerNode } from './appearance';
-import { svelteFlowInstance } from './core-state';
+import { searchQuery, showRelatedNodes, handleSearch } from './search';
+import { Err } from '$domain/errors';
+//#endregion
 
-// Main graph update orchestration
-export async function updateGraph(useLayout: boolean) {
-	const filter = get(filters);
-	const previous = { nodes: get(nodes), edges: get(edges) };
-	const graph = await buildGraph({
-		allTasks: get(allTasks),
-		taskById,
-		previous,
-		filter,
-		layoutEngine: elkLayoutEngine,
-		layoutOptions: { direction: 'RIGHT' },
-		useLayout
+//#region CENTER/HIGHLIGHT
+export function centerNode(
+	taskId: string,
+	options: { zoom?: number } = { zoom: 1.5 }
+) {
+	const instance = get(svelteFlowInstance);
+	const node = get(nodes).find((n) => n.id === taskId);
+	if (!instance || !node || typeof instance.setCenter !== 'function') return;
+
+	instance.setCenter(node.position.x, node.position.y, {
+		duration: 250,
+		zoom: options.zoom ?? 1.5,
 	});
-	nodes.set(graph.nodes);
-	edges.set(graph.edges);
+
+	highlightNode(node.id);
 }
 
-// URL sharing
+export function highlightNode(taskId: string) {
+	// Dispatch highlight event to node DOM element
+	const nodeElement = document.querySelector(
+		`[data-tasknodeid="${taskId}"]`
+	) as HTMLElement;
+	if (nodeElement) {
+		nodeElement.dispatchEvent(new CustomEvent('highlight', { bubbles: false }));
+	} else {
+		Err.UNHANDLED("[graph/navigation.highlightNode] Node element not found for taskId: " + taskId);
+	}
+}
+//#endregion
+
+//#region SHARE/URL
 export function buildShareUrl({
 	q,
 	showRelatedNodes,
@@ -61,13 +75,12 @@ export async function handleShare() {
 	const url = buildShareUrl({
 		q,
 		showRelatedNodes: get(showRelatedNodes),
-		baseHref: window.location.href
+		baseHref: window.location.href,
 	});
 	replaceUrl(url);
 	await copyToClipboard(url);
 }
 
-// URL initialization
 export async function initializeFromUrl(params: URLSearchParams) {
 	const selectId = params.get('select');
 	const qParam = params.get('q');
@@ -85,10 +98,11 @@ export async function initializeFromUrl(params: URLSearchParams) {
 	if (selectId) {
 		setTimeout(() => {
 			const node = get(nodes).find((n) => n.id === selectId);
-			centerNode(get(svelteFlowInstance), node, { select: true });
-			if (node?.data?.type === 'task') {
-				selectedTask.set((node.data as unknown as Task) ?? null);
+			centerNode(selectId);
+			if (node?.data.type === 'task') {
+				selectedTask.set((node.data.task) ?? null);
 			}
 		}, 500);
 	}
 }
+//#endregion

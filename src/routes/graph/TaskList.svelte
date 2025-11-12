@@ -13,12 +13,12 @@
 		id: string;
 		title?: string;
 		currentTaskId?: string;
-		onHighlight: (id: string) => void;
+		onSelect: (id: string) => void;
 		onReorder: (taskId: string, startIndex: number, finishIndex: number) => void;
 		showCompleted: boolean;
 	}
 
-	let { tasks, parentId, id, title, currentTaskId, onHighlight, onReorder, showCompleted }: Props =
+	let { tasks, parentId, id, title, currentTaskId, onSelect, onReorder, showCompleted }: Props =
 		$props();
 
 	// Sort tasks into incomplete and complete
@@ -93,7 +93,7 @@
 	{#if title}
 		<button
 			class="w-fit rounded-t-lg border border-b-0 border-gray-200 bg-gray-50 px-3 py-1.5 text-left text-sm text-gray-700 hover:cursor-pointer hover:bg-gray-100"
-			onclick={() => onHighlight(parentId)}
+			onclick={() => onSelect(parentId)}
 		>
 			<h2>{title}</h2>
 		</button>
@@ -110,7 +110,7 @@
 					{index}
 					isCurrent={currentTaskId === task.id}
 					isDraggable={isDraggable(task)}
-					{onHighlight}
+					{onSelect}
 				/>
 			{/each}
 		</ul>
@@ -142,7 +142,7 @@
 								index={sorted.incomplete.length + index}
 								isCurrent={currentTaskId === task.id}
 								isDraggable={false}
-								{onHighlight}
+								{onSelect}
 							/>
 						{/each}
 					</ul>

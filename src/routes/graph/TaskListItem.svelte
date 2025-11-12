@@ -39,7 +39,7 @@
 		index: number;
 		isCurrent?: boolean;
 		isDraggable?: boolean;
-		onHighlight?: (taskId: string) => void;
+		onSelect?: (taskId: string) => void;
 	}
 
 	let {
@@ -49,7 +49,7 @@
 		index,
 		isCurrent = false,
 		isDraggable = false,
-		onHighlight
+		onSelect
 	}: Props = $props();
 
 	let itemEl: HTMLElement | undefined = $state();
@@ -157,7 +157,7 @@
 			title={isDraggable
 				? 'Drag to reorder | Click to center in graph'
 				: 'Center this task in graph view'}
-			onclick={() => onHighlight?.(task.id)}
+			onclick={() => onSelect?.(task.id)}
 		>
 			{#if isDraggable}
 				<Icon icon="lucide:grip-vertical" class="mr-1 inline size-3 text-gray-400" />

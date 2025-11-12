@@ -1,3 +1,5 @@
+// ui/state.ts
+//#region STORES
 import { writable, type Writable } from 'svelte/store';
 import type { Task } from '$domain/models/task';
 import type { TaskEditorLayoutState } from '../TaskEditor.svelte';
@@ -11,9 +13,11 @@ export const triggerForNew: Writable<DrawerTrigger> = writable(null);
 export const editorLayoutState: Writable<TaskEditorLayoutState> = writable({
 	accordionValues: ['tasks'],
 	showCompletedTasks: false,
-	showCompletedSiblings: false
+	showCompletedSiblings: false,
 });
+//#endregion
 
+//#region ACTIONS
 export function resetUIState() {
 	selectedTask.set(null);
 	drawerOpen.set(false);
@@ -21,6 +25,7 @@ export function resetUIState() {
 	editorLayoutState.set({
 		accordionValues: ['tasks'],
 		showCompletedTasks: false,
-		showCompletedSiblings: false
+		showCompletedSiblings: false,
 	});
 }
+//#endregion

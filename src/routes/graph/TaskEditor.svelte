@@ -20,7 +20,7 @@
 		task: Task;
 		onTaskChange: (original: Task, update: Partial<Task>) => void;
 		onDelete: (task: Task) => void;
-		onHighlightNode?: (taskId: string, options?: { select?: boolean }) => void;
+		onSelectNode?: (taskId: string, options?: { select?: boolean }) => void;
 		layoutState?: TaskEditorLayoutState;
 	}
 
@@ -34,7 +34,7 @@
 		}),
 		onTaskChange,
 		onDelete,
-		onHighlightNode
+		onSelectNode
 	}: Props = $props();
 
 	// Derived live data from server as single sources of truth
@@ -207,7 +207,9 @@
 						tasks={$childTasksStore.data}
 						parentId={task.id}
 						id={`child-${task.id}`}
-						onHighlight={(id) => onHighlightNode?.(id)}
+						onSelect={(id) => {
+							onSelectNode?.(id);
+						}}
 						onReorder={(taskId, startIndex, finishIndex) =>
 							reorderChildren(taskId, startIndex, finishIndex)}
 					/>
@@ -231,7 +233,7 @@
 								id={`sibling-${parent.id}`}
 								title={parent.title}
 								currentTaskId={task.id}
-								onHighlight={(id) => onHighlightNode?.(id)}
+								onSelect={(id) => onSelectNode?.(id)}
 								onReorder={(taskId, startIndex, finishIndex) =>
 									reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
 							/>
