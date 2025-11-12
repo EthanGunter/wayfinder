@@ -44,6 +44,7 @@
 	let drawerOpenStore = controller.drawerOpen;
 	let nodesStore = controller.nodes;
 	let edgesStore = controller.edges;
+	
 	let triggerTaskForNewStore = controller.triggerTaskForNew;
 	let unsubscribeTasksStore: (() => void) | null = null;
 
@@ -68,7 +69,7 @@
 				allTasks = [];
 			}
 		});
-		controller.rebuildLayout();
+		controller.updateGraph();
 
 		// Handle URL params for highlighting
 		const params = page.url.searchParams;
@@ -84,7 +85,6 @@
 				highlightNode(selectId, { select: true });
 			}, 500);
 		}
-
 
 		return () => {
 			unsubAuth();
@@ -304,7 +304,7 @@
 							variant="outline"
 							class="absolute top-6 right-6 h-9 w-10 rounded-full border-1 border-border bg-white"
 							onclick={() => {
-								controller.rebuildLayout();
+								controller.updateGraph();
 							}}
 						>
 							<Icon icon="lucide:refresh-cw" />
