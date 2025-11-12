@@ -111,6 +111,9 @@ export interface GraphController {
 	};
 }
 
+
+let tasksLoaded = false;
+
 /**
  * Computes all ancestors and descendants of a task by walking the graph.
  * Returns sets of matching task IDs and related (dimmed) task IDs.
@@ -315,14 +318,15 @@ export function createGraphController(): GraphController {
 	// Deltas removed; full rebuild from store emissions
 
 	async function updateTasks(tasks: Task[]) {
-		// Mutate provided Map instance to preserve Svelte reactivity
 		const firstUpdate = state.taskById.size === 0 && tasks.length > 0;
-	
+
 		state.taskById.clear();
 		for (const t of tasks) state.taskById.set(t.id, t);
-	
+
+		tasksLoaded = tasksLoaded || tasks.length > 0;
+
 		await updateGraph(firstUpdate);
-	  }
+	}
 
 	let visibilityUpdateTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -333,14 +337,11 @@ export function createGraphController(): GraphController {
 		const includeRelated = options?.includeRelated ?? false;
 		const relatedDepth = options?.relatedDepth ?? -1;
 
-		// Check if we're clearing the filter
 		const isClearing = !matchingIds || matchingIds.size === 0;
 
 		if (!matchingIds) {
-			// Clear filter: show all nodes
 			visibilityFilter = null;
 		} else {
-			// Compute related tasks if requested
 			const result = computeRelatedTasks(
 				matchingIds,
 				state.taskById,
@@ -350,18 +351,19 @@ export function createGraphController(): GraphController {
 			visibilityFilter = result;
 		}
 
-		// Clear any pending timer
 		if (visibilityUpdateTimer) {
 			clearTimeout(visibilityUpdateTimer);
 			visibilityUpdateTimer = null;
 		}
 
-		// Immediate update when clearing filter (better UX), debounced otherwise
+		// Force a fresh layout when filter boundary changes to ensure edges rebuild
+		const run = () => updateGraph(true);
+
 		if (isClearing) {
-			updateGraph();
+			run();
 		} else {
 			visibilityUpdateTimer = setTimeout(() => {
-				updateGraph();
+				run();
 				visibilityUpdateTimer = null;
 			}, 150);
 		}

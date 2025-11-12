@@ -16,9 +16,7 @@
 	import { page } from '$app/state';
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import { authState } from '$lib/API/Auth';
-	import { TaskSearchService } from '$lib/API/Tasks/TaskSearchService';
-	import { tokenize } from '$lib/query/tokenizer';
-	import { parseQuery, Parser } from '$lib/query/parser';
+	import { parseQuery } from '$lib/query/parser';
 	import { QueryEvaluator } from '$lib/query/evaluator';
 	import { taskQueryFieldRegistry } from '$lib/API/Tasks/taskQueryHandlers';
 	import SearchTaskListItem from './SearchTaskListItem.svelte';
@@ -26,12 +24,11 @@
 
 	let selectedTask = $state<Task | null>(null);
 	let allTasks = $state<Task[]>([]);
-	let searchService: TaskSearchService | null = $state(null);
 	let activeSearchResults = $state<Task[]>([]);
 	let searchQuery = $state<string>('');
 	let isStructuredQuery = $state(false); // Track if current query is structured (uses QueryEvaluator)
 	let showRelatedNodes = $state(true);
-	let relatedDepth = $state(-1); // -1 = unlimited, 1 = direct only, 2 = 2 levels, etc. TODO: Wire to user settings
+	let relatedDepth = $state(-1); // -1 = unlimited, 1 = direct only, 2 = 2 levels, etc.
 
 	// UI State
 	let editorLayoutState: TaskEditorLayoutState = $state({
@@ -44,7 +41,7 @@
 	let drawerOpenStore = controller.drawerOpen;
 	let nodesStore = controller.nodes;
 	let edgesStore = controller.edges;
-	
+
 	let triggerTaskForNewStore = controller.triggerTaskForNew;
 	let unsubscribeTasksStore: (() => void) | null = null;
 
@@ -61,6 +58,12 @@
 						if (taskSub.status === 'resolved') {
 							allTasks = taskSub.data;
 							await controller.updateTasks(taskSub.data);
+
+							// If there was a q param provided before tasks loaded, re-run search now
+							if (searchQuery?.trim()) {
+								// fire and forget; state updates inside
+								handleSearch(searchQuery);
+							}
 						}
 					});
 			} else {
@@ -69,18 +72,31 @@
 				allTasks = [];
 			}
 		});
+
 		controller.updateGraph();
 
-		// Handle URL params for highlighting
+		// Handle URL params for query and selection
 		const params = page.url.searchParams;
-		const selectId = params.get('select'); // TODO: Select single by id
-		const query = params.get('q'); // TODO: Show/Hide query
-		const highlight = params.get('highlight'); // TODO: Highlight query
+		const selectId = params.get('select');
+		const qParam = params.get('q');
+		const showRelated = params.get('related');
+
+		// Initialize related toggle if provided
+		if (showRelated != null) {
+			// accept "0" or "false" to disable
+			const normalized = showRelated.toLowerCase();
+			showRelatedNodes = !(normalized === '0' || normalized === 'false');
+		}
+
+		if (qParam) {
+			// Prime UI and run initial search immediately
+			searchQuery = qParam;
+			// Run once now (works for structured queries); will re-run once tasks arrive
+			handleSearch(qParam);
+		}
 
 		if (selectId) {
 			// Defer until graph is laid out
-			// TODO:fix this is fragile, and will break with slow connections.
-			// We should wait for the graph to resolve a completion promise
 			setTimeout(() => {
 				highlightNode(selectId, { select: true });
 			}, 500);
@@ -97,30 +113,58 @@
 	});
 
 	$effect(() => {
-		// Sync search service when tasks change
-		if (allTasks.length > 0) {
-			if (!searchService) {
-				searchService = new TaskSearchService();
-			}
-			// Re-index all tasks
-			allTasks.forEach((task) => searchService!.indexTask(task));
+		if (allTasks.length === 0) {
+			// tasks not loaded yet: do not apply visibility filter
+			controller.setVisibleTaskIds(null);
+			return;
 		}
-	});
 
-	$effect(() => {
-		// Only update graph visibility for structured queries (QueryEvaluator) with results
 		if (isStructuredQuery && activeSearchResults.length > 0) {
-			// Structured query with results: filter to matching nodes (+ related if enabled)
 			const matchingIds = new Set(activeSearchResults.map((t) => t.id));
 			controller.setVisibleTaskIds(matchingIds, {
 				includeRelated: showRelatedNodes,
 				relatedDepth
 			});
 		} else {
-			// Plain text query or no structured query results: show all nodes
 			controller.setVisibleTaskIds(null);
 		}
 	});
+
+	function buildShareUrl({ q }: { q: string }) {
+		const url = new URL(window.location.href);
+		if (q?.trim()) url.searchParams.set('q', q);
+		else url.searchParams.delete('q');
+
+		// Include related toggle for completeness
+		url.searchParams.set('related', showRelatedNodes ? '1' : '0');
+
+		// We are not using highlight for now, ensure it's removed
+		url.searchParams.delete('highlight');
+
+		return url.toString();
+	}
+
+	function replaceUrl(url: string) {
+		// no history entry spam on share: replace not push
+		window.history.replaceState({}, '', url);
+	}
+
+	async function copyToClipboard(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	async function handleShare() {
+		const q = searchQuery ?? '';
+		const url = buildShareUrl({ q });
+		replaceUrl(url);
+		await copyToClipboard(url);
+		// Optionally trigger a toast/snackbar here
+	}
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
 		const [_, error] = await tasksAPI.updateTask({ id: original.id, data: update });
@@ -143,67 +187,45 @@
 		}
 	}
 
-	// TODO:refactor This should be derived from the result of parsing, not duplicated here
-	function isPlainTextQuery(query: string): boolean {
-		const trimmed = query.trim();
-		if (!trimmed) return false;
-
-		try {
-			const tokens = tokenize(trimmed);
-			const parser = new Parser(tokens);
-			parser.parse();
-			// If parsing succeeds and we have structured elements, not plain text
-			return false;
-		} catch {
-			// Parse error means it's plain text
-			return true;
-		}
-	}
-
+	// Pure AST-first search with simple linear fallback (title/content contains)
 	async function handleSearch(query: string): Promise<Task[]> {
-		if (!searchService || !query.trim()) {
-			// Clear search state when query is empty
-			searchQuery = '';
+		searchQuery = query;
+
+		const trimmed = query.trim();
+		if (!trimmed) {
 			activeSearchResults = [];
 			isStructuredQuery = false;
 			return [];
 		}
 
-		let results: Task[] = [];
-
-		if (isPlainTextQuery(query)) {
-			// Plain text query - just return results for dropdown, don't affect graph
-			results = searchService.searchTasks(query);
-			isStructuredQuery = false;
+		// 1) Try structured AST first
+		try {
+			const ast = parseQuery(trimmed);
+			const evaluator = new QueryEvaluator(taskQueryFieldRegistry);
+			const results = evaluator.evaluate(allTasks, ast);
+			activeSearchResults = results;
+			isStructuredQuery = true;
 			return results;
-		} else {
-			// Structured query - parse and evaluate
-			try {
-				const ast = parseQuery(query);
-				const evaluator = new QueryEvaluator(taskQueryFieldRegistry);
-				results = evaluator.evaluate(allTasks, ast);
-				// Only update graph state for structured queries with results
-				searchQuery = query;
-				activeSearchResults = results;
-				isStructuredQuery = true;
-				return results;
-			} catch (error) {
-				// Parse/evaluation error - clear graph state, return empty results
-				// TODO: Show error to user in UI
-				console.error('Query evaluation error:', error);
-				searchQuery = '';
-				activeSearchResults = [];
-				isStructuredQuery = false;
-				return [];
-			}
+		} catch {
+			// 2) Fallback: simple linear contains search over title/content
+			isStructuredQuery = false;
+			const ql = trimmed.toLowerCase();
+			const results =
+				allTasks.length === 0
+					? []
+					: allTasks.filter(
+							(t) =>
+								(t.title && t.title.toLowerCase().includes(ql)) ||
+								(t.content && t.content.toLowerCase().includes(ql))
+						);
+			activeSearchResults = results;
+			return results;
 		}
 	}
 
 	function handleSearchResultSelected(task: Task) {
 		highlightNode(task.id, { select: true });
 	}
-
-	// no utility functions; inline SvelteFlow init below
 </script>
 
 <div class="graph-root page-root">
@@ -211,6 +233,7 @@
 		<div class="flex items-center gap-2">
 			<div class="flex-1">
 				<SearchBar
+					bind:query={searchQuery}
 					placeholder="Enter query here..."
 					handleQuery={handleSearch}
 					onItemSelected={handleSearchResultSelected}
@@ -225,12 +248,26 @@
 						<SearchTaskListItem
 							{task}
 							onLocate={() => {
+								// When the user “locates” a result, update selectedTask and leave a breadcrumb
+								selectedTask = allTasks.find((t) => t.id === task.id) ?? null;
 								highlightNode(task.id, { select: false });
 							}}
 						/>
 					{/snippet}
 				</SearchBar>
 			</div>
+
+			<!-- Share is available whenever a query exists -->
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={handleShare}
+				disabled={!searchQuery?.trim()}
+				title="Copy a shareable URL for this query"
+			>
+				Share
+			</Button>
+
 			{#if isStructuredQuery && activeSearchResults.length > 0}
 				<Button
 					variant={showRelatedNodes ? 'default' : 'outline'}

@@ -3,6 +3,7 @@
 	import type { Snippet } from 'svelte';
 
 	interface Props {
+		query?: string;
 		onItemSelected?: (item: T) => void;
 		handleQuery: (search: string) => Promise<T[]>;
 		sorter?: (a: T, b: T) => number;
@@ -15,7 +16,8 @@
 		autocomplete?: boolean;
 	}
 
-	const {
+	let {
+		query = $bindable(''),
 		onItemSelected,
 		handleQuery: onQueryUpdate,
 		sorter,
@@ -28,7 +30,6 @@
 		autocomplete = true
 	}: Props = $props();
 
-	let query = $state('');
 	let searchResults = $state<T[]>([]);
 	let showResults = $state(false);
 	let isLoading = $state(false);
