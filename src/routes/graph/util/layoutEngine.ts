@@ -1,5 +1,5 @@
 import { isTaskCompleted, type Task } from '$domain/models/task';
-import type { Node, Edge } from '@xyflow/svelte';
+import type { WFEdge, WFNode } from '../types';
 import { Position } from '@xyflow/svelte';
 
 // Import ELK (bundled build works reliably with Vite)
@@ -23,7 +23,7 @@ type LayoutOpts = {
 export async function layoutTasksWithElk(
     tasks: Task[],
     opts: LayoutOpts = {}
-): Promise<{ nodes: Node[]; edges: Edge[] }> {
+): Promise<{ nodes: WFNode[]; edges: WFEdge[] }> {
     const byId = new Map<string, Task>(tasks.map((t) => [t.id, t]));
 
     const nodeWidth = opts.nodeWidth ?? DEFAULT_NODE_WIDTH;
@@ -85,19 +85,19 @@ export async function layoutTasksWithElk(
     const laidOut = await elk.layout(elkGraph as any);
 
     // Map back to XYFlow nodes/edges
-    const nodes: Node[] = (laidOut.children || []).map((n: any) => ({
+    const nodes: WFNode[] = (laidOut.children || []).map((n: any) => ({
         id: String(n.id),
         type: 'task',
         position: { x: n.x ?? 0, y: n.y ?? 0 },
         width: n.width ?? nodeWidth,
         height: n.height ?? nodeHeight,
         // data is filled by caller after layout; keep minimal here
-        data: {} as Record<string, unknown>,
+        data: { task: {} as Task },
         sourcePosition: Position.Right,
         targetPosition: Position.Left
     }));
 
-    const edges: Edge[] = elkEdges.map((e) => ({
+    const edges: WFEdge[] = elkEdges.map((e) => ({
         id: e.id,
         source: e.sources[0],
         target: e.targets[0],
@@ -110,7 +110,7 @@ export async function layoutTasksWithElk(
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
     for (const t of tasks) {
         const n = nodeMap.get(t.id);
-        if (n) n.data = t as unknown as Record<string, unknown>;
+        if (n) n.data.task = t;
     }
 
     return { nodes, edges };

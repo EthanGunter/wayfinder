@@ -1,6 +1,6 @@
 import type { Task } from '$domain/models/task';
 import type { ITasksLocal } from '$lib/API/Tasks/seam-interfaces';
-import type { Node, Edge } from '@xyflow/svelte';
+import type { WFEdge, WFNode } from '../types';
 
 /**
  * Updates parent/child relationships between tasks
@@ -36,7 +36,7 @@ export async function updateTaskRelationship(
 /**
  * Refreshes node data with latest task information
  */
-export function refreshNodeData(nodes: Node[], taskById: Map<string, Task>): Node[] {
+export function refreshNodeData(nodes: WFNode[], taskById: Map<string, Task>): WFNode[] {
 	return nodes.map((n) => {
 		const task = taskById.get(n.id);
 		return task ? { ...n, data: task as any } : n;
@@ -47,10 +47,10 @@ export function refreshNodeData(nodes: Node[], taskById: Map<string, Task>): Nod
  * Refreshes specific nodes by IDs
  */
 export function refreshSpecificNodes(
-	nodes: Node[],
+	nodes: WFNode[],
 	taskById: Map<string, Task>,
 	nodeIds: string[]
-): Node[] {
+): WFNode[] {
 	return nodes.map((n) => {
 		if (nodeIds.includes(n.id)) {
 			const task = taskById.get(n.id);
@@ -66,7 +66,7 @@ export function refreshSpecificNodes(
 export function wouldCreateCycle(
 	sourceId: string,
 	targetId: string,
-	edges: Edge[]
+	edges: WFEdge[]
 ): boolean {
 	if (!sourceId || !targetId) return false;
 	if (sourceId === targetId) return true;
@@ -99,14 +99,14 @@ export function wouldCreateCycle(
 /**
  * Checks if a connection already exists between two nodes
  */
-export function connectionExists(edges: Edge[], sourceId: string, targetId: string): boolean {
+export function connectionExists(edges: WFEdge[], sourceId: string, targetId: string): boolean {
 	return edges.some((e) => e.source === sourceId && e.target === targetId);
 }
 
 /**
  * Removes duplicate edges, keeping the first occurrence
  */
-export function removeDuplicateEdges(edges: Edge[]): Edge[] {
+export function removeDuplicateEdges(edges: WFEdge[]): WFEdge[] {
 	return edges.filter(
 		(e, idx, arr) => arr.findIndex((f) => f.source === e.source && f.target === e.target) === idx
 	);

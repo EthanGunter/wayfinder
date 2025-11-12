@@ -79,6 +79,10 @@ export class Err extends Error {
         captureHere(e, Err.throw);
         throw e;
     }
+
+    UNHANDLED(message?: string): never {
+        return Err.UNHANDLED(this, message);
+    }
 }
 
 export class UnknownError extends Err {

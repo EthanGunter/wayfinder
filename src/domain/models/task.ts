@@ -3,8 +3,8 @@ import { type Result } from "$domain/result";
 
 //#region Task Interface and Utilities
 
-export type Task = TaskBase
-export interface TaskBase {
+export type Task = ITask
+export interface ITask {
     // Indexing
     id: string,
     userAuthId: string,

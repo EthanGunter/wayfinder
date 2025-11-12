@@ -13,6 +13,8 @@
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
+		showCompletedTasks: boolean;
+		showCompletedSiblings: boolean;
 	}
 	interface Props {
 		task: Task;
@@ -25,7 +27,11 @@
 	// Props
 	let {
 		task = $bindable(),
-		layoutState = $bindable({ accordionValues: ['tasks'] }),
+		layoutState = $bindable({
+			accordionValues: ['tasks'],
+			showCompletedTasks: false,
+			showCompletedSiblings: false
+		}),
 		onTaskChange,
 		onDelete,
 		onHighlightNode
@@ -41,7 +47,6 @@
 		siblingsStore.updateQuery({ id: task.id });
 		childTasksStore.updateQuery({ id: task.id });
 	});
-
 
 	$effect(() => {
 		if ($siblingsStore.status === 'error') {
@@ -198,6 +203,7 @@
 				</Accordion.Trigger>
 				<Accordion.Content>
 					<TaskList
+						showCompleted={layoutState.showCompletedTasks}
 						tasks={$childTasksStore.data}
 						parentId={task.id}
 						id={`child-${task.id}`}
@@ -219,6 +225,7 @@
 					<div class="flex flex-col gap-4">
 						{#each $siblingsStore.data as [parent, siblings] (parent.id)}
 							<TaskList
+								showCompleted={layoutState.showCompletedSiblings}
 								tasks={siblings}
 								parentId={parent.id}
 								id={`sibling-${parent.id}`}

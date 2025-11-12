@@ -15,13 +15,11 @@
 		currentTaskId?: string;
 		onHighlight: (id: string) => void;
 		onReorder: (taskId: string, startIndex: number, finishIndex: number) => void;
+		showCompleted: boolean;
 	}
 
-	let { tasks, parentId, id, title, currentTaskId, onHighlight, onReorder }: Props = $props();
-
-	// State for completed section collapse
-	// TODO Should be global state (user settings?)
-	let completedOpen = $state(false);
+	let { tasks, parentId, id, title, currentTaskId, onHighlight, onReorder, showCompleted }: Props =
+		$props();
 
 	// Sort tasks into incomplete and complete
 	const sorted = $derived.by(() => {
@@ -117,9 +115,9 @@
 			{/each}
 		</ul>
 		{#if sorted.complete.length > 0}
-			<Collapsible.Root bind:open={completedOpen}>
+			<Collapsible.Root bind:open={showCompleted}>
 				<Collapsible.Trigger
-					class="flex w-full items-center gap-3 px-2 text-xs font-medium text-gray-400 hover:cursor-pointer hover:text-gray-600 {completedOpen
+					class="flex w-full items-center gap-3 px-2 text-xs font-medium text-gray-400 hover:cursor-pointer hover:text-gray-600 {showCompleted
 						? 'pt-3 pb-1'
 						: 'py-2'}"
 				>
@@ -127,7 +125,7 @@
 					<div class="flex items-center gap-1.5">
 						<Icon
 							icon="lucide:chevron-right"
-							class="size-3 transition-transform {completedOpen ? 'rotate-90' : ''}"
+							class="size-3 transition-transform {showCompleted ? 'rotate-90' : ''}"
 						/>
 						<span class="tracking-wider uppercase">Completed</span>
 						<span>({sorted.complete.length})</span>
