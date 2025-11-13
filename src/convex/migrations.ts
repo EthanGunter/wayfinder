@@ -1,6 +1,6 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api";
-import { DataModel } from "./_generated/dataModel";
+import { type DataModel } from "./_generated/dataModel";
 import { Err } from "$domain/errors";
 
 export const migrations = new Migrations<DataModel>(components.migrations);

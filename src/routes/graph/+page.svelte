@@ -26,7 +26,12 @@
 		taskById
 	} from './logic/shared-state';
 	import { refreshNodesData, updateGraph } from './logic/graph';
-	import { initializeFromUrl, highlightNode, handleShare, centerNode } from './logic/navigation';
+	import {
+		initializeFromUrl,
+		highlightNode,
+		handleShare,
+		centerAndHighlightNode
+	} from './logic/navigation';
 	import {
 		handleSearch,
 		filteredIds,
@@ -118,8 +123,7 @@
 
 	function onSelectNode(taskId: string) {
 		$selectedTask = $allTasks.find((t) => t.id === taskId) ?? null;
-		centerNode(taskId);
-		highlightNode(taskId);
+		centerAndHighlightNode(taskId);
 	}
 </script>
 
@@ -133,7 +137,7 @@
 					handleQuery={handleSearch}
 					onItemSelected={(task) => {
 						$selectedTask = task;
-						highlightNode(task.id);
+						centerAndHighlightNode(task.id);
 					}}
 					autocomplete={false}
 					sorter={(a, b) => {
@@ -147,7 +151,7 @@
 							{task}
 							onLocate={() => {
 								$selectedTask = $allTasks.find((t) => t.id === task.id) ?? null;
-								highlightNode(task.id);
+								centerAndHighlightNode(task.id);
 							}}
 						/>
 					{/snippet}

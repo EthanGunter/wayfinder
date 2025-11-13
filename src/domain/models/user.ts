@@ -6,7 +6,8 @@ import { Err } from "$domain/errors";
 export type UserStatus = "active" | "deleted";
 export type UserFeature =
 	| 'dev'
-	| 'task-sync'
+	| 'no-task-limit'
+	| 'import-export'
 
 // Base user interface
 export interface User {

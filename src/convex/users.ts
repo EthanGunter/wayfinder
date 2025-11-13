@@ -269,7 +269,7 @@ export const ensureCurrentUser = mutation({
        * at the cost of grandfathering in users to our first income source...
        * It's worth it while figuring out the UX, but should change ASAP
        */
-      features: ['task-sync'],
+      features: [],
       settingOverrides: undefined,
     });
 
@@ -317,7 +317,7 @@ function rowToAuthenticatedUser(row: Doc<"users">): User {
     displayName: row.displayName,
     // Dates are not supported in Convex
     // TODO:refactor consider SystemAgnosticUser<T>
-    createdAt: row._creationTime as any, 
+    createdAt: row._creationTime as any,
     status: row.status ?? "active",
     features: row.features ?? [],
     avatarUrl: row.avatarUrl,

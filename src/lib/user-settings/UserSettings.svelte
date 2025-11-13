@@ -28,14 +28,13 @@
 
 	// Standard pattern: create reactive feature stores for gating
 	const hasDev = hasFeature('dev');
-	const hasSync = hasFeature('task-sync');
 
-	// Helper to check feature access - must access stores directly with $ for reactivity
+	// Helper to check feature access
+	// Only used to hide tabs and sections, not to gate settings
 	const checkFeature = (feature: UserFeature | undefined): boolean => {
 		if (!feature) return true;
 		// Access stores directly by name for Svelte reactivity
 		if (feature === 'dev') return $hasDev;
-		if (feature === 'task-sync') return $hasSync;
 		return false;
 	};
 

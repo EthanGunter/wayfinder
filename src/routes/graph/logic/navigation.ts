@@ -10,20 +10,20 @@ import { Err } from '$domain/errors';
 //#endregion
 
 //#region CENTER/HIGHLIGHT
-export function centerNode(
+export function centerAndHighlightNode(
 	taskId: string,
-	options: { zoom?: number } = { zoom: 1.5 }
+	options: { zoom: number } = { zoom: 1.5 }
 ) {
 	const instance = get(svelteFlowInstance);
 	const node = get(nodes).find((n) => n.id === taskId);
-	if (!instance || !node || typeof instance.setCenter !== 'function') return;
+	if (!instance || !node) return;
 
 	instance.setCenter(node.position.x, node.position.y, {
-		duration: 250,
-		zoom: options.zoom ?? 1.5,
+		duration: 500,
+		zoom: options.zoom,
 	});
 
-	highlightNode(node.id);
+	highlightNode(taskId);
 }
 
 export function highlightNode(taskId: string) {
@@ -98,9 +98,9 @@ export async function initializeFromUrl(params: URLSearchParams) {
 	if (selectId) {
 		setTimeout(() => {
 			const node = get(nodes).find((n) => n.id === selectId);
-			centerNode(selectId);
-			if (node?.data.type === 'task') {
-				selectedTask.set((node.data.task) ?? null);
+			centerAndHighlightNode(selectId);
+			if (node?.data.task.type === 'task') {
+				selectedTask.set(node.data.task);
 			}
 		}, 500);
 	}

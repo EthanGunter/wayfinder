@@ -2,7 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export const UserStatusDef = v.union(v.literal("active"), v.literal("deleted"));
-export const UserFeatureDef = v.array(v.union(v.literal("task-sync"), v.literal("dev")));
+export const UserFeatureDef = v.array(v.union(v.literal("dev"), v.literal("no-task-limit"), v.literal("import-export")));
 
 export const UserDef = {
   authId: v.string(), // external user id from BetterAuth
@@ -12,9 +12,13 @@ export const UserDef = {
   features: UserFeatureDef,
   settingOverrides: v.optional(v.any()),
 }
+
+
+export const TaskTypeDef = v.union(v.literal("task"), v.literal("root"));
+
 export const ConvexTaskDef = {
   userAuthId: v.string(), // foreign key to users.authId
-  type: v.optional(v.union(v.literal("task"), v.literal("root"))), // "task" for normal tasks, "root" for hidden root task
+  type: TaskTypeDef,
   title: v.string(),
   content: v.optional(v.string()),
   status: v.number(), // keep your numeric enum as-is
