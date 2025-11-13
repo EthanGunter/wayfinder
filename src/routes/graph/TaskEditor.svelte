@@ -13,6 +13,10 @@
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
 	import { drawerOpen, drawerParams } from './logic/ui-state';
+	import SearchBar from '$lib/components/SearchBar.svelte';
+	import SearchTaskListItem from './SearchTaskListItem.svelte';
+	import { handleSearch } from './logic/search';
+	import type { ITask } from '$domain/models/task';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -65,6 +69,9 @@
 
 	// Internals
 	let showDeleteDialog = $state(false);
+	let showLinkDialog = $state(false);
+	let linkParentId = $state<string | null>(null);
+	let linkSearchQuery = $state('');
 	let accordionValues = $derived(layoutState.accordionValues);
 
 	function autosize(el: HTMLTextAreaElement | HTMLInputElement) {
@@ -190,6 +197,63 @@
 		drawerParams.set({ relation: parentTask, mode: 'parent' });
 		drawerOpen.set(true);
 	}
+
+	async function getFilteredSearchResults(query: string, parentId: string): Promise<Task[]> {
+		const results = await handleSearch(query);
+
+		// Get current children of parentId
+		let existingChildren: string[] = [];
+
+		if (parentId === task.id) {
+			// For "Blocked By" list, use task.children
+			existingChildren = task.children ?? [];
+		} else {
+			// For "Priority" list, look up parent from siblingsStore
+			const siblingsMap = $siblingsStore;
+			if (siblingsMap.status === 'resolved') {
+				for (const [p] of siblingsMap.data.entries()) {
+					if (p.id === parentId) {
+						existingChildren = p.children ?? [];
+						break;
+					}
+				}
+			}
+		}
+
+		// Filter out tasks that are already children
+		const existingChildrenSet = new Set(existingChildren);
+		return results.filter((t) => !existingChildrenSet.has(t.id) && t.id !== parentId);
+	}
+
+	async function handleLinkTask(selectedTask: Task, parentId: string) {
+		if (!parentId || !selectedTask.id || parentId === selectedTask.id) return;
+
+		// Update parent: add selectedTask as child
+		const [_, err1] = await tasksAPI.updateTask({
+			id: parentId,
+			data: {},
+			relations: [{ id: selectedTask.id, operation: 'addChild' }]
+		});
+		if (err1) {
+			Err.UNHANDLED(err1, 'Failed to link task');
+			return;
+		}
+
+		// Update child: add parentId as parent
+		const [__, err2] = await tasksAPI.updateTask({
+			id: selectedTask.id,
+			data: {},
+			relations: [{ id: parentId, operation: 'addParent' }]
+		});
+		if (err2) {
+			Err.UNHANDLED(err2, 'Failed to link task');
+			return;
+		}
+
+		showLinkDialog = false;
+		linkSearchQuery = '';
+		linkParentId = null;
+	}
 </script>
 
 <div class="relative flex h-full w-full flex-col bg-white" class:bg-[#efe]={checked}>
@@ -259,6 +323,10 @@
 									onReorder={(taskId, startIndex, finishIndex) =>
 										reorderChildren(taskId, startIndex, finishIndex)}
 									onAddTask={handleAddChildTask}
+									onLink={(parentId) => {
+										linkParentId = task.id;
+										showLinkDialog = true;
+									}}
 								/>
 							</Accordion.Content>
 						</Accordion.Item>
@@ -283,7 +351,6 @@
 											onSelect={(id) => onSelectNode?.(id)}
 											onReorder={(taskId, startIndex, finishIndex) =>
 												reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
-											onAddTask={handleAddChildTask}
 										/>
 									{/each}
 								</div>
@@ -307,6 +374,49 @@
 		<Dialog.Footer class="flex gap-2">
 			<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Cancel</Button>
 			<Button variant="destructive" onclick={performDelete}>Delete Task</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showLinkDialog}>
+	<Dialog.Content>
+		<Dialog.Header>
+			<Dialog.Title>Link Task</Dialog.Title>
+		</Dialog.Header>
+		<div class="p-4">
+			{#if linkParentId}
+				<SearchBar
+					bind:query={linkSearchQuery}
+					placeholder="Search for a task to link..."
+					handleQuery={(q) => getFilteredSearchResults(q, linkParentId!)}
+					onItemSelected={(selectedTask) => handleLinkTask(selectedTask, linkParentId!)}
+					autocomplete={false}
+					sorter={(a, b) => {
+						if (a.status == TaskStatus.complete) return 1;
+						else if (b.status == TaskStatus.complete) return -1;
+						else return 0;
+					}}
+				>
+					{#snippet children(task: ITask)}
+						<SearchTaskListItem
+							{task}
+							onLocate={() => {
+								onSelectNode?.(task.id);
+							}}
+						/>
+					{/snippet}
+				</SearchBar>
+			{/if}
+		</div>
+		<Dialog.Footer class="flex gap-2">
+			<Button
+				variant="outline"
+				onclick={() => {
+					showLinkDialog = false;
+					linkSearchQuery = '';
+					linkParentId = null;
+				}}>Cancel</Button
+			>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

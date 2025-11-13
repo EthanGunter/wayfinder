@@ -17,6 +17,7 @@
 		onReorder: (taskId: string, startIndex: number, finishIndex: number) => void;
 		showCompleted: boolean;
 		onAddTask?: (parentId: string) => void;
+		onLink?: (parentId: string) => void;
 	}
 
 	let {
@@ -28,7 +29,8 @@
 		onSelect,
 		onReorder,
 		showCompleted,
-		onAddTask
+		onAddTask,
+		onLink
 	}: Props = $props();
 
 	// Sort tasks into incomplete and complete
@@ -124,14 +126,27 @@
 				/>
 			{/each}
 		</ul>
-		{#if onAddTask}
-			<button
-				class="w-full px-2 py-1.5 text-sm text-gray-400 hover:cursor-pointer hover:text-gray-600 hover:underline"
-				onclick={() => onAddTask(parentId)}
-			>
-				+ new
-			</button>
-		{/if}
+		<div class="flex items-center gap-2 text-gray-400">
+			{#if onLink}
+				<button
+					class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
+					onclick={() => onLink(parentId)}
+				>
+					🔗 connect
+				</button>
+			{/if}
+			{#if onLink && onAddTask}
+				/
+			{/if}
+			{#if onAddTask}
+				<button
+					class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
+					onclick={() => onAddTask(parentId)}
+				>
+					+ create
+				</button>
+			{/if}
+		</div>
 		{#if sorted.complete.length > 0}
 			<Collapsible.Root bind:open={showCompleted}>
 				<Collapsible.Trigger
