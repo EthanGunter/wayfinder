@@ -18,7 +18,7 @@ export const TaskTypeDef = v.union(v.literal("task"), v.literal("root"));
 
 export const ConvexTaskDef = {
   userAuthId: v.string(), // foreign key to users.authId
-  type: v.optional(TaskTypeDef), // TODO: migrate to required
+  type: TaskTypeDef,
   title: v.string(),
   content: v.optional(v.string()),
   status: v.number(), // keep your numeric enum as-is
