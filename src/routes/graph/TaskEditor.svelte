@@ -12,6 +12,7 @@
 	import TaskList from './TaskList.svelte';
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
+	import { drawerOpen, drawerParams } from './logic/ui-state';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -164,6 +165,31 @@
 		const [_, e] = await tasksAPI.updateTask({ id: task.id, data: { children: currentIds } });
 		if (e) e.UNHANDLED('Failed to reorder children');
 	}
+
+	function handleAddChildTask(parentId: string) {
+		let parentTask: Task | undefined;
+
+		// For children list, parent is the current task
+		if (parentId === task.id) {
+			parentTask = task;
+		} else {
+			// For siblings list, look up parent from siblings map
+			const siblingsMap = $siblingsStore;
+			if (siblingsMap.status === 'resolved') {
+				for (const [p] of siblingsMap.data.entries()) {
+					if (p.id === parentId) {
+						parentTask = p;
+						break;
+					}
+				}
+			}
+		}
+
+		if (!parentTask) return;
+
+		drawerParams.set({ relation: parentTask, mode: 'parent' });
+		drawerOpen.set(true);
+	}
 </script>
 
 <div class="relative flex h-full w-full flex-col bg-white" class:bg-[#efe]={checked}>
@@ -219,7 +245,7 @@
 							<Accordion.Trigger
 								class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 							>
-								Tasks
+								Blocked By
 							</Accordion.Trigger>
 							<Accordion.Content>
 								<TaskList
@@ -232,6 +258,7 @@
 									}}
 									onReorder={(taskId, startIndex, finishIndex) =>
 										reorderChildren(taskId, startIndex, finishIndex)}
+									onAddTask={handleAddChildTask}
 								/>
 							</Accordion.Content>
 						</Accordion.Item>
@@ -256,6 +283,7 @@
 											onSelect={(id) => onSelectNode?.(id)}
 											onReorder={(taskId, startIndex, finishIndex) =>
 												reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
+											onAddTask={handleAddChildTask}
 										/>
 									{/each}
 								</div>

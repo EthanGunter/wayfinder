@@ -16,10 +16,20 @@
 		onSelect: (id: string) => void;
 		onReorder: (taskId: string, startIndex: number, finishIndex: number) => void;
 		showCompleted: boolean;
+		onAddTask?: (parentId: string) => void;
 	}
 
-	let { tasks, parentId, id, title, currentTaskId, onSelect, onReorder, showCompleted }: Props =
-		$props();
+	let {
+		tasks,
+		parentId,
+		id,
+		title,
+		currentTaskId,
+		onSelect,
+		onReorder,
+		showCompleted,
+		onAddTask
+	}: Props = $props();
 
 	// Sort tasks into incomplete and complete
 	const sorted = $derived.by(() => {
@@ -114,6 +124,14 @@
 				/>
 			{/each}
 		</ul>
+		{#if onAddTask}
+			<button
+				class="w-full px-2 py-1.5 text-sm text-gray-400 hover:cursor-pointer hover:text-gray-600 hover:underline"
+				onclick={() => onAddTask(parentId)}
+			>
+				+ new
+			</button>
+		{/if}
 		{#if sorted.complete.length > 0}
 			<Collapsible.Root bind:open={showCompleted}>
 				<Collapsible.Trigger
