@@ -19,49 +19,79 @@ export const runAll = migrations.runner([
 export const attachParentlessTasksToRoot = migrations.define({
 	table: "tasks",
 	migrateOne: async (ctx, doc) => {
-		// Only process tasks that have no parents
-		if (doc.type !== "task" || doc.parents.length > 0) {
-			return {}
+		// 1) Ensure every task has a type (default to "task")
+		let nextType = doc.type;
+		if (!nextType) {
+			nextType = "task";
+		} else if (nextType !== "task" && nextType !== "root") {
+			Err.UNHANDLED("Invalid task type");
 		}
 
-		// Get or create root for this user
-		const existingRoots = await ctx.db
-			.query("tasks")
-			.withIndex("by_user_type", (q: any) => q.eq("userAuthId", doc.userAuthId).eq("type", "root"))
-			.collect();
-		const root = existingRoots[0];
-
-		let rootId: string;
-		if (existingRoots.length === 1) {
-			rootId = String(root._id);
-			// Add this task to root's children
-			await ctx.db.patch(root._id, {
-				children: [...root.children, doc._id]
-			});
-		} else if (existingRoots.length > 1) {
-			Err.UNHANDLED("Multiple root tasks found for user");
-		} else {
-			// Create root task
-			const now = Date.now();
-			const newRootId = await ctx.db.insert("tasks", {
-				userAuthId: doc.userAuthId,
-				type: "root",
-				title: "Projects",
-				status: 0,
-				parents: [],
-				children: [doc._id],
-				lastEdit: now,
-				created: now,
-			});
-			rootId = String(newRootId);
+		// Prepare a patch accumulator
+		const patch: any = {};
+		if (nextType !== doc.type) {
+			patch.type = nextType;
 		}
 
-		// Set this task's parents to the root
-		return {
-			parents: [rootId]
+		// 2) Only attach parentless "task" docs under a root
+		if (nextType === "task" && (!doc.parents || doc.parents.length === 0)) {
+			// Get or create root for this user
+			const existingRoots = await ctx.db
+				.query("tasks")
+				.withIndex("by_user_type", (q: any) =>
+					q.eq("userAuthId", doc.userAuthId).eq("type", "root")
+				)
+				.collect();
+
+			if (existingRoots.length > 1) {
+				Err.UNHANDLED("Multiple root tasks found for user");
+			}
+
+			let rootId: string;
+			let root: any = existingRoots[0];
+
+			if (existingRoots.length === 1) {
+				rootId = String(root._id);
+
+				// Ensure the found root truly is type "root"
+				if (root.type !== "root") {
+					await ctx.db.patch(root._id, { type: "root" });
+					root = { ...root, type: "root" };
+				}
+
+				// Add this task to root's children if not already present
+				const children = Array.isArray(root.children) ? root.children : [];
+				if (!children.some((id: any) => String(id) === String(doc._id))) {
+					await ctx.db.patch(root._id, {
+						children: [...children, doc._id],
+					});
+				}
+			} else {
+				// Create root task
+				const now = Date.now();
+				const newRootId = await ctx.db.insert("tasks", {
+					userAuthId: doc.userAuthId,
+					type: "root",
+					title: "Projects",
+					status: 0,
+					parents: [],
+					children: [doc._id],
+					lastEdit: now,
+					created: now,
+				});
+				rootId = String(newRootId);
+			}
+
+			// Set this task's parents to the root
+			patch.parents = [rootId];
 		}
+
+		// If nothing to change, return empty object
+		if (Object.keys(patch).length === 0) return {};
+
+		return patch;
 	},
-})
+});
 
 /** 2025-11-11
  * Introduces type field and defaults to "task" and moves away from isRoot abstraction

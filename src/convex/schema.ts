@@ -28,8 +28,6 @@ export const ConvexTaskDef = {
   children: v.array(v.string()),
   lastEdit: v.number(),  // unix milliseconds
   created: v.number(),  // unix milliseconds
-  priority: v.optional(v.number()),
-  isRoot: v.optional(v.boolean()),
 }
 
 
