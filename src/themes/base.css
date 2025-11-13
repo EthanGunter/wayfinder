@@ -149,7 +149,9 @@
 
 @layer layout {
   .page-root {
-    @apply flex flex-col h-full w-full overflow-hidden bg-background;
+    @apply flex flex-col overflow-hidden bg-background;
+    height: 100vh;
+    width: 100vw;
   }
 }
 

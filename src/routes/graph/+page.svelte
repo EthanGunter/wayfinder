@@ -7,7 +7,7 @@
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
-	import { ResizablePaneGroup, ResizablePane, ResizableHandle } from '$lib/components/ui/resizable';
+	import * as Resizable from '$lib/components/ui/resizable';
 	import TaskEditor from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import { TaskStatus, type Task, type ITask } from '$domain/models/task';
@@ -101,7 +101,8 @@
 	});
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		(await tasksAPI.updateTask({ id: original.id, data: update }))[1]?.UNHANDLED();
+		const [_, err] = await tasksAPI.updateTask({ id: original.id, data: update });
+		if (err) err.UNHANDLED();
 	}
 
 	function onGraphDelete(params: { nodes: WFNode[]; edges: WFEdge[] }): void {
@@ -182,8 +183,8 @@
 		</div>
 	</div>
 	<div class="flex min-h-0 flex-1 flex-col">
-		<ResizablePaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
-			<ResizablePane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
+		<Resizable.PaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
+			<Resizable.Pane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
 				<SvelteFlowProvider>
 					<div class="relative flex h-full w-full">
 						<SvelteFlow
@@ -243,26 +244,24 @@
 						</Button>
 					</div>
 				</SvelteFlowProvider>
-			</ResizablePane>
+			</Resizable.Pane>
 			{#if $selectedTask}
-				<ResizableHandle />
-				<ResizablePane
-					class="flex h-full flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
+				<Resizable.Handle />
+				<Resizable.Pane
+					class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
 					defaultSize={30}
 					minSize={24}
 				>
-					<ScrollArea class="h-full">
-						<TaskEditor
-							bind:task={$selectedTask}
-							bind:layoutState={$editorLayoutState}
-							{onTaskChange}
-							onDelete={onEditorDelete}
-							{onSelectNode}
-						/>
-					</ScrollArea>
-				</ResizablePane>
+					<TaskEditor
+						bind:task={$selectedTask}
+						bind:layoutState={$editorLayoutState}
+						{onTaskChange}
+						onDelete={onEditorDelete}
+						{onSelectNode}
+					/>
+				</Resizable.Pane>
 			{/if}
-		</ResizablePaneGroup>
+		</Resizable.PaneGroup>
 	</div>
 </div>
 

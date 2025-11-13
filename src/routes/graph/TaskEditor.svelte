@@ -11,6 +11,7 @@
 
 	import TaskList from './TaskList.svelte';
 	import Separator from '$lib/components/ui/separator/separator.svelte';
+	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -42,6 +43,8 @@
 	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
 	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
 
+	let notesEl = $state<HTMLTextAreaElement | null>(null);
+
 	$effect(() => {
 		task.id;
 		siblingsStore.updateQuery({ id: task.id });
@@ -54,9 +57,25 @@
 		}
 	});
 
+	$effect(() => {
+		task.content;
+		if (notesEl) autosize(notesEl);
+	});
+
 	// Internals
 	let showDeleteDialog = $state(false);
 	let accordionValues = $derived(layoutState.accordionValues);
+
+	function autosize(el: HTMLTextAreaElement | HTMLInputElement) {
+		if (!el) return;
+		// Only apply height logic to textarea; inputs don't need it
+		if (el instanceof HTMLTextAreaElement) {
+			el.style.height = '0px';
+			// Compensate for borders/padding reliably
+			const borderBox = el.offsetHeight - el.clientHeight;
+			el.style.height = Math.max(el.scrollHeight + borderBox, 48) + 'px';
+		}
+	}
 
 	// Complete status mirrors task.status; no redundant state held
 	function toggleCompleted(next: boolean) {
@@ -143,104 +162,110 @@
 
 		task.children = currentIds;
 		const [_, e] = await tasksAPI.updateTask({ id: task.id, data: { children: currentIds } });
-		if (e) Err.UNHANDLED(e, 'Failed to reorder children');
+		if (e) e.UNHANDLED('Failed to reorder children');
 	}
 </script>
 
-<div class="task-editor flex h-full w-full flex-col p-3" class:bg-[#efe]={checked}>
-	<div class="flex h-full w-full resize-none flex-col rounded-xl border-1 bg-white p-1">
-		<div class="flex items-start gap-2 px-2 py-2">
-			<Checkbox
-				class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
-				aria-label="Toggle complete"
-				bind:checked
-				onCheckedChange={(status) => toggleCompleted(status)}
-			/>
-			<input
-				id="input-task-title"
-				name="title"
-				class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
-				placeholder="Task title"
-				value={task.title}
-				oninput={handleInput}
-			/>
-			<Separator orientation="vertical" />
-			<button
-				onclick={confirmDelete}
-				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
-				title="Delete task"
-			>
-				<Icon icon="lucide:trash-2" class="size-4" />
-			</button>
-		</div>
-
-		<textarea
-			name="content"
-			id="task-editor-notes"
-			placeholder="Add notes or description..."
-			value={task.content}
-			oninput={handleInput}
-			class=" h-full resize-none p-2 text-sm text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
-			rows="3"
-		></textarea>
-	</div>
-
-	<Accordion.Root
-		type="multiple"
-		value={accordionValues}
-		onValueChange={(e) => {
-			layoutState.accordionValues = e as any;
-		}}
-	>
-		{#if $childTasksStore.status === 'resolved' && $childTasksStore.data.length > 0}
-			<Accordion.Item value="tasks">
-				<Accordion.Trigger
-					class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+<div class="relative flex h-full w-full flex-col bg-white" class:bg-[#efe]={checked}>
+	<ScrollWithHeader class="bg-white">
+		{#snippet header()}
+			<!-- sticky top-0 z-10  -->
+			<div class="flex items-start gap-2 px-2 py-2">
+				<Checkbox
+					class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
+					aria-label="Toggle complete"
+					bind:checked
+					onCheckedChange={(status) => toggleCompleted(status)}
+				/>
+				<input
+					class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+					id="input-task-title"
+					name="title"
+					bind:value={task.title}
+					placeholder="Task title"
+					oninput={handleInput}
+				/>
+				<Separator orientation="vertical" />
+				<button
+					class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+					title="Delete task"
+					onclick={confirmDelete}
 				>
-					Tasks
-				</Accordion.Trigger>
-				<Accordion.Content>
-					<TaskList
-						showCompleted={layoutState.showCompletedTasks}
-						tasks={$childTasksStore.data}
-						parentId={task.id}
-						id={`child-${task.id}`}
-						onSelect={(id) => {
-							onSelectNode?.(id);
-						}}
-						onReorder={(taskId, startIndex, finishIndex) =>
-							reorderChildren(taskId, startIndex, finishIndex)}
-					/>
-				</Accordion.Content>
-			</Accordion.Item>
-		{/if}
-		{#if $siblingsStore.status === 'resolved'}
-			<Accordion.Item value="parent-order">
-				<Accordion.Trigger
-					class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+					<Icon icon="lucide:trash-2" class="size-4" />
+				</button>
+			</div>
+		{/snippet}
+
+		{#snippet content()}
+			<div class="flex h-full flex-col p-3">
+				<textarea
+					class="w-full shrink-0 resize-none rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
+					bind:this={notesEl}
+					name="content"
+					bind:value={task.content}
+					placeholder="Add notes or description..."
+					oninput={handleInput}
+				></textarea>
+
+				<Accordion.Root
+					type="multiple"
+					value={accordionValues}
+					onValueChange={(e) => {
+						layoutState.accordionValues = e as any;
+					}}
 				>
-					Priority
-				</Accordion.Trigger>
-				<Accordion.Content>
-					<div class="flex flex-col gap-4">
-						{#each $siblingsStore.data as [parent, siblings] (parent.id)}
-							<TaskList
-								showCompleted={layoutState.showCompletedSiblings}
-								tasks={siblings}
-								parentId={parent.id}
-								id={`sibling-${parent.id}`}
-								title={parent.title}
-								currentTaskId={task.id}
-								onSelect={(id) => onSelectNode?.(id)}
-								onReorder={(taskId, startIndex, finishIndex) =>
-									reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
-							/>
-						{/each}
-					</div>
-				</Accordion.Content>
-			</Accordion.Item>
-		{/if}
-	</Accordion.Root>
+					{#if $childTasksStore.status === 'resolved' && $childTasksStore.data.length > 0}
+						<Accordion.Item value="tasks">
+							<Accordion.Trigger
+								class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+							>
+								Tasks
+							</Accordion.Trigger>
+							<Accordion.Content>
+								<TaskList
+									showCompleted={layoutState.showCompletedTasks}
+									tasks={$childTasksStore.data}
+									parentId={task.id}
+									id={`child-${task.id}`}
+									onSelect={(id) => {
+										onSelectNode?.(id);
+									}}
+									onReorder={(taskId, startIndex, finishIndex) =>
+										reorderChildren(taskId, startIndex, finishIndex)}
+								/>
+							</Accordion.Content>
+						</Accordion.Item>
+					{/if}
+					{#if $siblingsStore.status === 'resolved'}
+						<Accordion.Item value="parent-order">
+							<Accordion.Trigger
+								class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+							>
+								Priority
+							</Accordion.Trigger>
+							<Accordion.Content>
+								<div class="flex flex-col gap-4">
+									{#each $siblingsStore.data as [parent, siblings] (parent.id)}
+										<TaskList
+											showCompleted={layoutState.showCompletedSiblings}
+											tasks={siblings}
+											parentId={parent.id}
+											id={`sibling-${parent.id}`}
+											title={parent.title}
+											currentTaskId={task.id}
+											onSelect={(id) => onSelectNode?.(id)}
+											onReorder={(taskId, startIndex, finishIndex) =>
+												reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
+										/>
+									{/each}
+								</div>
+							</Accordion.Content>
+						</Accordion.Item>
+					{/if}
+				</Accordion.Root>
+			</div>
+		{/snippet}
+	</ScrollWithHeader>
 </div>
 
 <Dialog.Root bind:open={showDeleteDialog}>
