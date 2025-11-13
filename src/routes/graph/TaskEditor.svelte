@@ -90,8 +90,6 @@
 		startIndex: number,
 		finishIndex: number
 	) {
-		console.log('reorderWithinParent', parentId, movingId, startIndex, finishIndex);
-
 		if (finishIndex === startIndex) return;
 
 		const siblingsMap = $siblingsStore;

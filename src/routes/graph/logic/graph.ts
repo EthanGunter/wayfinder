@@ -5,6 +5,7 @@ import { get } from 'svelte/store';
 import { elkLayoutEngine } from './LayoutEngines';
 import { allTasks, taskById, nodes, edges } from './shared-state';
 import { filteredIds } from './search';
+import { pendingNodeParams, type PendingNodeIntent } from './ui-state';
 //#endregion
 
 //#region INTERNAL HELPERS
@@ -45,27 +46,125 @@ function decorateDimming(
 
 //#region PUBLIC ACTIONS
 export function refreshNodesData(tasks: Task[]) {
+	// 1) keep global maps up to date
 	allTasks.set(tasks);
 	taskById.clear();
 	for (const t of tasks) taskById.set(t.id, t);
 
+	// 2) start from current graph state
 	const currentNodes = get(nodes);
 	const currentEdges = get(edges);
 
-	// update node.data from taskById
-	const updatedNodes = currentNodes.map((n) => {
+	// 3) rehydrate data for existing nodes; collect IDs to detect new tasks
+	const knownIds = new Set(currentNodes.map((n) => n.id));
+	let updatedNodes: WFNode[] = currentNodes.map((n) => {
 		const t = taskById.get(n.id);
 		return t ? { ...n, data: { task: t } } : n;
 	});
 
-	// reapply dimming with existing edges
-	const decorated = decorateDimming(updatedNodes, currentEdges);
+	// 4) add missing nodes (brand-new tasks) with placeholder position (0,0)
+	const newNodes: WFNode[] = tasks
+		.filter((t) => !knownIds.has(t.id))
+		.map((t) => ({
+			id: t.id,
+			type: 'task',
+			data: { task: t },
+			position: { x: 0, y: 0 },
+			x: 0,
+			y: 0,
+		}));
+
+	updatedNodes = [...updatedNodes, ...newNodes];
+
+	// 5) generate edges for any nodes (new or existing) based on their current Task relations
+	//    - id: `e-${start}-${end}`
+	//    - for parent edges: source = parentId, target = node.id
+	//    - for child edges: source = node.id, target = childId
+	// We’ll generate both directions but avoid duplicates with a Set.
+	const existingKey = new Set(currentEdges.map((e) => `${e.source}->${e.target}`));
+	const generatedEdges: WFEdge[] = [];
+
+	for (const n of newNodes) {
+		const t = n.data.task;
+		if (!t) continue;
+
+		// parents => edges parent -> node
+		for (const parentId of t.parents) {
+			if (!parentId) continue;
+			const key = `e-${parentId}-${t.id}`;
+			if (!existingKey.has(key)) {
+				generatedEdges.push({
+					id: key,
+					source: parentId,
+					target: t.id,
+					type: 'task',
+					data: { task: t },
+				} satisfies WFEdge);
+				existingKey.add(key);
+			}
+		}
+
+		// children => edges node -> child
+		for (const childId of t.children) {
+			if (!childId) continue;
+			const key = `e-${t.id}-${childId}`;
+			if (!existingKey.has(key)) {
+				generatedEdges.push({
+					id: key,
+					source: t.id,
+					target: childId,
+					type: 'task',
+					data: { task: t },
+				} satisfies WFEdge);
+				existingKey.add(key);
+			}
+		}
+	}
+
+	// 6) apply pending position once (if any), to updatedNodes (the array we will set)
+	const pending: PendingNodeIntent = get(pendingNodeParams);
+	if (pending?.pos) {
+		// Choose a node to apply:
+		// - Prefer pending.id if present
+		// - Else, if there is exactly one truly new node, use that (common case right after create)
+		let targetId: string | undefined = pending.id;
+
+		if (!targetId) {
+			const trulyNewIds = newNodes.map((nn) => nn.id);
+			if (trulyNewIds.length === 1) {
+				targetId = trulyNewIds[0];
+			}
+		}
+
+		if (targetId) {
+			const idx = updatedNodes.findIndex((n) => n.id === targetId);
+			if (idx >= 0) {
+				const n = updatedNodes[idx];
+				updatedNodes = [
+					...updatedNodes.slice(0, idx),
+					{
+						...n,
+						position: { x: pending.pos.x, y: pending.pos.y }
+					},
+					...updatedNodes.slice(idx + 1),
+				];
+				// one-shot consume
+				pendingNodeParams.set({});
+			}
+		}
+	}
+
+	// 7) finalize edges: merge current + generated, then de-dup; then dim and set
+	const mergedEdges = [...currentEdges, ...generatedEdges];
+
+	const decorated = decorateDimming(updatedNodes, mergedEdges);
 	nodes.set(decorated.nodes);
+	edges.set(decorated.edges);
+	edges.set(decorated.edges);
 }
 
 export async function updateGraph(useLayout: boolean) {
 	const all = get(allTasks);
-	const f = get(filteredIds);
 	const visibleIds = buildVisibleIdSet();
 	const tasksForLayout = selectTasksForLayout(all, visibleIds);
 

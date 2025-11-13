@@ -4,7 +4,7 @@ import type { Connection } from '@xyflow/svelte';
 import { get } from 'svelte/store';
 import tasksAPI from '$lib/API/Tasks';
 import { nodes, edges, taskById, screenToFlowPosition } from './shared-state';
-import { drawerOpen, triggerForNew } from './ui-state';
+import { drawerOpen, drawerParams, pendingNodeParams } from './ui-state';
 import type { WFEdge, WFNode } from '../types';
 //#endregion
 
@@ -161,16 +161,24 @@ export const handleConnectEnd = (event: MouseEvent | TouchEvent, connectState: a
 		if (connectState.toHandle || connectState.toNode) {
 			// dropped on a handle, invalid connection — no-op
 		} else {
-			const pos = getFlowPointFromEvent(event, get(screenToFlowPosition)) || null;
-			// pos reserved for future "create task at cursor"
 
 			const srcId = connectionSourceNodeId;
 			const triggerTask = srcId ? taskById.get(srcId) || null : null;
 			if (triggerTask) {
-				triggerForNew.set({
-					task: triggerTask,
+				drawerParams.set({
+					relation: triggerTask,
 					mode: connectionHandleType === 'source' ? 'parent' : 'child',
 				});
+
+				const pos = getFlowPointFromEvent(event, get(screenToFlowPosition)) || null;
+				if (pos) {
+					// we know relation and mode before API call
+					pendingNodeParams.set({
+						pos,
+						// TODO ts: Date.now(),
+					});
+				}
+
 				drawerOpen.set(true);
 			}
 		}

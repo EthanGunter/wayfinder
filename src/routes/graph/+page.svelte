@@ -48,7 +48,7 @@
 		handleReconnectEnd,
 		isValidConnection
 	} from './logic/svelte-flow';
-	import { selectedTask, editorLayoutState, drawerOpen, triggerForNew } from './logic/ui-state';
+	import { selectedTask, editorLayoutState, drawerParams, drawerOpen } from './logic/ui-state';
 	import type { WFNode, WFEdge } from './types';
 
 	let unsubscribeTasksStore: (() => void) | null = null;
@@ -223,8 +223,7 @@
 							variant="outline"
 							class="absolute right-6 bottom-6 h-9 w-10 rounded-full border-1 border-border bg-white"
 							onclick={() => {
-								triggerForNew.set(null);
-								drawerOpen.set(true);
+								drawerParams.set(null);
 							}}
 						>
 							+
@@ -263,7 +262,11 @@
 	</div>
 </div>
 
-<TaskCreationDrawer bind:open={$drawerOpen} relation={$triggerForNew} />
+<TaskCreationDrawer
+	bind:open={$drawerOpen}
+	relation={$drawerParams?.relation}
+	relationMode={$drawerParams?.mode}
+/>
 
 <style>
 	:global(.svelte-flow__attribution) {

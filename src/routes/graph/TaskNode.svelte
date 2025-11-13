@@ -5,11 +5,12 @@
 	import { type WFNode, type FlowData } from './types';
 
 	interface Props {
+		id: string;
 		data: FlowData<Task>;
 		selected: boolean;
 	}
 
-	let { data, selected }: Props = $props();
+	let { id, data, selected }: Props = $props();
 	const isDimmed = $derived(data.dimmed ?? false);
 
 	// Track animation state for one-time fade-out effect
@@ -61,7 +62,7 @@
 <div
 	bind:this={nodeElement}
 	data-tasknodeid={data.task.id}
-	class="task-node relative max-w-[280px] min-w-[100px] rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
+	class="task-node relative min-w-[200px] rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
 	{isTaskCompleted(data.task) ? 'bg-green-100' : 'bg-white'}"
 	class:highlighted={isAnimating}
 	class:dimmed={isDimmed}
@@ -78,7 +79,9 @@
 			{/if}
 			{#if $devEnabled}
 				<div class="text-[7px]">
-					<span>id: {data.task.id.substring(0, 4)}</span>
+					<span>task-id: {data.task.id.substring(0, 12)}</span>
+					<br />
+					<span>node-id: {id}</span>
 					{#if data.task.parents.length > 0}
 						<h6>Parents</h6>
 					{/if}

@@ -81,7 +81,7 @@ export async function layoutTasksWithElk(
 
 	const laidOut = await elk.layout(elkGraph);
 
-	const nodes: WFNode[] = (laidOut.children || []).map((n: any) => ({
+	const nodes: WFNode[] = (laidOut.children || []).map((n) => ({
 		id: String(n.id),
 		type: 'task',
 		position: { x: n.x ?? 0, y: n.y ?? 0 },

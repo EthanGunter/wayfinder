@@ -3,7 +3,6 @@ import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { calculateRelationshipChanges, relationshipChangesToUpdateParams, type SystemAgnosticTask } from "$domain/models/task";
-import { api } from "./_generated/api";
 
 
 //#region Utility
@@ -12,6 +11,7 @@ type DBTask = Doc<'tasks'>;
 type TaskWithId = Omit<DBTask, "_creationTime">;
 const argsCreateTask = v.object({
 	id: v.optional(v.string()),
+	type: v.union(v.literal("task"), v.literal("root")),
 	userAuthId: v.string(),
 	title: v.string(),
 	content: v.optional(v.string()),

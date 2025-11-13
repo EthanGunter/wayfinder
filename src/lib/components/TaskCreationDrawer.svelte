@@ -7,13 +7,15 @@
 	import { Err } from '$domain/errors';
 	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
 	import tasksAPI from '$lib/API/Tasks';
+	import { pendingNodeParams } from '../../routes/graph/logic/ui-state';
 
-	interface Props {
+	type Props = {
 		open: boolean;
-		relation?: { task: Task; mode: 'child' | 'parent' } | null;
-	}
+		relation?: Task;
+		relationMode?: 'child' | 'parent';
+	};
 
-	let { open = $bindable(), relation }: Props = $props();
+	let { open = $bindable(), relation, relationMode }: Props = $props();
 
 	// Form state
 	let formData = $state({
@@ -39,6 +41,7 @@
 
 		const createDetail: CreateTaskParams = {
 			id: v4(),
+			type: 'task',
 			userAuthId: $authState.user.id,
 			title: formData.title.trim()
 		};
@@ -47,24 +50,23 @@
 			createDetail.content = formData.content.trim();
 		}
 
-		if (formData.completed) {
-			createDetail.status = TaskStatus.complete;
-		}
-
 		if (relation) {
-			switch (relation.mode) {
+			switch (relationMode) {
 				case 'parent':
-					createDetail.parents = [relation.task.id];
+					createDetail.parents = [relation.id];
 					break;
 				case 'child':
-					createDetail.children = [relation.task.id];
+					createDetail.children = [relation.id];
 					break;
 			}
 		}
 
-		const [task, error] = await tasksAPI.createTask({ createDetail });
-		if (error) Err.UNHANDLED(error);
-		if (task) open = false;
+		const [newId, error] = await tasksAPI.createTask({ createDetail });
+		if (error) error.UNHANDLED('[TaskCreationDrawer.handleSubmit] Error creating task');
+		if (newId) {
+			$pendingNodeParams = { ...$pendingNodeParams, id: newId };
+			open = false;
+		}
 	}
 
 	const isValid = $derived(formData.title.trim().length > 0);
