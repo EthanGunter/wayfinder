@@ -169,4 +169,8 @@
     cursor: pointer;
     border-color: var(--border);
   }
+
+  svg{
+    @apply size-4;
+  }
 }

@@ -31,9 +31,9 @@
 	{#snippet children({ checked, indeterminate })}
 		<span class="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
 			{#if indeterminate}
-				<Icon icon="lucide:minus" class="size-4" />
+				<Icon icon="lucide:minus" class="" />
 			{:else}
-				<Icon icon="lucide:check" class={cn('size-4', !checked && 'text-transparent')} />
+				<Icon icon="lucide:check" class={cn('', !checked && 'text-transparent')} />
 			{/if}
 		</span>
 		{@render childrenProp?.()}

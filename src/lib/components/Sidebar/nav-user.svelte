@@ -88,7 +88,7 @@
 								<span class="truncate text-xs">{user.email}</span>
 							{/if} -->
 						</div>
-						<Icon icon="lucide:chevron-down" class="ml-auto size-4" />
+						<Icon icon="lucide:chevron-down" class="ml-auto " />
 						<!-- <ChevronsUpDownIcon class="ml-auto size-4" /> -->
 					</Sidebar.MenuButton>
 				{/snippet}
@@ -115,7 +115,7 @@
 					<DropdownMenu.Item
 						onclick={() => goto(`/account?redirect=${$page.url.pathname + $page.url.search}`)}
 					>
-						<Icon icon="lucide:settings" class="size-4" />
+						<Icon icon="lucide:settings" class="" />
 						<!-- <SettingsIcon class="size-4" /> -->
 						User Settings
 					</DropdownMenu.Item>
@@ -123,19 +123,19 @@
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
 					<DropdownMenu.Item onclick={handleExport}>
-						<Icon icon="lucide:download" class="size-4" />
+						<Icon icon="lucide:download" class="" />
 						<!-- <DownloadIcon class="size-4" /> -->
 						Export Data
 					</DropdownMenu.Item>
 					<DropdownMenu.Item onclick={handleImport}>
-						<Icon icon="lucide:upload" class="size-4" />
+						<Icon icon="lucide:upload" class="" />
 						<!-- <UploadIcon class="size-4" /> -->
 						Import Data
 					</DropdownMenu.Item>
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item onclick={handleSignOut}>
-					<Icon icon="lucide:log-out" class="size-4" />
+					<Icon icon="lucide:log-out" class="" />
 					<!-- <LogOutIcon class="size-4" /> -->
 					Sign out
 				</DropdownMenu.Item>
