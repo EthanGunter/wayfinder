@@ -10,6 +10,7 @@
 		extractClosestEdge,
 		type Edge
 	} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
+	import Button from '$lib/components/ui/button/button.svelte';
 
 	type ItemData = { taskId: string; parentId: string; index: number; listId: string };
 
@@ -40,6 +41,7 @@
 		isCurrent?: boolean;
 		isDraggable?: boolean;
 		onSelect?: (taskId: string) => void;
+		onDisconnect?: (taskId: string) => void;
 	}
 
 	let {
@@ -49,7 +51,8 @@
 		index,
 		isCurrent = false,
 		isDraggable = false,
-		onSelect
+		onSelect,
+		onDisconnect
 	}: Props = $props();
 
 	let itemEl: HTMLElement | undefined = $state();
@@ -164,6 +167,14 @@
 			{/if}
 			<span>{task.title}</span>
 		</button>
+		{#if onDisconnect}
+			<button
+				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+				onclick={() => onDisconnect?.(task.id)}
+			>
+				<Icon icon="material-symbols:link-off" class="" />
+			</button>
+		{/if}
 	</div>
 </li>
 {#if closestEdge === 'bottom'}
