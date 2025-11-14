@@ -974,11 +974,13 @@ export const getPrioritizedTasks = query({
 	args: { limit: v.number() },
 	handler: async (ctx, { limit }) => {
 		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) return { ok: true as const, value: [] }; // TODO:UX/DX Log and error
+		if (!identity) return { ok: false as const, error: serializeError(new NotAuthorizedError("Auth Identity not found")) }
+
 		const tasks = await ctx.db
 			.query("tasks")
 			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
 			.collect();
+
 		// Filter out root tasks - they're hidden from clients
 		const taskTasks = tasks.filter(t => t.type !== "root");
 		// Get root to start traversal from root's children
@@ -1004,7 +1006,7 @@ export const getPrioritizedTasks = query({
 				to show up in the planner's suggestions. This should probably have
 				some form of configuration, because it's awkward having to manually
 				"complete" a task that isn't really a task at all.
-				This will likely play into the node-type system if we every get there...
+				This will likely play into the node-type system if we ever get there...
 				*/
 				if (children.every((c) => !c || c.status !== 0) && task.status === 0) todo.push(task);
 			}
@@ -1055,7 +1057,7 @@ function convertToTaskBase(task: DBTask): SystemAgnosticTask<number> {
  * Gets or creates the root task for a user. Ensures exactly one root per user.
  * Root tasks are hidden from clients and serve as the parent for all parentless tasks.
  */
-async function getOrCreateRoot(ctx: any, userAuthId: string): Promise<DBTask> {
+export async function getOrCreateRoot(ctx: any, userAuthId: string): Promise<DBTask> {
 	// Look for existing root
 	const existingRoots = await ctx.db
 		.query("tasks")
