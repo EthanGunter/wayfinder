@@ -225,20 +225,8 @@ async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): 
 		children = children.filter(id => !update.data.removeChildren!.includes(id));
 	}
 
-
-	// Normalize parents (non-root only)
-	if (oldTask.type !== "root") {
-		if (parents.length === 0) {
-			const rootTask = await getOrCreateRoot(ctx, oldTask.userAuthId);
-			parents = [String(rootTask._id)];
-		} else if (parents.length > 1) {
-			const rootTask = await getOrCreateRoot(ctx, oldTask.userAuthId);
-			const rootId = String(rootTask._id);
-			if (parents.includes(rootId)) {
-				parents = parents.filter(id => id !== rootId);
-			}
-		}
-	}
+	// Normalize parents using shared function
+	parents = await normalizeTaskParents(ctx, oldTask, parents, taskId);
 
 	// Reassign delta fields for update
 	update.data.parents = parents;
@@ -253,35 +241,6 @@ async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): 
 
 	// Apply patch
 	await ctx.db.patch(taskId, update.data);
-
-	// Handle root attachment/detachment
-	if (oldTask.type !== "root") {
-		const rootTask = await getOrCreateRoot(ctx, oldTask.userAuthId);
-		const rootId = String(rootTask._id);
-		const wasAttachedToRoot = oldTask.parents?.includes(rootId);
-		const isAttachedToRoot = parents.includes(rootId);
-
-		if (!wasAttachedToRoot && isAttachedToRoot) {
-
-			// Newly attached to root
-			const rootChildren = [...(rootTask.children ?? [])];
-			if (!rootChildren.includes(String(taskId))) {
-				rootChildren.push(String(taskId));
-				await ctx.db.patch(rootTask._id, {
-					children: rootChildren,
-					lastEdit: now,
-				});
-			}
-		} else if (wasAttachedToRoot && !isAttachedToRoot) {
-
-			// Detached from root
-			const rootChildren = (rootTask.children ?? []).filter(id => id !== String(taskId));
-			await ctx.db.patch(rootTask._id, {
-				children: rootChildren,
-				lastEdit: now,
-			});
-		}
-	}
 
 	// Get updated task
 	const updated = await ctx.db.get(taskId);
@@ -699,6 +658,65 @@ export async function getOrCreateRoot(ctx: any, userAuthId: string): Promise<DBT
 	}
 }
 
+/**
+ * Normalizes a task's parents array according to root rules:
+ * - If empty, attaches to root
+ * - If multiple parents, removes root if present
+ * Also updates root.children when task attaches/detaches from root.
+ * @returns Normalized parents array
+ */
+async function normalizeTaskParents(
+	ctx: MutationCtx,
+	oldTask: DBTask,
+	newParents: string[],
+	taskId: Id<"tasks">
+): Promise<string[]> {
+	// Root tasks cannot have parents modified
+	if (oldTask.type === "root") {
+		return newParents;
+	}
+
+	const rootTask = await getOrCreateRoot(ctx, oldTask.userAuthId);
+	const rootId = String(rootTask._id);
+	const wasAttachedToRoot = oldTask.parents?.includes(rootId);
+	
+	let normalizedParents: string[];
+	
+	// Normalize parents array
+	if (newParents.length === 0) {
+		// No parents - attach to root
+		normalizedParents = [rootId];
+	} else if (newParents.length > 1) {
+		// Multiple parents - remove root if present
+		normalizedParents = newParents.filter(id => id !== rootId);
+	} else {
+		// Single parent - keep as is
+		normalizedParents = [...newParents];
+	}
+	
+	const isAttachedToRoot = normalizedParents.includes(rootId);
+	
+	// Update root.children when attachment state changes
+	if (!wasAttachedToRoot && isAttachedToRoot) {
+		// Newly attached to root
+		const rootChildren = [...(rootTask.children ?? [])];
+		if (!rootChildren.includes(String(taskId))) {
+			rootChildren.push(String(taskId));
+			await ctx.db.patch(rootTask._id, {
+				children: rootChildren,
+			});
+		}
+	} else if (wasAttachedToRoot && !isAttachedToRoot) {
+		// Detached from root
+		const rootChildren = (rootTask.children ?? []).filter(id => id !== String(taskId));
+		await ctx.db.patch(rootTask._id, {
+			children: rootChildren,
+		});
+	}
+	
+	return normalizedParents;
+}
+
 async function propagateRelationshipChanges(
 	ctx: MutationCtx,
 	changes: Array<{ oldTask: DBTask | null; newTask: DBTask | null }>
@@ -723,9 +741,17 @@ async function propagateRelationshipChanges(
 		// Apply operations using shared logic
 		const updated = applyRelationshipOperations(cleanTaskForClient(relatedTask), operations);
 
-		// Patch the DB
+		// Normalize parents for affected tasks
+		const normalizedParents = await normalizeTaskParents(
+			ctx,
+			relatedTask,
+			updated.parents ?? [],
+			taskId as Id<"tasks">
+		);
+
+		// Patch the DB with normalized parents
 		await ctx.db.patch(relatedTask._id, {
-			parents: updated.parents,
+			parents: normalizedParents,
 			children: updated.children,
 		});
 

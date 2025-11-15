@@ -436,7 +436,7 @@ describe("updateTask", () => {
 		expect(rootAfter!.children).toContain(child.created.id);
 	});
 
-	test("removes root when task has multiple parents", async () => {
+	test("removes root when task gains parents", async () => {
 		const t = createTestCtx();
 
 		const p1 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
@@ -459,7 +459,7 @@ describe("updateTask", () => {
 			id: task.created.id,
 			data: {
 				type: "task",
-				addParents: [p1.created.id, p2.created.id],
+				addParents: [p1.created.id],
 			},
 		});
 
@@ -468,46 +468,137 @@ describe("updateTask", () => {
 		// Root should be auto-removed
 		expect(updated!.parents).not.toContain(rootId);
 		expect(updated!.parents).toContain(p1.created.id);
-		expect(updated!.parents).toContain(p2.created.id);
-		expect(updated!.parents).toHaveLength(2);
+		expect(updated!.parents).toHaveLength(1);
 	});
 
-	test("removes task from root.children when task gains non-root parent", async () => {
+	test("removes child's parent reference when parent removes child", async () => {
 		const t = createTestCtx();
 
 		const parent = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({ title: "Parent" }),
 		});
 
-		// Create task attached to root
-		const task = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
-			createDetail: buildTaskCreate({ title: "Task" }),
+		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({
+				title: "Child",
+				parents: [parent.created.id],
+			}),
 		});
 
-		const rootId = task.created.parents[0];
-		const rootBefore = await getTaskById(t, rootId as Id<"tasks">);
-		
-		// Verify task is initially in root's children
-		expect(rootBefore!.children).toContain(task.created.id);
+		// Verify initial relationship
+		const parentBefore = await getTaskById(t, parent.created.id);
+		const childBefore = await getTaskById(t, child.created.id);
+		expect(parentBefore!.children).toContain(child.created.id);
+		expect(childBefore!.parents).toContain(parent.created.id);
 
-		// Add non-root parent
+		// Parent removes child from its children list
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: task.created.id,
+			id: parent.created.id,
 			data: {
 				type: "task",
-				addParents: [parent.created.id],
+				removeChildren: [child.created.id],
 			},
 		});
 
-		const updatedTask = await getTaskById(t, task.created.id);
+		const parentAfter = await getTaskById(t, parent.created.id);
+		const childAfter = await getTaskById(t, child.created.id);
+
+		// Parent should no longer have child
+		expect(parentAfter!.children).not.toContain(child.created.id);
+		
+		// Child should no longer have parent
+		expect(childAfter!.parents).not.toContain(parent.created.id);
+	});
+
+	test("attaches orphaned child to root when parent removes child", async () => {
+		const t = createTestCtx();
+
+		const parent = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "Parent" }),
+		});
+
+		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({
+				title: "Child",
+				parents: [parent.created.id],
+			}),
+		});
+
+		// Get root before removing child
+		const rootBefore = await getTaskById(t, parent.created.parents[0] as Id<"tasks">);
+		
+		// Verify child is NOT in root's children initially (it has a parent)
+		expect(rootBefore!.children).not.toContain(child.created.id);
+
+		// Parent removes child (makes child orphaned)
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
+			id: parent.created.id,
+			data: {
+				type: "task",
+				removeChildren: [child.created.id],
+			},
+		});
+
+		const refreshedChild = await getTaskById(t, child.created.id);
+		const rootId = refreshedChild!.parents[0];
 		const rootAfter = await getTaskById(t, rootId as Id<"tasks">);
 
-		// Root should be removed from task's parents
-		expect(updatedTask!.parents).not.toContain(rootId);
-		expect(updatedTask!.parents).toContain(parent.created.id);
+		// Child should be attached to root
+		expect(refreshedChild!.parents).toContain(rootId);
+		expect(refreshedChild!.parents).toHaveLength(1);
 		
-		// Task should be removed from root's children
-		expect(rootAfter!.children).not.toContain(task.created.id);
+		// Root should have child in its children list
+		expect(rootAfter!.children).toContain(child.created.id);
+		expect(rootAfter!.type).toBe("root");
+	});
+
+	test("removes parent from child but keeps other parents when parent removes child", async () => {
+		const t = createTestCtx();
+
+		const p1 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "P1" }),
+		});
+
+		const p2 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "P2" }),
+		});
+
+		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({
+				title: "Child",
+				parents: [p1.created.id, p2.created.id],
+			}),
+		});
+
+		// Verify initial relationship
+		const childBefore = await getTaskById(t, child.created.id);
+		expect(childBefore!.parents).toContain(p1.created.id);
+		expect(childBefore!.parents).toContain(p2.created.id);
+		expect(childBefore!.parents).toHaveLength(2);
+
+		// P1 removes child from its children list
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
+			id: p1.created.id,
+			data: {
+				type: "task",
+				removeChildren: [child.created.id],
+			},
+		});
+
+		const p1After = await getTaskById(t, p1.created.id);
+		const p2After = await getTaskById(t, p2.created.id);
+		const childAfter = await getTaskById(t, child.created.id);
+
+		// P1 should no longer have child
+		expect(p1After!.children).not.toContain(child.created.id);
+		
+		// P2 should still have child
+		expect(p2After!.children).toContain(child.created.id);
+		
+		// Child should no longer have P1, but still have P2
+		expect(childAfter!.parents).not.toContain(p1.created.id);
+		expect(childAfter!.parents).toContain(p2.created.id);
+		expect(childAfter!.parents).toHaveLength(1);
 	});
 
 	test("replaces parents with absolute assignment", async () => {
