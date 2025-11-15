@@ -22,6 +22,6 @@
 	{#if children}
 		{@render children?.()}
 	{:else}
-		<Icon icon="lucide:chevron-right" class="size-4" />
+		<Icon icon="lucide:chevron-right" class="" />
 	{/if}
 </li>

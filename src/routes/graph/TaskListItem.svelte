@@ -10,6 +10,7 @@
 		extractClosestEdge,
 		type Edge
 	} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
+	import Button from '$lib/components/ui/button/button.svelte';
 
 	type ItemData = { taskId: string; parentId: string; index: number; listId: string };
 
@@ -40,6 +41,7 @@
 		isCurrent?: boolean;
 		isDraggable?: boolean;
 		onSelect?: (taskId: string) => void;
+		onDisconnect?: (taskId: string) => void;
 	}
 
 	let {
@@ -49,11 +51,14 @@
 		index,
 		isCurrent = false,
 		isDraggable = false,
-		onSelect
+		onSelect,
+		onDisconnect
 	}: Props = $props();
 
 	let itemEl: HTMLElement | undefined = $state();
 	let handleEl: HTMLElement | undefined = $state();
+	let containerEl: HTMLElement | undefined = $state();
+	let dragHandleEl: HTMLElement | undefined = $state();
 	let closestEdge = $state<Edge | null>(null);
 
 	const isCompleted = $derived(isTaskCompleted(task));
@@ -64,10 +69,11 @@
 
 		const cleanups: (() => void)[] = [];
 
-		if (isDraggable) {
+		if (isDraggable && containerEl && dragHandleEl) {
 			cleanups.push(
 				draggable({
-					element: handleEl ?? itemEl,
+					element: containerEl,
+					dragHandle: dragHandleEl,
 					getInitialData: () => makeItemData(task.id, parentId, index, listType)
 				})
 			);
@@ -91,7 +97,7 @@
 					});
 				},
 				onDragEnter: ({ source, self }) => {
-					const isSource = source.element === (handleEl ?? itemEl);
+					const isSource = source.element === (containerEl ?? itemEl);
 					if (isSource) {
 						closestEdge = null;
 						return;
@@ -111,7 +117,7 @@
 					closestEdge = edge;
 				},
 				onDrag: ({ source, self }) => {
-					const isSource = source.element === (handleEl ?? itemEl);
+					const isSource = source.element === (containerEl ?? itemEl);
 					if (isSource) {
 						closestEdge = null;
 						return;
@@ -147,23 +153,37 @@
 	<div class="z-10 h-0 w-full outline-1 outline-blue-500"></div>
 {/if}
 <li class="relative flex w-full items-center gap-2 py-[.125rem] text-sm" bind:this={itemEl}>
-	<div class="w-full {isDraggable && !isCurrent ? 'group flex w-full items-center gap-2' : ''}">
+	<div
+		bind:this={containerEl}
+		class="w-full rounded border {isDraggable && !isCurrent ? 'group flex w-full items-center gap-2' : 'flex items-center gap-2'} {isDraggable
+			? 'border-gray-300 bg-white hover:border-gray-400'
+			: 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'} {!isDraggable ? (isCompleted ? '' : 'bg-white') : ''}"
+	>
+		{#if isDraggable}
+			<div
+				bind:this={dragHandleEl}
+				class="cursor-grab select-none active:cursor-grabbing px-1"
+				title="Drag to reorder"
+			>
+				<Icon icon="lucide:grip-vertical" class="size-3 text-gray-400" />
+			</div>
+		{/if}
 		<button
 			bind:this={handleEl}
-			class="w-full rounded border px-2 py-1 text-left {isDraggable
-				? 'cursor-grab border-gray-300 bg-white select-none hover:border-gray-400 active:cursor-grabbing'
-				: 'border-gray-200 hover:cursor-pointer hover:border-blue-300 hover:bg-blue-50'} 
-				{!isDraggable ? (isCompleted ? 'text-gray-500' : 'bg-white') : ''}"
-			title={isDraggable
-				? 'Drag to reorder | Click to center in graph'
-				: 'Center this task in graph view'}
+			class="flex-1 px-2 py-1 text-left cursor-pointer {!isDraggable ? (isCompleted ? 'text-gray-500' : '') : ''}"
+			title="Center this task in graph view"
 			onclick={() => onSelect?.(task.id)}
 		>
-			{#if isDraggable}
-				<Icon icon="lucide:grip-vertical" class="mr-1 inline size-3 text-gray-400" />
-			{/if}
 			<span>{task.title}</span>
 		</button>
+		{#if onDisconnect}
+			<button
+				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+				onclick={() => onDisconnect?.(task.id)}
+			>
+				<Icon icon="material-symbols:link-off" class="" />
+			</button>
+		{/if}
 	</div>
 </li>
 {#if closestEdge === 'bottom'}

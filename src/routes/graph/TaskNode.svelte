@@ -79,21 +79,21 @@
 			{/if}
 			{#if $devEnabled}
 				<div class="text-[7px]">
-					<span>task-id: {data.task.id.substring(0, 12)}</span>
+					<span>task-id: {data.task.id.substring(0, 5)}</span>
 					<br />
 					<span>node-id: {id}</span>
 					{#if data.task.parents.length > 0}
 						<h6>Parents</h6>
 					{/if}
 					{#each data.task.parents as parent}
-						<span>- {parent.substring(0, 4)}</span>
+						<span>- {parent.substring(0, 5)}</span>
 						<br />
 					{/each}
 					{#if data.task.children.length > 0}
 						<h6>Children</h6>
 					{/if}
 					{#each data.task.children as child}
-						<span>- {child.substring(0, 4)}</span>
+						<span>- {child.substring(0, 5)}</span>
 						<br />
 					{/each}
 				</div>

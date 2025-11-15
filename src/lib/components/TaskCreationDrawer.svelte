@@ -128,7 +128,7 @@
 							Cancel
 						</Button>
 						<Button id="btn-task-drawer-create" type="submit" class="flex-1" disabled={!isValid}>
-							<Icon icon="lucide:plus" class="mr-2 size-4" />
+							<Icon icon="lucide:plus" class="mr-2" />
 							{relation ? 'Create Subtask' : 'Create Project'}
 						</Button>
 					</div>

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { get } from 'svelte/store';
 	import { SvelteFlow, SvelteFlowProvider, Background, useSvelteFlow } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import TaskCreationDrawer from '../../lib/components/TaskCreationDrawer.svelte';
@@ -10,8 +9,7 @@
 	import * as Resizable from '$lib/components/ui/resizable';
 	import TaskEditor from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
-	import { TaskStatus, type Task, type ITask } from '$domain/models/task';
-	import ScrollArea from '$lib/components/ui/scroll-area/scroll-area.svelte';
+	import { TaskStatus, type Task } from '$domain/models/task';
 	import { page } from '$app/state';
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import SearchTaskListItem from './SearchTaskListItem.svelte';
@@ -147,7 +145,7 @@
 						else return 0;
 					}}
 				>
-					{#snippet children(task: ITask)}
+					{#snippet children(task: Task)}
 						<SearchTaskListItem
 							{task}
 							onLocate={() => {
@@ -229,6 +227,7 @@
 							class="absolute right-6 bottom-6 h-9 w-10 rounded-full border-1 border-border bg-white"
 							onclick={() => {
 								drawerParams.set(null);
+								drawerOpen.set(true);
 							}}
 						>
 							+

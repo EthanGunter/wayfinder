@@ -31,9 +31,9 @@
 					onclick={() => (expanded[itemId] = !expanded[itemId])}
 				>
 					{#if expanded[itemId]}
-						<Icon icon="ri:skip-up-line" class="size-4" />
+						<Icon icon="ri:skip-up-line" class="" />
 					{:else}
-						<Icon icon="material-symbols:help" class="size-4" />
+						<Icon icon="material-symbols:help" class="" />
 					{/if}
 				</button>
 			</div>

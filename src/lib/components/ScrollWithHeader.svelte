@@ -1,8 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { Properties } from 'csstype';
 
-	type Props = { header: Snippet; content: Snippet; class?: string; shadow?: Properties };
+	type Props = { header: Snippet; content: Snippet; class?: string };
 
 	const { header, content, class: className }: Props = $props();
 

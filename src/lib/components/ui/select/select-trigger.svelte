@@ -26,5 +26,5 @@
 	{...restProps}
 >
 	{@render children?.()}
-	<Icon icon="lucide:chevron-down" class="size-4 opacity-50" />
+	<Icon icon="lucide:chevron-down" class=" opacity-50" />
 </SelectPrimitive.Trigger>

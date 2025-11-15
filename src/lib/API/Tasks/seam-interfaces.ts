@@ -1,4 +1,4 @@
-import type { InvalidStateError, ArgumentError, NotAuthorizedError } from "$domain/errors";
+import type { InvalidStateError, ArgumentError, NotAuthorizedError, NotFoundError } from "$domain/errors";
 import type { CreateTaskParams, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
 import type { FetchableStore, QueryableStore } from "../fetchableStore";
@@ -10,8 +10,8 @@ export interface ITasks {
 	*/
 	/* TODO:sync/tasks/refactor An example of divergence between the client-side and remote side APIs. The server should return id updates, 
 	the client should frankly return void, since we're using a subscription-based data model */
-	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ oldId: string, newId: string, affectedTasks: Task[] }, NotAuthorizedError | InvalidStateError>>;
-	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ updatedIds: Map<string, string>, affectedTasks: Task[] }, NotAuthorizedError>>;
+	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ created: Task & { givenId?: string }, affected: Task[] }, NotAuthorizedError | InvalidStateError>>;
+	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ created: (Task & { givenId?: string })[], affected: Task[] }, NotAuthorizedError>>;
 	/**
 	 * Fetches a task's data by its ID
 	 */
@@ -21,11 +21,11 @@ export interface ITasks {
 	/**
 	 * @param task can be passed as an id
 	 */
-	updateTask(params: UpdateTaskParams): Promise<Result<Task, NotAuthorizedError>>;
-	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<Task[], NotAuthorizedError>>;
+	updateTask(params: UpdateTaskParams): Promise<Result<{ updated: Task, affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<{ updated: Task[], affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 
-	deleteTask(params: { id: string }): Promise<Result<void, NotAuthorizedError>>;
-	deleteTasks(params: { ids: string[] }): Promise<Result<void, NotAuthorizedError>>;
+	deleteTask(params: { id: string }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	deleteTasks(params: { ids: string[] }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 
 	// TODO:sync migrate un-synced user data
 	// changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<Result<Task[], NotAuthorizedError>>;
@@ -78,12 +78,12 @@ export interface ITasksLocal {
 	/**
 	 * @param task can be passed as an id
 	 */
-	updateTask(params: UpdateTaskParams): Promise<Result<Task, NotAuthorizedError>>;
-	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<Task[], NotAuthorizedError>>;
+	updateTask(params: UpdateTaskParams): Promise<Result<{ updated: Task, affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<{ updated: Task[], affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 	handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;
 
-	deleteTask(params: { id: string }): Promise<Result<void>>;
-	deleteTasks(params: { ids: string[] }): Promise<Result<void>>;
+	deleteTask(params: { id: string }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	deleteTasks(params: { ids: string[] }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 	handleDeleteTasksResponse(response: Result<void, { oldState: Task[], error: NotAuthorizedError }>): Promise<void>;
 
 	handleMigrateResponse(response: Result<void, { oldUserID: string, newUserID: string, error: NotAuthorizedError }>): Promise<void>;

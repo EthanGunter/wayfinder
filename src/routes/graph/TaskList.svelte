@@ -14,6 +14,7 @@
 		title?: string;
 		currentTaskId?: string;
 		onSelect: (id: string) => void;
+		onDisconnect: (childId: string, parentId: string) => void;
 		onReorder: (taskId: string, startIndex: number, finishIndex: number) => void;
 		showCompleted: boolean;
 		onAddTask?: (parentId: string) => void;
@@ -27,6 +28,7 @@
 		title,
 		currentTaskId,
 		onSelect,
+		onDisconnect,
 		onReorder,
 		showCompleted,
 		onAddTask,
@@ -111,9 +113,11 @@
 		</button>
 	{/if}
 	<div
-		class="relative rounded-md border border-gray-200 bg-gray-50 {title ? ' rounded-tl-none' : ''}"
+		class="relative rounded-md border border-gray-200 bg-gray-50 p-[0.25rem] {title
+			? ' rounded-tl-none'
+			: ''}"
 	>
-		<ul class="flex flex-col p-1">
+		<ul class="flex flex-col">
 			{#each sorted.incomplete as task, index (task.id)}
 				<TaskListItem
 					{task}
@@ -123,29 +127,36 @@
 					isCurrent={currentTaskId === task.id}
 					isDraggable={isDraggable(task)}
 					{onSelect}
+					onDisconnect={(id) => onDisconnect(id, parentId)}
 				/>
 			{/each}
 		</ul>
-		<div class="flex items-center gap-2 text-gray-400">
-			{#if onLink}
-				<button
-					class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
-					onclick={() => onLink(parentId)}
-				>
-					🔗 connect
-				</button>
-			{/if}
-			{#if onLink && onAddTask}
-				/
-			{/if}
-			{#if onAddTask}
-				<button
-					class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
-					onclick={() => onAddTask(parentId)}
-				>
-					+ create
-				</button>
-			{/if}
+		<div class="flex w-full justify-center">
+			<span class="flex max-w-[16rem] items-center gap-2 text-gray-400">
+				{#if onLink}
+					<button
+						class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
+						onclick={() => onLink(parentId)}
+					>
+						<span class="flex w-full items-center justify-center gap-1">
+							<Icon icon="material-symbols:add-link" /> connect
+						</span>
+					</button>
+				{/if}
+				{#if onLink && onAddTask}
+					/
+				{/if}
+				{#if onAddTask}
+					<button
+						class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
+						onclick={() => onAddTask(parentId)}
+					>
+						<span class="flex w-full items-center justify-center gap-1">
+							<Icon icon="flowbite:plus-outline" /> create
+						</span>
+					</button>
+				{/if}
+			</span>
 		</div>
 		{#if sorted.complete.length > 0}
 			<Collapsible.Root bind:open={showCompleted}>
@@ -176,6 +187,7 @@
 								isCurrent={currentTaskId === task.id}
 								isDraggable={false}
 								{onSelect}
+								onDisconnect={(id) => onDisconnect(id, parentId)}
 							/>
 						{/each}
 					</ul>

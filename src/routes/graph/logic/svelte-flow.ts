@@ -6,6 +6,7 @@ import tasksAPI from '$lib/API/Tasks';
 import { nodes, edges, taskById, screenToFlowPosition } from './shared-state';
 import { drawerOpen, drawerParams, pendingNodeParams } from './ui-state';
 import type { WFEdge, WFNode } from '../types';
+import type { UpdateTaskParams } from '$domain/models/task';
 //#endregion
 
 //#region LOCAL STATE
@@ -134,17 +135,11 @@ export async function handleConnect(connection: Connection) {
 	const childId: string | undefined = connection?.target;
 	if (!parentId || !childId || parentId === childId) return;
 
-	(await tasksAPI.updateTask({
+	const [_, error] = await tasksAPI.updateTask({
 		id: parentId,
-		data: {},
-		relations: [{ id: childId, operation: 'addChild' }],
-	}))[1]?.UNHANDLED();
-
-	(await tasksAPI.updateTask({
-		id: childId,
-		data: {},
-		relations: [{ id: parentId, operation: 'addParent' }],
-	}))[1]?.UNHANDLED();
+		data: { addChildren: [childId] },
+	})
+	error?.UNHANDLED();
 
 	refreshNodesDataFor([parentId, childId]);
 }
@@ -223,30 +218,18 @@ export async function handleReconnect(
 	if (!newSource || !newTarget) return;
 	if (newSource === oldSource && newTarget === oldTarget) return;
 
-	(await tasksAPI.updateTask({
+	const [_, error] = await tasksAPI.updateTask({
 		id: oldSource,
-		data: {},
-		relations: [{ id: oldTarget, operation: 'removeChild' }],
-	}))[1]?.UNHANDLED();
-
-	(await tasksAPI.updateTask({
-		id: oldTarget,
-		data: {},
-		relations: [{ id: oldSource, operation: 'removeParent' }],
-	}))[1]?.UNHANDLED();
+		data: { removeChildren: [oldTarget] },
+	})
+	error?.UNHANDLED();
 
 	if (!connectionExists(get(edges), newSource, newTarget)) {
-		(await tasksAPI.updateTask({
+		const [_, error] = await tasksAPI.updateTask({
 			id: newSource,
-			data: {},
-			relations: [{ id: newTarget, operation: 'addChild' }],
-		}))[1]?.UNHANDLED();
-
-		(await tasksAPI.updateTask({
-			id: newTarget,
-			data: {},
-			relations: [{ id: newSource, operation: 'addParent' }],
-		}))[1]?.UNHANDLED();
+			data: { addChildren: [newTarget] },
+		})
+		error?.UNHANDLED();
 	} else {
 		edges.set(removeDuplicateEdges(get(edges)));
 	}
@@ -269,17 +252,11 @@ export const handleReconnectEnd = async (
 			const src = String(edge.source);
 			const tgt = String(edge.target);
 
-			(await tasksAPI.updateTask({
+			const [_, error] = await tasksAPI.updateTask({
 				id: src,
-				data: {},
-				relations: [{ id: tgt, operation: 'removeChild' }],
-			}))[1]?.UNHANDLED();
-
-			(await tasksAPI.updateTask({
-				id: tgt,
-				data: {},
-				relations: [{ id: src, operation: 'removeParent' }],
-			}))[1]?.UNHANDLED();
+				data: { removeChildren: [tgt] },
+			})
+			error?.UNHANDLED();
 
 			edges.set(get(edges).filter((e) => e.id !== edge.id));
 			refreshNodesDataFor([src, tgt]);
@@ -294,36 +271,48 @@ export const handleReconnectEnd = async (
 //#endregion
 
 //#region DELETE
+
 export async function handleDelete(params: { nodes: WFNode[]; edges: WFEdge[] }) {
+	// If node deleted
 	if (params.nodes.length > 0) {
 		const ids = params.nodes.map((n) => n.id);
 		(await tasksAPI.deleteTasks({ ids }))[1]?.UNHANDLED();
 	}
 
+	// If edge deleted
 	if (params.edges.length > 0) {
-		const relationChanges = new Map<
-			string,
-			{ id: string; operation: 'removeChild' | 'removeParent' | 'addChild' | 'addParent' }[]
-		>();
+		const childrenToRemove = new Map<string, string[]>();
+		const parentsToRemove = new Map<string, string[]>();
 
 		for (const edge of params.edges) {
 			const sourceId = edge.source;
 			const targetId = edge.target;
 
-			if (!relationChanges.has(sourceId)) relationChanges.set(sourceId, []);
-			relationChanges.get(sourceId)!.push({ id: targetId, operation: 'removeChild' });
+			if (!childrenToRemove.has(sourceId)) childrenToRemove.set(sourceId, []);
+			childrenToRemove.get(sourceId)!.push(targetId);
 
-			if (!relationChanges.has(targetId)) relationChanges.set(targetId, []);
-			relationChanges.get(targetId)!.push({ id: sourceId, operation: 'removeParent' });
+			if (!parentsToRemove.has(targetId)) parentsToRemove.set(targetId, []);
+			parentsToRemove.get(targetId)!.push(sourceId);
 		}
 
-		const updates = Array.from(relationChanges.entries()).map(([taskId, relations]) => ({
-			id: taskId,
-			data: {},
-			relations,
-		}));
+		const updates: UpdateTaskParams[] = [];
 
-		(await tasksAPI.updateTasks({ updates }))[1]?.UNHANDLED();
+		for (const [taskId, childIds] of childrenToRemove.entries()) {
+			updates.push({
+				id: taskId,
+				data: { removeChildren: childIds },
+			});
+		}
+
+		for (const [taskId, parentIds] of parentsToRemove.entries()) {
+			updates.push({
+				id: taskId,
+				data: { removeParents: parentIds },
+			});
+		}
+
+		const [_, error] = await tasksAPI.updateTasks({ updates })
+		error?.UNHANDLED();
 	}
 }
 //#endregion

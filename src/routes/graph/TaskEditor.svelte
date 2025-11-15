@@ -145,7 +145,10 @@
 		const adjustedTo = from < to ? to - 1 : to;
 		currentIds.splice(adjustedTo, 0, movingId);
 
-		const [_, e] = await tasksAPI.updateTask({ id: parentId, data: { children: currentIds } });
+		const [_, e] = await tasksAPI.updateTask({
+			id: parentId,
+			data: { children: currentIds }
+		});
 		if (e) Err.UNHANDLED(e, 'Failed to reorder siblings');
 	}
 
@@ -169,7 +172,10 @@
 		currentIds.splice(adjustedTo, 0, movingId);
 
 		task.children = currentIds;
-		const [_, e] = await tasksAPI.updateTask({ id: task.id, data: { children: currentIds } });
+		const [_, e] = await tasksAPI.updateTask({
+			id: task.id,
+			data: { children: currentIds }
+		});
 		if (e) e.UNHANDLED('Failed to reorder children');
 	}
 
@@ -231,28 +237,28 @@
 		// Update parent: add selectedTask as child
 		const [_, err1] = await tasksAPI.updateTask({
 			id: parentId,
-			data: {},
-			relations: [{ id: selectedTask.id, operation: 'addChild' }]
+			data: {
+				addChildren: [selectedTask.id]
+			}
 		});
 		if (err1) {
 			Err.UNHANDLED(err1, 'Failed to link task');
-			return;
-		}
-
-		// Update child: add parentId as parent
-		const [__, err2] = await tasksAPI.updateTask({
-			id: selectedTask.id,
-			data: {},
-			relations: [{ id: parentId, operation: 'addParent' }]
-		});
-		if (err2) {
-			Err.UNHANDLED(err2, 'Failed to link task');
-			return;
 		}
 
 		showLinkDialog = false;
 		linkSearchQuery = '';
 		linkParentId = null;
+	}
+
+	async function handleDisconnectTask(child: string, parent: string) {
+		const [_, err] = await tasksAPI.updateTask({
+			id: parent,
+			data: {
+				removeChildren: [child]
+			}
+		});
+		if (err) err?.UNHANDLED( 'Failed to disconnect task');
+		else console.log('Disconnected task', child, 'from', parent);
 	}
 </script>
 
@@ -281,7 +287,7 @@
 					title="Delete task"
 					onclick={confirmDelete}
 				>
-					<Icon icon="lucide:trash-2" class="size-4" />
+					<Icon icon="lucide:trash-2" class="" />
 				</button>
 			</div>
 		{/snippet}
@@ -304,33 +310,32 @@
 						layoutState.accordionValues = e as any;
 					}}
 				>
-					{#if $childTasksStore.status === 'resolved' && $childTasksStore.data.length > 0}
-						<Accordion.Item value="tasks">
-							<Accordion.Trigger
-								class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
-							>
-								Blocked By
-							</Accordion.Trigger>
-							<Accordion.Content>
-								<TaskList
-									showCompleted={layoutState.showCompletedTasks}
-									tasks={$childTasksStore.data}
-									parentId={task.id}
-									id={`child-${task.id}`}
-									onSelect={(id) => {
-										onSelectNode?.(id);
-									}}
-									onReorder={(taskId, startIndex, finishIndex) =>
-										reorderChildren(taskId, startIndex, finishIndex)}
-									onAddTask={handleAddChildTask}
-									onLink={(parentId) => {
-										linkParentId = task.id;
-										showLinkDialog = true;
-									}}
-								/>
-							</Accordion.Content>
-						</Accordion.Item>
-					{/if}
+					<Accordion.Item value="tasks">
+						<Accordion.Trigger
+							class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+						>
+							Blocked By
+						</Accordion.Trigger>
+						<Accordion.Content>
+							<TaskList
+								showCompleted={layoutState.showCompletedTasks}
+								tasks={($childTasksStore as { data: Task[] }).data ?? []}
+								parentId={task.id}
+								id={`child-${task.id}`}
+								onSelect={(id) => {
+									onSelectNode?.(id);
+								}}
+								onDisconnect={handleDisconnectTask}
+								onReorder={(taskId, startIndex, finishIndex) =>
+									reorderChildren(taskId, startIndex, finishIndex)}
+								onAddTask={handleAddChildTask}
+								onLink={(parentId) => {
+									linkParentId = task.id;
+									showLinkDialog = true;
+								}}
+							/>
+						</Accordion.Content>
+					</Accordion.Item>
 					{#if $siblingsStore.status === 'resolved'}
 						<Accordion.Item value="parent-order">
 							<Accordion.Trigger
@@ -349,6 +354,7 @@
 											title={parent.title}
 											currentTaskId={task.id}
 											onSelect={(id) => onSelectNode?.(id)}
+											onDisconnect={handleDisconnectTask}
 											onReorder={(taskId, startIndex, finishIndex) =>
 												reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
 										/>
@@ -397,7 +403,7 @@
 						else return 0;
 					}}
 				>
-					{#snippet children(task: ITask)}
+					{#snippet children(task: Task)}
 						<SearchTaskListItem
 							{task}
 							onLocate={() => {
