@@ -227,6 +227,7 @@
 							class="absolute right-6 bottom-6 h-9 w-10 rounded-full border-1 border-border bg-white"
 							onclick={() => {
 								drawerParams.set(null);
+								drawerOpen.set(true);
 							}}
 						>
 							+

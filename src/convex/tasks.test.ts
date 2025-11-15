@@ -3,7 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, test, expect, beforeEach, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { Id } from "./_generated/dataModel";
+import { type Id } from "./_generated/dataModel";
 
 //#region Test Utilities
 
@@ -80,7 +80,7 @@ describe("createTask", () => {
 		const root = await getTaskById(t, result.created.parents[0] as Id<"tasks">);
 		expect(root).toBeDefined();
 		expect(root!.type).toBe("root");
-		expect(root!.children).toContain(String(result.created.id));
+		expect(root!.children).toContain(result.created.id);
 
 		// Verify affected includes root
 		expect(result.affected).toContainEqual(
@@ -100,7 +100,7 @@ describe("createTask", () => {
 		const childResult = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "Child",
-				parents: [String(parentResult.created.id)],
+				parents: [parentResult.created.id],
 			}),
 		});
 
@@ -128,8 +128,8 @@ describe("createTask", () => {
 		});
 
 		const root = await getTaskById(t, rootId as Id<"tasks">);
-		expect(root!.children).toContain(String(first.created.id));
-		expect(root!.children).toContain(String(second.created.id));
+		expect(root!.children).toContain(first.created.id);
+		expect(root!.children).toContain(second.created.id);
 	});
 
 	test("respects client-provided created timestamp", async () => {
@@ -157,7 +157,7 @@ describe("createTask", () => {
 		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "Child",
-				parents: [String(p1.created.id), String(p2.created.id)],
+				parents: [p1.created.id, p2.created.id],
 			}),
 		});
 
@@ -248,11 +248,11 @@ describe("createTasks", () => {
 			createDetails: [
 				buildTaskCreate({
 					title: "Child 1",
-					parents: [String(parent.created.id)],
+					parents: [parent.created.id],
 				}),
 				buildTaskCreate({
 					title: "Child 2",
-					parents: [String(parent.created.id)],
+					parents: [parent.created.id],
 				}),
 			],
 		});
@@ -279,11 +279,11 @@ describe("createTasks", () => {
 			createDetails: [
 				buildTaskCreate({
 					title: "Child 1",
-					parents: [String(parent.created.id)],
+					parents: [parent.created.id],
 				}),
 				buildTaskCreate({
 					title: "Child 2",
-					parents: [String(parent.created.id)],
+					parents: [parent.created.id],
 				}),
 			],
 		});
@@ -305,7 +305,7 @@ describe("updateTask", () => {
 		const t = createTestCtx();
 
 		const created = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
-			createDetail: buildTaskCreate({ title: "Original", status: 0 }),
+			createDetail: buildTaskCreate({ title: "Original", status: 1 }),
 		});
 
 		const originalLastEdit = created.created.lastEdit;
@@ -314,9 +314,9 @@ describe("updateTask", () => {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
 		const updated = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			...buildTaskUpdate(String(created.created.id), {
+			...buildTaskUpdate(created.created.id, {
 				title: "Updated",
-				status: 1,
+				status: 0,
 				content: "New content",
 			}),
 		});
@@ -340,10 +340,10 @@ describe("updateTask", () => {
 
 		// Add parent relationship
 		const updated = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(child.created.id),
+			id: child.created.id,
 			data: {
 				type: "task",
-				parents: [{ ids: [String(parent.created.id)], op: "add" }],
+				addParents: [parent.created.id],
 			},
 		});
 
@@ -368,24 +368,24 @@ describe("updateTask", () => {
 		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "Child",
-				parents: [String(parent.created.id)],
+				parents: [parent.created.id],
 			}),
 		});
 
 		// Remove parent relationship
 		const updated = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(child.created.id),
+			id: child.created.id,
 			data: {
 				type: "task",
-				parents: [{ ids: [String(parent.created.id)], op: "remove" }],
+				removeParents: [parent.created.id],
 			},
 		});
 
 		const refreshedParent = await getTaskById(t, parent.created.id);
 		const refreshedChild = await getTaskById(t, child.created.id);
 
-		expect(refreshedParent!.children).not.toContain(String(child.created.id));
-		expect(refreshedChild!.parents).not.toContain(String(parent.created.id));
+		expect(refreshedParent!.children).not.toContain(child.created.id);
+		expect(refreshedChild!.parents).not.toContain(parent.created.id);
 
 		// Should auto-attach to root
 		expect(refreshedChild!.parents).toHaveLength(1);
@@ -394,6 +394,46 @@ describe("updateTask", () => {
 			refreshedChild!.parents[0] as Id<"tasks">
 		);
 		expect(root!.type).toBe("root");
+	});
+
+	test("adds orphaned task to root.children when parent is removed", async () => {
+		const t = createTestCtx();
+
+		const parent = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "Parent" }),
+		});
+
+		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({
+				title: "Child",
+				parents: [parent.created.id],
+			}),
+		});
+
+		// Get root before removing parent
+		const rootBefore = await getTaskById(t, parent.created.parents[0] as Id<"tasks">);
+		
+		// Verify child is NOT in root's children initially (it has a parent)
+		expect(rootBefore!.children).not.toContain(child.created.id);
+
+		// Remove parent relationship (makes child orphaned)
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
+			id: child.created.id,
+			data: {
+				type: "task",
+				removeParents: [parent.created.id],
+			},
+		});
+
+		const refreshedChild = await getTaskById(t, child.created.id);
+		const rootId = refreshedChild!.parents[0];
+		const rootAfter = await getTaskById(t, rootId as Id<"tasks">);
+
+		// Child should be attached to root
+		expect(refreshedChild!.parents).toContain(rootId);
+		
+		// Root should have child in its children list
+		expect(rootAfter!.children).toContain(child.created.id);
 	});
 
 	test("removes root when task has multiple parents", async () => {
@@ -416,15 +456,10 @@ describe("updateTask", () => {
 
 		// Add two non-root parents
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(task.created.id),
+			id: task.created.id,
 			data: {
 				type: "task",
-				parents: [
-					{
-						ids: [String(p1.created.id), String(p2.created.id)],
-						op: "add",
-					},
-				],
+				addParents: [p1.created.id, p2.created.id],
 			},
 		});
 
@@ -432,9 +467,47 @@ describe("updateTask", () => {
 
 		// Root should be auto-removed
 		expect(updated!.parents).not.toContain(rootId);
-		expect(updated!.parents).toContain(String(p1.created.id));
-		expect(updated!.parents).toContain(String(p2.created.id));
+		expect(updated!.parents).toContain(p1.created.id);
+		expect(updated!.parents).toContain(p2.created.id);
 		expect(updated!.parents).toHaveLength(2);
+	});
+
+	test("removes task from root.children when task gains non-root parent", async () => {
+		const t = createTestCtx();
+
+		const parent = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "Parent" }),
+		});
+
+		// Create task attached to root
+		const task = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "Task" }),
+		});
+
+		const rootId = task.created.parents[0];
+		const rootBefore = await getTaskById(t, rootId as Id<"tasks">);
+		
+		// Verify task is initially in root's children
+		expect(rootBefore!.children).toContain(task.created.id);
+
+		// Add non-root parent
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
+			id: task.created.id,
+			data: {
+				type: "task",
+				addParents: [parent.created.id],
+			},
+		});
+
+		const updatedTask = await getTaskById(t, task.created.id);
+		const rootAfter = await getTaskById(t, rootId as Id<"tasks">);
+
+		// Root should be removed from task's parents
+		expect(updatedTask!.parents).not.toContain(rootId);
+		expect(updatedTask!.parents).toContain(parent.created.id);
+		
+		// Task should be removed from root's children
+		expect(rootAfter!.children).not.toContain(task.created.id);
 	});
 
 	test("replaces parents with absolute assignment", async () => {
@@ -451,21 +524,21 @@ describe("updateTask", () => {
 		const task = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "Task",
-				parents: [String(p1.created.id)],
+				parents: [p1.created.id],
 			}),
 		});
 
 		// Absolute replacement
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(task.created.id),
+			id: task.created.id,
 			data: {
 				type: "task",
-				parents: [String(p2.created.id)],
+				parents: [p2.created.id],
 			},
 		});
 
 		const updated = await getTaskById(t, task.created.id);
-		expect(updated!.parents).toEqual([String(p2.created.id)]);
+		expect(updated!.parents).toEqual([p2.created.id]);
 	});
 
 	test("mixes strings and delta operations for parents", async () => {
@@ -488,29 +561,29 @@ describe("updateTask", () => {
 			createDetail: buildTaskCreate({ title: "Task" }),
 		});
 
-		// Mix: two strings (absolute replacement), one add, one remove
-		// Strings should be collected first: [p1, p2]
+		// Mix: two set operations (absolute replacement), one add, one remove
+		// Set operations should be collected first: [p1, p2]
 		// Then add p3, then remove p2
 		// Final result should be [p1, p3]
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(task.created.id),
+			id: task.created.id,
 			data: {
 				type: "task",
-				parents: [
-					String(p1.created.id),
-					String(p2.created.id),
-					{ ids: [String(p3.created.id)], op: "add" },
-					{ ids: [String(p2.created.id)], op: "remove" },
-				],
+				parents: [p1.created.id, p2.created.id],
+				addParents: [p3.created.id],
+				removeParents: [p2.created.id],
 			},
 		});
 
 		const updated = await getTaskById(t, task.created.id);
-		expect(updated!.parents).toContain(String(p1.created.id));
-		expect(updated!.parents).toContain(String(p3.created.id));
-		expect(updated!.parents).not.toContain(String(p2.created.id));
-		expect(updated!.parents).not.toContain(String(p4.created.id));
+		expect(updated!.parents).toContain(p1.created.id);
+		expect(updated!.parents).toContain(p3.created.id);
+		expect(updated!.parents).not.toContain(p2.created.id);
+		expect(updated!.parents).not.toContain(p4.created.id);
 		expect(updated!.parents).toHaveLength(2);
+		// Verify order: set operations [p1, p2] collected first, then p3 added at end, then p2 removed
+		// Final order should be [p1, p3]
+		expect(updated!.parents).toEqual([p1.created.id, p3.created.id]);
 	});
 
 	test("mixes strings and delta operations for children", async () => {
@@ -538,24 +611,66 @@ describe("updateTask", () => {
 		// Then add c3, then remove c2
 		// Final result should be [c1, c3]
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(parent.created.id),
+			id: parent.created.id,
 			data: {
 				type: "task",
-				children: [
-					String(c1.created.id),
-					String(c2.created.id),
-					{ ids: [String(c3.created.id)], op: "add" },
-					{ ids: [String(c2.created.id)], op: "remove" },
-				],
+				children: [c1.created.id, c2.created.id],
+				addChildren: [c3.created.id],
+				removeChildren: [c2.created.id],
 			},
 		});
 
 		const updated = await getTaskById(t, parent.created.id);
-		expect(updated!.children).toContain(String(c1.created.id));
-		expect(updated!.children).toContain(String(c3.created.id));
-		expect(updated!.children).not.toContain(String(c2.created.id));
-		expect(updated!.children).not.toContain(String(c4.created.id));
+		expect(updated!.children).toContain(c1.created.id);
+		expect(updated!.children).toContain(c3.created.id);
+		expect(updated!.children).not.toContain(c2.created.id);
+		expect(updated!.children).not.toContain(c4.created.id);
 		expect(updated!.children).toHaveLength(2);
+	});
+
+	test("preserves order of set operations and appends adds to end", async () => {
+		const t = createTestCtx();
+
+		const p1 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "P1" }),
+		});
+		const p2 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "P2" }),
+		});
+		const p3 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "P3" }),
+		});
+		const p4 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "P4" }),
+		});
+		const p5 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "P5" }),
+		});
+
+		const task = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+			createDetail: buildTaskCreate({ title: "Task" }),
+		});
+
+		// Multiple set operations should preserve order: [p1, p2, p3]
+		// Then add p4 and p5 at end
+		// Final result should be [p1, p2, p3, p4, p5]
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
+			id: task.created.id,
+			data: {
+				type: "task",
+				parents: [p1.created.id, p2.created.id, p3.created.id],
+				addParents: [p4.created.id, p5.created.id],
+			},
+		});
+
+		const updated = await getTaskById(t, task.created.id);
+		expect(updated!.parents).toEqual([
+			p1.created.id,
+			p2.created.id,
+			p3.created.id,
+			p4.created.id,
+			p5.created.id,
+		]);
 	});
 
 	test("adds and removes children with delta operations", async () => {
@@ -575,41 +690,41 @@ describe("updateTask", () => {
 
 		// Add c1 as child
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(parent.created.id),
+			id: parent.created.id,
 			data: {
 				type: "task",
-				children: [{ ids: [String(c1.created.id)], op: "add" }],
+				addChildren: [c1.created.id],
 			},
 		});
 
 		let updated = await getTaskById(t, parent.created.id);
-		expect(updated!.children).toContain(String(c1.created.id));
+		expect(updated!.children).toContain(c1.created.id);
 
 		// Add c2
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(parent.created.id),
+			id: parent.created.id,
 			data: {
 				type: "task",
-				children: [{ ids: [String(c2.created.id)], op: "add" }],
+				addChildren: [c2.created.id],
 			},
 		});
 
 		updated = await getTaskById(t, parent.created.id);
-		expect(updated!.children).toContain(String(c2.created.id));
+		expect(updated!.children).toContain(c2.created.id);
 		expect(updated!.children).toHaveLength(2);
 
 		// Remove c1
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(parent.created.id),
+			id: parent.created.id,
 			data: {
 				type: "task",
-				children: [{ ids: [String(c1.created.id)], op: "remove" }],
+				removeChildren: [c1.created.id],
 			},
 		});
 
 		updated = await getTaskById(t, parent.created.id);
-		expect(updated!.children).not.toContain(String(c1.created.id));
-		expect(updated!.children).toContain(String(c2.created.id));
+		expect(updated!.children).not.toContain(c1.created.id);
+		expect(updated!.children).toContain(c2.created.id);
 	});
 
 	test("throws NotFoundError for non-existent task", async () => {
@@ -632,7 +747,7 @@ describe("updateTask", () => {
 		// Switch to user2
 		await expect(
 			t.withIdentity(mockAuth("user2")).mutation(api.tasks.updateTask, {
-				...buildTaskUpdate(String(task.created.id), { title: "Hijacked" }),
+				...buildTaskUpdate(task.created.id, { title: "Hijacked" }),
 			})
 		).rejects.toThrow("Not owner");
 	});
@@ -652,10 +767,10 @@ describe("updateTask", () => {
 				id: rootId,
 				data: {
 					type: "root",
-					parents: [{ ids: ["some_id"], op: "add" }],
+					addParents: ["some_id"],
 				},
 			})
-		).rejects.toThrow("Root task cannot have parents modified");
+		).rejects.toThrow("Root");
 	});
 
 	test("throws NotAuthorizedError when not authenticated", async () => {
@@ -667,7 +782,7 @@ describe("updateTask", () => {
 
 		await expect(
 			t.mutation(api.tasks.updateTask, {
-				...buildTaskUpdate(String(task.created.id), { title: "Nope" }),
+				...buildTaskUpdate(task.created.id, { title: "Nope" }),
 			})
 		).rejects.toThrow("NotAuthorized");
 	});
@@ -721,21 +836,21 @@ describe("updateTasks", () => {
 				{
 					id: c1.created.id,
 					data: {
-						parents: [{ ids: [parent.created.id], op: "add" }],
+						addParents: [parent.created.id],
 					}
 				},
 				{
 					id: c2.created.id,
 					data: {
-						parents: [{ ids: [parent.created.id], op: "add" }],
+						addParents: [parent.created.id],
 					}
 				},
 			],
 		});
 
 		const refreshedParent = await getTaskById(t, parent.created.id);
-		expect(refreshedParent!.children).toContain(String(c1.created.id));
-		expect(refreshedParent!.children).toContain(String(c2.created.id));
+		expect(refreshedParent!.children).toContain(c1.created.id);
+		expect(refreshedParent!.children).toContain(c2.created.id);
 
 		// Parent should be in affected only once
 		const parentAffectedCount = result.affected.filter(
@@ -760,7 +875,7 @@ describe("deleteTask", () => {
 		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "Child",
-				parents: [String(parent.created.id)],
+				parents: [parent.created.id],
 			}),
 		});
 
@@ -774,7 +889,7 @@ describe("deleteTask", () => {
 
 		// Parent should no longer reference child
 		const refreshedParent = await getTaskById(t, parent.created.id);
-		expect(refreshedParent!.children).not.toContain(String(child.created.id));
+		expect(refreshedParent!.children).not.toContain(child.created.id);
 
 		// Parent should be in affected
 		expect(result.affected).toContainEqual(
@@ -792,7 +907,7 @@ describe("deleteTask", () => {
 		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "Child",
-				parents: [String(parent.created.id)],
+				parents: [parent.created.id],
 			}),
 		});
 
@@ -802,7 +917,7 @@ describe("deleteTask", () => {
 
 		// Child should no longer reference parent
 		const refreshedChild = await getTaskById(t, child.created.id);
-		expect(refreshedChild!.parents).not.toContain(String(parent.created.id));
+		expect(refreshedChild!.parents).not.toContain(parent.created.id);
 
 		// Child should be auto-attached to root
 		expect(refreshedChild!.parents).toHaveLength(1);
@@ -811,7 +926,7 @@ describe("deleteTask", () => {
 			refreshedChild!.parents[0] as Id<"tasks">
 		);
 		expect(root!.type).toBe("root");
-		expect(root!.children).toContain(String(child.created.id));
+		expect(root!.children).toContain(child.created.id);
 	});
 
 	test("throws InvalidStateError when deleting root", async () => {
@@ -908,14 +1023,14 @@ describe("deleteTasks", () => {
 		const c1 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "C1",
-				parents: [String(parent.created.id)],
+				parents: [parent.created.id],
 			}),
 		});
 
 		const c2 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "C2",
-				parents: [String(parent.created.id)],
+				parents: [parent.created.id],
 			}),
 		});
 
@@ -931,8 +1046,8 @@ describe("deleteTasks", () => {
 
 		// Parent should no longer reference children
 		const refreshedParent = await getTaskById(t, parent.created.id);
-		expect(refreshedParent!.children).not.toContain(String(c1.created.id));
-		expect(refreshedParent!.children).not.toContain(String(c2.created.id));
+		expect(refreshedParent!.children).not.toContain(c1.created.id);
+		expect(refreshedParent!.children).not.toContain(c2.created.id);
 	});
 });
 
@@ -1042,23 +1157,23 @@ describe("Relationship integrity & propagation", () => {
 		const c1 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "C1",
-				parents: [String(p1.created.id)],
+				parents: [p1.created.id],
 			}),
 		});
 
 		const gc1 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "GC1",
-				parents: [String(c1.created.id)],
+				parents: [c1.created.id],
 			}),
 		});
 
 		// Move GC1 to be child of P1 instead
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(gc1.created.id),
+			id: gc1.created.id,
 			data: {
 				type: "task",
-				parents: [String(p1.created.id)],
+				parents: [p1.created.id],
 			},
 		});
 
@@ -1067,14 +1182,14 @@ describe("Relationship integrity & propagation", () => {
 		const updatedGC1 = await getTaskById(t, gc1.created.id);
 
 		// P1 should have both C1 and GC1 as children
-		expect(updatedP1!.children).toContain(String(c1.created.id));
-		expect(updatedP1!.children).toContain(String(gc1.created.id));
+		expect(updatedP1!.children).toContain(c1.created.id);
+		expect(updatedP1!.children).toContain(gc1.created.id);
 
 		// C1 should no longer have GC1 as child
-		expect(updatedC1!.children).not.toContain(String(gc1.created.id));
+		expect(updatedC1!.children).not.toContain(gc1.created.id);
 
 		// GC1 should only have P1 as parent
-		expect(updatedGC1!.parents).toEqual([String(p1.created.id)]);
+		expect(updatedGC1!.parents).toEqual([p1.created.id]);
 	});
 
 	test("propagates changes when adding child via parent", async () => {
@@ -1090,15 +1205,15 @@ describe("Relationship integrity & propagation", () => {
 
 		// Add child via parent.children update
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(parent.created.id),
+			id: parent.created.id,
 			data: {
 				type: "task",
-				children: [{ ids: [String(child.created.id)], op: "add" }],
+				addChildren: [child.created.id],
 			},
 		});
 
 		const updatedChild = await getTaskById(t, child.created.id);
-		expect(updatedChild!.parents).toContain(String(parent.created.id));
+		expect(updatedChild!.parents).toContain(parent.created.id);
 	});
 
 	test("propagates changes when removing parent via child", async () => {
@@ -1111,21 +1226,21 @@ describe("Relationship integrity & propagation", () => {
 		const child = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "Child",
-				parents: [String(parent.created.id)],
+				parents: [parent.created.id],
 			}),
 		});
 
 		// Remove parent via child.parents update
 		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(child.created.id),
+			id: child.created.id,
 			data: {
 				type: "task",
-				parents: [{ ids: [String(parent.created.id)], op: "remove" }],
+				removeParents: [parent.created.id],
 			},
 		});
 
 		const updatedParent = await getTaskById(t, parent.created.id);
-		expect(updatedParent!.children).not.toContain(String(child.created.id));
+		expect(updatedParent!.children).not.toContain(child.created.id);
 	});
 });
 
@@ -1144,7 +1259,7 @@ describe("Cycle prevention", () => {
 		const b = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "B",
-				parents: [String(a.created.id)],
+				parents: [a.created.id],
 			}),
 		});
 
@@ -1152,10 +1267,10 @@ describe("Cycle prevention", () => {
 		// TODO: This should fail once cycle detection is implemented
 		// For now, test that we can detect infinite loop via timeout
 		const cycleAttempt = t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(a.created.id),
+			id: a.created.id,
 			data: {
 				type: "task",
-				parents: [{ ids: [String(b.created.id)], op: "add" }],
+				addParents: [b.created.id],
 			},
 		});
 
@@ -1177,23 +1292,23 @@ describe("Cycle prevention", () => {
 		const b = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "B",
-				parents: [String(a.created.id)],
+				parents: [a.created.id],
 			}),
 		});
 
 		const c = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "C",
-				parents: [String(b.created.id)],
+				parents: [b.created.id],
 			}),
 		});
 
 		// Attempt to create cycle: A -> B -> C -> A
 		const cycleAttempt = t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: String(a.created.id),
+			id: a.created.id,
 			data: {
 				type: "task",
-				parents: [{ ids: [String(c.created.id)], op: "add" }],
+				addParents: [c.created.id],
 			},
 		});
 

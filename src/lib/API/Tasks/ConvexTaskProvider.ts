@@ -507,7 +507,7 @@ function convertFromServerTask(row: ITask<number>): Task {
 }
 
 function convexifyTaskUpdate(update: UpdateTaskParams) {
-	return {
+	const u = {
 		...update,
 		id: update.id as Id<'tasks'>,
 		data: {
@@ -518,5 +518,5 @@ function convexifyTaskUpdate(update: UpdateTaskParams) {
 			lastEdit: update.data?.lastEdit?.getTime(),
 		}
 	}
-
+	return u;
 }

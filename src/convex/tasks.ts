@@ -2,8 +2,8 @@ import { Err, NotAuthorizedError, NotFoundError, NotImplementedError, InvalidSta
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { applyRelationshipOperations, calculateRelationshipUpdates, CreateTaskParams, UpdateTaskParams, type ITask } from "$domain/models/task";
-import { MutationCtx } from "./_generated/server";
+import { applyRelationshipOperations, calculateRelationshipUpdates, type CreateTaskParams, type UpdateTaskParams, type ITask } from "$domain/models/task";
+import { type MutationCtx } from "./_generated/server";
 
 //#region Types
 
@@ -25,14 +25,17 @@ const argsCreateTask = v.object({
 	created: v.optional(v.number()),
 	lastEdit: v.optional(v.number()),
 })
-const argsUpdateRelations = v.array(v.union(v.string(), v.object({ ids: v.array(v.string()), op: v.union(v.literal("add"), v.literal("remove")) })))
 const argsUpdateTask = v.object({
 	id: v.string(),
 	data: v.object({
 		userAuthId: v.optional(v.string()),
 		type: v.optional(v.union(v.literal("task"), v.literal("root"))),
-		parents: v.optional(argsUpdateRelations),
-		children: v.optional(argsUpdateRelations),
+		parents: v.optional(v.array(v.string())),
+		addParents: v.optional(v.array(v.string())),
+		removeParents: v.optional(v.array(v.string())),
+		children: v.optional(v.array(v.string())),
+		addChildren: v.optional(v.array(v.string())),
+		removeChildren: v.optional(v.array(v.string())),
 		title: v.optional(v.string()),
 		content: v.optional(v.string()),
 		status: v.optional(v.number()),
@@ -154,7 +157,7 @@ export const updateTask = mutation({
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
 
-		return await _updateTask(ctx, update);
+		return await _updateTask(ctx, update as UpdateTaskParams<number>);
 	},
 });
 
@@ -168,7 +171,7 @@ export const updateTasks = mutation({
 		const updated: ClientTask[] = [];
 		let affected: ClientTask[] = [];
 		for (const update of updates) {
-			const { updated: updatedTask, affected: affectedTasks } = await _updateTask(ctx, update);
+			const { updated: updatedTask, affected: affectedTasks } = await _updateTask(ctx, update as UpdateTaskParams<number>);
 			updated.push(updatedTask);
 			affected.push(...affectedTasks);
 		}
@@ -181,8 +184,6 @@ export const updateTasks = mutation({
 });
 
 async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): Promise<{ updated: ClientTask, affected: ClientTask[] }> {
-
-
 	const taskId = update.id as Id<"tasks">;
 
 	// Get old task state
@@ -196,60 +197,32 @@ async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): 
 	}
 
 	// Enforce root constraints
-	if (oldTask.type === "root" && update.data?.parents) {
+	if (oldTask.type === "root" && (update.data.parents || update.data.addParents || update.data.removeParents)) {
 		throw new ConvexError({ type: "InvalidState", msg: "Root task cannot have parents modified", ctx: update.id });
 	}
 
 	const now = Date.now();
 
 	// Resolve relations operations into arrays
-	let parents = [...(oldTask.parents ?? [])];
-	let children = [...(oldTask.children ?? [])];
+	// Initialize with static set. If no update is provided, 
+	// use the old task's relations and prepare for deltas
+	let parents = [...(update.data.parents ?? oldTask.parents ?? [])];
+	let children = [...(update.data.children ?? oldTask.children ?? [])];
 
-
-
-	if (update.data?.parents) {
-		// First, collect all strings for absolute replacement
-		const stringParents = update.data.parents.filter((item): item is string => typeof item === "string");
-		if (stringParents.length > 0) {
-			parents = stringParents;
-		}
-
-		// Then apply delta operations
-		for (const item of update.data.parents) {
-			if (typeof item !== "string") {
-				// Delta operation
-				if (item.op === "add") {
-					for (const id of item.ids) {
-						if (!parents.includes(id)) parents.push(id);
-					}
-				} else {
-					parents = parents.filter(id => !item.ids.includes(id));
-				}
-			}
-		}
+	if (update.data.addParents) {
+		parents = [...parents, ...update.data.addParents];
 	}
 
-	if (update.data?.children) {
-		// First, collect all strings for absolute replacement
-		const stringChildren = update.data.children.filter((item): item is string => typeof item === "string");
-		if (stringChildren.length > 0) {
-			children = stringChildren;
-		}
+	if (update.data.removeParents) {
+		parents = parents.filter(id => !update.data.removeParents!.includes(id));
+	}
 
-		// Then apply delta operations
-		for (const item of update.data.children) {
-			if (typeof item !== "string") {
-				// Delta operation
-				if (item.op === "add") {
-					for (const id of item.ids) {
-						if (!children.includes(id)) children.push(id);
-					}
-				} else {
-					children = children.filter(id => !item.ids.includes(id));
-				}
-			}
-		}
+	if (update.data.addChildren) {
+		children = [...children, ...update.data.addChildren];
+	}
+
+	if (update.data.removeChildren) {
+		children = children.filter(id => !update.data.removeChildren!.includes(id));
 	}
 
 
@@ -267,20 +240,19 @@ async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): 
 		}
 	}
 
-	// Build patch
-	const patch: Partial<DBTask> = { lastEdit: now };
-	if (update.data?.title) patch.title = update.data.title;
-	if (update.data?.content) patch.content = update.data.content;
-	if (update.data?.status) patch.status = update.data.status;
-	if (update.data?.todaysTask) patch.todaysTask = update.data.todaysTask;
-	if (update.data?.dueDate) patch.dueDate = update.data.dueDate;
-	if (update.data?.parents) patch.parents = parents;
-	if (update.data?.children) patch.children = children;
+	// Reassign delta fields for update
+	update.data.parents = parents;
+	update.data.children = children;
+	update.data.lastEdit = update.data.lastEdit ?? now;
 
-
+	// Strip delta fields that aren't on our object
+	delete update.data.addParents;
+	delete update.data.removeParents;
+	delete update.data.addChildren;
+	delete update.data.removeChildren;
 
 	// Apply patch
-	await ctx.db.patch(taskId, patch);
+	await ctx.db.patch(taskId, update.data);
 
 	// Handle root attachment/detachment
 	if (oldTask.type !== "root") {
@@ -447,7 +419,7 @@ export const getTasks = query({
 		const rows = await Promise.all(ids.map((i) => ctx.db.get(i as Id<"tasks">)));
 		const found = rows.filter(Boolean) as Doc<"tasks">[];
 		if (found.length !== ids.length) {
-			throw new ConvexError({ type: "NotFoundError", msg: "Some tasks not found", ctx: ids.map((x) => "" + x).join(",") });
+			throw new ConvexError({ type: "NotFoundError", msg: "Some tasks not found", ctx: ids.map((x) => x).join(",") });
 		}
 		return found.map(cleanTaskForClient);
 	},
@@ -514,15 +486,15 @@ export const getSiblingsOf = query({
 			if (childIds.length === 0) return siblings.slice();
 
 			// Build index map for O(1) position lookup
-			const pos = new Map<string, number>();
+			const pos = new Map<Id<"tasks">, number>();
 			for (let i = 0; i < childIds.length; i++) {
-				pos.set(String(childIds[i] as any), i);
+				pos.set(childIds[i] as Id<"tasks">, i);
 			}
 
 			return siblings
 				.map((t, idx) => {
-					const key = String((t as any)._id);
-					const order = pos.has(key) ? (pos.get(key) as number) : Infinity;
+					const taskId = (t as any)._id as Id<"tasks">;
+					const order = pos.has(taskId) ? pos.get(taskId)! : Infinity;
 					return { t, order, idx };
 				})
 				.sort((a, b) => (a.order === b.order ? a.idx - b.idx : a.order - b.order))
@@ -530,8 +502,7 @@ export const getSiblingsOf = query({
 		}
 
 		// Pre-processing data
-		const selfKey = "" + id;
-		const seen = new Map<string, Doc<"tasks"> | null>();
+		const seen = new Map<Id<"tasks">, Doc<"tasks"> | null>();
 		const siblings = new Map<Doc<"tasks">, Doc<"tasks">[]>();
 		const addSibling = (parent: Doc<"tasks">, sibling: Doc<"tasks">) => {
 			const arr = siblings.get(parent);
@@ -543,7 +514,7 @@ export const getSiblingsOf = query({
 		let parentIds = self.parents ?? [];
 		if (parentIds.length === 0) {
 			const root = await getOrCreateRoot(ctx, self.userAuthId);
-			parentIds = [String(root._id)];
+			parentIds = [root._id];
 		}
 
 		// 2-b) Fetch only the parents we need
@@ -568,16 +539,15 @@ export const getSiblingsOf = query({
 				continue;
 			}
 
-			for (const cid of childIds as Array<string | { _id?: unknown }>) {
-				const key = "" + cid;
-				if (key === selfKey) continue; // exclude self for now; we’ll add it once per parent below
-				if (seen.has(key)) {
-					const cached = seen.get(key)!;
+			for (const cid of childIds as Array<Id<"tasks">>) {
+				if (cid === self._id || cid === parent._id) continue; // exclude self and parent
+				if (seen.has(cid)) {
+					const cached = seen.get(cid)!;
 					if (cached) addSibling(parent, cached);
 					continue;
 				}
-				const sibling = await ctx.db.get(key as Id<"tasks">);
-				seen.set(key, sibling);
+				const sibling = await ctx.db.get(cid);
+				seen.set(cid, sibling);
 				if (sibling) addSibling(parent, sibling);
 			}
 
@@ -646,7 +616,7 @@ export const getPrioritizedTasks = query({
 		const taskTasks = tasks.filter(t => t.type !== "root");
 		// Get root to start traversal from root's children
 		const root = await getOrCreateRoot(ctx, identity.subject);
-		const tasksMap = new Map(taskTasks.map((t) => ["" + t._id, t] as [string, DBTask]));
+		const tasksMap = new Map(taskTasks.map((t) => [t._id, t] as [string, DBTask]));
 		const sorter = (a?: DBTask, b?: DBTask) => {
 			// TODO This is going to need context from the parent to determine sibling priority...
 			if (!a) return -1; if (!b) return 1; return 0; // (b.priority ?? 0) - (a.priority ?? 0);
@@ -656,8 +626,8 @@ export const getPrioritizedTasks = query({
 		const walk = (task: DBTask) => {
 			if (todo.length === limit) return;
 			if (task.children.length === 0) {
-				if (seen.has("" + task._id)) return;
-				seen.add("" + task._id);
+				if (seen.has(task._id)) return;
+				seen.add(task._id);
 				if (task.status === 0) todo.push(task);
 			} else {
 				const children = task.children.map((id) => tasksMap.get(id)).sort(sorter);
@@ -748,7 +718,7 @@ async function propagateRelationshipChanges(
 	// Apply each update
 	for (const { taskId, operations } of updates) {
 		const relatedTask = await ctx.db.get(taskId as Id<"tasks">);
-		if (!relatedTask) continue;
+		if (!relatedTask) throw new ConvexError({ type: "NotFoundError", msg: "Task not found", ctx: taskId });
 
 		// Apply operations using shared logic
 		const updated = applyRelationshipOperations(cleanTaskForClient(relatedTask), operations);
@@ -785,7 +755,7 @@ function cleanTaskForClient(task: DBTask): ClientTask {
 		children: task.children,
 		todaysTask: task.todaysTask,
 		dueDate: task.dueDate,
-		created: task._creationTime,
+		created: task.created ?? task._creationTime,
 		lastEdit: task.lastEdit
 	};
 

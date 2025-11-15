@@ -180,11 +180,12 @@ export type CreateTaskParams<T = Date> = Partial<ITask<T>> & Omit<ITask<T>,
 // | "filepath"
 >
 export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id">
-export type TaskRelationsUpdate = (string | { ids: string[], op: "add" | "remove" })[]
-type TaskUpdate<T> = Omit<ITask<T>, "children" | "parents">
+type TaskUpdate<T> = ITask<T>
     & {
-        parents?: TaskRelationsUpdate,
-        children?: TaskRelationsUpdate
+        addParents: string[],
+        addChildren: string[],
+        removeParents: string[],
+        removeChildren: string[],
     }
 export type UpdateTaskParams<T = Date> = { id: string, data: Partial<TaskUpdate<T>> };
 

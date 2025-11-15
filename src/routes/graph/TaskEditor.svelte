@@ -145,7 +145,10 @@
 		const adjustedTo = from < to ? to - 1 : to;
 		currentIds.splice(adjustedTo, 0, movingId);
 
-		const [_, e] = await tasksAPI.updateTask({ id: parentId, data: { children: currentIds } });
+		const [_, e] = await tasksAPI.updateTask({
+			id: parentId,
+			data: { children: currentIds }
+		});
 		if (e) Err.UNHANDLED(e, 'Failed to reorder siblings');
 	}
 
@@ -169,7 +172,10 @@
 		currentIds.splice(adjustedTo, 0, movingId);
 
 		task.children = currentIds;
-		const [_, e] = await tasksAPI.updateTask({ id: task.id, data: { children: currentIds } });
+		const [_, e] = await tasksAPI.updateTask({
+			id: task.id,
+			data: { children: currentIds }
+		});
 		if (e) e.UNHANDLED('Failed to reorder children');
 	}
 
@@ -232,26 +238,12 @@
 		const [_, err1] = await tasksAPI.updateTask({
 			id: parentId,
 			data: {
-				children: [{ ids: [selectedTask.id], op: 'add' }]
+				addChildren: [selectedTask.id]
 			}
 		});
 		if (err1) {
 			Err.UNHANDLED(err1, 'Failed to link task');
-			return;
 		}
-
-		// Update child: add parentId as parent
-		// TODO Should be redundant since server handles relationship propagation
-		/* 		const [__, err2] = await tasksAPI.updateTask({
-			id: selectedTask.id,
-			data: {
-				parents: [{ ids: [parentId], op: 'add' }]
-			}
-		});
-		if (err2) {
-			Err.UNHANDLED(err2, 'Failed to link task');
-			return;
-		} */
 
 		showLinkDialog = false;
 		linkSearchQuery = '';
@@ -262,10 +254,10 @@
 		const [_, err] = await tasksAPI.updateTask({
 			id: parent,
 			data: {
-				children: [{ ids: [child], op: 'remove' }]
+				removeChildren: [child]
 			}
 		});
-		if (err) Err.UNHANDLED(err, 'Failed to disconnect task');
+		if (err) err?.UNHANDLED( 'Failed to disconnect task');
 		else console.log('Disconnected task', child, 'from', parent);
 	}
 </script>
