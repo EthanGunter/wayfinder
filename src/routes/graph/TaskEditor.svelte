@@ -260,9 +260,9 @@
 
 	async function handleDisconnectTask(child: string, parent: string) {
 		const [_, err] = await tasksAPI.updateTask({
-			id: child,
+			id: parent,
 			data: {
-				children: [{ ids: [parent], op: 'remove' }]
+				children: [{ ids: [child], op: 'remove' }]
 			}
 		});
 		if (err) Err.UNHANDLED(err, 'Failed to disconnect task');
