@@ -76,15 +76,18 @@ export function refreshNodesData(tasks: Task[]) {
 
 	updatedNodes = [...updatedNodes, ...newNodes];
 
-	// 5) generate edges for any nodes (new or existing) based on their current Task relations
+	// 4.5) filter out nodes for deleted tasks
+	updatedNodes = updatedNodes.filter((n) => taskById.get(n.id) !== undefined);
+
+	// 5) generate edges for all nodes based on their current Task relations
 	//    - id: `e-${start}-${end}`
 	//    - for parent edges: source = parentId, target = node.id
 	//    - for child edges: source = node.id, target = childId
-	// We’ll generate both directions but avoid duplicates with a Set.
-	const existingKey = new Set(currentEdges.map((e) => `${e.source}->${e.target}`));
+	// We'll generate both directions but avoid duplicates with a Set.
+	const existingEdgeIds = new Set(currentEdges.map((e) => e.id));
 	const generatedEdges: WFEdge[] = [];
 
-	for (const n of newNodes) {
+	for (const n of updatedNodes) {
 		const t = n.data.task;
 		if (!t) continue;
 
@@ -92,7 +95,7 @@ export function refreshNodesData(tasks: Task[]) {
 		for (const parentId of t.parents) {
 			if (!parentId) continue;
 			const key = `e-${parentId}-${t.id}`;
-			if (!existingKey.has(key)) {
+			if (!existingEdgeIds.has(key)) {
 				generatedEdges.push({
 					id: key,
 					source: parentId,
@@ -100,7 +103,7 @@ export function refreshNodesData(tasks: Task[]) {
 					type: 'task',
 					data: { task: t },
 				} satisfies WFEdge);
-				existingKey.add(key);
+				existingEdgeIds.add(key);
 			}
 		}
 
@@ -108,7 +111,7 @@ export function refreshNodesData(tasks: Task[]) {
 		for (const childId of t.children) {
 			if (!childId) continue;
 			const key = `e-${t.id}-${childId}`;
-			if (!existingKey.has(key)) {
+			if (!existingEdgeIds.has(key)) {
 				generatedEdges.push({
 					id: key,
 					source: t.id,
@@ -116,7 +119,7 @@ export function refreshNodesData(tasks: Task[]) {
 					type: 'task',
 					data: { task: t },
 				} satisfies WFEdge);
-				existingKey.add(key);
+				existingEdgeIds.add(key);
 			}
 		}
 	}
@@ -154,12 +157,35 @@ export function refreshNodesData(tasks: Task[]) {
 		}
 	}
 
-	// 7) finalize edges: merge current + generated, then de-dup; then dim and set
-	const mergedEdges = [...currentEdges, ...generatedEdges];
+	// 7) build set of valid edge keys from current task relationships
+	const validEdgeKeys = new Set<string>();
+	const validNodeIds = new Set(updatedNodes.map((n) => n.id));
+
+	for (const t of tasks) {
+		// parents => edges parent -> task
+		for (const parentId of t.parents) {
+			if (!parentId) continue;
+			validEdgeKeys.add(`e-${parentId}-${t.id}`);
+		}
+		// children => edges task -> child
+		for (const childId of t.children) {
+			if (!childId) continue;
+			validEdgeKeys.add(`e-${t.id}-${childId}`);
+		}
+	}
+
+	// 8) finalize edges: merge current + generated, filter to valid relationships, then dim and set
+	const mergedEdges = [...currentEdges, ...generatedEdges].filter((e) => {
+		const edgeKey = `e-${e.source}-${e.target}`;
+		return (
+			validEdgeKeys.has(edgeKey) &&
+			validNodeIds.has(e.source) &&
+			validNodeIds.has(e.target)
+		);
+	});
 
 	const decorated = decorateDimming(updatedNodes, mergedEdges);
 	nodes.set(decorated.nodes);
-	edges.set(decorated.edges);
 	edges.set(decorated.edges);
 }
 
