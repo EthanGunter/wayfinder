@@ -17,6 +17,7 @@
 	import SearchTaskListItem from './SearchTaskListItem.svelte';
 	import { handleSearch } from './logic/search';
 	import type { ITask } from '$domain/models/task';
+	import { onMount } from 'svelte';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -75,14 +76,13 @@
 	let accordionValues = $derived(layoutState.accordionValues);
 
 	function autosize(el: HTMLTextAreaElement | HTMLInputElement) {
-		if (!el) return;
+		if (!el || !(el instanceof HTMLTextAreaElement)) return;
+
 		// Only apply height logic to textarea; inputs don't need it
-		if (el instanceof HTMLTextAreaElement) {
-			el.style.height = '0px';
-			// Compensate for borders/padding reliably
-			const borderBox = el.offsetHeight - el.clientHeight;
-			el.style.height = Math.max(el.scrollHeight + borderBox, 48) + 'px';
-		}
+		el.style.height = '0px';
+		// Compensate for borders/padding reliably
+		const borderBox = el.offsetHeight - el.clientHeight;
+		el.style.height = Math.max(el.scrollHeight + borderBox, 48) + 'px';
 	}
 
 	// Complete status mirrors task.status; no redundant state held
@@ -257,117 +257,117 @@
 				removeChildren: [child]
 			}
 		});
-		if (err) err?.UNHANDLED( 'Failed to disconnect task');
-		else console.log('Disconnected task', child, 'from', parent);
+		if (err) err?.UNHANDLED('Failed to disconnect task');
 	}
 </script>
 
-<div class="relative flex h-full w-full flex-col bg-white" class:bg-[#efe]={checked}>
-	<ScrollWithHeader class="bg-white">
-		{#snippet header()}
-			<!-- sticky top-0 z-10  -->
-			<div class="flex items-start gap-2 px-2 py-2">
-				<Checkbox
-					class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
-					aria-label="Toggle complete"
-					bind:checked
-					onCheckedChange={(status) => toggleCompleted(status)}
-				/>
-				<input
-					class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
-					id="input-task-title"
-					name="title"
-					bind:value={task.title}
-					placeholder="Task title"
-					oninput={handleInput}
-				/>
-				<Separator orientation="vertical" />
-				<button
-					class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
-					title="Delete task"
-					onclick={confirmDelete}
-				>
-					<Icon icon="lucide:trash-2" class="" />
-				</button>
-			</div>
-		{/snippet}
+<ScrollWithHeader
+	class="relative flex h-full w-full flex-col bg-white {checked ? 'bg-[#efe]' : ''}"
+>
+	{#snippet header()}
+		<div class="flex items-start gap-2 px-2 py-2">
+			<Checkbox
+				class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
+				aria-label="Toggle complete"
+				bind:checked
+				onCheckedChange={(status) => toggleCompleted(status)}
+			/>
+			<input
+				class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+				id="input-task-title"
+				name="title"
+				bind:value={task.title}
+				placeholder="Task title"
+				oninput={handleInput}
+			/>
+			<Separator orientation="vertical" />
+			<button
+				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+				title="Delete task"
+				onclick={confirmDelete}
+			>
+				<Icon icon="lucide:trash-2" class="" />
+			</button>
+		</div>
+	{/snippet}
 
-		{#snippet content()}
-			<div class="flex h-full flex-col p-3">
-				<textarea
-					class="w-full shrink-0 resize-none rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
-					bind:this={notesEl}
-					name="content"
-					bind:value={task.content}
-					placeholder="Add notes or description..."
-					oninput={handleInput}
-				></textarea>
+	{#snippet content()}
+		<div class="flex h-full min-h-0 flex-col p-3">
+			<textarea
+				class="w-full shrink-0 resize-none rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
+				bind:this={notesEl}
+				name="content"
+				bind:value={task.content}
+				placeholder="Add notes or description..."
+				oninput={handleInput}
+				use:autosize
+			></textarea>
 
-				<Accordion.Root
-					type="multiple"
-					value={accordionValues}
-					onValueChange={(e) => {
-						layoutState.accordionValues = e as any;
-					}}
-				>
-					<Accordion.Item value="tasks">
+			<Accordion.Root
+				type="multiple"
+				value={accordionValues}
+				onValueChange={(e) => {
+					layoutState.accordionValues = e as any;
+				}}
+				class="mt-auto"
+			>
+				<Accordion.Item value="tasks">
+					<Accordion.Trigger
+						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+					>
+						Blocked By
+					</Accordion.Trigger>
+					<Accordion.Content>
+						<TaskList
+							showCompleted={layoutState.showCompletedTasks}
+							tasks={($childTasksStore as { data: Task[] }).data ?? []}
+							parentId={task.id}
+							id={`child-${task.id}`}
+							onSelect={(id) => {
+								onSelectNode?.(id);
+							}}
+							onDisconnect={handleDisconnectTask}
+							onReorder={(taskId, startIndex, finishIndex) =>
+								reorderChildren(taskId, startIndex, finishIndex)}
+							onAddTask={handleAddChildTask}
+							onLink={(parentId) => {
+								linkParentId = task.id;
+								showLinkDialog = true;
+							}}
+						/>
+					</Accordion.Content>
+				</Accordion.Item>
+				{#if $siblingsStore.status === 'resolved'}
+					<Accordion.Item value="parent-order">
 						<Accordion.Trigger
 							class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 						>
-							Blocked By
+							Priority
 						</Accordion.Trigger>
 						<Accordion.Content>
-							<TaskList
-								showCompleted={layoutState.showCompletedTasks}
-								tasks={($childTasksStore as { data: Task[] }).data ?? []}
-								parentId={task.id}
-								id={`child-${task.id}`}
-								onSelect={(id) => {
-									onSelectNode?.(id);
-								}}
-								onDisconnect={handleDisconnectTask}
-								onReorder={(taskId, startIndex, finishIndex) =>
-									reorderChildren(taskId, startIndex, finishIndex)}
-								onAddTask={handleAddChildTask}
-								onLink={(parentId) => {
-									linkParentId = task.id;
-									showLinkDialog = true;
-								}}
-							/>
+							<div class="flex flex-col gap-4">
+								{#each $siblingsStore.data as [parent, siblings] (parent.id)}
+									<TaskList
+										showCompleted={layoutState.showCompletedSiblings}
+										tasks={siblings}
+										parentId={parent.id}
+										id={`sibling-${parent.id}`}
+										title={parent.title}
+										currentTaskId={task.id}
+										onSelect={(id) => onSelectNode?.(id)}
+										onDisconnect={handleDisconnectTask}
+										onReorder={(taskId, startIndex, finishIndex) =>
+											reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
+									/>
+								{/each}
+							</div>
 						</Accordion.Content>
 					</Accordion.Item>
-					{#if $siblingsStore.status === 'resolved'}
-						<Accordion.Item value="parent-order">
-							<Accordion.Trigger
-								class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
-							>
-								Priority
-							</Accordion.Trigger>
-							<Accordion.Content>
-								<div class="flex flex-col gap-4">
-									{#each $siblingsStore.data as [parent, siblings] (parent.id)}
-										<TaskList
-											showCompleted={layoutState.showCompletedSiblings}
-											tasks={siblings}
-											parentId={parent.id}
-											id={`sibling-${parent.id}`}
-											title={parent.title}
-											currentTaskId={task.id}
-											onSelect={(id) => onSelectNode?.(id)}
-											onDisconnect={handleDisconnectTask}
-											onReorder={(taskId, startIndex, finishIndex) =>
-												reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
-										/>
-									{/each}
-								</div>
-							</Accordion.Content>
-						</Accordion.Item>
-					{/if}
-				</Accordion.Root>
-			</div>
-		{/snippet}
-	</ScrollWithHeader>
-</div>
+				{/if}
+			</Accordion.Root>
+		</div>
+	{/snippet}
+</ScrollWithHeader>
 
 <Dialog.Root bind:open={showDeleteDialog}>
 	<Dialog.Content>

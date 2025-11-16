@@ -63,7 +63,7 @@
 >
 	<!-- Sticky header -->
 	<div
-		class="sticky top-0 z-10 bg-white backdrop-blur supports-[backdrop-filter]:bg-white/70"
+		class="sticky top-0 z-10 bg-white/20 backdrop-blur supports-[backdrop-filter]:bg-white/20"
 		style="
 		box-shadow: 0 0 calc(5px * var(--shadow-strength, 0)) rgba(0,0,0,.5),
 					0 0 calc(18px * var(--shadow-strength, 0)) rgba(0,0,0,.2);
@@ -76,5 +76,7 @@
 
 	<!-- Sentinel: a 1px strip at the very top inside the scroll root -->
 	<div bind:this={sentinel} use:setupIO class="pointer-events-none h-px w-full"></div>
-	{@render content()}
+	<!-- <div class="min-h-0"> -->
+		{@render content()}
+	<!-- </div> -->
 </div>
