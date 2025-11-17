@@ -44,23 +44,25 @@
 		}
 	}
 
-	// Filter completed tasks and duplicates
-	let filteredDaysTasks = $derived(
-		// TODO:UX this should sort by priority, but the tasks' priorities are not related to each other... Today's tasks need their own local priority :(
-		$todaysList.status === 'resolved'
-			? $todaysList.data.sort((a, b) => {
-					const ac = isTaskCompleted(a);
-					const bc = isTaskCompleted(b);
+	// Derive todays sort order from suggested tasks
+	let filteredDaysTasks = $derived.by(() => {
+		if ($todaysList.status === 'resolved' && $suggestedTasks.status === 'resolved') {
+			return $suggestedTasks.data.filter((suggestedTask) =>
+				$todaysList.data.some((todaysTask) => todaysTask.id == suggestedTask.id)
+			);
+		} else return [];
+	});
 
-					// If both or neither are completed, sort by title
-					if ((ac && bc) || !(ac || bc)) return a.title < b.title ? -1 : 1;
-					// Otherwise move completed lower
-					else if (isTaskCompleted(a)) return 1;
-					else return -1;
-				})
-			: []
-	);
-	let firstCompletedIndex = $derived(filteredDaysTasks.findIndex((t) => isTaskCompleted(t)));
+	let completedTodaysTasks = $derived.by(() => {
+		if ($todaysList.status === 'resolved') {
+			return $todaysList.data.filter((t) => {
+				console.log(t.title, 'is completed', t.status, isTaskCompleted(t));
+
+				return isTaskCompleted(t);
+			});
+		} else return [];
+	});
+
 	let filteredSuggestedTasks = $derived(
 		$suggestedTasks.status === 'resolved' && $todaysList.status === 'resolved'
 			? $suggestedTasks.data.filter(
@@ -72,7 +74,7 @@
 
 {#if $authState.status === 'signed-in'}
 	<div
-		class="page-root mx-auto m-header mb-footer flex w-full max-w-[35rem] min-w-80 flex-col overflow-hidden p-4 gap-5"
+		class="page-root m-header mx-auto mb-footer flex w-full max-w-[35rem] min-w-80 flex-col gap-5 overflow-hidden p-4"
 	>
 		<div
 			id="todays-tasks-list"
@@ -88,12 +90,15 @@
 			{/if}
 			<div class="tasks-list">
 				{#each filteredDaysTasks as task, index (task.id)}
-					<!-- {#each filteredDaysTasks as task, index} -->
-					{#if index === firstCompletedIndex && firstCompletedIndex !== -1}
-						<div class="completed-separator" aria-hidden="true">Completed</div>
-					{/if}
 					<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
 				{/each}
+				{#if completedTodaysTasks.length > 0}
+					<div class="completed-separator" aria-hidden="true">Completed</div>
+					{#each completedTodaysTasks as task, index (task.id)}
+						<!-- {#each filteredDaysTasks as task, index} -->
+						<TaskListItem bind:task={completedTodaysTasks[index]} {onTaskChange} />
+					{/each}
+				{/if}
 			</div>
 		</div>
 		<div
