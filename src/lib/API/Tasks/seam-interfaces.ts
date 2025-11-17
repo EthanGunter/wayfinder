@@ -1,5 +1,5 @@
 import type { InvalidStateError, ArgumentError, NotAuthorizedError, NotFoundError } from "$domain/errors";
-import type { CreateTaskParams, Task, UpdateTaskParams } from "$domain/models/task";
+import type { CreateTaskParams, ExportedData, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
 import type { FetchableStore, QueryableStore } from "../fetchableStore";
 
@@ -60,6 +60,9 @@ export interface ITasks {
   } */): QueryableStore<{ limit: number }, Task[]>;
 
 	searchTasks(searchTerm: string): Promise<Task[]>;
+
+	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<Result<number, NotAuthorizedError | ArgumentError | InvalidStateError>>;
+	exportData(subtreeId?: string): Promise<ExportedData>;
 };
 
 
@@ -146,8 +149,8 @@ export interface ITasksLocal {
 				}
 		): { unsubscribe: () => void, tasks: Readable<Task[]> }; */
 
-	exportData(): Promise<string>;
-	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<number>;
+	exportData(subtreeId?: string): Promise<ExportedData>;
+	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<Result<number, NotAuthorizedError | ArgumentError | InvalidStateError>>;
 
 	// hydrateForUser(params: { user: User }): Promise<void>;
 };

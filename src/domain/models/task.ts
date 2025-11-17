@@ -167,6 +167,11 @@ export function applyRelationshipOperations<T>(
 
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
+export interface ExportedData {
+    version: string;
+    exportedAt: string;
+    tasks: ITask<number>[];
+}
 
 /**
  * Delta describing a task change. Creation: oldTask=null. Deletion: newTask=null.
