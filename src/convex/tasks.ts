@@ -2,7 +2,7 @@ import { Err, NotAuthorizedError, NotFoundError, NotImplementedError, InvalidSta
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { applyRelationshipOperations, calculateRelationshipUpdates, type CreateTaskParams, type UpdateTaskParams, type ITask, ExportedData, Task } from "$domain/models/task";
+import { applyRelationshipOperations, calculateRelationshipUpdates, type CreateTaskParams, type UpdateTaskParams, type ITask, type ExportedData, type Task } from "$domain/models/task";
 import { type MutationCtx } from "./_generated/server";
 
 //#region Types

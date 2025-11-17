@@ -149,9 +149,14 @@
 
 @layer layout {
   .page-root {
-    @apply flex flex-col overflow-hidden bg-background;
-    height: 100vh;
-    width: 100%;
+    @apply absolute top-0 left-0 h-full max-h-screen w-full max-w-screen;
+    display: grid;
+    grid-template-rows: var(--header-height) calc(100vh - var(--header-height));
+  }
+
+  .page-content {
+    @apply max-w-3xl;
+    justify-self: center;
   }
 }
 
@@ -170,7 +175,7 @@
     border-color: var(--border);
   }
 
-  svg{
+  svg {
     @apply size-4;
   }
 }

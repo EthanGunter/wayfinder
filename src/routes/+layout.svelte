@@ -1,15 +1,10 @@
 <script lang="ts">
 	import '../app.css';
-	import { authState, cachedUsers, authAPI } from '$lib/API/Auth';
-	import tasksAPI from '$lib/API/Tasks';
+	import { authState, authAPI } from '$lib/API/Auth';
 	import Icon from '@iconify/svelte';
-	import SelectUserView from '$lib/components/AuthComponents/SelectUser.svelte';
 	import LoginView from '$lib/components/AuthComponents/Login.svelte';
-	import RegisterView from '$lib/components/AuthComponents/Register.svelte';
 	import { InputRequiredError, type Err } from '$domain/errors';
-	import * as Accordion from '$lib/components/ui/accordion';
-	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import AppSidebar from '$lib/components/Sidebar/app-sidebar.svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
 
 	const { children } = $props();
 	let mode = $state</* 'select' | */ 'login' | 'register'>('login');
@@ -71,7 +66,7 @@
 	}
 </script>
 
-<div class="absolute top-0 left-0 h-screen w-screen">
+<div class="page-root">
 	{#if $authState.status === 'loading'}
 		<div class="flex h-screen w-full items-center justify-center">
 			<Icon icon="lucide:loader-circle" class="size-10 animate-spin" />
@@ -124,11 +119,7 @@
 			</div>
 		</div>
 	{:else}
-		<Sidebar.Provider>
-			<AppSidebar />
-			<Sidebar.Inset>
-				{@render children?.()}
-			</Sidebar.Inset>
-		</Sidebar.Provider>
+		<AppHeader />
+		{@render children?.()}
 	{/if}
 </div>

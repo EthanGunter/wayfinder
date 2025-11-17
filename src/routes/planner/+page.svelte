@@ -5,6 +5,7 @@
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
+	import * as NavBar from '$lib/components/ui/navbar';
 
 	let todaysList = tasksAPI.getTodaysTasks();
 	let suggestedTasks = tasksAPI.getPrioritizedTasks(15);
@@ -55,11 +56,7 @@
 
 	let completedTodaysTasks = $derived.by(() => {
 		if ($todaysList.status === 'resolved') {
-			return $todaysList.data.filter((t) => {
-				console.log(t.title, 'is completed', t.status, isTaskCompleted(t));
-
-				return isTaskCompleted(t);
-			});
+			return $todaysList.data.filter((t) => isTaskCompleted(t));
 		} else return [];
 	});
 
@@ -73,27 +70,30 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<div
-		class="page-root m-header mx-auto mb-footer flex w-full max-w-[35rem] min-w-80 flex-col gap-5 overflow-hidden p-4"
-	>
+	<div class="page-content flex w-full flex-col items-center gap-4 overflow-y-scroll p-4">
 		<div
 			id="todays-tasks-list"
-			class="droppable-zone todays-tasks"
+			class="droppable-zone todays-tasks relative min-h-[200px] w-full flex-[2] overflow-y-auto rounded-xl border-2 border-dashed border-blue-200 bg-[linear-gradient(135deg,#dbeafe_0%,#bfdbfe_100%)] p-4 transition-all duration-200 ease-in-out"
 			use:droppable={{
 				accepts: ['task'],
 				onDrop: handleTodaysTaskDrop
 			}}
 		>
-			<h1>Today's Tasks</h1>
+			<h1 class="mb-4 font-semibold text-gray-700">Today's Tasks</h1>
 			{#if filteredSuggestedTasks.length > 0}
-				<h4>Nothing here. Drag some suggestions in!</h4>
+				<h4 class="my-2 text-gray-500 italic">Nothing here. Drag some suggestions in!</h4>
 			{/if}
-			<div class="tasks-list">
+			<div class="flex flex-col gap-2">
 				{#each filteredDaysTasks as task, index (task.id)}
 					<TaskListItem bind:task={filteredDaysTasks[index]} {onTaskChange} />
 				{/each}
 				{#if completedTodaysTasks.length > 0}
-					<div class="completed-separator" aria-hidden="true">Completed</div>
+					<div
+						class="my-1 mb-2 border-t border-dashed border-gray-400 px-2 text-xs text-gray-500"
+						aria-hidden="true"
+					>
+						Completed
+					</div>
 					{#each completedTodaysTasks as task, index (task.id)}
 						<!-- {#each filteredDaysTasks as task, index} -->
 						<TaskListItem bind:task={completedTodaysTasks[index]} {onTaskChange} />
@@ -103,19 +103,19 @@
 		</div>
 		<div
 			id="suggested-tasks-list"
-			class="droppable-zone suggested-tasks"
+			class="droppable-zone suggested-tasks relative min-h-[150px] w-full flex-1 overflow-y-auto rounded-xl border-2 border-dashed border-gray-200 bg-[linear-gradient(135deg,#f9fafb_0%,#f3f4f6_100%)] p-4 transition-all duration-200 ease-in-out"
 			use:droppable={{
 				accepts: ['task'],
 				onDrop: handleSuggestedTaskDrop
 			}}
 		>
-			<h2>Suggested Tasks</h2>
+			<h2 class="mb-4 font-semibold text-gray-700">Suggested Tasks</h2>
 
 			{#if filteredSuggestedTasks.length === 0}
-				<h4>There's nothing to suggest!</h4>
+				<h4 class="my-2 text-gray-500 italic">There's nothing to suggest!</h4>
 			{/if}
 
-			<div class="tasks-list">
+			<div class="flex flex-col gap-2">
 				<!-- {#each filteredSuggestedTasks as task} -->
 				{#each filteredSuggestedTasks as task (task.id)}
 					<TaskListItem {task} {onTaskChange} />
@@ -125,89 +125,35 @@
 	</div>
 {/if}
 
-<style lang="scss">
-	.tasks-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+<style>
+	/* Pseudo-element overlays for droppable zones */
+	.droppable-zone::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		border-radius: inherit;
+		background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
+		opacity: 0;
+		transition: opacity 0.2s ease-in-out;
+		pointer-events: none;
 	}
 
-	.droppable-zone {
-		padding: 1rem;
-		border: 2px dashed transparent;
-		border-radius: 12px;
-		background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-		transition: all 0.2s ease-in-out;
-		position: relative;
-		overflow-y: auto;
-
-		&::before {
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			border-radius: inherit;
-			background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%);
-			opacity: 0;
-			transition: opacity 0.2s ease-in-out;
-			pointer-events: none;
-		}
-
-		h1,
-		h2 {
-			margin-bottom: 1rem;
-			color: #374151;
-			font-weight: 600;
-		}
-
-		h4 {
-			color: #6b7280;
-			font-style: italic;
-			margin: 0.5rem 0;
-		}
+	.todays-tasks::before {
+		background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
 	}
 
-	.todays-tasks {
-		border-color: #dbeafe;
-		background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-		flex: 2; // Priority - takes 2/3 of available space
-		min-height: 200px;
-
-		&::before {
-			background: linear-gradient(
-				135deg,
-				rgba(59, 130, 246, 0.1) 0%,
-				rgba(59, 130, 246, 0.05) 100%
-			);
-		}
+	.suggested-tasks::before {
+		background: linear-gradient(
+			135deg,
+			rgba(107, 114, 128, 0.1) 0%,
+			rgba(107, 114, 128, 0.05) 100%
+		);
 	}
 
-	.suggested-tasks {
-		border-color: #e5e7eb;
-		background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-		flex: 1; // Takes 1/3 of available space
-		min-height: 150px;
-
-		&::before {
-			background: linear-gradient(
-				135deg,
-				rgba(107, 114, 128, 0.1) 0%,
-				rgba(107, 114, 128, 0.05) 100%
-			);
-		}
-	}
-
-	.completed-separator {
-		margin: 0.25rem 0 0.5rem;
-		padding: 0.25rem 0.5rem;
-		font-size: 0.8rem;
-		color: #6b7280;
-		border-top: 1px dashed #9ca3af;
-	}
-
-	// Drop zone states during drag
+	/* Drop zone states during drag */
 	:global(.dnd-droppable.valid-drop) {
 		border-color: #22c55e !important;
 		border-style: solid !important;
@@ -218,15 +164,15 @@
 			rgba(34, 197, 94, 0.1) 100%
 		) !important;
 		box-shadow: 0 4px 12px rgba(34, 197, 94, 0.1);
+	}
 
-		&::before {
-			opacity: 1;
-		}
+	:global(.dnd-droppable.valid-drop)::before {
+		opacity: 1;
+	}
 
-		h1,
-		h2 {
-			color: #059669;
-		}
+	:global(.dnd-droppable.valid-drop h1),
+	:global(.dnd-droppable.valid-drop h2) {
+		color: #059669;
 	}
 
 	:global(.dnd-droppable.invalid-drop) {
@@ -238,14 +184,14 @@
 			rgba(156, 163, 175, 0.15) 0%,
 			rgba(156, 163, 175, 0.1) 100%
 		) !important;
-
-		h1,
-		h2 {
-			color: #6b7280;
-		}
 	}
 
-	// Enhanced ghost styling
+	:global(.dnd-droppable.invalid-drop h1),
+	:global(.dnd-droppable.invalid-drop h2) {
+		color: #6b7280;
+	}
+
+	/* Enhanced ghost styling */
 	:global(.dnd-ghost) {
 		opacity: 0.8;
 		transform: rotate(3deg);
@@ -267,7 +213,7 @@
 		transform: rotate(3deg) scale(0.95);
 	}
 
-	// Draggable feedback - simplified to avoid z-fighting
+	/* Draggable feedback */
 	:global(.dnd-draggable:active) {
 		transform: scale(1.02);
 	}

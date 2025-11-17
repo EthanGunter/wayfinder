@@ -126,143 +126,86 @@
 	}
 </script>
 
-<div class="graph-root page-root">
-	<div class="h-header bg-white p-2">
-		<div class="flex items-center gap-2">
-			<div class="flex-1">
-				<SearchBar
-					bind:query={$searchQuery}
-					placeholder="Enter query here..."
-					handleQuery={handleSearch}
-					onItemSelected={(task) => {
-						$selectedTask = task;
-						centerAndHighlightNode(task.id);
+<Resizable.PaneGroup direction="horizontal" class="flex min-h-0">
+	<Resizable.Pane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
+		<SvelteFlowProvider>
+			<div class="relative flex h-full w-full">
+				<SvelteFlow
+					class="h-full w-full"
+					bind:nodes={$nodes}
+					bind:edges={$edges}
+					fitView
+					minZoom={0.1}
+					maxZoom={2}
+					nodeTypes={{ task: TaskNode }}
+					nodeOrigin={[0.5, 0.5]}
+					edgeTypes={{ task: TaskEdge }}
+					defaultEdgeOptions={{ type: 'task' }}
+					oninit={() => {
+						const instance = useSvelteFlow();
+						svelteFlowInstance.set(instance);
+						screenToFlowPosition.set(instance.screenToFlowPosition);
 					}}
-					autocomplete={false}
-					sorter={(a, b) => {
-						if (a.status == TaskStatus.complete) return 1;
-						else if (b.status == TaskStatus.complete) return -1;
-						else return 0;
+					ondelete={onGraphDelete}
+					onconnectstart={handleConnectStart}
+					onreconnectstart={handleReconnectStart}
+					onconnect={handleConnect}
+					onbeforereconnect={handleBeforeReconnect}
+					onreconnect={handleReconnect}
+					onconnectend={handleConnectEnd}
+					onreconnectend={handleReconnectEnd}
+					{isValidConnection}
+					onnodeclick={({ node, event }) => {
+						if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
+						$selectedTask = node.id
+							? ($nodes.find((n) => n.id === node.id)?.data.task ?? null)
+							: null;
+					}}
+					onpaneclick={() => {
+						$selectedTask = null;
 					}}
 				>
-					{#snippet children(task: Task)}
-						<SearchTaskListItem
-							{task}
-							onLocate={() => {
-								$selectedTask = $allTasks.find((t) => t.id === task.id) ?? null;
-								centerAndHighlightNode(task.id);
-							}}
-						/>
-					{/snippet}
-				</SearchBar>
-			</div>
-
-			<Button
-				variant="outline"
-				size="sm"
-				onclick={handleShare}
-				disabled={!$searchQuery?.trim()}
-				title="Copy a shareable URL for this query"
-			>
-				Share
-			</Button>
-
-			{#if $isValidQuery && $activeSearchResults.length > 0}
+					<Background bgColor="var(--background)" />
+				</SvelteFlow>
 				<Button
-					variant={$showRelatedNodes ? 'default' : 'outline'}
-					size="sm"
+					variant="outline"
+					class="absolute right-6 bottom-6 h-9 w-10 rounded-full border-1 border-border bg-white"
 					onclick={() => {
-						$showRelatedNodes = !$showRelatedNodes;
+						drawerParams.set(null);
+						drawerOpen.set(true);
 					}}
 				>
-					{$showRelatedNodes ? 'Hide' : 'Show'} Related
+					+
 				</Button>
-			{/if}
-		</div>
-	</div>
-	<div class="flex min-h-0 flex-1 flex-col">
-		<Resizable.PaneGroup direction="horizontal" class="flex h-full min-h-0 w-full">
-			<Resizable.Pane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
-				<SvelteFlowProvider>
-					<div class="relative flex h-full w-full">
-						<SvelteFlow
-							class="h-full w-full"
-							bind:nodes={$nodes}
-							bind:edges={$edges}
-							fitView
-							minZoom={0.1}
-							maxZoom={2}
-							nodeTypes={{ task: TaskNode }}
-							nodeOrigin={[0.5, 0.5]}
-							edgeTypes={{ task: TaskEdge }}
-							defaultEdgeOptions={{ type: 'task' }}
-							oninit={() => {
-								const instance = useSvelteFlow();
-								svelteFlowInstance.set(instance);
-								screenToFlowPosition.set(instance.screenToFlowPosition);
-							}}
-							ondelete={onGraphDelete}
-							onconnectstart={handleConnectStart}
-							onreconnectstart={handleReconnectStart}
-							onconnect={handleConnect}
-							onbeforereconnect={handleBeforeReconnect}
-							onreconnect={handleReconnect}
-							onconnectend={handleConnectEnd}
-							onreconnectend={handleReconnectEnd}
-							{isValidConnection}
-							onnodeclick={({ node, event }) => {
-								if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
-								$selectedTask = node.id
-									? ($nodes.find((n) => n.id === node.id)?.data.task ?? null)
-									: null;
-							}}
-							onpaneclick={() => {
-								$selectedTask = null;
-							}}
-						>
-							<Background bgColor="var(--background)" />
-						</SvelteFlow>
-						<Button
-							variant="outline"
-							class="absolute right-6 bottom-6 h-9 w-10 rounded-full border-1 border-border bg-white"
-							onclick={() => {
-								drawerParams.set(null);
-								drawerOpen.set(true);
-							}}
-						>
-							+
-						</Button>
-						<Button
-							variant="outline"
-							class="absolute top-6 right-6 h-9 w-10 rounded-full border-1 border-border bg-white"
-							onclick={() => {
-								updateGraph(true);
-							}}
-						>
-							<Icon icon="lucide:refresh-cw" />
-						</Button>
-					</div>
-				</SvelteFlowProvider>
-			</Resizable.Pane>
-			{#if $selectedTask}
-				<Resizable.Handle />
-				<Resizable.Pane
-					class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
-					defaultSize={30}
-					minSize={24}
+				<Button
+					variant="outline"
+					class="absolute top-6 right-6 h-9 w-10 rounded-full border-1 border-border bg-white"
+					onclick={() => {
+						updateGraph(true);
+					}}
 				>
-					<TaskEditor
-						bind:task={$selectedTask}
-						bind:layoutState={$editorLayoutState}
-						{onTaskChange}
-						onDelete={onEditorDelete}
-						{onSelectNode}
-					/>
-				</Resizable.Pane>
-			{/if}
-		</Resizable.PaneGroup>
-	</div>
-</div>
+					<Icon icon="lucide:refresh-cw" />
+				</Button>
+			</div>
+		</SvelteFlowProvider>
+	</Resizable.Pane>
+	{#if $selectedTask}
+		<Resizable.Handle />
+		<Resizable.Pane
+			class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
+			defaultSize={30}
+			minSize={24}
+		>
+			<TaskEditor
+				bind:task={$selectedTask}
+				bind:layoutState={$editorLayoutState}
+				{onTaskChange}
+				onDelete={onEditorDelete}
+				{onSelectNode}
+			/>
+		</Resizable.Pane>
+	{/if}
+</Resizable.PaneGroup>
 
 <TaskCreationDrawer
 	bind:open={$drawerOpen}

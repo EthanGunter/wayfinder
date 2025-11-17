@@ -43,11 +43,12 @@ async function getTaskById(t: TestContext, id: string) {
 	return result;
 }
 
-async function getAllTasksForUser(t: TestContext, userId: string) {
-	return await t.run(async (ctx) => {
+async function getAllTasksForUser(t: TestContext, userId: string, excludeRoot: boolean = false) {
+	const all = await t.run(async (ctx) => {
 		const all = await ctx.db.query("tasks").collect();
-		return all.filter(task => task.userAuthId === userId && task.type === "task");
+		return all.filter(task => task.userAuthId === userId);
 	});
+	return excludeRoot ? all.filter(task => task.type !== "root") : all;
 }
 
 function assertBidirectionalRelationship(
@@ -412,7 +413,7 @@ describe("updateTask", () => {
 
 		// Get root before removing parent
 		const rootBefore = await getTaskById(t, parent.created.parents[0] as Id<"tasks">);
-		
+
 		// Verify child is NOT in root's children initially (it has a parent)
 		expect(rootBefore!.children).not.toContain(child.created.id);
 
@@ -431,7 +432,7 @@ describe("updateTask", () => {
 
 		// Child should be attached to root
 		expect(refreshedChild!.parents).toContain(rootId);
-		
+
 		// Root should have child in its children list
 		expect(rootAfter!.children).toContain(child.created.id);
 	});
@@ -505,7 +506,7 @@ describe("updateTask", () => {
 
 		// Parent should no longer have child
 		expect(parentAfter!.children).not.toContain(child.created.id);
-		
+
 		// Child should no longer have parent
 		expect(childAfter!.parents).not.toContain(parent.created.id);
 	});
@@ -526,7 +527,7 @@ describe("updateTask", () => {
 
 		// Get root before removing child
 		const rootBefore = await getTaskById(t, parent.created.parents[0] as Id<"tasks">);
-		
+
 		// Verify child is NOT in root's children initially (it has a parent)
 		expect(rootBefore!.children).not.toContain(child.created.id);
 
@@ -546,7 +547,7 @@ describe("updateTask", () => {
 		// Child should be attached to root
 		expect(refreshedChild!.parents).toContain(rootId);
 		expect(refreshedChild!.parents).toHaveLength(1);
-		
+
 		// Root should have child in its children list
 		expect(rootAfter!.children).toContain(child.created.id);
 		expect(rootAfter!.type).toBe("root");
@@ -591,10 +592,10 @@ describe("updateTask", () => {
 
 		// P1 should no longer have child
 		expect(p1After!.children).not.toContain(child.created.id);
-		
+
 		// P2 should still have child
 		expect(p2After!.children).toContain(child.created.id);
-		
+
 		// Child should no longer have P1, but still have P2
 		expect(childAfter!.parents).not.toContain(p1.created.id);
 		expect(childAfter!.parents).toContain(p2.created.id);
@@ -1470,7 +1471,7 @@ describe("importData", () => {
 		});
 
 		// Should import all tasks
-		const allTasks = await getAllTasksForUser(t, "user1");
+		const allTasks = await getAllTasksForUser(t, "user1", true);
 		expect(allTasks).toHaveLength(3);
 
 		// Find imported tasks by title (since IDs will be different)
@@ -1532,7 +1533,7 @@ describe("importData", () => {
 			mode: "add",
 		});
 
-		const allTasks = await getAllTasksForUser(t, "user1");
+		const allTasks = await getAllTasksForUser(t, "user1", true);
 		expect(allTasks).toHaveLength(2);
 
 		const parent = allTasks.find(t => t.title === "Parent");
@@ -1550,7 +1551,7 @@ describe("importData", () => {
 			expect(parent.children).toContain(String(child._id));
 			// Parent should be attached to root (since missingParentId was removed)
 			expect(parent.parents.length).toBeGreaterThan(0);
-			
+
 			// Verify bidirectional relationship with child
 			assertBidirectionalRelationship(parent, child);
 		}
@@ -1610,7 +1611,7 @@ describe("importData", () => {
 			mode: "add",
 		});
 
-		const allTasks = await getAllTasksForUser(t, "user1");
+		const allTasks = await getAllTasksForUser(t, "user1", true);
 		expect(allTasks).toHaveLength(3);
 
 		const task1 = allTasks.find(t => t.title === "Task 1");

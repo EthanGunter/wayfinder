@@ -61,44 +61,41 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
-	<div id="account-page" class="page-root relative h-full w-full bg-gray-200 mt-header">
-		<div
-			class="page-content mx-auto flex w-full min-w-80 flex-col items-center gap-4 overflow-y-scroll p-4"
-		>
-			<div class="grid gap-4">
-				<!-- TODO:UX avatar only seems to update after navigation or refresh... -->
-				<AvatarEditor
-					user={$authState.user}
-					onAvatarChange={(avatar_url) => {
+	<div class="page-content flex w-full flex-col items-center gap-4 overflow-y-scroll p-4">
+		<div class="grid gap-4">
+			<!-- TODO:UX avatar only seems to update after navigation or refresh... -->
+			<AvatarEditor
+				user={$authState.user}
+				onAvatarChange={(avatar_url) => {
+					if ($authState.status !== 'signed-in') return;
+					if (avatar_url !== $authState.user.avatarUrl) {
+						void debouncedUpdateUser({
+							update: { id: $authState.user.id, avatarUrl: avatar_url }
+						});
+					}
+				}}
+				class="m-auto max-h-[50vh] max-w-[50vw]"
+			/>
+			<span class="flex flex-col">
+				<label for="input_display_name" class="mb-2 font-medium text-gray-800">Name</label>
+				<input
+					id="input_display_name"
+					type="text"
+					bind:value={draftName}
+					oninput={(event) => {
+						event.preventDefault();
 						if ($authState.status !== 'signed-in') return;
-						if (avatar_url !== $authState.user.avatarUrl) {
+						if (event.currentTarget.value !== $authState.user.displayName) {
 							void debouncedUpdateUser({
-								update: { id: $authState.user.id, avatarUrl: avatar_url }
+								update: { id: $authState.user.id, displayName: event.currentTarget.value }
 							});
 						}
 					}}
-					class="m-auto max-h-[50vh] max-w-[50vw]"
+					placeholder="Really cool username"
+					class="rounded border border-gray-300 p-2"
 				/>
-				<span class="flex flex-col">
-					<label for="input_display_name" class="mb-2 font-medium text-gray-800">Name</label>
-					<input
-						id="input_display_name"
-						type="text"
-						bind:value={draftName}
-						oninput={(event) => {
-							event.preventDefault();
-							if ($authState.status !== 'signed-in') return;
-							if (event.currentTarget.value !== $authState.user.displayName) {
-								void debouncedUpdateUser({
-									update: { id: $authState.user.id, displayName: event.currentTarget.value }
-								});
-							}
-						}}
-						placeholder="Really cool username"
-						class="rounded border border-gray-300 p-2"
-					/>
-				</span>
-				<!-- TODO Local Passkey <section id="sec-passkey">
+			</span>
+			<!-- TODO Local Passkey <section id="sec-passkey">
 				<Button>Passkey</Button>
 				<input
 				id="input_passkey"
@@ -107,49 +104,49 @@
 				oninput={handlePasswordInput}
 				/>
 				</section> -->
-				<!-- TODO App themes <section id="sec-theme">
+			<!-- TODO App themes <section id="sec-theme">
 					<label for="select_theme">Theme</label>
 					<select id="select_theme">
 						<option>Light</option>
 						<option>Dark</option>
 						</select>
 						</section> -->
-			</div>
+		</div>
 
-			<Button class="alert" onclick={authAPI.logout}>Sign out</Button>
+		<Button class="alert" onclick={authAPI.logout}>Sign out</Button>
 
-			<!-- Delete Account Dialog -->
-			<AlertDialog.Root>
-				<AlertDialog.Trigger>
-					<Button variant="destructive" class="w-full">Delete Account</Button>
-				</AlertDialog.Trigger>
-				<AlertDialog.Content>
-					<AlertDialog.Header>
-						<AlertDialog.Title>Delete Account</AlertDialog.Title>
-						<AlertDialog.Description>
-							Are you sure you want to delete your account? This action cannot be undone.
-							{#if taskCount > 0}
-								<br /><br />
-								<strong>Warning:</strong> This will also delete {taskCount} task{taskCount === 1
-									? ''
-									: 's'} associated with this account.
-							{/if}
-						</AlertDialog.Description>
-					</AlertDialog.Header>
-					<AlertDialog.Footer>
-						<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-						<AlertDialog.Action
-							onclick={handleDeleteUser}
-							disabled={isDeleting}
-							class="bg-red-600 hover:bg-red-700"
-						>
-							{isDeleting ? 'Deleting...' : 'Delete Account'}
-						</AlertDialog.Action>
-					</AlertDialog.Footer>
-				</AlertDialog.Content>
-			</AlertDialog.Root>
+		<!-- Delete Account Dialog -->
+		<AlertDialog.Root>
+			<AlertDialog.Trigger>
+				<Button variant="destructive" class="w-full">Delete Account</Button>
+			</AlertDialog.Trigger>
+			<AlertDialog.Content>
+				<AlertDialog.Header>
+					<AlertDialog.Title>Delete Account</AlertDialog.Title>
+					<AlertDialog.Description>
+						Are you sure you want to delete your account? This action cannot be undone.
+						{#if taskCount > 0}
+							<br /><br />
+							<strong>Warning:</strong> This will also delete {taskCount} task{taskCount === 1
+								? ''
+								: 's'} associated with this account.
+						{/if}
+					</AlertDialog.Description>
+				</AlertDialog.Header>
+				<AlertDialog.Footer>
+					<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+					<AlertDialog.Action
+						onclick={handleDeleteUser}
+						disabled={isDeleting}
+						class="bg-red-600 hover:bg-red-700"
+					>
+						{isDeleting ? 'Deleting...' : 'Delete Account'}
+					</AlertDialog.Action>
+				</AlertDialog.Footer>
+			</AlertDialog.Content>
+		</AlertDialog.Root>
 
-			<!-- 			{#if !userHasFeature(user, 'task-sync')}
+		<!-- 			{#if !userHasFeature(user, 'task-sync')}
 				<div class="rounded-lg bg-gray-50 p-8 text-center">
 					<h2 class="m-0 mb-2 text-gray-800">Upgrade to Cloud Sync</h2>
 					<p class="mb-6 text-gray-600">
@@ -172,9 +169,8 @@
 					</Button>
 				</div>
 				{/if} -->
-			<div class="m-2 w-full border-t border-gray-300 p-2">
-				<UserSettings />
-			</div>
+		<div class="m-2 w-full border-t border-gray-300 p-2">
+			<UserSettings />
 		</div>
 	</div>
 {/if}
