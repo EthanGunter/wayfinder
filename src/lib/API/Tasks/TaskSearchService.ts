@@ -80,7 +80,7 @@ export class TaskSearchService {
 		const results = new Map<string, TaskSearchResult>();
 
 		// Search titles (higher priority)
-		const titleResults = this.titleIndex.search(query, limit * 2);
+		const titleResults = this.titleIndex.search(query, { limit: limit * 2 });
 		(titleResults as string[]).forEach((id) => {
 			const task = this.taskMap.get(id);
 			if (task) {
@@ -99,7 +99,7 @@ export class TaskSearchService {
 		});
 
 		// Search content
-		const contentResults = this.contentIndex.search(query, limit * 2);
+		const contentResults = this.contentIndex.search(query, { limit: limit * 2 });
 		(contentResults as string[]).forEach((id) => {
 			const task = this.taskMap.get(id);
 			if (task) {
@@ -120,7 +120,7 @@ export class TaskSearchService {
 		});
 
 		// Search combined (fallback for partial matches)
-		const combinedResults = this.combinedIndex.search(query, limit * 2);
+		const combinedResults = this.combinedIndex.search(query, { limit: limit * 2 });
 		(combinedResults as string[]).forEach((id) => {
 			const task = this.taskMap.get(id);
 			if (task && !results.has(task.id)) {

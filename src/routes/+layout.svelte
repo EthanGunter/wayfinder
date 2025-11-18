@@ -119,7 +119,6 @@
 			</div>
 		</div>
 	{:else}
-		<AppHeader />
 		{@render children?.()}
 	{/if}
 </div>

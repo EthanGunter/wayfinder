@@ -12,7 +12,7 @@
 	import { TaskStatus, type Task } from '$domain/models/task';
 	import { page } from '$app/state';
 	import SearchBar from '$lib/components/SearchBar.svelte';
-	import SearchTaskListItem from './SearchTaskListItem.svelte';
+	import SearchTaskListItem from '../../lib/components/ui/task-searchbar/SearchTaskListItem.svelte';
 	import Icon from '@iconify/svelte';
 
 	import {
@@ -53,12 +53,14 @@
 	} from './logic/svelte-flow';
 	import { selectedTask, editorLayoutState, drawerParams, drawerOpen } from './logic/ui-state';
 	import type { WFNode, WFEdge } from './types';
+	import AppHeader from '$lib/components/AppHeader.svelte';
+	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 
 	let unsubscribeTasksStore: (() => void) | null = null;
 	let didRunInitialLayout = false;
 
 	onMount(() => {
-		unsubscribeTasksStore = tasksAPI.getAllUserTasks({}).subscribe(async (taskSub) => {
+		unsubscribeTasksStore = tasksAPI.getAllUserTasks().subscribe(async (taskSub) => {
 			if (taskSub.status !== 'resolved') return;
 
 			// always keep stores current
@@ -126,6 +128,12 @@
 	}
 </script>
 
+<AppHeader>
+	<TaskSearchBar
+		class="my-2 mr-4 ml-auto max-w-md justify-self-end"
+		onTaskSelected={(t) => onSelectNode(t.id)}
+	/>
+</AppHeader>
 <Resizable.PaneGroup direction="horizontal" class="flex min-h-0">
 	<Resizable.Pane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
 		<SvelteFlowProvider>

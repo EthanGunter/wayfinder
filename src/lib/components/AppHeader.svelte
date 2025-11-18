@@ -1,13 +1,14 @@
 <script lang="ts">
 	import Logo from './Logo.svelte';
-	import InfoMenu from './ui/InfoMenu.svelte';
 	import * as NavigationMenu from './ui/navigation-menu';
 	import { Separator } from './ui/separator';
-	import UserMenu from './ui/UserMenu.svelte';
 	import { page } from '$app/state';
+	import type { Snippet } from 'svelte';
+	import UserMenu from './ui/UserMenu.svelte';
+	import InfoMenu from './ui/InfoMenu.svelte';
 
-	type Props = {};
-	const {}: Props = $props();
+	type Props = { children?: Snippet };
+	const { children }: Props = $props();
 </script>
 
 <div class="relative z-100 flex h-[var(--header-height)] w-full gap-3 bg-background shadow-sm">
@@ -29,7 +30,9 @@
 	</NavigationMenu.Root>
 
 	<!-- Push following content to the right -->
-	<div class="flex-1"></div>
+	<div class="flex flex-1 items-center">
+		{@render children?.()}
+	</div>
 
 	<InfoMenu />
 	<!-- <NotificationMenu /> -->

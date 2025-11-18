@@ -11,6 +11,7 @@
 	import { Err } from '$domain/errors';
 	import UserSettings from '$lib/user-settings/UserSettings.svelte';
 	import { get } from 'svelte/store';
+	import AppHeader from '$lib/components/AppHeader.svelte';
 
 	let taskCount = $state<number>(0);
 	let isDeleting = $state(false);
@@ -61,6 +62,7 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
+	<AppHeader />
 	<div class="page-content flex w-full flex-col items-center gap-4 overflow-y-scroll p-4">
 		<div class="grid gap-4">
 			<!-- TODO:UX avatar only seems to update after navigation or refresh... -->

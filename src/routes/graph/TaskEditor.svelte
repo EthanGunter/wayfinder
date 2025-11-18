@@ -14,7 +14,7 @@
 	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
 	import { drawerOpen, drawerParams } from './logic/ui-state';
 	import SearchBar from '$lib/components/SearchBar.svelte';
-	import SearchTaskListItem from './SearchTaskListItem.svelte';
+	import SearchTaskListItem from '../../lib/components/ui/task-searchbar/SearchTaskListItem.svelte';
 	import { handleSearch } from './logic/search';
 	import type { ITask } from '$domain/models/task';
 	import { onMount } from 'svelte';
@@ -46,8 +46,8 @@
 
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
-	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
-	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
+	const siblingsStore = tasksAPI.getSiblingsOf(task.id);
+	const childTasksStore = tasksAPI.getChildrenOf(task.id);
 
 	let notesEl = $state<HTMLTextAreaElement | null>(null);
 
@@ -403,10 +403,10 @@
 						else return 0;
 					}}
 				>
-					{#snippet children(task: Task)}
+					{#snippet searchItems(task: Task)}
 						<SearchTaskListItem
 							{task}
-							onLocate={() => {
+							onSelect={() => {
 								onSelectNode?.(task.id);
 							}}
 						/>

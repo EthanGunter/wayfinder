@@ -123,10 +123,10 @@ export const api: ITasks = {
 			return err(reconstructError(error));
 		}
 	},
-	
+
 
 	// Queries
-	getTask: ({ id }) =>
+	getTask: (id) =>
 		createQueryable<{ id: string }, Task>(
 			{ id },
 			(params, set) => {
@@ -145,7 +145,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getTasks: ({ ids }) =>
+	getTasks: (ids) =>
 		createQueryable<{ ids: string[] }, Task[]>(
 			{ ids },
 			(params, set) => {
@@ -164,7 +164,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getAllUserTasks: ({ userId }) =>
+	getAllUserTasks: (userId) =>
 		createQueryable<{ userId?: string }, Task[]>(
 			{ userId },
 			(params, set) => {
@@ -222,7 +222,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getChildrenOf: ({ id }) =>
+	getChildrenOf: (id) =>
 		createQueryable(
 			{ id },
 			(params, set) => {
@@ -241,7 +241,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getParentsOf: ({ id }) =>
+	getParentsOf: (id) =>
 		createQueryable(
 			{ id },
 			(params, set) => {
@@ -260,7 +260,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getSiblingsOf: ({ id }) =>
+	getSiblingsOf: (id) =>
 		createQueryable({ id }, (params, set) => {
 			const unsubscribe = client.onUpdate(
 				convexApi.tasks.getSiblingsOf,

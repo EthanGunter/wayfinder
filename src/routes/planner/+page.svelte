@@ -9,6 +9,7 @@
 	import { Err } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 	import Icon from '@iconify/svelte';
+	import AppHeader from '$lib/components/AppHeader.svelte';
 
 	let todaysList = tasksAPI.getTodaysTasks();
 	let suggestedTasks = tasksAPI.getPrioritizedTasks(15);
@@ -149,10 +150,12 @@
 </script>
 
 {#if $authState.status === 'signed-in'}
+	<AppHeader />
+
 	<div class="page-content mx-auto flex w-full flex-col gap-5 overflow-hidden p-4">
 		<div
 			bind:this={todaysDropZoneEl}
-			class="flex flex-1 relative flex-col overflow-y-auto rounded-xl border-2 p-4 transition-all duration-200 {isDraggingOverTodays &&
+			class="relative flex flex-1 flex-col overflow-y-auto rounded-xl border-2 p-4 transition-all duration-200 {isDraggingOverTodays &&
 			isValidDrop
 				? 'border-solid border-green-500 bg-gradient-to-br from-green-50/15 to-green-50/10 shadow-lg'
 				: 'border-dashed border-blue-200 bg-gradient-to-br from-blue-100 to-blue-200'}"
