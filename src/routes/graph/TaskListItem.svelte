@@ -155,14 +155,20 @@
 <li class="relative flex w-full items-center gap-2 py-[.125rem] text-sm" bind:this={itemEl}>
 	<div
 		bind:this={containerEl}
-		class="w-full rounded border {isDraggable && !isCurrent ? 'group flex w-full items-center gap-2' : 'flex items-center gap-2'} {isDraggable
+		class="w-full rounded border {isDraggable && !isCurrent
+			? 'group flex w-full items-center gap-2'
+			: 'flex items-center gap-2'} {isDraggable
 			? 'border-gray-300 bg-white hover:border-gray-400'
-			: 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'} {!isDraggable ? (isCompleted ? '' : 'bg-white') : ''}"
+			: 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'} {!isDraggable
+			? isCompleted
+				? ''
+				: 'bg-white'
+			: ''}"
 	>
 		{#if isDraggable}
 			<div
 				bind:this={dragHandleEl}
-				class="cursor-grab select-none active:cursor-grabbing px-1"
+				class="cursor-grab px-1 select-none active:cursor-grabbing"
 				title="Drag to reorder"
 			>
 				<Icon icon="lucide:grip-vertical" class="size-3 text-gray-400" />
@@ -170,18 +176,23 @@
 		{/if}
 		<button
 			bind:this={handleEl}
-			class="flex-1 px-2 py-1 text-left cursor-pointer {!isDraggable ? (isCompleted ? 'text-gray-500' : '') : ''}"
-			title="Center this task in graph view"
+			class="flex-1 cursor-pointer px-2 py-1 text-left {!isDraggable
+				? isCompleted
+					? 'text-gray-500'
+					: ''
+				: ''}"
+			title="Select task for editing"
 			onclick={() => onSelect?.(task.id)}
 		>
 			<span>{task.title}</span>
 		</button>
 		{#if onDisconnect}
 			<button
+				title="Disconnect task"
 				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
 				onclick={() => onDisconnect?.(task.id)}
 			>
-				<Icon icon="material-symbols:link-off" class="" />
+				<Icon icon="material-symbols:link-off" />
 			</button>
 		{/if}
 	</div>

@@ -13,11 +13,7 @@
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
 	import { drawerOpen, drawerParams } from './logic/ui-state';
-	import SearchBar from '$lib/components/SearchBar.svelte';
-	import SearchTaskListItem from '../../lib/components/ui/task-searchbar/SearchTaskListItem.svelte';
-	import { handleSearch } from './logic/search';
-	import type { ITask } from '$domain/models/task';
-	import { onMount } from 'svelte';
+	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -72,7 +68,6 @@
 	let showDeleteDialog = $state(false);
 	let showLinkDialog = $state(false);
 	let linkParentId = $state<string | null>(null);
-	let linkSearchQuery = $state('');
 	let accordionValues = $derived(layoutState.accordionValues);
 
 	function autosize(el: HTMLTextAreaElement | HTMLInputElement) {
@@ -204,35 +199,35 @@
 		drawerOpen.set(true);
 	}
 
-	async function getFilteredSearchResults(query: string, parentId: string): Promise<Task[]> {
-		const results = await handleSearch(query);
-
-		// Get current children of parentId
-		let existingChildren: string[] = [];
-
+	function getExistingChildren(parentId: string): string[] {
 		if (parentId === task.id) {
 			// For "Blocked By" list, use task.children
-			existingChildren = task.children ?? [];
+			return task.children ?? [];
 		} else {
 			// For "Priority" list, look up parent from siblingsStore
 			const siblingsMap = $siblingsStore;
 			if (siblingsMap.status === 'resolved') {
 				for (const [p] of siblingsMap.data.entries()) {
 					if (p.id === parentId) {
-						existingChildren = p.children ?? [];
-						break;
+						return p.children ?? [];
 					}
 				}
 			}
 		}
-
-		// Filter out tasks that are already children
-		const existingChildrenSet = new Set(existingChildren);
-		return results.filter((t) => !existingChildrenSet.has(t.id) && t.id !== parentId);
+		return [];
 	}
 
 	async function handleLinkTask(selectedTask: Task, parentId: string) {
 		if (!parentId || !selectedTask.id || parentId === selectedTask.id) return;
+
+		// Check if task is already a child
+		const existingChildren = getExistingChildren(parentId);
+		if (existingChildren.includes(selectedTask.id)) {
+			// Task is already linked, just close the dialog
+			showLinkDialog = false;
+			linkParentId = null;
+			return;
+		}
 
 		// Update parent: add selectedTask as child
 		const [_, err1] = await tasksAPI.updateTask({
@@ -246,7 +241,6 @@
 		}
 
 		showLinkDialog = false;
-		linkSearchQuery = '';
 		linkParentId = null;
 	}
 
@@ -391,27 +385,9 @@
 		</Dialog.Header>
 		<div class="p-4">
 			{#if linkParentId}
-				<SearchBar
-					bind:query={linkSearchQuery}
-					placeholder="Search for a task to link..."
-					handleQuery={(q) => getFilteredSearchResults(q, linkParentId!)}
-					onItemSelected={(selectedTask) => handleLinkTask(selectedTask, linkParentId!)}
-					autocomplete={false}
-					sorter={(a, b) => {
-						if (a.status == TaskStatus.complete) return 1;
-						else if (b.status == TaskStatus.complete) return -1;
-						else return 0;
-					}}
-				>
-					{#snippet searchItems(task: Task)}
-						<SearchTaskListItem
-							{task}
-							onSelect={() => {
-								onSelectNode?.(task.id);
-							}}
-						/>
-					{/snippet}
-				</SearchBar>
+				<TaskSearchBar
+					onTaskSelected={(selectedTask) => handleLinkTask(selectedTask, linkParentId!)}
+				/>
 			{/if}
 		</div>
 		<Dialog.Footer class="flex gap-2">
@@ -419,7 +395,6 @@
 				variant="outline"
 				onclick={() => {
 					showLinkDialog = false;
-					linkSearchQuery = '';
 					linkParentId = null;
 				}}>Cancel</Button
 			>
