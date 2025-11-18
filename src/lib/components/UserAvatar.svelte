@@ -1,11 +1,15 @@
 <script lang="ts">
+	import type { User } from '$domain/models/user';
 	import { authState } from '$lib/API/Auth';
 	import * as Avatar from '$lib/components/ui/avatar';
 
 	interface Props {
+		user?: User;
 		class?: string;
 	}
-	let { class: className }: Props = $props();
+	let { class: className, user }: Props = $props();
+
+	let _user = $derived(user ?? ($authState.status === 'signed-in' ? $authState.user : undefined));
 
 	function getFallbackName(displayName: string): string {
 		const split = displayName.split(' ');
@@ -17,10 +21,14 @@
 	}
 </script>
 
-{#if $authState.status === 'signed-in'}
-	{@const fallbackName = getFallbackName($authState.user.displayName)}
+{#if _user}
+	{@const fallbackName = getFallbackName(_user.displayName)}
 	<Avatar.Root class="size-8 rounded-lg {className}">
-		<Avatar.Image src={$authState.user.avatarUrl} alt={$authState.user.displayName} />
+		<Avatar.Image src={_user.avatarUrl} alt={_user.displayName} />
 		<Avatar.Fallback class="rounded-lg">{fallbackName}</Avatar.Fallback>
+	</Avatar.Root>
+{:else}
+	<Avatar.Root class="size-8 rounded-lg {className}">
+		<Avatar.Fallback class="rounded-lg">?</Avatar.Fallback>
 	</Avatar.Root>
 {/if}

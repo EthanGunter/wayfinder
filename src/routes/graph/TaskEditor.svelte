@@ -13,10 +13,7 @@
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
 	import { drawerOpen, drawerParams } from './logic/ui-state';
-	import SearchBar from '$lib/components/SearchBar.svelte';
-	import SearchTaskListItem from './SearchTaskListItem.svelte';
-	import { handleSearch } from './logic/search';
-	import type { ITask } from '$domain/models/task';
+	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -45,8 +42,8 @@
 
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
-	const siblingsStore = tasksAPI.getSiblingsOf({ id: task.id });
-	const childTasksStore = tasksAPI.getChildrenOf({ id: task.id });
+	const siblingsStore = tasksAPI.getSiblingsOf(task.id);
+	const childTasksStore = tasksAPI.getChildrenOf(task.id);
 
 	let notesEl = $state<HTMLTextAreaElement | null>(null);
 
@@ -71,18 +68,16 @@
 	let showDeleteDialog = $state(false);
 	let showLinkDialog = $state(false);
 	let linkParentId = $state<string | null>(null);
-	let linkSearchQuery = $state('');
 	let accordionValues = $derived(layoutState.accordionValues);
 
 	function autosize(el: HTMLTextAreaElement | HTMLInputElement) {
-		if (!el) return;
+		if (!el || !(el instanceof HTMLTextAreaElement)) return;
+
 		// Only apply height logic to textarea; inputs don't need it
-		if (el instanceof HTMLTextAreaElement) {
-			el.style.height = '0px';
-			// Compensate for borders/padding reliably
-			const borderBox = el.offsetHeight - el.clientHeight;
-			el.style.height = Math.max(el.scrollHeight + borderBox, 48) + 'px';
-		}
+		el.style.height = '0px';
+		// Compensate for borders/padding reliably
+		const borderBox = el.offsetHeight - el.clientHeight;
+		el.style.height = Math.max(el.scrollHeight + borderBox, 48) + 'px';
 	}
 
 	// Complete status mirrors task.status; no redundant state held
@@ -204,35 +199,35 @@
 		drawerOpen.set(true);
 	}
 
-	async function getFilteredSearchResults(query: string, parentId: string): Promise<Task[]> {
-		const results = await handleSearch(query);
-
-		// Get current children of parentId
-		let existingChildren: string[] = [];
-
+	function getExistingChildren(parentId: string): string[] {
 		if (parentId === task.id) {
 			// For "Blocked By" list, use task.children
-			existingChildren = task.children ?? [];
+			return task.children ?? [];
 		} else {
 			// For "Priority" list, look up parent from siblingsStore
 			const siblingsMap = $siblingsStore;
 			if (siblingsMap.status === 'resolved') {
 				for (const [p] of siblingsMap.data.entries()) {
 					if (p.id === parentId) {
-						existingChildren = p.children ?? [];
-						break;
+						return p.children ?? [];
 					}
 				}
 			}
 		}
-
-		// Filter out tasks that are already children
-		const existingChildrenSet = new Set(existingChildren);
-		return results.filter((t) => !existingChildrenSet.has(t.id) && t.id !== parentId);
+		return [];
 	}
 
 	async function handleLinkTask(selectedTask: Task, parentId: string) {
 		if (!parentId || !selectedTask.id || parentId === selectedTask.id) return;
+
+		// Check if task is already a child
+		const existingChildren = getExistingChildren(parentId);
+		if (existingChildren.includes(selectedTask.id)) {
+			// Task is already linked, just close the dialog
+			showLinkDialog = false;
+			linkParentId = null;
+			return;
+		}
 
 		// Update parent: add selectedTask as child
 		const [_, err1] = await tasksAPI.updateTask({
@@ -246,7 +241,6 @@
 		}
 
 		showLinkDialog = false;
-		linkSearchQuery = '';
 		linkParentId = null;
 	}
 
@@ -257,117 +251,117 @@
 				removeChildren: [child]
 			}
 		});
-		if (err) err?.UNHANDLED( 'Failed to disconnect task');
-		else console.log('Disconnected task', child, 'from', parent);
+		if (err) err?.UNHANDLED('Failed to disconnect task');
 	}
 </script>
 
-<div class="relative flex h-full w-full flex-col bg-white" class:bg-[#efe]={checked}>
-	<ScrollWithHeader class="bg-white">
-		{#snippet header()}
-			<!-- sticky top-0 z-10  -->
-			<div class="flex items-start gap-2 px-2 py-2">
-				<Checkbox
-					class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
-					aria-label="Toggle complete"
-					bind:checked
-					onCheckedChange={(status) => toggleCompleted(status)}
-				/>
-				<input
-					class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
-					id="input-task-title"
-					name="title"
-					bind:value={task.title}
-					placeholder="Task title"
-					oninput={handleInput}
-				/>
-				<Separator orientation="vertical" />
-				<button
-					class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
-					title="Delete task"
-					onclick={confirmDelete}
-				>
-					<Icon icon="lucide:trash-2" class="" />
-				</button>
-			</div>
-		{/snippet}
+<ScrollWithHeader
+	class="relative flex h-full w-full flex-col bg-white {checked ? 'bg-[#efe]' : ''}"
+>
+	{#snippet header()}
+		<div class="flex items-start gap-2 px-2 py-2">
+			<Checkbox
+				class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
+				aria-label="Toggle complete"
+				bind:checked
+				onCheckedChange={(status) => toggleCompleted(status)}
+			/>
+			<input
+				class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
+				id="input-task-title"
+				name="title"
+				bind:value={task.title}
+				placeholder="Task title"
+				oninput={handleInput}
+			/>
+			<Separator orientation="vertical" />
+			<button
+				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+				title="Delete task"
+				onclick={confirmDelete}
+			>
+				<Icon icon="lucide:trash-2" class="" />
+			</button>
+		</div>
+	{/snippet}
 
-		{#snippet content()}
-			<div class="flex h-full flex-col p-3">
-				<textarea
-					class="w-full shrink-0 resize-none rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
-					bind:this={notesEl}
-					name="content"
-					bind:value={task.content}
-					placeholder="Add notes or description..."
-					oninput={handleInput}
-				></textarea>
+	{#snippet content()}
+		<div class="flex h-full min-h-0 flex-col p-3">
+			<textarea
+				class="w-full shrink-0 resize-none rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
+				bind:this={notesEl}
+				name="content"
+				bind:value={task.content}
+				placeholder="Add notes or description..."
+				oninput={handleInput}
+				use:autosize
+			></textarea>
 
-				<Accordion.Root
-					type="multiple"
-					value={accordionValues}
-					onValueChange={(e) => {
-						layoutState.accordionValues = e as any;
-					}}
-				>
-					<Accordion.Item value="tasks">
+			<Accordion.Root
+				type="multiple"
+				value={accordionValues}
+				onValueChange={(e) => {
+					layoutState.accordionValues = e as any;
+				}}
+				class="mt-auto"
+			>
+				<Accordion.Item value="tasks">
+					<Accordion.Trigger
+						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
+					>
+						Blocked By
+					</Accordion.Trigger>
+					<Accordion.Content>
+						<TaskList
+							showCompleted={layoutState.showCompletedTasks}
+							tasks={($childTasksStore as { data: Task[] }).data ?? []}
+							parentId={task.id}
+							id={`child-${task.id}`}
+							onSelect={(id) => {
+								onSelectNode?.(id);
+							}}
+							onDisconnect={handleDisconnectTask}
+							onReorder={(taskId, startIndex, finishIndex) =>
+								reorderChildren(taskId, startIndex, finishIndex)}
+							onAddTask={handleAddChildTask}
+							onLink={(parentId) => {
+								linkParentId = task.id;
+								showLinkDialog = true;
+							}}
+						/>
+					</Accordion.Content>
+				</Accordion.Item>
+				{#if $siblingsStore.status === 'resolved'}
+					<Accordion.Item value="parent-order">
 						<Accordion.Trigger
 							class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 						>
-							Blocked By
+							Priority
 						</Accordion.Trigger>
 						<Accordion.Content>
-							<TaskList
-								showCompleted={layoutState.showCompletedTasks}
-								tasks={($childTasksStore as { data: Task[] }).data ?? []}
-								parentId={task.id}
-								id={`child-${task.id}`}
-								onSelect={(id) => {
-									onSelectNode?.(id);
-								}}
-								onDisconnect={handleDisconnectTask}
-								onReorder={(taskId, startIndex, finishIndex) =>
-									reorderChildren(taskId, startIndex, finishIndex)}
-								onAddTask={handleAddChildTask}
-								onLink={(parentId) => {
-									linkParentId = task.id;
-									showLinkDialog = true;
-								}}
-							/>
+							<div class="flex flex-col gap-4">
+								{#each $siblingsStore.data as [parent, siblings] (parent.id)}
+									<TaskList
+										showCompleted={layoutState.showCompletedSiblings}
+										tasks={siblings}
+										parentId={parent.id}
+										id={`sibling-${parent.id}`}
+										title={parent.title}
+										currentTaskId={task.id}
+										onSelect={(id) => onSelectNode?.(id)}
+										onDisconnect={handleDisconnectTask}
+										onReorder={(taskId, startIndex, finishIndex) =>
+											reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
+									/>
+								{/each}
+							</div>
 						</Accordion.Content>
 					</Accordion.Item>
-					{#if $siblingsStore.status === 'resolved'}
-						<Accordion.Item value="parent-order">
-							<Accordion.Trigger
-								class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
-							>
-								Priority
-							</Accordion.Trigger>
-							<Accordion.Content>
-								<div class="flex flex-col gap-4">
-									{#each $siblingsStore.data as [parent, siblings] (parent.id)}
-										<TaskList
-											showCompleted={layoutState.showCompletedSiblings}
-											tasks={siblings}
-											parentId={parent.id}
-											id={`sibling-${parent.id}`}
-											title={parent.title}
-											currentTaskId={task.id}
-											onSelect={(id) => onSelectNode?.(id)}
-											onDisconnect={handleDisconnectTask}
-											onReorder={(taskId, startIndex, finishIndex) =>
-												reorderWithinParent(parent.id, taskId, startIndex, finishIndex)}
-										/>
-									{/each}
-								</div>
-							</Accordion.Content>
-						</Accordion.Item>
-					{/if}
-				</Accordion.Root>
-			</div>
-		{/snippet}
-	</ScrollWithHeader>
-</div>
+				{/if}
+			</Accordion.Root>
+		</div>
+	{/snippet}
+</ScrollWithHeader>
 
 <Dialog.Root bind:open={showDeleteDialog}>
 	<Dialog.Content>
@@ -391,27 +385,9 @@
 		</Dialog.Header>
 		<div class="p-4">
 			{#if linkParentId}
-				<SearchBar
-					bind:query={linkSearchQuery}
-					placeholder="Search for a task to link..."
-					handleQuery={(q) => getFilteredSearchResults(q, linkParentId!)}
-					onItemSelected={(selectedTask) => handleLinkTask(selectedTask, linkParentId!)}
-					autocomplete={false}
-					sorter={(a, b) => {
-						if (a.status == TaskStatus.complete) return 1;
-						else if (b.status == TaskStatus.complete) return -1;
-						else return 0;
-					}}
-				>
-					{#snippet children(task: Task)}
-						<SearchTaskListItem
-							{task}
-							onLocate={() => {
-								onSelectNode?.(task.id);
-							}}
-						/>
-					{/snippet}
-				</SearchBar>
+				<TaskSearchBar
+					onTaskSelected={(selectedTask) => handleLinkTask(selectedTask, linkParentId!)}
+				/>
 			{/if}
 		</div>
 		<Dialog.Footer class="flex gap-2">
@@ -419,7 +395,6 @@
 				variant="outline"
 				onclick={() => {
 					showLinkDialog = false;
-					linkSearchQuery = '';
 					linkParentId = null;
 				}}>Cancel</Button
 			>

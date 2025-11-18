@@ -46,6 +46,15 @@ export interface ITask<T> {
 export enum TaskStatus {
     incomplete = 0,
     complete = 1,
+    // cancelled = 2,
+    // onHold = 3,
+    // deferred = 4,
+    // deleted = 5,
+    // archived = 6,
+    // snoozed = 7,
+    // repeated = 8,
+    // recurring = 9,
+    // scheduled = 10,
 }
 
 
@@ -158,6 +167,11 @@ export function applyRelationshipOperations<T>(
 
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
+export interface ExportedData {
+    version: string;
+    exportedAt: string;
+    tasks: ITask<number>[];
+}
 
 /**
  * Delta describing a task change. Creation: oldTask=null. Deletion: newTask=null.

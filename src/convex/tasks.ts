@@ -1,8 +1,8 @@
-import { Err, NotAuthorizedError, NotFoundError, NotImplementedError, InvalidStateError } from "$domain/errors";
+import { Err, NotAuthorizedError, NotFoundError, NotImplementedError, InvalidStateError, ArgumentError } from "$domain/errors";
 import { type Doc, type Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { applyRelationshipOperations, calculateRelationshipUpdates, type CreateTaskParams, type UpdateTaskParams, type ITask } from "$domain/models/task";
+import { applyRelationshipOperations, calculateRelationshipUpdates, type CreateTaskParams, type UpdateTaskParams, type ITask, type ExportedData, type Task } from "$domain/models/task";
 import { type MutationCtx } from "./_generated/server";
 
 //#region Types
@@ -355,6 +355,177 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"tasks">): Promise<{ affecte
 	return { affected: affected.map(cleanTaskForClient) };
 }
 
+export const importData = mutation({
+	args: { data: v.string(), mode: v.optional(v.union(v.literal("replace"), v.literal("add"), v.literal("attemptMerge"))) },
+	handler: async (ctx, { data, mode = "add" }) => {
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
+		}
+		const userAuthId = identity.subject;
+
+		let parsed: ExportedData;
+		try {
+			parsed = JSON.parse(data);
+		} catch (error) {
+			console.error(error)
+			throw new ArgumentError("Invalid JSON format", data, { cause: error });
+		}
+
+		if (!parsed.version || !parsed.tasks || !Array.isArray(parsed.tasks)) {
+			throw new ArgumentError("Invalid export format: missing version or tasks", parsed);
+		}
+
+		// Version migration - currently only support 0.0.0
+		if (parsed.version !== "0.0.0") {
+			throw new ArgumentError(`Unsupported export version: ${parsed.version}. Expected 0.0.0`, parsed);
+		}
+
+		if (parsed.tasks.length == 0) return 0;
+
+		// Convert ISO strings to timestamps (numbers) for Convex
+		const tasksToImport: CreateTaskArgs[] = parsed.tasks.map(task => ({
+			id: task.id,
+			userAuthId, // Override with current user
+			type: task.type,
+			title: task.title,
+			content: task.content,
+			status: task.status,
+			parents: task.parents,
+			children: task.children,
+			todaysTask: task.todaysTask ? new Date(task.todaysTask).getTime() : undefined,
+			dueDate: task.dueDate ? new Date(task.dueDate).getTime() : undefined,
+			created: new Date(task.created).getTime(),
+			lastEdit: new Date(task.lastEdit).getTime(),
+		}));
+
+		// Filter out references to tasks not in the import set
+		const allImportIds = new Set(tasksToImport.map(t => t.id!));
+		for (const task of tasksToImport) {
+			task.parents = task.parents?.filter(p => allImportIds.has(p)) ?? [];
+			task.children = task.children?.filter(c => allImportIds.has(c)) ?? [];
+		}
+
+		if (mode === "replace") {
+			// Get all existing tasks and delete them
+			const existingTasks = await ctx.db
+				.query("tasks")
+				.withIndex("by_user_type", (q) => q.eq("userAuthId", userAuthId).eq("type", "task"))
+				.collect();
+			// Filter out root tasks - they're hidden from clients
+			if (existingTasks.length > 0) {
+				const existingIds = existingTasks.map(t => t._id);
+				for (const id of existingIds) {
+					await _deleteTask(ctx, id);
+				}
+			}
+		}
+
+		// Create all tasks with their original relationships (old IDs)
+		// Build mapping: oldId -> newId
+		const idMapping = new Map<string, Id<"tasks">>();
+		const createdTasks: Array<{ oldId: string; newId: Id<"tasks">; task: DBTask }> = [];
+		const now = Date.now();
+		const rootTask = await getOrCreateRoot(ctx, userAuthId);
+
+		for (const createDetail of tasksToImport) {
+			const oldId = createDetail.id!;
+
+			// Create task with original relationships (old IDs)
+			// Don't normalize parents - we'll handle that after remapping
+			const newId = await ctx.db.insert("tasks", {
+				userAuthId: createDetail.userAuthId,
+				type: "task",
+				title: createDetail.title,
+				content: createDetail.content,
+				status: createDetail.status ?? 0,
+				todaysTask: createDetail.todaysTask,
+				dueDate: createDetail.dueDate,
+				parents: createDetail.parents ?? [],
+				children: createDetail.children ?? [],
+				lastEdit: now,
+				created: createDetail.created ?? now,
+			});
+
+			idMapping.set(oldId, newId);
+
+			const createdTask = await ctx.db.get(newId);
+			if (!createdTask) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created task", ctx: newId });
+			createdTasks.push({ oldId, newId, task: createdTask });
+		}
+
+		// Remap relationships and establish bidirectional consistency
+		// For each task: remap old IDs to new IDs, normalize parents, and update related tasks
+		for (const { newId, task } of createdTasks) {
+			// Remap old IDs to new IDs
+			const remappedParents = (task.parents ?? []).map(oldId => idMapping.get(oldId)).filter((id): id is Id<"tasks"> => !!id).map(String);
+			const remappedChildren = (task.children ?? []).map(oldId => idMapping.get(oldId)).filter((id): id is Id<"tasks"> => !!id).map(String);
+
+			// Normalize parents (attach to root if empty, remove root if multiple parents)
+			let normalizedParents: string[];
+			if (remappedParents.length === 0) {
+				normalizedParents = [String(rootTask._id)];
+			} else if (remappedParents.length > 1) {
+				// Multiple parents - remove root if present
+				normalizedParents = remappedParents.filter(id => id !== String(rootTask._id));
+			} else {
+				normalizedParents = remappedParents;
+			}
+
+			// Update this task with remapped relationships
+			await ctx.db.patch(newId, {
+				parents: normalizedParents,
+				children: remappedChildren,
+			});
+
+			// Update root.children if attached to root
+			if (normalizedParents.length === 1 && normalizedParents[0] === String(rootTask._id)) {
+				const currentRoot = await ctx.db.get(rootTask._id);
+				if (currentRoot) {
+					const rootChildren = [...(currentRoot.children ?? [])];
+					if (!rootChildren.includes(String(newId))) {
+						rootChildren.push(String(newId));
+						await ctx.db.patch(rootTask._id, {
+							children: rootChildren,
+							lastEdit: now,
+						});
+					}
+				}
+			}
+
+			// Establish bidirectional relationships: update children to have this as parent
+			for (const childIdStr of remappedChildren) {
+				const childId = childIdStr as Id<"tasks">;
+				const child = await ctx.db.get(childId);
+				if (child) {
+					const childParents = child.parents ?? [];
+					if (!childParents.includes(String(newId))) {
+						await ctx.db.patch(childId, {
+							parents: [...childParents, String(newId)],
+						});
+					}
+				}
+			}
+
+			// Establish bidirectional relationships: update parents to have this as child
+			for (const parentIdStr of normalizedParents) {
+				if (parentIdStr === String(rootTask._id)) continue; // Root handled separately above
+				const parentId = parentIdStr as Id<"tasks">;
+				const parent = await ctx.db.get(parentId);
+				if (parent) {
+					const parentChildren = parent.children ?? [];
+					if (!parentChildren.includes(String(newId))) {
+						await ctx.db.patch(parentId, {
+							children: [...parentChildren, String(newId)],
+						});
+					}
+				}
+			}
+		}
+
+		return createdTasks.length;
+	},
+});
 
 //#endregion
 
@@ -615,6 +786,31 @@ export const searchTasks = query({
 	},
 });
 
+export const exportData = query({
+	args: { subtreeId: v.optional(v.string()) },
+	handler: async (ctx, { subtreeId }) => {
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
+		}
+		const userAuthId = identity.subject;
+
+
+		const tasksResult = await ctx.db.query('tasks').withIndex('by_user_type', q => q.eq('userAuthId', userAuthId).eq('type', 'task')).collect();
+
+		const tasks = tasksResult.map(t => cleanTaskForClient(t));
+
+		const exportedData: ExportedData = {
+			version: "0.0.0",
+			exportedAt: new Date().toISOString(),
+			tasks,
+		};
+
+		return exportedData;
+
+	}
+})
+
 //#endregion
 
 
@@ -679,9 +875,9 @@ async function normalizeTaskParents(
 	const rootTask = await getOrCreateRoot(ctx, oldTask.userAuthId);
 	const rootId = String(rootTask._id);
 	const wasAttachedToRoot = oldTask.parents?.includes(rootId);
-	
+
 	let normalizedParents: string[];
-	
+
 	// Normalize parents array
 	if (newParents.length === 0) {
 		// No parents - attach to root
@@ -693,9 +889,9 @@ async function normalizeTaskParents(
 		// Single parent - keep as is
 		normalizedParents = [...newParents];
 	}
-	
+
 	const isAttachedToRoot = normalizedParents.includes(rootId);
-	
+
 	// Update root.children when attachment state changes
 	if (!wasAttachedToRoot && isAttachedToRoot) {
 		// Newly attached to root
@@ -713,7 +909,7 @@ async function normalizeTaskParents(
 			children: rootChildren,
 		});
 	}
-	
+
 	return normalizedParents;
 }
 

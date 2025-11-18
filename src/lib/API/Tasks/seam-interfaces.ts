@@ -1,5 +1,5 @@
 import type { InvalidStateError, ArgumentError, NotAuthorizedError, NotFoundError } from "$domain/errors";
-import type { CreateTaskParams, Task, UpdateTaskParams } from "$domain/models/task";
+import type { CreateTaskParams, ExportedData, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
 import type { FetchableStore, QueryableStore } from "../fetchableStore";
 
@@ -15,9 +15,9 @@ export interface ITasks {
 	/**
 	 * Fetches a task's data by its ID
 	 */
-	getTask(params: { id: string }): QueryableStore<{ id: string }, Task>;
-	getTasks(params: { ids: string[] }): QueryableStore<{ ids: string[] }, Task[]>;
-	getAllUserTasks(params: { userId?: string }): QueryableStore<{ userId?: string }, Task[]>;
+	getTask(id: string): QueryableStore<{ id: string }, Task>;
+	getTasks(ids: string[]): QueryableStore<{ ids: string[] }, Task[]>;
+	getAllUserTasks(userId?: string): QueryableStore<{ userId?: string }, Task[]>;
 	/**
 	 * @param task can be passed as an id
 	 */
@@ -33,16 +33,16 @@ export interface ITasks {
 	/**
 	 * Finds all tasks that must be completed before `id`
 	 */
-	getChildrenOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
+	getChildrenOf(id: string): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are waiting for `id`
 	 */
-	getParentsOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
+	getParentsOf(id: string): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are children of the same parents as `id`
 	 * @note keyed by parent
 	 */
-	getSiblingsOf(params: { id: string }): QueryableStore<{ id: string }, Map<Task, Task[]>>;
+	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<Task, Task[]>>;
 	/**
 	 * Gets all tasks that nothing depends on
 	 */
@@ -60,6 +60,9 @@ export interface ITasks {
   } */): QueryableStore<{ limit: number }, Task[]>;
 
 	searchTasks(searchTerm: string): Promise<Task[]>;
+
+	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<Result<number, NotAuthorizedError | ArgumentError | InvalidStateError>>;
+	exportData(subtreeId?: string): Promise<ExportedData>;
 };
 
 
@@ -71,9 +74,9 @@ export interface ITasksLocal {
 	/**
 	 * Fetches a task's data by its ID
 	 */
-	getTask(params: { id: string }): QueryableStore<{ id: string }, Task>;
-	getTasks(params: { ids: string[] }): QueryableStore<{ ids: string[] }, Task[]>;
-	getAllUserTasks(params: { userId?: string }): QueryableStore<{ userId?: string }, Task[]>;
+	getTask(id: string): QueryableStore<{ id: string }, Task>;
+	getTasks(ids: string[]): QueryableStore<{ ids: string[] }, Task[]>;
+	getAllUserTasks(userId?: string): QueryableStore<{ userId?: string }, Task[]>;
 
 	/**
 	 * @param task can be passed as an id
@@ -91,16 +94,16 @@ export interface ITasksLocal {
 	/**
 	 * Finds all tasks that must be completed before `id`
 	 */
-	getChildrenOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
+	getChildrenOf(id: string): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are waiting for `id`
 	 */
-	getParentsOf(params: { id: string }): QueryableStore<{ id: string }, Task[]>;
+	getParentsOf(id: string): QueryableStore<{ id: string }, Task[]>;
 	/**
 	 * Gets all tasks that are children of the same parents as `id`
 	 * @note keyed by parent
 	 */
-	getSiblingsOf(params: { id: string }): QueryableStore<{ id: string }, Map<Task, Task[]>>;
+	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<Task, Task[]>>;
 
 	/**
 	 * Gets all tasks that nothing depends on
@@ -146,8 +149,8 @@ export interface ITasksLocal {
 				}
 		): { unsubscribe: () => void, tasks: Readable<Task[]> }; */
 
-	exportData(): Promise<string>;
-	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<number>;
+	exportData(subtreeId?: string): Promise<ExportedData>;
+	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<Result<number, NotAuthorizedError | ArgumentError | InvalidStateError>>;
 
 	// hydrateForUser(params: { user: User }): Promise<void>;
 };

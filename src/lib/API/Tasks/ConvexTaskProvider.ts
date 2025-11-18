@@ -1,6 +1,6 @@
 import { Err, NotImplementedError, NotAuthorizedError, ArgumentError, NotFoundError, InvalidStateError } from "$domain/errors";
 import { err, ok } from "$domain/result";
-import { type CreateTaskParams, type Task, type UpdateTaskParams, type ITask } from "$domain/models/task";
+import { type CreateTaskParams, type Task, type UpdateTaskParams, type ITask, type ExportedData } from "$domain/models/task";
 import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";
@@ -8,11 +8,6 @@ import { createFetchableReadable as createFetchable, createQueryable } from "$li
 import type { ITasks, ITasksLocal } from "./seam-interfaces";
 import { ConvexError } from "convex/values";
 
-interface ExportedData {
-	version: string;
-	exportedAt: string;
-	tasks: ITask<string>[];
-}
 
 function reconstructError(error: unknown): Err {
 	if (error instanceof ConvexError) {
@@ -119,9 +114,19 @@ export const api: ITasks = {
 		}
 	},
 
+	importData: async ({ data, mode = "add" }) => {
+		try {
+			const res = await client.mutation(convexApi.tasks.importData, { data, mode });
+			return ok(res);
+		} catch (error) {
+			console.error(error)
+			return err(reconstructError(error));
+		}
+	},
+
 
 	// Queries
-	getTask: ({ id }) =>
+	getTask: (id) =>
 		createQueryable<{ id: string }, Task>(
 			{ id },
 			(params, set) => {
@@ -140,7 +145,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getTasks: ({ ids }) =>
+	getTasks: (ids) =>
 		createQueryable<{ ids: string[] }, Task[]>(
 			{ ids },
 			(params, set) => {
@@ -159,7 +164,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getAllUserTasks: ({ userId }) =>
+	getAllUserTasks: (userId) =>
 		createQueryable<{ userId?: string }, Task[]>(
 			{ userId },
 			(params, set) => {
@@ -217,7 +222,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getChildrenOf: ({ id }) =>
+	getChildrenOf: (id) =>
 		createQueryable(
 			{ id },
 			(params, set) => {
@@ -236,7 +241,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getParentsOf: ({ id }) =>
+	getParentsOf: (id) =>
 		createQueryable(
 			{ id },
 			(params, set) => {
@@ -255,7 +260,7 @@ export const api: ITasks = {
 				};
 			}),
 
-	getSiblingsOf: ({ id }) =>
+	getSiblingsOf: (id) =>
 		createQueryable({ id }, (params, set) => {
 			const unsubscribe = client.onUpdate(
 				convexApi.tasks.getSiblingsOf,
@@ -333,6 +338,11 @@ export const api: ITasks = {
 		// return res; // Promise<Task[]>
 		Err.throw(new NotImplementedError("api.searchTasks"));
 	},
+
+	exportData: async (subtreeId?: string) => {
+		const res = await client.query(convexApi.tasks.exportData, { subtreeId });
+		return res;
+	},
 };
 
 // Thin passthrough over the Convex provider. No optimistic/local behavior.
@@ -374,110 +384,8 @@ export const localApi: ITasksLocal = {
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 
-	exportData: async () => {
-		const whoamiResult = await client.query(convexApi.users.whoami, {});
-		if (!whoamiResult?.authId) {
-			throw new NotAuthorizedError("Not authenticated");
-		}
-
-		const tasksResult = await client.query(convexApi.tasks.getAllUserTasks, { userId: whoamiResult.authId });
-
-		const tasks = tasksResult.map(convertFromServerTask);
-		const exportedTasks: ITask<string>[] = tasks.map(task => ({
-			id: task.id,
-			userAuthId: task.userAuthId,
-			type: task.type,
-			title: task.title,
-			content: task.content,
-			status: task.status,
-			parents: task.parents,
-			children: task.children,
-			todaysTask: task.todaysTask?.toISOString(),
-			dueDate: task.dueDate?.toISOString(),
-			created: task.created.toISOString(),
-			lastEdit: task.lastEdit.toISOString(),
-		}));
-
-		const exportedData: ExportedData = {
-			version: "0.0.0",
-			exportedAt: new Date().toISOString(),
-			tasks: exportedTasks,
-		};
-
-		return JSON.stringify(exportedData, null, 2);
-	},
-
-	importData: async ({ data, mode = "add" }) => {
-		const whoamiResult = await client.query(convexApi.users.whoami, {});
-		if (!whoamiResult?.authId) {
-			throw new NotAuthorizedError("Not authenticated");
-		}
-
-		let parsed: ExportedData;
-		try {
-			parsed = JSON.parse(data);
-		} catch (error) {
-			console.error(error)
-			throw new ArgumentError("Invalid JSON format", data, { cause: error });
-		}
-
-		if (!parsed.version || !parsed.tasks || !Array.isArray(parsed.tasks)) {
-			throw new ArgumentError("Invalid export format: missing version or tasks", parsed);
-		}
-
-		// Version migration - currently only support 0.0.0
-		if (parsed.version !== "0.0.0") {
-			throw new ArgumentError(`Unsupported export version: ${parsed.version}. Expected 0.0.0`, parsed);
-		}
-
-		if (parsed.tasks.length == 0) return 0;
-
-		// Convert ISO strings back to Date objects
-		const tasksToImport: Task[] = parsed.tasks.map(task => ({
-			...task,
-			userAuthId: whoamiResult.authId, // Override with current user
-			todaysTask: task.todaysTask ? new Date(task.todaysTask) : undefined,
-			dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-			created: new Date(task.created),
-			lastEdit: new Date(task.lastEdit),
-		}));
-
-		if (mode === "replace") {
-
-			// Get all existing tasks and delete them
-			const existingResult = await client.query(convexApi.tasks.getAllUserTasks, { userId: whoamiResult.authId });
-			if (existingResult.length > 0) {
-				const existingIds = existingResult.map(row => row.id);
-				await client.mutation(convexApi.tasks.deleteTasks, { ids: existingIds });
-			}
-
-			const [createResult, err] = await api.createTasks({ createDetails: tasksToImport });
-			if (err) {
-				throw err;
-			}
-			return createResult.affected.length;
-
-		} else if (mode === "add") {
-			// Remove all references to nodes that aren't in the "add" set
-			const allIds = new Set(tasksToImport.map(t => t.id));
-			for (const task of tasksToImport) {
-				task.parents = task.parents?.filter(p => allIds.has(p)) ?? [];
-				task.children = task.children?.filter(c => allIds.has(c)) ?? [];
-			}
-
-			const [createResult, err] = await api.createTasks({ createDetails: tasksToImport });
-			if (err) {
-				throw err;
-			}
-			return createResult.affected.length;
-
-		} else if (mode === "attemptMerge") {
-			Err.NotImplemented("attemptMerge import mode");
-		}
-
-		// Fallback (should never reach here due to type constraints, but satisfies TypeScript)
-		return 0;
-	},
+	exportData: async (subtreeId?: string) => api.exportData(subtreeId),
+	importData: async ({ data, mode = "add" }) => api.importData({ data, mode }),
 };
 
 export default localApi;
