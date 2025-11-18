@@ -1,21 +1,17 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
-	import { draggable, dragGroup } from '$lib/actions/dnd';
+	import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Icon from '@iconify/svelte';
 
 	const {
 		task = $bindable(),
-		onTaskChange,
-		onDragStart,
-		onDrop
+		onTaskChange
 	}: {
 		task: Task;
 		onTaskChange?: (original: Task, changes: Partial<Task>) => void;
-		onDragStart?: (e: CustomEvent) => void;
-		onDrop?: (e: CustomEvent) => void;
 	} = $props();
 
 	// Create a reactive variable that's properly bound to the checkbox
@@ -35,20 +31,26 @@
 		checked = isTaskCompleted(task);
 	});
 
-	function handleDragStart(e: CustomEvent) {
-		onDragStart?.(e);
-	}
-
-	function handleDrop(e: CustomEvent) {
-		onDrop?.(e);
-	}
-
 	function navigateToTask() {
 		goto(`/graph/?select=${task.id}`);
 	}
+
+	let itemEl: HTMLElement | undefined = $state();
+	let dragHandleEl: HTMLElement | undefined = $state();
+
+	// Set up draggable with pragmatic-dnd
+	$effect(() => {
+		if (!itemEl || !dragHandleEl) return;
+
+		return draggable({
+			element: itemEl,
+			dragHandle: dragHandleEl,
+			getInitialData: () => ({ type: 'task', task })
+		});
+	});
 </script>
 
-<li class="task-list-item" class:completed={checked} use:dragGroup>
+<li class="task-list-item flex items-center gap-2" class:completed={checked} bind:this={itemEl}>
 	<!-- Completion checkbox -->
 	<Checkbox
 		class="mx-3 rounded-md border-gray-500 p-2 text-xl"
@@ -58,14 +60,8 @@
 
 	<!-- Draggable task title -->
 	<span
-		class="align-content-center h-full w-full cursor-grab overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap"
-		use:draggable={{
-			type: 'task',
-			data: task,
-			onDragStart: handleDragStart,
-			onDrop: handleDrop,
-			delay: 0
-		}}
+		bind:this={dragHandleEl}
+		class="h-full w-full cursor-grab overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap active:cursor-grabbing"
 	>
 		{task.title}
 	</span>
