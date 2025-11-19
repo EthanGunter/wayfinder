@@ -14,6 +14,8 @@
 	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
 	import { drawerOpen, drawerParams } from './logic/ui-state';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
+	import MarkdownEditor from '$lib/components/ui/markdown-editor';
+
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -40,12 +42,16 @@
 		onSelectNode
 	}: Props = $props();
 
+	// Internals
+	let showDeleteDialog = $state(false);
+	let showLinkDialog = $state(false);
+	let linkParentId = $state<string | null>(null);
+	let accordionValues = $derived(layoutState.accordionValues);
+
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
 	const siblingsStore = tasksAPI.getSiblingsOf(task.id);
 	const childTasksStore = tasksAPI.getChildrenOf(task.id);
-
-	let notesEl = $state<HTMLTextAreaElement | null>(null);
 
 	$effect(() => {
 		task.id;
@@ -58,27 +64,6 @@
 			Err.UNHANDLED($siblingsStore.error, 'Failed to get siblings');
 		}
 	});
-
-	$effect(() => {
-		task.content;
-		if (notesEl) autosize(notesEl);
-	});
-
-	// Internals
-	let showDeleteDialog = $state(false);
-	let showLinkDialog = $state(false);
-	let linkParentId = $state<string | null>(null);
-	let accordionValues = $derived(layoutState.accordionValues);
-
-	function autosize(el: HTMLTextAreaElement | HTMLInputElement) {
-		if (!el || !(el instanceof HTMLTextAreaElement)) return;
-
-		// Only apply height logic to textarea; inputs don't need it
-		el.style.height = '0px';
-		// Compensate for borders/padding reliably
-		const borderBox = el.offsetHeight - el.clientHeight;
-		el.style.height = Math.max(el.scrollHeight + borderBox, 48) + 'px';
-	}
 
 	// Complete status mirrors task.status; no redundant state held
 	function toggleCompleted(next: boolean) {
@@ -287,15 +272,7 @@
 
 	{#snippet content()}
 		<div class="flex h-full min-h-0 flex-col p-3">
-			<textarea
-				class="w-full shrink-0 resize-none rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
-				bind:this={notesEl}
-				name="content"
-				bind:value={task.content}
-				placeholder="Add notes or description..."
-				oninput={handleInput}
-				use:autosize
-			></textarea>
+			<MarkdownEditor value={task.content ?? ''} onChange={(md) => (task.content = md)} />
 
 			<Accordion.Root
 				type="multiple"

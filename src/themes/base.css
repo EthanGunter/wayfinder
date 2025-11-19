@@ -140,11 +140,6 @@
     @apply bg-background text-foreground;
     overscroll-behavior: none;
   }
-
-  h1 {
-    @apply text-2xl font-bold mb-1;
-  }
-
 }
 
 @layer layout {
@@ -178,4 +173,34 @@
   svg {
     @apply size-4;
   }
+}
+
+code {
+  background-color: #f0f0f0;
+  padding: 0.1rem 0.2rem;
+  border-radius: 0.3rem;
+}
+
+h1 {
+  @apply text-[2.5rem] font-extrabold mb-1;
+}
+
+h2 {
+  @apply text-[2rem] font-bold mb-1;
+}
+
+h3 {
+  @apply text-[1.5rem] font-bold mb-1;
+}
+
+h4 {
+  @apply text-[1rem] mb-1;
+}
+
+h5 {
+  @apply text-[0.875rem] text-foreground/60 font-light mb-1;
+}
+
+h6 {
+  @apply text-[0.75rem] text-foreground/50 font-extralight mb-1;
 }
