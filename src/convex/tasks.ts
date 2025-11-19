@@ -754,10 +754,12 @@ export const getPrioritizedTasks = query({
 		const todo: DBTask[] = [];
 		const seen = new Set<string>();
 		const walk = (task: DBTask) => {
+			if (seen.has(task._id)) return;
+			else seen.add(task._id);
+
 			if (todo.length === limit) return;
+
 			if (task.children.length === 0) {
-				if (seen.has(task._id)) return;
-				seen.add(task._id);
 				if (task.status === 0) todo.push(task);
 			} else {
 				const children = task.children.map((id) => tasksMap.get(id)).sort(sorter);

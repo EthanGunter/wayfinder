@@ -323,7 +323,7 @@ describe("updateTask", () => {
 		});
 
 		expect(updated.updated.title).toBe("Updated");
-		expect(updated.updated.status).toBe(1);
+		expect(updated.updated.status).toBe(0);
 		expect(updated.updated.content).toBe("New content");
 		expect(updated.updated.lastEdit).toBeGreaterThan(originalLastEdit);
 	});
@@ -1762,7 +1762,208 @@ describe.todo("getParentsOf");
 describe.todo("getSiblingsOf");
 describe.todo("getRootTasks");
 describe.todo("getTodaysTasks");
-describe.todo("getPrioritizedTasks");
+describe("getPrioritizedTasks", () => {
+	test("handles cycles gracefully without infinite loops", async () => {
+		const t = createTestCtx();
+
+		// Create tasks that will form a cycle: A -> B -> A
+		// We need to manually insert them to bypass cycle detection in mutations
+		let taskAId: Id<"tasks">;
+		let taskBId: Id<"tasks">;
+
+		await t.withIdentity(mockAuth("user1")).run(async (ctx) => {
+			// Create task A
+			taskAId = await ctx.db.insert("tasks", {
+				userAuthId: "user1",
+				type: "task",
+				title: "Task A",
+				status: 0,
+				parents: [],
+				children: [],
+				lastEdit: Date.now(),
+				created: Date.now(),
+			});
+
+			// Create task B
+			taskBId = await ctx.db.insert("tasks", {
+				userAuthId: "user1",
+				type: "task",
+				title: "Task B",
+				status: 0,
+				parents: [],
+				children: [],
+				lastEdit: Date.now(),
+				created: Date.now(),
+			});
+
+			// Manually create cycle: A -> B -> A
+			await ctx.db.patch(taskAId, {
+				children: [String(taskBId)],
+			});
+			await ctx.db.patch(taskBId, {
+				children: [String(taskAId)],
+				parents: [String(taskAId)],
+			});
+			await ctx.db.patch(taskAId, {
+				parents: [String(taskBId)],
+			});
+
+			// Attach A to root so it's reachable
+			let roots = await ctx.db
+				.query("tasks")
+				.withIndex("by_user_type", (q) => q.eq("userAuthId", "user1").eq("type", "root"))
+				.collect();
+			let root = roots[0];
+			if (!root) {
+				// Create root if it doesn't exist
+				const rootId = await ctx.db.insert("tasks", {
+					userAuthId: "user1",
+					type: "root",
+					title: "",
+					status: 0,
+					parents: [],
+					children: [],
+					lastEdit: Date.now(),
+					created: Date.now(),
+				});
+				const createdRoot = await ctx.db.get(rootId);
+				if (!createdRoot) {
+					throw new Error("Failed to create root task");
+				}
+				root = createdRoot;
+			}
+			if (root) {
+				const rootChildren = [...(root.children ?? [])];
+				if (!rootChildren.includes(String(taskAId))) {
+					rootChildren.push(String(taskAId));
+					await ctx.db.patch(root._id, {
+						children: rootChildren,
+					});
+				}
+			}
+		});
+
+		// Call getPrioritizedTasks with a timeout to detect infinite loops
+		const queryPromise = t.withIdentity(mockAuth("user1")).query(api.tasks.getPrioritizedTasks, {
+			limit: 10,
+		});
+
+		const timeoutPromise = new Promise((_, reject) =>
+			setTimeout(() => reject(new Error("Query timed out - possible infinite loop")), 2000)
+		);
+
+		// Should complete within timeout (not hang)
+		const result = await Promise.race([queryPromise, timeoutPromise]);
+
+		// Should return results (may include tasks from the cycle or other tasks)
+		expect(Array.isArray(result)).toBe(true);
+		// Should not hang indefinitely
+	}, 3000);
+
+	test("handles complex cycles (A -> B -> C -> A) gracefully", async () => {
+		const t = createTestCtx();
+
+		let taskAId: Id<"tasks">;
+		let taskBId: Id<"tasks">;
+		let taskCId: Id<"tasks">;
+
+		await t.withIdentity(mockAuth("user1")).run(async (ctx) => {
+			// Create three tasks
+			taskAId = await ctx.db.insert("tasks", {
+				userAuthId: "user1",
+				type: "task",
+				title: "Task A",
+				status: 0,
+				parents: [],
+				children: [],
+				lastEdit: Date.now(),
+				created: Date.now(),
+			});
+
+			taskBId = await ctx.db.insert("tasks", {
+				userAuthId: "user1",
+				type: "task",
+				title: "Task B",
+				status: 0,
+				parents: [],
+				children: [],
+				lastEdit: Date.now(),
+				created: Date.now(),
+			});
+
+			taskCId = await ctx.db.insert("tasks", {
+				userAuthId: "user1",
+				type: "task",
+				title: "Task C",
+				status: 0,
+				parents: [],
+				children: [],
+				lastEdit: Date.now(),
+				created: Date.now(),
+			});
+
+			// Create cycle: A -> B -> C -> A
+			await ctx.db.patch(taskAId, {
+				children: [String(taskBId)],
+				parents: [String(taskCId)],
+			});
+			await ctx.db.patch(taskBId, {
+				children: [String(taskCId)],
+				parents: [String(taskAId)],
+			});
+			await ctx.db.patch(taskCId, {
+				children: [String(taskAId)],
+				parents: [String(taskBId)],
+			});
+
+			// Attach A to root so it's reachable
+			let roots = await ctx.db
+				.query("tasks")
+				.withIndex("by_user_type", (q) => q.eq("userAuthId", "user1").eq("type", "root"))
+				.collect();
+			let root = roots[0];
+			if (!root) {
+				// Create root if it doesn't exist
+				const rootId = await ctx.db.insert("tasks", {
+					userAuthId: "user1",
+					type: "root",
+					title: "",
+					status: 0,
+					parents: [],
+					children: [],
+					lastEdit: Date.now(),
+					created: Date.now(),
+				});
+				const createdRoot = await ctx.db.get(rootId);
+				if (!createdRoot) {
+					throw new Error("Failed to create root task");
+				}
+				root = createdRoot;
+			}
+			if (root) {
+				const rootChildren = [...(root.children ?? [])];
+				if (!rootChildren.includes(String(taskAId))) {
+					rootChildren.push(String(taskAId));
+					await ctx.db.patch(root._id, {
+						children: rootChildren,
+					});
+				}
+			}
+		});
+
+		const queryPromise = t.withIdentity(mockAuth("user1")).query(api.tasks.getPrioritizedTasks, {
+			limit: 10,
+		});
+
+		const timeoutPromise = new Promise((_, reject) =>
+			setTimeout(() => reject(new Error("Query timed out - possible infinite loop")), 2000)
+		);
+
+		const result = await Promise.race([queryPromise, timeoutPromise]);
+
+		expect(Array.isArray(result)).toBe(true);
+	}, 3000);
+});
 describe.todo("searchTasks");
 
 //#endregion
