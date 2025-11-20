@@ -1,46 +1,21 @@
 import type { NotFoundError, Err, NotAuthorizedError, InvalidStateError } from "$domain/errors";
 import { type Result } from "$domain/result";
+import type { INode } from "./node";
+import type { ProjectData } from "./project";
 
-//#region Task Interface and Utilities
+//#region Task Data Interface and Utilities
 
-export type Task = ITask<Date>
 /**
- * System-agnostic task type that works with both Date (client) and number (Convex) timestamps
- * @template T - Any type that can be converted to a Date()
+ * Task-specific data embedded in nodes
+ * @template TimeFormat - Any type that can be converted to Date() for timestamps
  */
-export interface ITask<T> {
-    // Indexing
-    id: string,
-    userAuthId: string,
-
-
-    // Content
-    /**
-     * @root an organizational task the all parentless tasks are attached to
-     * @task normal task
-     */
-    type: "task" | "root",
-    title: string,
-    content?: string,
-    status: TaskStatus,
-
-
-    // Prioritization Fields
-    /** 
-     * Tasks that depend on this one's completion.
-    */
-    parents: string[]
-    /** 
-     * This task's prequisite[s].
-    */
-    children: string[]
-    todaysTask?: T, // Time of assignment
-    dueDate?: T,
-
-
-    // Metadata
-    created: T,
-    lastEdit: T,
+export interface TaskData<TimeFormat = Date> {
+    type: "task";
+    title: string;
+    content?: string;
+    status: TaskStatus;
+    todaysTask?: TimeFormat; // Time of assignment
+    dueDate?: TimeFormat;
 }
 
 export enum TaskStatus {
@@ -58,34 +33,48 @@ export enum TaskStatus {
 }
 
 
-export function isTaskCompleted(task: Task): boolean {
-    return task.status === TaskStatus.complete;
+export function isTaskCompleted(data: TaskData<any>): boolean {
+    return data.status === TaskStatus.complete;
 }
 
 //#endregion
 
 
-//#region Shared Functions
+//#region Shared Graph Relationship Functions
 
 // Shared logic that both client and server can use
+// These work on the graph structure level (Node), not the data level (TaskData/ProjectData)
+
 export type RelationshipOperation =
     | { type: "addChild"; childId: string }
     | { type: "removeChild"; childId: string }
     | { type: "addParent"; parentId: string }
     | { type: "removeParent"; parentId: string };
 
-export function calculateRelationshipUpdates<T>(
-    changes: Array<{ oldTask: ITask<T> | null; newTask: ITask<T> | null }>
+/**
+ * Interface for any entity with graph relationships (Node, or legacy ITask)
+ */
+interface GraphEntity {
+    id: string;
+    parents: string[];
+    children: string[];
+}
+
+/**
+ * Calculate relationship updates needed when nodes change
+ * Works with both Node<T> and legacy ITask<T> types
+ */
+export function calculateRelationshipUpdates<T extends GraphEntity>(
+    changes: Array<{ oldTask: T | null; newTask: T | null }>
 ): Array<{ taskId: string; operations: RelationshipOperation[] }> {
     const updates = new Map<string, RelationshipOperation[]>();
 
     // Helper to add operation
-    const addOperation = (id: T, op: RelationshipOperation) => {
-        const key = String(id);
-        if (!updates.has(key)) {
-            updates.set(key, []);
+    const addOperation = (id: string, op: RelationshipOperation) => {
+        if (!updates.has(id)) {
+            updates.set(id, []);
         }
-        updates.get(key)!.push(op);
+        updates.get(id)!.push(op);
     };
 
     for (const { oldTask, newTask } of changes) {
@@ -94,28 +83,28 @@ export function calculateRelationshipUpdates<T>(
         const newParents = new Set(newTask?.parents?.map(String) ?? []);
         const newChildren = new Set(newTask?.children?.map(String) ?? []);
 
-        // Parents added to this task -> add this task as child to those parents
+        // Parents added to this node -> add this node as child to those parents
         const addedParents = [...newParents].filter(p => !oldParents.has(p));
         for (const parentId of addedParents) {
-            addOperation(parentId as T, { type: "addChild", childId: newTask!.id });
+            addOperation(parentId, { type: "addChild", childId: newTask!.id });
         }
 
-        // Parents removed from this task -> remove this task as child from those parents
+        // Parents removed from this node -> remove this node as child from those parents
         const removedParents = [...oldParents].filter(p => !newParents.has(p));
         for (const parentId of removedParents) {
-            addOperation(parentId as T, { type: "removeChild", childId: oldTask!.id });
+            addOperation(parentId, { type: "removeChild", childId: oldTask!.id });
         }
 
-        // Children added to this task -> add this task as parent to those children
+        // Children added to this node -> add this node as parent to those children
         const addedChildren = [...newChildren].filter(c => !oldChildren.has(c));
         for (const childId of addedChildren) {
-            addOperation(childId as T, { type: "addParent", parentId: newTask!.id });
+            addOperation(childId, { type: "addParent", parentId: newTask!.id });
         }
 
-        // Children removed from this task -> remove this task as parent from those children
+        // Children removed from this node -> remove this node as parent from those children
         const removedChildren = [...oldChildren].filter(c => !newChildren.has(c));
         for (const childId of removedChildren) {
-            addOperation(childId as T, { type: "removeParent", parentId: oldTask!.id });
+            addOperation(childId, { type: "removeParent", parentId: oldTask!.id });
         }
     }
 
@@ -125,12 +114,16 @@ export function calculateRelationshipUpdates<T>(
     }));
 }
 
-export function applyRelationshipOperations<T>(
-    task: ITask<T>,
+/**
+ * Apply relationship operations to a graph entity
+ * Works with both Node<T> and legacy ITask<T> types
+ */
+export function applyRelationshipOperations<T extends GraphEntity>(
+    entity: T,
     operations: RelationshipOperation[]
-): ITask<T> {
-    let parents = [...(task.parents ?? [])];
-    let children = [...(task.children ?? [])];
+): T {
+    let parents = [...(entity.parents ?? [])];
+    let children = [...(entity.children ?? [])];
 
     for (const op of operations) {
         switch (op.type) {
@@ -154,7 +147,7 @@ export function applyRelationshipOperations<T>(
     }
 
     return {
-        ...task,
+        ...entity,
         parents,
         children,
     };
@@ -170,38 +163,29 @@ export function applyRelationshipOperations<T>(
 export interface ExportedData {
     version: string;
     exportedAt: string;
-    tasks: ITask<number>[];
+    nodes: any[];
 }
-
-/**
- * Delta describing a task change. Creation: oldTask=null. Deletion: newTask=null.
- */
-export type TaskDelta = { oldTask: Task | null; newTask: Task | null };
 
 
 // #region Shared function parameter types
 
+type StrippedNodeParams<DataType, TimeFormat = Date> = Partial<Omit<INode<undefined, TimeFormat>, "data" | "id">> & Omit<DataType, "type">;
 
-// All fields in the Omit<> become optional
-export type CreateTaskParams<T = Date> = Partial<ITask<T>> & Omit<ITask<T>,
-    // | "id"
-    | "created"
-    | "lastEdit"
-    | "todaysTask"
-    | "status"
-    | "parents"
-    | "children"
-// | "filepath"
->
-export type PopulatedTaskDTO = Partial<Task> & Omit<Task, "id">
-type TaskUpdate<T> = ITask<T>
+export type CreateNodeParams<DataType = unknown, TimeFormat = Date> = Partial<StrippedNodeParams<DataType, TimeFormat>> & DataType;
+export type CreateTaskParams<TimeFormat = Date> = Partial<StrippedNodeParams<TaskData<TimeFormat>, TimeFormat>> & { title: string }
+
+
+type TaskUpdate<TimeFormat = Date> = Partial<TaskData<TimeFormat>>
     & {
-        addParents: string[],
-        addChildren: string[],
-        removeParents: string[],
-        removeChildren: string[],
+        addParents: string[];
+        addChildren: string[];
+        removeParents: string[];
+        removeChildren: string[];
     }
-export type UpdateTaskParams<T = Date> = { id: string, data: Partial<TaskUpdate<T>> };
+
+export type UpdateTaskParams<TimeFormat = Date> = { id: string; } & Partial<StrippedNodeParams<TaskUpdate<TimeFormat>, TimeFormat>>;
+
+export type PopulatedTaskDTO = Partial<TaskData> & Omit<TaskData, "id">;
 
 //#endregion
 

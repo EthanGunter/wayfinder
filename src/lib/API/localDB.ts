@@ -1,7 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import { TASK_TABLE_NAME, USER_TABLE_NAME } from "./DBConstants";
+import { USER_TABLE_NAME } from "./DBConstants";
 import type { SessionUser } from "$domain/models/user";
-import type { Task } from "$domain/models/task";
 
 interface AuthDB extends DBSchema {
     users: {

@@ -1,12 +1,17 @@
 import { Err, NotImplementedError, NotAuthorizedError, ArgumentError, NotFoundError, InvalidStateError } from "$domain/errors";
 import { err, ok } from "$domain/result";
-import { type CreateTaskParams, type Task, type UpdateTaskParams, type ITask, type ExportedData } from "$domain/models/task";
+import type { CreateTaskParams, UpdateTaskParams, TaskData } from "$domain/models/task";
+import type { INodeBase } from "$domain/models/node";
+import type { ProjectData } from "$domain/models/project";
 import { api as convexApi } from "$convex/_generated/api";
 import type { Doc, Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";
 import { createFetchableReadable as createFetchable, createQueryable } from "$lib/API/fetchableStore";
 import type { ITasks, ITasksLocal } from "./seam-interfaces";
 import { ConvexError } from "convex/values";
+
+// Type alias for server-side nodes with number timestamps
+type ServerNode<T> = INodeBase<T, number>;
 
 
 function reconstructError(error: unknown): Err {
@@ -92,7 +97,7 @@ export const api: ITasks = {
 
 	deleteTask: async ({ id }) => {
 		try {
-			const res = await client.mutation(convexApi.tasks.deleteTask, { id: id as Id<'tasks'> });
+			const res = await client.mutation(convexApi.tasks.deleteTask, { id: id as Id<'nodes'> });
 			return ok({
 				affected: res.affected.map(convertFromServerTask)
 			});
@@ -104,7 +109,7 @@ export const api: ITasks = {
 
 	deleteTasks: async ({ ids }) => {
 		try {
-			const res = await client.mutation(convexApi.tasks.deleteTasks, { ids: ids as Id<'tasks'>[] });
+			const res = await client.mutation(convexApi.tasks.deleteTasks, { ids: ids as Id<'nodes'>[] });
 			return ok({
 				affected: res.affected.map(convertFromServerTask)
 			});
@@ -127,12 +132,12 @@ export const api: ITasks = {
 
 	// Queries
 	getTask: (id) =>
-		createQueryable<{ id: string }, Task>(
+		createQueryable<{ id: string }, TaskData>(
 			{ id },
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getTask,
-					{ id: params.id as Id<'tasks'> },
+					{ id: params.id as Id<'nodes'> },
 					(result) => {
 						set({ status: "resolved", data: convertFromServerTask(result) });
 					},
@@ -146,12 +151,12 @@ export const api: ITasks = {
 			}),
 
 	getTasks: (ids) =>
-		createQueryable<{ ids: string[] }, Task[]>(
+		createQueryable<{ ids: string[] }, TaskData[]>(
 			{ ids },
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getTasks,
-					{ ids: params.ids as Id<'tasks'>[] },
+					{ ids: params.ids as Id<'nodes'>[] },
 					(result) => {
 						set({ status: "resolved", data: result.map(convertFromServerTask) });
 					},
@@ -165,7 +170,7 @@ export const api: ITasks = {
 			}),
 
 	getAllUserTasks: (userId) =>
-		createQueryable<{ userId?: string }, Task[]>(
+		createQueryable<{ userId?: string }, TaskData[]>(
 			{ userId },
 			(params, set) => {
 				let unsubscribe: (() => void) | null = null;
@@ -228,7 +233,7 @@ export const api: ITasks = {
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getChildrenOf,
-					{ id: params.id as Id<'tasks'> },
+					{ id: params.id as Id<'nodes'> },
 					(result) => {
 						set({ status: "resolved", data: result.map(convertFromServerTask) });
 					},
@@ -247,7 +252,7 @@ export const api: ITasks = {
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getParentsOf,
-					{ id: params.id as Id<'tasks'> },
+					{ id: params.id as Id<'nodes'> },
 					(result) => {
 						set({ status: "resolved", data: result.map(convertFromServerTask) });
 					},
@@ -264,7 +269,7 @@ export const api: ITasks = {
 		createQueryable({ id }, (params, set) => {
 			const unsubscribe = client.onUpdate(
 				convexApi.tasks.getSiblingsOf,
-				{ id: params.id as Id<'tasks'> },
+				{ id: params.id as Id<'nodes'> },
 				(result) => {
 					const siblings = new Map(result.map(
 						([parent, siblings]) => [convertFromServerTask(parent), siblings.map(convertFromServerTask)]
@@ -391,40 +396,111 @@ export const localApi: ITasksLocal = {
 export default localApi;
 
 
-export function convexifyCreateTaskDetails(dto: CreateTaskParams): Doc<"tasks"> {
-	const convexified: Partial<Doc<"tasks">> = {
-		...dto,
-		created: dto.created instanceof Date ? dto.created.getTime() : dto.created,
-		todaysTask: dto.todaysTask instanceof Date ? dto.todaysTask.getTime() : dto.todaysTask,
-		dueDate: dto.dueDate instanceof Date ? dto.dueDate.getTime() : dto.dueDate,
-		lastEdit: dto.lastEdit instanceof Date ? dto.lastEdit.getTime() : dto.lastEdit,
+/**
+ * Converts client create params to Convex format with nested data structure
+ * Separates graph fields (id, userAuthId, parents, children, timestamps) from data fields (title, content, status, etc.)
+ */
+export function convexifyCreateTaskDetails(params: CreateTaskParams): any {
+	// Extract data fields vs graph fields
+	const dataFields = {
+		type: "task" as const,
+		title: params.title,
+		content: params.content,
+		status: params.status ?? 0,
+		todaysTask: params.todaysTask instanceof Date ? params.todaysTask.getTime() : params.todaysTask,
+		dueDate: params.dueDate instanceof Date ? params.dueDate.getTime() : params.dueDate,
 	};
 
-	delete (convexified as Partial<Task>).created; // Remove Date object so we don't crash Convex
-	return convexified as Doc<"tasks">;
-}
+	const graphFields = {
+		id: params.id,
+		userAuthId: params.userAuthId,
+		parents: params.parents ?? [],
+		children: params.children ?? [],
+		created: params.created instanceof Date ? params.created.getTime() : (params.created ?? Date.now()),
+		lastEdit: params.lastEdit instanceof Date ? params.lastEdit.getTime() : (params.lastEdit ?? Date.now()),
+	};
 
-function convertFromServerTask(row: ITask<number>): Task {
 	return {
-		...row,
-		created: new Date(row.created),
-		lastEdit: new Date(row.lastEdit),
-		todaysTask: row.todaysTask ? new Date(row.todaysTask) : undefined,
-		dueDate: row.dueDate ? new Date(row.dueDate) : undefined,
+		...graphFields,
+		data: dataFields,
 	};
 }
 
-function convexifyTaskUpdate(update: UpdateTaskParams) {
-	const u = {
-		...update,
-		id: update.id as Id<'tasks'>,
-		data: {
-			...update.data,
-			created: update.data?.created ? update.data.created.getTime() : undefined,
-			dueDate: update.data?.dueDate ? update.data.dueDate.getTime() : undefined,
-			todaysTask: update.data?.todaysTask ? update.data.todaysTask.getTime() : undefined,
-			lastEdit: update.data?.lastEdit?.getTime(),
-		}
+/**
+ * Converts server response (node with nested data or legacy ITask) to client Task format
+ * Handles both node structure (with nested data) and legacy flat structure for backward compatibility
+ */
+function convertFromServerNode(serverNode: ServerNode<TaskData | ProjectData<number>> | ITask<number>): TaskData {
+	// Check if it's a node structure (has nested data property)
+	if ('data' in serverNode && typeof serverNode.data === 'object' && serverNode.data !== null) {
+		const node = serverNode as ServerNode<TaskData | ProjectData>;
+		// Map nested data back to flat structure for backward compatibility
+		return {
+			id: node.id,
+			userAuthId: node.userAuthId,
+			type: node.data.type === "project" ? "root" : "task",
+			title: node.data.title,
+			content: node.data.content,
+			status: node.data.status,
+			todaysTask: node.data.type === "task" && node.data.todaysTask
+				? new Date(node.data.todaysTask)
+				: undefined,
+			dueDate: node.data.dueDate ? new Date(node.data.dueDate) : undefined,
+			parents: node.parents,
+			children: node.children,
+			created: new Date(node.created),
+			lastEdit: new Date(node.lastEdit),
+		};
 	}
-	return u;
+
+	// Legacy format - convert timestamps
+	const legacyTask = serverNode as ITask<number>;
+	return {
+		...legacyTask,
+		created: new Date(legacyTask.created),
+		lastEdit: new Date(legacyTask.lastEdit),
+		todaysTask: legacyTask.todaysTask ? new Date(legacyTask.todaysTask) : undefined,
+		dueDate: legacyTask.dueDate ? new Date(legacyTask.dueDate) : undefined,
+	};
+}
+
+// Backward compatibility alias
+const convertFromServerTask = convertFromServerNode;
+
+/**
+ * Converts client update params to Convex format
+ * UpdateTaskParams is flat, so we just need to convert Date timestamps to numbers
+ */
+function convexifyTaskUpdate(update: UpdateTaskParams): any {
+	const result: any = {
+		id: update.id as Id<'nodes'>,
+	};
+
+	// Graph fields (parents, children, timestamps)
+	if (update.parents !== undefined) result.parents = update.parents;
+	if (update.children !== undefined) result.children = update.children;
+	if (update.addParents !== undefined) result.addParents = update.addParents;
+	if (update.removeParents !== undefined) result.removeParents = update.removeParents;
+	if (update.addChildren !== undefined) result.addChildren = update.addChildren;
+	if (update.removeChildren !== undefined) result.removeChildren = update.removeChildren;
+	if (update.created !== undefined) {
+		result.created = update.created instanceof Date ? update.created.getTime() : update.created;
+	}
+	if (update.lastEdit !== undefined) {
+		result.lastEdit = update.lastEdit instanceof Date ? update.lastEdit.getTime() : update.lastEdit;
+	}
+
+	// Data fields (title, content, status, etc.)
+	if (update.title !== undefined) result.title = update.title;
+	if (update.content !== undefined) result.content = update.content;
+	if (update.status !== undefined) result.status = update.status;
+	if (update.todaysTask !== undefined) {
+		result.todaysTask = update.todaysTask instanceof Date ? update.todaysTask.getTime() : update.todaysTask;
+	}
+	if (update.dueDate !== undefined) {
+		result.dueDate = update.dueDate instanceof Date ? update.dueDate.getTime() : update.dueDate;
+	}
+	if (update.userAuthId !== undefined) result.userAuthId = update.userAuthId;
+
+	return result;
 }
