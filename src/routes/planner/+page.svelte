@@ -197,13 +197,13 @@
 				? 'border-solid border-green-500 bg-gradient-to-br from-green-50/15 to-green-50/10 shadow-lg'
 				: 'border-dashed border-gray-300 bg-gradient-to-br from-gray-50 to-gray-100'}"
 		>
-			<h2
+			<h1
 				class="mb-4 shrink-0 font-semibold text-gray-700 {isDraggingOverSuggested && isValidDrop
 					? 'text-green-700'
 					: ''}"
 			>
 				Suggested Tasks
-			</h2>
+			</h1>
 			<div bind:this={suggestedDropZoneEl} class="min-h-0 flex-1 overflow-y-auto">
 				{#if filteredSuggestedTasks.length === 0}
 					<h4 class="my-2 text-gray-500 italic">There's nothing to suggest!</h4>

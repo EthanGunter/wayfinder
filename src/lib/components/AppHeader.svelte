@@ -11,9 +11,10 @@
 	const { children }: Props = $props();
 </script>
 
+<!-- TODO Too many items in the header breaks the content on narrow screens -->
 <div class="relative z-100 flex h-[var(--header-height)] w-full gap-3 bg-background shadow-sm">
 	<Logo />
-	<NavigationMenu.Root>
+	<NavigationMenu.Root class="flex w-full max-w-none sm:max-w-max">
 		<NavigationMenu.List>
 			<NavigationMenu.Item>
 				<NavigationMenu.Link active={page.url.pathname === '/planner'} href="/planner">
@@ -30,11 +31,13 @@
 	</NavigationMenu.Root>
 
 	<!-- Push following content to the right -->
-	<div class="flex flex-1 items-center">
+	<div class="flex items-center sm:flex-1">
 		{@render children?.()}
 	</div>
 
-	<InfoMenu />
-	<!-- <NotificationMenu /> -->
-	<UserMenu />
+	<div class="flex flex-shrink-0 items-center gap-1">
+		<InfoMenu class="hidden sm:block" />
+		<!-- <NotificationMenu /> -->
+		<UserMenu />
+	</div>
 </div>
