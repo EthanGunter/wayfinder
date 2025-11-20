@@ -8,10 +8,11 @@
 	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
 	import tasksAPI from '$lib/API/Tasks';
 	import { pendingNodeParams } from '../../routes/graph/logic/ui-state';
+	import type { GraphNode } from '$domain/models/node';
 
 	type Props = {
 		open: boolean;
-		relation?: Task;
+		relation?: GraphNode;
 		relationMode?: 'child' | 'parent';
 	};
 
@@ -41,7 +42,6 @@
 
 		const createDetail: CreateTaskParams = {
 			id: v4(),
-			type: 'task',
 			userAuthId: $authState.user.id,
 			title: formData.title.trim()
 		};

@@ -3,18 +3,18 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { applyRelationshipOperations, calculateRelationshipUpdates } from "$domain/models/task";
-import type { CreateNodeParams, CreateTaskParams, ExportedData, TaskData, UpdateTaskParams } from "$domain/models/task";
+import type { CreateNodeParams, CreateTaskParams, ExportedData, Task, TaskData, UpdateTaskParams } from "$domain/models/task";
 
 import type { MutationCtx } from "./_generated/server";
-import type { INode } from "$domain/models/node";
+import type { GraphData as GraphData, IGraphNode } from "$domain/models/node";
 import type { ProjectData } from "$domain/models/project";
 
 //#region Types
 
 type DBNode = Doc<'nodes'>;
-type ClientNode<T = unknown> = INode<T, number>;
+type ClientNode<T extends GraphData<number>> = IGraphNode<T, number>;
 type ClientTaskData = TaskData<number>;
-type ClientTaskNode = INode<ClientTaskData, number>;
+type ClientTaskNode = IGraphNode<ClientTaskData, number>;
 type CreateTaskArgs = CreateTaskParams<number> & { id?: string };
 
 const argsCreateTask = v.object({
@@ -63,14 +63,10 @@ export const createTask = mutation({
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
 		const userAuthId = identity.subject;
-		const now = Date.now();
 
 		const result = await _createTask(ctx, {
 			...createDetail,
-			id: createDetail.id!,
 			userAuthId,
-			created: createDetail.created ?? now,
-			lastEdit: createDetail.lastEdit ?? now
 		});
 		return result;
 	},
@@ -86,15 +82,12 @@ export const createTasks = mutation({
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
 		const userAuthId = identity.subject;
-		const created: INode<ClientTaskData & { givenId: string | undefined }, number>[] = [];
+		const created: IGraphNode<ClientTaskData & { givenId: string | undefined }, number>[] = [];
 		let affected: ClientTaskNode[] = [];
 		for (const createDetail of createDetails) {
-			const now = Date.now();
 			const { created: createdTask, affected: affectedTasks } = await _createTask(ctx, {
 				...createDetail,
 				userAuthId,
-				created: createDetail.created ?? now,
-				lastEdit: createDetail.lastEdit ?? now
 			});
 			created.push(createdTask);
 			affected.push(...affectedTasks);
@@ -110,7 +103,7 @@ export const createTasks = mutation({
 	},
 });
 
-async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: INode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientTaskNode[] }> {
+async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IGraphNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientTaskNode[] }> {
 	const now = Date.now();
 
 	// Normalize parents (attach to root if empty)
@@ -125,7 +118,7 @@ async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { us
 		userAuthId: createDetail.userAuthId,
 		parents: finalParents,
 		children: createDetail.children ?? [],
-		lastEdit: now,
+		lastEdit: createDetail.lastEdit ?? now,
 		created: createDetail.created ?? now,
 		data: {
 			type: "task" as const,
@@ -411,7 +404,7 @@ export const importData = mutation({
 			throw new ArgumentError("Invalid export format: missing version or tasks", parsed);
 		}
 
-		let dataToImport: INode<any, number>[] = [];
+		let dataToImport: IGraphNode<any, number>[] = [];
 		switch (parsed.version) {
 			case "0.0.0": if ((parsed as any).tasks.length == 0) return 0;
 				// Convert ISO strings to timestamps (numbers) for Convex
@@ -445,7 +438,7 @@ export const importData = mutation({
 								todaysTask: node.todaysTask ? new Date(node.todaysTask).getTime() : undefined,
 								dueDate: node.dueDate ? new Date(node.dueDate).getTime() : undefined,
 							},
-						} satisfies INode<TaskData<number>, number>
+						} satisfies Task<number>
 					} else if (node.type === "root") {
 						return {
 							id: node.id,
@@ -461,7 +454,7 @@ export const importData = mutation({
 								status: node.status,
 								dueDate: node.dueDate ? new Date(node.dueDate).getTime() : undefined,
 							},
-						} satisfies INode<ProjectData<number>, number>
+						} satisfies IGraphNode<ProjectData<number>, number>
 					} else {
 						throw new ConvexError({ type: "InvalidState", msg: "Failed to parse node type", ctx: { version: '0.0.0', data: node } });
 					}
@@ -470,7 +463,7 @@ export const importData = mutation({
 			case "0.0.1":
 				if ((parsed as any).nodes.length == 0) return 0;
 				// v0.0.1 uses nodes array with nested data structure (already in INode format)
-				dataToImport = (parsed as any).nodes.map((node: INode<TaskData<number> | ProjectData<number>, number>) => {
+				dataToImport = (parsed as any).nodes.map((node: IGraphNode<TaskData<number> | ProjectData<number>, number>) => {
 					// Extract id for mapping, override userAuthId
 					return {
 						id: node.id,
@@ -480,7 +473,7 @@ export const importData = mutation({
 						created: node.created,
 						lastEdit: node.lastEdit,
 						data: node.data,
-					} satisfies INode<TaskData<number> | ProjectData<number>, number>;
+					} satisfies IGraphNode<TaskData<number> | ProjectData<number>, number>;
 				});
 				break;
 			default:
@@ -902,6 +895,8 @@ export const exportData = query({
  * Gets or creates the root project for a user. Ensures exactly one root per user.
  * Root projects are hidden from clients and serve as the parent for all parentless tasks.
  */
+// TODO:refactor This will eventually need to be removed,
+// and instead error if a task is created without a parent
 export async function getOrCreateProject(ctx: any, userAuthId: string): Promise<DBNode> {
 	// Look for existing root project
 	const existingRoots = await ctx.db
@@ -1065,6 +1060,8 @@ function cleanNodeForClient(node: DBNode) {
 		id: node._id,
 		created: node.created ?? node._creationTime,
 	};
+	delete (t as any)._id;
+	delete (t as any)._creationTime;
 
 	return t;
 }

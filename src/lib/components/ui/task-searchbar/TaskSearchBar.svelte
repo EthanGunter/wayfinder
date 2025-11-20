@@ -22,7 +22,7 @@
 	onMount(() => {
 		unsubscribeTasks = tasksAPI.getAllUserTasks().subscribe((taskSub) => {
 			if (taskSub.status === 'resolved') {
-				searchService.reindexTasks(taskSub.data);
+				searchService.reindexTasks(taskSub.value);
 				// Trigger refresh if there's an active query
 				if (currentQuery.trim()) {
 					refreshTrigger++;
@@ -38,9 +38,9 @@
 	async function handleSearch(query: string): Promise<Task[]> {
 		currentQuery = query;
 		return searchService.searchTasks(query, 100).sort((a, b) => {
-			if (a.status === TaskStatus.complete) return 1;
-			else if (b.status === TaskStatus.complete) return -1;
-			else return a.title.localeCompare(b.title);
+			if (a.data.status === TaskStatus.complete) return 1;
+			else if (b.data.status === TaskStatus.complete) return -1;
+			else return a.data.title.localeCompare(b.data.title);
 		});
 	}
 </script>

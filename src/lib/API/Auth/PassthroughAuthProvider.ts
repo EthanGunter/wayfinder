@@ -37,7 +37,7 @@ export const passthroughCachedUsers = derived(
 						const [dto, dtoErr] = await remoteAuth.getUserSessions();
 						if (!dtoErr) sessionList = dto as any;
 					}
-					const mapped: SessionUser[] = (users.data as any[]).map((u) => {
+					const mapped: SessionUser[] = (users.value as any[]).map((u) => {
 						const match = sessionList.find((s) => s.user.id === u.id || s.session.userId === u.id);
 						if (match) {
 							const expiresAt = match.session.expiresAt instanceof Date ? match.session.expiresAt : new Date(match.session.expiresAt);
@@ -53,7 +53,7 @@ export const passthroughCachedUsers = derived(
 					});
 					set(mapped);
 				} catch {
-					set((users.data as any[]).map((u) => ({ ...u, sessionStatus: 'revoked' })) as SessionUser[]);
+					set((users.value as any[]).map((u) => ({ ...u, sessionStatus: 'revoked' })) as SessionUser[]);
 				}
 			}
 		});

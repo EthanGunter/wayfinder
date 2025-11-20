@@ -7,7 +7,7 @@
 	import { authState } from '$lib/API/Auth';
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
-	import { isTaskCompleted, type Task } from '$domain/models/task';
+	import { isTaskCompleted, type Task, type TaskData } from '$domain/models/task';
 	import Icon from '@iconify/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 
@@ -93,10 +93,10 @@
 				// Determine which drop zone received the drop
 				if (target.element === todaysDropZoneEl) {
 					if ($todaysList.status !== 'resolved') return;
-					if (!$todaysList.data.includes(task)) {
+					if (!$todaysList.value.includes(task)) {
 						await tasksAPI.updateTask({
 							id: task.id,
-							data: { todaysTask: new Date() }
+							todaysTask: new Date()
 						});
 					}
 				} else if (target.element === suggestedDropZoneEl) {
@@ -105,7 +105,7 @@
 					yesterday.setDate(yesterday.getDate() - 1);
 					const [_, error] = await tasksAPI.updateTask({
 						id: task.id,
-						data: { todaysTask: yesterday }
+						todaysTask: yesterday
 					});
 					if (error) {
 						Err.UNHANDLED(error);
@@ -117,10 +117,8 @@
 		return cleanup;
 	});
 
-	async function onTaskChange(task: Task, changes: Partial<Task>) {
-		if (changes.children || changes.parents) Err.UNHANDLED('Relational updates not handled');
-
-		const [_, error] = await tasksAPI!.updateTask({ id: task.id, data: changes });
+	async function onTaskChange(task: Task, changes: Partial<TaskData>) {
+		const [_, error] = await tasksAPI!.updateTask({ id: task.id, ...changes });
 		if (error) {
 			Err.UNHANDLED(error);
 		}
@@ -129,21 +127,21 @@
 	// Derive todays sort order from suggested tasks
 	let filteredDaysTasks = $derived.by(() => {
 		if ($todaysList.status === 'resolved' && $suggestedTasks.status === 'resolved') {
-			return $suggestedTasks.data.filter((suggestedTask) =>
-				$todaysList.data.some((todaysTask) => todaysTask.id == suggestedTask.id)
+			return $suggestedTasks.value.filter((suggestedTask) =>
+				$todaysList.value.some((todaysTask) => todaysTask.id == suggestedTask.id)
 			);
 		} else return [];
 	});
 
 	let completedTodaysTasks = $derived.by(() => {
 		if ($todaysList.status === 'resolved') {
-			return $todaysList.data.filter((t) => isTaskCompleted(t));
+			return $todaysList.value.filter((t) => isTaskCompleted(t));
 		} else return [];
 	});
 	let filteredSuggestedTasks = $derived(
 		$suggestedTasks.status === 'resolved' && $todaysList.status === 'resolved'
-			? $suggestedTasks.data.filter(
-					(task) => !isTaskCompleted(task) && !$todaysList.data.find((t) => task.id === t.id)
+			? $suggestedTasks.value.filter(
+					(task) => !isTaskCompleted(task) && !$todaysList.value.find((t) => task.id === t.id)
 				)
 			: []
 	);

@@ -2,7 +2,7 @@
 	import { Handle, Position } from '@xyflow/svelte';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 	import { devEnabled } from '$lib/user-settings';
-	import { type WFNode, type FlowData } from './types';
+	import { type FlowNode, type FlowData } from './types';
 
 	interface Props {
 		id: string;
@@ -10,8 +10,8 @@
 		selected: boolean;
 	}
 
-	let { id, data, selected }: Props = $props();
-	const isDimmed = $derived(data.dimmed ?? false);
+	let { id, data: flowNode, selected }: Props = $props();
+	const isDimmed = $derived(flowNode.dimmed ?? false);
 
 	// Track animation state for one-time fade-out effect
 	let isAnimating = $state(false);
@@ -61,38 +61,44 @@
 
 <div
 	bind:this={nodeElement}
-	data-tasknodeid={data.task.id}
+	data-tasknodeid={flowNode.wfNode.id}
 	class="task-node relative min-w-[200px] rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
-	{isTaskCompleted(data.task) ? 'bg-green-100' : 'bg-white'}"
+	{isTaskCompleted(flowNode.wfNode) ? 'bg-green-100' : 'bg-white'}"
 	class:highlighted={isAnimating}
 	class:dimmed={isDimmed}
 >
 	<div class="flex items-start gap-2 px-3 py-2">
 		<div class="min-w-0 flex-1">
-			<div class="truncate text-sm font-semibold text-gray-900" title={data.task.title}>
-				{data.task.title}
+			<div
+				class="truncate text-sm font-semibold text-gray-900"
+				title={flowNode.wfNode.data.title}
+			>
+				{flowNode.wfNode.data.title}
 			</div>
-			{#if data.task.content}
-				<div class="mt-0.5 line-clamp-2 text-xs text-gray-600" title={data.task.content}>
-					{data.task.content}
+			{#if flowNode.wfNode.data.content}
+				<div
+					class="mt-0.5 line-clamp-2 text-xs text-gray-600"
+					title={flowNode.wfNode.data.content}
+				>
+					{flowNode.wfNode.data.content}
 				</div>
 			{/if}
 			{#if $devEnabled}
 				<div class="text-[7px]">
-					<span>task-id: {data.task.id.substring(0, 5)}</span>
+					<span>task-id: {flowNode.wfNode.id.substring(0, 5)}</span>
 					<br />
 					<span>node-id: {id}</span>
-					{#if data.task.parents.length > 0}
+					{#if flowNode.wfNode.parents.length > 0}
 						<h6>Parents</h6>
 					{/if}
-					{#each data.task.parents as parent}
+					{#each flowNode.wfNode.parents as parent}
 						<span>- {parent.substring(0, 5)}</span>
 						<br />
 					{/each}
-					{#if data.task.children.length > 0}
+					{#if flowNode.wfNode.children.length > 0}
 						<h6>Children</h6>
 					{/if}
-					{#each data.task.children as child}
+					{#each flowNode.wfNode.children as child}
 						<span>- {child.substring(0, 5)}</span>
 						<br />
 					{/each}

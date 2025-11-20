@@ -1,5 +1,5 @@
 //#region TYPES
-import type { WFEdge, WFNode } from '../../types';
+import type { FlowEdge, FlowNode } from '../../types';
 import type { Task } from '$domain/models/task';
 import { layoutTasksWithElk } from './ELK';
 
@@ -10,7 +10,7 @@ export type LayoutOptions = {
 export type LayoutEngine = (
 	tasks: Task[],
 	options?: LayoutOptions
-) => Promise<{ nodes: WFNode[]; edges: WFEdge[] }>;
+) => Promise<{ nodes: FlowNode[]; edges: FlowEdge[] }>;
 //#endregion
 
 //#region ADAPTER

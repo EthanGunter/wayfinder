@@ -1,6 +1,6 @@
 //#region IMPORTS
 import { isTaskCompleted, type Task } from '$domain/models/task';
-import type { WFEdge, WFNode } from '../../types';
+import type { FlowEdge, FlowNode } from '../../types';
 import { Position } from '@xyflow/svelte';
 // @ts-ignore
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js';
@@ -26,7 +26,7 @@ type LayoutOpts = {
 export async function layoutTasksWithElk(
 	tasks: Task[],
 	opts: LayoutOpts = {}
-): Promise<{ nodes: WFNode[]; edges: WFEdge[] }> {
+): Promise<{ nodes: FlowNode[]; edges: FlowEdge[] }> {
 	const byId = new Map<string, Task>(tasks.map((t) => [t.id, t]));
 
 	const nodeWidth = opts.nodeWidth ?? DEFAULT_NODE_WIDTH;
@@ -81,18 +81,18 @@ export async function layoutTasksWithElk(
 
 	const laidOut = await elk.layout(elkGraph);
 
-	const nodes: WFNode[] = (laidOut.children || []).map((n) => ({
+	const nodes: FlowNode[] = (laidOut.children || []).map((n) => ({
 		id: String(n.id),
 		type: 'task',
 		position: { x: n.x ?? 0, y: n.y ?? 0 },
 		width: n.width ?? nodeWidth,
 		height: n.height ?? nodeHeight,
-		data: { task: {} as Task },
+		data: { wfNode: {} as Task },
 		sourcePosition: Position.Right,
 		targetPosition: Position.Left,
 	}));
 
-	const edges: WFEdge[] = elkEdges.map((e) => ({
+	const edges: FlowEdge[] = elkEdges.map((e) => ({
 		id: e.id,
 		source: e.sources[0],
 		target: e.targets[0],
@@ -104,7 +104,7 @@ export async function layoutTasksWithElk(
 	const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 	for (const t of tasks) {
 		const n = nodeMap.get(t.id);
-		if (n) (n.data).task = t;
+		if (n) (n.data).wfNode = t;
 	}
 
 	return { nodes, edges };
@@ -182,13 +182,13 @@ function buildMeasureNode(task: Task): HTMLElement {
 
 	const title = document.createElement('div');
 	title.className = 'truncate text-sm font-semibold text-gray-900';
-	title.textContent = task.title ?? '';
+	title.textContent = task.data.title ?? '';
 	contentWrap.appendChild(title);
 
-	if (task.content) {
+	if (task.data.content) {
 		const body = document.createElement('div');
 		body.className = 'mt-0.5 line-clamp-2 text-xs text-gray-600';
-		body.textContent = task.content;
+		body.textContent = task.data.content;
 		contentWrap.appendChild(body);
 	}
 

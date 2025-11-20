@@ -12,9 +12,6 @@
 	} = $props();
 
 	let selected = $derived(isSelected());
-	$effect(() => {
-		console.log('selected', selected);
-	});
 </script>
 
 <NavigationMenuPrimitive.Item

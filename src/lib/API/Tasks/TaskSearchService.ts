@@ -43,17 +43,17 @@ export class TaskSearchService {
 		this.taskMap.set(task.id, task);
 
 		// Index title with higher weight
-		if (task.title) {
-			this.titleIndex.add(task.id, task.title);
+		if (task.data.title) {
+			this.titleIndex.add(task.id, task.data.title);
 		}
 
 		// Index content
-		if (task.content) {
-			this.contentIndex.add(task.id, task.content);
+		if (task.data.content) {
+			this.contentIndex.add(task.id, task.data.content);
 		}
 
 		// Combined index for general search
-		const searchableText = [task.title, task.content].filter(Boolean).join(' ');
+		const searchableText = [task.data.title, task.data.content].filter(Boolean).join(' ');
 		if (searchableText.trim()) {
 			this.combinedIndex.add(task.id, searchableText);
 		}
@@ -142,7 +142,7 @@ export class TaskSearchService {
 			}
 
 			// Boost today's tasks
-			if (result.task.todaysTask) {
+			if (result.task.data.todaysTask) {
 				additionalScore += 3;
 			}
 

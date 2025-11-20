@@ -3,4 +3,4 @@ import type { Err } from "./errors";
 export type Fetchable<T> =
 	| { status: "loading" }
 	| { status: "error"; error: Err }
-	| { status: "resolved"; data: T };
+	| { status: "resolved"; value: T };

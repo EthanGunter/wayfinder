@@ -51,8 +51,8 @@
 		handleReconnectEnd,
 		isValidConnection
 	} from './logic/svelte-flow';
-	import { selectedTask, editorLayoutState, drawerParams, drawerOpen } from './logic/ui-state';
-	import type { WFNode, WFEdge } from './types';
+	import { selectedTask as selectedNode, editorLayoutState, drawerParams, drawerOpen } from './logic/ui-state';
+	import type { FlowNode, FlowEdge } from './types';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 
@@ -64,7 +64,7 @@
 			if (taskSub.status !== 'resolved') return;
 
 			// always keep stores current
-			refreshNodesData(taskSub.data);
+			refreshNodesData(taskSub.value);
 
 			// only do layout once on first data load
 			if (!didRunInitialLayout) {
@@ -101,29 +101,29 @@
 	});
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
-		const [_, err] = await tasksAPI.updateTask({ id: original.id, data: update });
+		const [_, err] = await tasksAPI.updateTask({ id: original.id, ...update });
 		if (err) err.UNHANDLED();
 	}
 
-	function onGraphDelete(params: { nodes: WFNode[]; edges: WFEdge[] }): void {
+	function onGraphDelete(params: { nodes: FlowNode[]; edges: FlowEdge[] }): void {
 		if (params.nodes.length === 1) {
-			const task = params.nodes[0].data.task;
-			const parent = taskById.get(task?.parents[0]);
-			$selectedTask = parent ?? null;
+			const task = params.nodes[0].data.wfNode;
+			const parent = taskById.get(task.parents[0]);
+			$selectedNode = parent ?? null;
 		} else {
-			$selectedTask = null;
+			$selectedNode = null;
 		}
 		handleDelete({ nodes: params.nodes, edges: params.edges });
 	}
 
 	async function onEditorDelete(task: Task) {
 		const parent = taskById.get(task.parents[0]);
-		$selectedTask = parent ?? null;
+		$selectedNode = parent ?? null;
 		await tasksAPI.deleteTask({ id: task.id });
 	}
 
 	function onSelectNode(taskId: string) {
-		$selectedTask = $allTasks.find((t) => t.id === taskId) ?? null;
+		$selectedNode = $allTasks.find((t) => t.id === taskId) ?? null;
 		centerAndHighlightNode(taskId);
 	}
 </script>
@@ -165,12 +165,12 @@
 					{isValidConnection}
 					onnodeclick={({ node, event }) => {
 						if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
-						$selectedTask = node.id
-							? ($nodes.find((n) => n.id === node.id)?.data.task ?? null)
+						$selectedNode = node.id
+							? ($nodes.find((n) => n.id === node.id)?.data.wfNode ?? null)
 							: null;
 					}}
 					onpaneclick={() => {
-						$selectedTask = null;
+						$selectedNode = null;
 					}}
 				>
 					<Background bgColor="var(--background)" />
@@ -197,7 +197,7 @@
 			</div>
 		</SvelteFlowProvider>
 	</Resizable.Pane>
-	{#if $selectedTask}
+	{#if $selectedNode}
 		<Resizable.Handle />
 		<Resizable.Pane
 			class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
@@ -205,7 +205,7 @@
 			minSize={24}
 		>
 			<TaskEditor
-				bind:task={$selectedTask}
+				bind:task={$selectedNode}
 				bind:layoutState={$editorLayoutState}
 				{onTaskChange}
 				onDelete={onEditorDelete}
