@@ -26,7 +26,7 @@
 <div
 	class="shrink-0 rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
 >
-	{#if showMarkdown}
+	{#if showMarkdown && value}
 		<div
 			class="markdown"
 			onclick={() => {

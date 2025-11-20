@@ -109,7 +109,7 @@
 			class="w-fit rounded-t-lg border border-b-0 border-gray-200 bg-gray-50 px-3 py-1.5 text-left text-sm text-gray-700 hover:cursor-pointer hover:bg-gray-100"
 			onclick={() => onSelect(parentId)}
 		>
-			<h2>{title}</h2>
+			<h2 class="text-sm font-medium mb-0">{title}</h2>
 		</button>
 	{/if}
 	<div
