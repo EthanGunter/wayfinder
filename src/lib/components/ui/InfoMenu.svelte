@@ -6,6 +6,7 @@
 
 	type Props = {
 		onItemClick?: (item: string) => void;
+		class?: string;
 	};
 
 	const FORMS = {
@@ -16,7 +17,7 @@
 			'https://docs.google.com/forms/d/e/1FAIpQLScGlOmqhskpYlWoU6pMYPVooJeEERG45gztSxkMO7dFVVLXvg/viewform?usp=sf_link'
 	};
 
-	const { onItemClick }: Props = $props();
+	const { onItemClick, class: className }: Props = $props();
 
 	function click(item: string) {
 		onItemClick?.(item);
@@ -24,7 +25,7 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger>
+	<DropdownMenu.Trigger class={className}>
 		<Button variant="ghost" size="icon">
 			<Icon icon="material-symbols:feedback-outline" class="size-5" />
 			<span class="sr-only">Help and Information</span>

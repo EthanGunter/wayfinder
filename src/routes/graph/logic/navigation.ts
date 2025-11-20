@@ -2,7 +2,7 @@
 import { get } from 'svelte/store';
 import type { Task } from '$domain/models/task';
 import type { SvelteFlowInstance } from '@xyflow/svelte';
-import type { WFNode } from '../types';
+import type { FlowNode } from '../types';
 import { nodes, svelteFlowInstance } from './shared-state';
 import { selectedTask } from './ui-state';
 import { searchQuery, showRelatedNodes, handleSearch } from './search';
@@ -99,8 +99,8 @@ export async function initializeFromUrl(params: URLSearchParams) {
 		setTimeout(() => {
 			const node = get(nodes).find((n) => n.id === selectId);
 			centerAndHighlightNode(selectId);
-			if (node?.data.task.type === 'task') {
-				selectedTask.set(node.data.task);
+			if (node?.data.wfNode.data.type === 'task') { // ew lol
+				selectedTask.set(node.data.wfNode);
 			}
 		}, 500);
 	}

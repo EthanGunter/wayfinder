@@ -2,13 +2,13 @@
 import { writable, type Writable } from 'svelte/store';
 import type { SvelteFlowInstance } from '@xyflow/svelte';
 import type { Task } from '$domain/models/task';
-import type { WFEdge, WFNode } from '../types';
+import type { FlowEdge, FlowNode } from '../types';
 
 // Graph + data
 export const taskById = new Map<string, Task>();
 export const allTasks: Writable<Task[]> = writable([]);
-export const nodes: Writable<WFNode[]> = writable([]);
-export const edges: Writable<WFEdge[]> = writable([]);
+export const nodes: Writable<FlowNode[]> = writable([]);
+export const edges: Writable<FlowEdge[]> = writable([]);
 
 // Flow library refs
 export const svelteFlowInstance: Writable<SvelteFlowInstance | null> = writable(null);

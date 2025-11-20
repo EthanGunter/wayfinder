@@ -1,5 +1,5 @@
 //#region IMPORTS
-import type { WFEdge, WFNode } from '../types';
+import type { FlowEdge, FlowNode } from '../types';
 import type { Task } from '$domain/models/task';
 import { get } from 'svelte/store';
 import { elkLayoutEngine } from './LayoutEngines';
@@ -21,9 +21,9 @@ function selectTasksForLayout(all: Task[], visible: Set<string> | null): Task[] 
 }
 
 function decorateDimming(
-	currentNodes: WFNode[],
-	currentEdges: WFEdge[],
-): { nodes: WFNode[]; edges: WFEdge[] } {
+	currentNodes: FlowNode[],
+	currentEdges: FlowEdge[],
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
 	const f = get(filteredIds);
 	if (!f) {
 		return {
@@ -57,18 +57,18 @@ export function refreshNodesData(tasks: Task[]) {
 
 	// 3) rehydrate data for existing nodes; collect IDs to detect new tasks
 	const knownIds = new Set(currentNodes.map((n) => n.id));
-	let updatedNodes: WFNode[] = currentNodes.map((n) => {
+	let updatedNodes: FlowNode[] = currentNodes.map((n) => {
 		const t = taskById.get(n.id);
-		return t ? { ...n, data: { task: t } } : n;
+		return t ? { ...n, data: { wfNode: t } } : n;
 	});
 
 	// 4) add missing nodes (brand-new tasks) with placeholder position (0,0)
-	const newNodes: WFNode[] = tasks
+	const newNodes: FlowNode[] = tasks
 		.filter((t) => !knownIds.has(t.id))
 		.map((t) => ({
 			id: t.id,
 			type: 'task',
-			data: { task: t },
+			data: { wfNode: t },
 			position: { x: 0, y: 0 },
 			x: 0,
 			y: 0,
@@ -85,10 +85,10 @@ export function refreshNodesData(tasks: Task[]) {
 	//    - for child edges: source = node.id, target = childId
 	// We'll generate both directions but avoid duplicates with a Set.
 	const existingEdgeIds = new Set(currentEdges.map((e) => e.id));
-	const generatedEdges: WFEdge[] = [];
+	const generatedEdges: FlowEdge[] = [];
 
 	for (const n of updatedNodes) {
-		const t = n.data.task;
+		const t = n.data.wfNode;
 		if (!t) continue;
 
 		// parents => edges parent -> node
@@ -101,8 +101,8 @@ export function refreshNodesData(tasks: Task[]) {
 					source: parentId,
 					target: t.id,
 					type: 'task',
-					data: { task: t },
-				} satisfies WFEdge);
+					data: { wfNode: t },
+				} satisfies FlowEdge);
 				existingEdgeIds.add(key);
 			}
 		}
@@ -117,8 +117,8 @@ export function refreshNodesData(tasks: Task[]) {
 					source: t.id,
 					target: childId,
 					type: 'task',
-					data: { task: t },
-				} satisfies WFEdge);
+					data: { wfNode: t },
+				} satisfies FlowEdge);
 				existingEdgeIds.add(key);
 			}
 		}
@@ -194,14 +194,14 @@ export async function updateGraph(useLayout: boolean) {
 	const visibleIds = buildVisibleIdSet();
 	const tasksForLayout = selectTasksForLayout(all, visibleIds);
 
-	let baseNodes: WFNode[];
-	let baseEdges: WFEdge[];
+	let baseNodes: FlowNode[];
+	let baseEdges: FlowEdge[];
 
 	if (useLayout) {
 		const laidOut = await elkLayoutEngine(tasksForLayout, { direction: 'RIGHT' });
 		baseNodes = laidOut.nodes.map((n) => {
 			const t = taskById.get(n.id);
-			return t ? { ...n, data: { task: t } } : n;
+			return t ? { ...n, data: { wfNode: t } } : n;
 		});
 		baseEdges = laidOut.edges;
 	} else {
@@ -210,14 +210,14 @@ export async function updateGraph(useLayout: boolean) {
 		if (prevNodes.length > 0) {
 			baseNodes = prevNodes.map((n) => {
 				const t = taskById.get(n.id);
-				return t ? { ...n, data: { task: t } } : n;
+				return t ? { ...n, data: { wfNode: t } } : n;
 			});
 			baseEdges = prevEdges;
 		} else {
 			const laidOut = await elkLayoutEngine(tasksForLayout, { direction: 'RIGHT' });
 			baseNodes = laidOut.nodes.map((n) => {
 				const t = taskById.get(n.id);
-				return t ? { ...n, data: { task: t } } : n;
+				return t ? { ...n, data: { wfNode: t } } : n;
 			});
 			baseEdges = laidOut.edges;
 		}

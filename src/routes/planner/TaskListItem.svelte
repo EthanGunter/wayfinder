@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
+	import { isTaskCompleted, TaskStatus, type Task, type TaskData } from '$domain/models/task';
 	import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -11,7 +11,7 @@
 		onTaskChange
 	}: {
 		task: Task;
-		onTaskChange?: (original: Task, changes: Partial<Task>) => void;
+		onTaskChange?: (original: Task, changes: Partial<TaskData>) => void;
 	} = $props();
 
 	// Create a reactive variable that's properly bound to the checkbox
@@ -20,8 +20,8 @@
 	// Watch for changes to isCompleted and update the task
 	$effect(() => {
 		const newStatus = checked ? TaskStatus.complete : TaskStatus.incomplete;
-		if (task.status !== newStatus) {
-			task.status = newStatus;
+		if (task.data.status !== newStatus) {
+			// task.data.status = newStatus; <- I don't think this does anything
 			onTaskChange?.(task, { status: newStatus });
 		}
 	});
@@ -63,7 +63,7 @@
 		bind:this={dragHandleEl}
 		class="h-full w-full cursor-grab overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap active:cursor-grabbing"
 	>
-		{task.title}
+		{task.data.title}
 	</span>
 
 	<!-- Link to task editor -->

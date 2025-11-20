@@ -1,157 +1,91 @@
 import type { InvalidStateError, ArgumentError, NotAuthorizedError, NotFoundError } from "$domain/errors";
-import type { CreateTaskParams, ExportedData, Task, UpdateTaskParams } from "$domain/models/task";
+import type { GraphNode, IGraphNode } from "$domain/models/node";
+import type { ProjectData } from "$domain/models/project";
+import type { CreateTaskParams, ExportedData, TaskData, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
 import type { FetchableStore, QueryableStore } from "../fetchableStore";
 
-export interface ITasks {
+/**
+ * Base interface containing methods shared between ITasks and ITasksLocal
+ */
+export interface ITasksBase {
 	/**
-	* Creates a new task with the given data
-	* @returns The new task's generated ID
+	 * Fetches a GraphNode's data by its ID
+	 */
+	getTask(id: string): QueryableStore<{ id: string }, Task>;
+	getTasks(ids: string[]): QueryableStore<{ ids: string[] }, Task[]>;
+	getAllUserTasks(userId?: string): QueryableStore<{ userId?: string }, Task[]>;
+
+	updateTask(params: UpdateTaskParams): Promise<Result<{ updated: GraphNode, affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<{ updated: GraphNode[], affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+
+	deleteTask(params: { id: string }): Promise<Result<{ affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	deleteTasks(params: { ids: string[] }): Promise<Result<{ affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+
+	/**
+	 * Finds all GraphNodes that must be completed before `id`
+	 */
+	getChildrenOf(id: string): QueryableStore<{ id: string }, GraphNode[]>;
+	/**
+	 * Gets all GraphNodes that are waiting for `id`
+	 */
+	getParentsOf(id: string): QueryableStore<{ id: string }, GraphNode[]>;
+	/**
+	 * Gets all GraphNodes that are children of the same parents as `id`
+	 * @note keyed by parent
+	 */
+	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<GraphNode, GraphNode[]>>;
+	/**
+	 * Gets all GraphNodes that nothing depends on
+	*/
+	// TODO * @deprecated use getProjects instead
+	getRootTasks(): FetchableStore<Task[]>;
+
+	// /**
+	//  * Gets all GraphNodes that are projects
+	//  */
+	// TODO getProjects(): FetchableStore<IGraphNode<ProjectData>[]>;
+
+	/**
+	 * Gets all GraphNodes that are on the "Today's List"
+	 */
+	getTodaysTasks(): FetchableStore<Task[]>;
+	/**
+	 * Gets the top N tasks based on priority
+	 */
+	getPrioritizedTasks(limit: number /* , weights: WeightParams = {
+      deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
+  } */): QueryableStore<{ limit: number }, Task[]>;
+
+	searchTasks(searchTerm: string): Promise<Task[]>;
+
+	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<Result<number, NotAuthorizedError | ArgumentError | InvalidStateError>>;
+	exportData(subtreeId?: string): Promise<ExportedData>;
+}
+
+export interface ITasksRemote extends ITasksBase {
+	/**
+	* Creates a new GraphNode with the given data
+	* @returns The new GraphNode's generated ID
 	*/
 	/* TODO:sync/tasks/refactor An example of divergence between the client-side and remote side APIs. The server should return id updates, 
 	the client should frankly return void, since we're using a subscription-based data model */
-	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ created: Task & { givenId?: string }, affected: Task[] }, NotAuthorizedError | InvalidStateError>>;
-	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ created: (Task & { givenId?: string })[], affected: Task[] }, NotAuthorizedError>>;
-	/**
-	 * Fetches a task's data by its ID
-	 */
-	getTask(id: string): QueryableStore<{ id: string }, Task>;
-	getTasks(ids: string[]): QueryableStore<{ ids: string[] }, Task[]>;
-	getAllUserTasks(userId?: string): QueryableStore<{ userId?: string }, Task[]>;
-	/**
-	 * @param task can be passed as an id
-	 */
-	updateTask(params: UpdateTaskParams): Promise<Result<{ updated: Task, affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
-	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<{ updated: Task[], affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
-
-	deleteTask(params: { id: string }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
-	deleteTasks(params: { ids: string[] }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ created: Task & { data: TaskData<Date> & { givenId?: string } }, affected: GraphNode[] }, NotAuthorizedError | InvalidStateError>>;
+	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ created: (Task & { data: TaskData<Date> & { givenId?: string } })[], affected: GraphNode[] }, NotAuthorizedError>>;
 
 	// TODO:sync migrate un-synced user data
 	// changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<Result<Task[], NotAuthorizedError>>;
+}
 
-	/**
-	 * Finds all tasks that must be completed before `id`
-	 */
-	getChildrenOf(id: string): QueryableStore<{ id: string }, Task[]>;
-	/**
-	 * Gets all tasks that are waiting for `id`
-	 */
-	getParentsOf(id: string): QueryableStore<{ id: string }, Task[]>;
-	/**
-	 * Gets all tasks that are children of the same parents as `id`
-	 * @note keyed by parent
-	 */
-	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<Task, Task[]>>;
-	/**
-	 * Gets all tasks that nothing depends on
-	 */
-	getRootTasks(): FetchableStore<Task[]>;
-
-	/**
-	 * Gets all tasks that are on the "Today's List"
-	 */
-	getTodaysTasks(): FetchableStore<Task[]>;
-	/**
-	 * Gets the top N tasks based on priority
-	 */
-	getPrioritizedTasks(limit: number /* , weights: WeightParams = {
-      deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
-  } */): QueryableStore<{ limit: number }, Task[]>;
-
-	searchTasks(searchTerm: string): Promise<Task[]>;
-
-	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<Result<number, NotAuthorizedError | ArgumentError | InvalidStateError>>;
-	exportData(subtreeId?: string): Promise<ExportedData>;
-};
-
-
-export interface ITasksLocal {
+export interface ITasksLocal extends ITasksBase {
 	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<string, InvalidStateError>>;
 	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<string[], InvalidStateError | ArgumentError>>;
-	handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string>, affectedTasks: Task[] }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
+	handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string>, affectedTasks: GraphNode[] }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
 
-	/**
-	 * Fetches a task's data by its ID
-	 */
-	getTask(id: string): QueryableStore<{ id: string }, Task>;
-	getTasks(ids: string[]): QueryableStore<{ ids: string[] }, Task[]>;
-	getAllUserTasks(userId?: string): QueryableStore<{ userId?: string }, Task[]>;
-
-	/**
-	 * @param task can be passed as an id
-	 */
-	updateTask(params: UpdateTaskParams): Promise<Result<{ updated: Task, affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
-	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<{ updated: Task[], affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 	handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;
 
-	deleteTask(params: { id: string }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
-	deleteTasks(params: { ids: string[] }): Promise<Result<{ affected: Task[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 	handleDeleteTasksResponse(response: Result<void, { oldState: Task[], error: NotAuthorizedError }>): Promise<void>;
 
 	handleMigrateResponse(response: Result<void, { oldUserID: string, newUserID: string, error: NotAuthorizedError }>): Promise<void>;
-
-	/**
-	 * Finds all tasks that must be completed before `id`
-	 */
-	getChildrenOf(id: string): QueryableStore<{ id: string }, Task[]>;
-	/**
-	 * Gets all tasks that are waiting for `id`
-	 */
-	getParentsOf(id: string): QueryableStore<{ id: string }, Task[]>;
-	/**
-	 * Gets all tasks that are children of the same parents as `id`
-	 * @note keyed by parent
-	 */
-	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<Task, Task[]>>;
-
-	/**
-	 * Gets all tasks that nothing depends on
-	 */
-	getRootTasks(): FetchableStore<Task[]>;
-
-	/**
-	 * Gets all tasks that are on the "Today's List"
-	 */
-	getTodaysTasks(): FetchableStore<Task[]>;
-	/**
-	 * Gets the top N tasks based on priority
-	 */
-	getPrioritizedTasks(limit: number /* , weights: WeightParams = {
-      deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
-  } */): QueryableStore<{ limit: number }, Task[]>;
-
-	searchTasks(searchTerm: string): Promise<Task[]>;
-
-	/**
-	 * @param userId Used to subscribe to ALL tasks for a user
-	 * @param ids For tracking only specific tasks
-	 * @param depth the recursive depth of ancestor/descendants to include in the subscription
-	 * @param onInitialize Called immediately on subscription. Provides the initial state of data
-	 * @param onChange Called everytime a task is modified. 
-	 * @return unsubscribe function
-   */
-	/* 	subscribeTasks(
-			params:
-				| {
-					userId: string;
-					ids?: never;
-					// onInitialize: (tasks: Task[]) => void;
-					// onChange: (changes: TaskDelta[]) => void;
-				}
-				| {
-					ids: string[];
-					ancestorDepth: number;
-					descendantDepth: number;
-					userId?: never;
-					// onInitialize: (tasks: Task[]) => void;
-					// onChange: (changes: TaskDelta[]) => void;
-				}
-		): { unsubscribe: () => void, tasks: Readable<Task[]> }; */
-
-	exportData(subtreeId?: string): Promise<ExportedData>;
-	importData(params: { data: string, mode?: "add" | "replace" | "attemptMerge" }): Promise<Result<number, NotAuthorizedError | ArgumentError | InvalidStateError>>;
-
-	// hydrateForUser(params: { user: User }): Promise<void>;
-};
+}
 

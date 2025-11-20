@@ -52,7 +52,7 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 			console.log('[title parseValue()]:', raw);
 			return raw;
 		},
-		matches: (task, op, value) => compareString(task.title, op, value),
+		matches: (task, op, value) => compareString(task.data.title, op, value),
 	}),
 	content: fieldHandler({
 		operators: compareOps('==', '!=', '~='),
@@ -61,7 +61,7 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 			console.log('[content parseValue()]:', value);
 			return value;
 		},
-		matches: (task, op, value) => compareString(task.content, op, value),
+		matches: (task, op, value) => compareString(task.data.content, op, value),
 	}),
 	status: fieldHandler({
 		operators: compareOps('==', '!='),
@@ -73,7 +73,7 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 			throw new ValueTransformError(`Invalid status: ${raw}. Must be 'complete' or 'incomplete'`);
 		},
 		matches: (task, op, value) => {
-			return task.status === value.data;
+			return task.data.status === value.data;
 		},
 		autocomplete: (value) => {
 			const normalized = value.toLowerCase();
@@ -113,7 +113,7 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 			}
 		},
 		transformValue: parseDateValue,
-		matches: (task, op, value) => compareDate(task.dueDate, op, value)
+		matches: (task, op, value) => compareDate(task.data.dueDate, op, value)
 	}),
 	dueDate: fieldHandler({
 		operators: compareOps('==', '!=', '>=', '<=', '>', '<'),
@@ -134,7 +134,7 @@ export const taskQueryFieldRegistry: FieldRegistry<Task> = {
 			}
 		},
 		transformValue: parseDateValue,
-		matches: (task, op, value) => compareDate(task.dueDate, op, value)
+		matches: (task, op, value) => compareDate(task.data.dueDate, op, value)
 	}),
 
 	// Metadata

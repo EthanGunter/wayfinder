@@ -1,17 +1,22 @@
 import { Err, NotImplementedError, NotAuthorizedError, ArgumentError, NotFoundError, InvalidStateError } from "$domain/errors";
 import { err, ok } from "$domain/result";
-import { type CreateTaskParams, type Task, type UpdateTaskParams, type ITask, type ExportedData } from "$domain/models/task";
+import type { CreateTaskParams, UpdateTaskParams, TaskData, Task } from "$domain/models/task";
+import type { ProjectData } from "$domain/models/project";
 import { api as convexApi } from "$convex/_generated/api";
-import type { Doc, Id } from "$convex/_generated/dataModel";
+import type { Id } from "$convex/_generated/dataModel";
 import { sharedConvexClient as client } from "$lib/API/ConvexClient";
 import { createFetchableReadable as createFetchable, createQueryable } from "$lib/API/fetchableStore";
-import type { ITasks, ITasksLocal } from "./seam-interfaces";
+import type { ITasksRemote, ITasksLocal } from "./seam-interfaces";
 import { ConvexError } from "convex/values";
+import type { IGraphNode, GraphData, GraphNode } from "$domain/models/node";
+
+// Type alias for server-side nodes with number timestamps
+type ServerNode<T extends GraphData<number>> = IGraphNode<T & { givenId?: string }, number>;
 
 
 function reconstructError(error: unknown): Err {
 	if (error instanceof ConvexError) {
-		const data = error.data as { type: string; msg: string; ctx?: any; msgForUser?: string };
+		const data = JSON.parse(error.data);
 		const messageForUser = data.msgForUser ?? data.msg;
 
 		switch (data.type) {
@@ -36,14 +41,14 @@ function reconstructError(error: unknown): Err {
 	return new Err("Unknown", String(error));
 }
 
-export const api: ITasks = {
+export const api: ITasksRemote = {
 	// Mutators
 	createTask: async ({ createDetail }) => {
 		try {
 			const res = await client.mutation(convexApi.tasks.createTask, { createDetail: convexifyCreateTaskDetails(createDetail) });
 			return ok({
-				created: convertFromServerTask(res.created),
-				affected: res.affected.map((r) => convertFromServerTask(r))
+				created: convertFromServerNode(res.created),
+				affected: res.affected.map((r) => convertFromServerNode(r))
 			});
 		} catch (error) {
 			console.error(error)
@@ -55,8 +60,8 @@ export const api: ITasks = {
 		try {
 			const res = await client.mutation(convexApi.tasks.createTasks, { createDetails: createDetails.map(convexifyCreateTaskDetails) });
 			return ok({
-				created: res.created.map((r) => convertFromServerTask(r)),
-				affected: res.affected.map((r) => convertFromServerTask(r))
+				created: res.created.map((r) => convertFromServerNode(r)),
+				affected: res.affected.map((r) => convertFromServerNode(r))
 			});
 		} catch (error) {
 			console.error(error)
@@ -68,8 +73,8 @@ export const api: ITasks = {
 		try {
 			const res = await client.mutation(convexApi.tasks.updateTask, convexifyTaskUpdate(update));
 			return ok({
-				updated: convertFromServerTask(res.updated),
-				affected: res.affected.map(convertFromServerTask)
+				updated: convertFromServerNode(res.updated),
+				affected: res.affected.map(convertFromServerNode)
 			});
 		} catch (error) {
 			console.error(error)
@@ -81,8 +86,8 @@ export const api: ITasks = {
 		try {
 			const res = await client.mutation(convexApi.tasks.updateTasks, { updates: updates.map(u => convexifyTaskUpdate(u)) });
 			return ok({
-				updated: res.updated.map(convertFromServerTask),
-				affected: res.affected.map(convertFromServerTask)
+				updated: res.updated.map(convertFromServerNode),
+				affected: res.affected.map(convertFromServerNode)
 			});
 		} catch (error) {
 			console.error(error)
@@ -92,9 +97,9 @@ export const api: ITasks = {
 
 	deleteTask: async ({ id }) => {
 		try {
-			const res = await client.mutation(convexApi.tasks.deleteTask, { id: id as Id<'tasks'> });
+			const res = await client.mutation(convexApi.tasks.deleteTask, { id: id as Id<'nodes'> });
 			return ok({
-				affected: res.affected.map(convertFromServerTask)
+				affected: res.affected.map(convertFromServerNode)
 			});
 		} catch (error) {
 			console.error(error)
@@ -104,9 +109,9 @@ export const api: ITasks = {
 
 	deleteTasks: async ({ ids }) => {
 		try {
-			const res = await client.mutation(convexApi.tasks.deleteTasks, { ids: ids as Id<'tasks'>[] });
+			const res = await client.mutation(convexApi.tasks.deleteTasks, { ids: ids as Id<'nodes'>[] });
 			return ok({
-				affected: res.affected.map(convertFromServerTask)
+				affected: res.affected.map(convertFromServerNode)
 			});
 		} catch (error) {
 			console.error(error)
@@ -132,9 +137,9 @@ export const api: ITasks = {
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getTask,
-					{ id: params.id as Id<'tasks'> },
+					{ id: params.id as Id<'nodes'> },
 					(result) => {
-						set({ status: "resolved", data: convertFromServerTask(result) });
+						set({ status: "resolved", value: convertFromServerNode(result) });
 					},
 					(error: Error) => {
 						set({ status: "error", error: reconstructError(error) });
@@ -151,9 +156,9 @@ export const api: ITasks = {
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getTasks,
-					{ ids: params.ids as Id<'tasks'>[] },
+					{ ids: params.ids as Id<'nodes'>[] },
 					(result) => {
-						set({ status: "resolved", data: result.map(convertFromServerTask) });
+						set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
 					},
 					(error: Error) => {
 						set({ status: "error", error: reconstructError(error) });
@@ -202,7 +207,7 @@ export const api: ITasks = {
 						{ userId: resolvedUserId },
 						(result) => {
 							if (cancelled) return;
-							set({ status: "resolved", data: result.map(convertFromServerTask) });
+							set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
 						},
 						(error: Error) => {
 							if (cancelled) return;
@@ -228,9 +233,9 @@ export const api: ITasks = {
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getChildrenOf,
-					{ id: params.id as Id<'tasks'> },
+					{ id: params.id as Id<'nodes'> },
 					(result) => {
-						set({ status: "resolved", data: result.map(convertFromServerTask) });
+						set({ status: "resolved", value: result.map(convertFromServerNode) });
 					},
 					(error: Error) => {
 						set({ status: "error", error: reconstructError(error) });
@@ -247,9 +252,9 @@ export const api: ITasks = {
 			(params, set) => {
 				const unsubscribe = client.onUpdate(
 					convexApi.tasks.getParentsOf,
-					{ id: params.id as Id<'tasks'> },
+					{ id: params.id as Id<'nodes'> },
 					(result) => {
-						set({ status: "resolved", data: result.map(convertFromServerTask) });
+						set({ status: "resolved", value: result.map(convertFromServerNode) });
 					},
 					(error: Error) => {
 						set({ status: "error", error: reconstructError(error) });
@@ -264,12 +269,12 @@ export const api: ITasks = {
 		createQueryable({ id }, (params, set) => {
 			const unsubscribe = client.onUpdate(
 				convexApi.tasks.getSiblingsOf,
-				{ id: params.id as Id<'tasks'> },
+				{ id: params.id as Id<'nodes'> },
 				(result) => {
 					const siblings = new Map(result.map(
-						([parent, siblings]) => [convertFromServerTask(parent), siblings.map(convertFromServerTask)]
+						([parent, siblings]) => [convertFromServerNode(parent), siblings.map(convertFromServerNode)]
 					));
-					set({ status: "resolved", data: siblings });
+					set({ status: "resolved", value: siblings });
 				},
 				(error: Error) => {
 					set({ status: "error", error: reconstructError(error) });
@@ -286,7 +291,7 @@ export const api: ITasks = {
 				convexApi.tasks.getRootTasks,
 				{},
 				(result) => {
-					set({ status: "resolved", data: result.map(convertFromServerTask) });
+					set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
 
 				},
 				(error: Error) => {
@@ -305,7 +310,7 @@ export const api: ITasks = {
 				convexApi.tasks.getTodaysTasks,
 				{},
 				(result) => {
-					set({ status: "resolved", data: result.map(convertFromServerTask) });
+					set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
 				},
 				(error: Error) => {
 					set({ status: "error", error: reconstructError(error) });
@@ -322,7 +327,7 @@ export const api: ITasks = {
 				convexApi.tasks.getPrioritizedTasks,
 				{ limit: params.limit },
 				(result) => {
-					set({ status: "resolved", data: result.map(convertFromServerTask) });
+					set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
 				},
 				(error: Error) => {
 					set({ status: "error", error: reconstructError(error) });
@@ -351,13 +356,13 @@ export const localApi: ITasksLocal = {
 	createTask: async ({ createDetail }) => {
 		const [res, e] = await api.createTask({ createDetail });
 		if (e) return err(e);
-		return ok(res.created.givenId!); // id is required from client, so it will be returned from server
+		return ok(res.created.data.givenId!); // id is required from client, so it will be returned from server
 	},
 	createTasks: async ({ createDetails }) => {
 		const [res, e] = await api.createTasks({ createDetails });
 		if (e) return err(e);
 		// Prefer authoritative ids from affectedTasks if mapping is empty
-		return ok(res.created.map(t => t.givenId!));
+		return ok(res.created.map(t => t.data.givenId!));
 	},
 
 	getTask: (params) => api.getTask(params),
@@ -391,40 +396,94 @@ export const localApi: ITasksLocal = {
 export default localApi;
 
 
-export function convexifyCreateTaskDetails(dto: CreateTaskParams): Doc<"tasks"> {
-	const convexified: Partial<Doc<"tasks">> = {
-		...dto,
-		created: dto.created instanceof Date ? dto.created.getTime() : dto.created,
-		todaysTask: dto.todaysTask instanceof Date ? dto.todaysTask.getTime() : dto.todaysTask,
-		dueDate: dto.dueDate instanceof Date ? dto.dueDate.getTime() : dto.dueDate,
-		lastEdit: dto.lastEdit instanceof Date ? dto.lastEdit.getTime() : dto.lastEdit,
-	};
-
-	delete (convexified as Partial<Task>).created; // Remove Date object so we don't crash Convex
-	return convexified as Doc<"tasks">;
-}
-
-function convertFromServerTask(row: ITask<number>): Task {
+/**
+ * Converts client create params to Convex format with nested data structure
+ * Separates graph fields (id, userAuthId, parents, children, timestamps) from data fields (title, content, status, etc.)
+ */
+export function convexifyCreateTaskDetails(params: CreateTaskParams): CreateTaskParams<number> {
 	return {
-		...row,
-		created: new Date(row.created),
-		lastEdit: new Date(row.lastEdit),
-		todaysTask: row.todaysTask ? new Date(row.todaysTask) : undefined,
-		dueDate: row.dueDate ? new Date(row.dueDate) : undefined,
+		...params,
+		title: params.title,
+		todaysTask: params.todaysTask?.getTime(),
+		dueDate: params.dueDate?.getTime(),
+		created: params.created?.getTime() ?? Date.now(),
+		lastEdit: params.lastEdit?.getTime() ?? Date.now(),
 	};
 }
 
-function convexifyTaskUpdate(update: UpdateTaskParams) {
-	const u = {
-		...update,
-		id: update.id as Id<'tasks'>,
-		data: {
-			...update.data,
-			created: update.data?.created ? update.data.created.getTime() : undefined,
-			dueDate: update.data?.dueDate ? update.data.dueDate.getTime() : undefined,
-			todaysTask: update.data?.todaysTask ? update.data.todaysTask.getTime() : undefined,
-			lastEdit: update.data?.lastEdit?.getTime(),
-		}
+/**
+ * Converts server node with numeric timestamps to client node with Date timestamps
+ * Preserves the nested data structure - no flattening
+ */
+function convertFromServerNode<T extends GraphNode>(node: ServerNode<GraphData<number>>): T {
+	const { data, ...graphFields } = node;
+
+	const clientNodeFields: Omit<GraphNode, "data"> = {
+		...graphFields,
+		created: new Date(graphFields.created),
+		lastEdit: new Date(graphFields.lastEdit),
 	}
-	return u;
+	let clientDataFields: GraphData<Date>;
+
+	switch (data.type) {
+		case "task":
+			clientDataFields = {
+				...data,
+				todaysTask: data.todaysTask ? new Date(data.todaysTask) : undefined,
+				dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+			} satisfies TaskData<Date>
+			break;
+		case "project":
+			clientDataFields = {
+				...data,
+				dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+			} satisfies ProjectData<Date>
+			break;
+		default:
+			throw new Error(`Unknown data type: ${node}`);
+	}
+
+	// Return client node with Date timestamps
+	return {
+		...clientNodeFields,
+		data: clientDataFields,
+	} as T;
+}
+
+/**
+ * Converts client update params to Convex format
+ * UpdateTaskParams is flat, so we just need to convert Date timestamps to numbers
+ */
+function convexifyTaskUpdate(update: UpdateTaskParams): any {
+	const result: any = {
+		id: update.id as Id<'nodes'>,
+	};
+
+	// Graph fields (parents, children, timestamps)
+	if (update.parents !== undefined) result.parents = update.parents;
+	if (update.children !== undefined) result.children = update.children;
+	if (update.addParents !== undefined) result.addParents = update.addParents;
+	if (update.removeParents !== undefined) result.removeParents = update.removeParents;
+	if (update.addChildren !== undefined) result.addChildren = update.addChildren;
+	if (update.removeChildren !== undefined) result.removeChildren = update.removeChildren;
+	if (update.created !== undefined) {
+		result.created = update.created instanceof Date ? update.created.getTime() : update.created;
+	}
+	if (update.lastEdit !== undefined) {
+		result.lastEdit = update.lastEdit instanceof Date ? update.lastEdit.getTime() : update.lastEdit;
+	}
+
+	// Data fields (title, content, status, etc.)
+	if (update.title !== undefined) result.title = update.title;
+	if (update.content !== undefined) result.content = update.content;
+	if (update.status !== undefined) result.status = update.status;
+	if (update.todaysTask !== undefined) {
+		result.todaysTask = update.todaysTask instanceof Date ? update.todaysTask.getTime() : update.todaysTask;
+	}
+	if (update.dueDate !== undefined) {
+		result.dueDate = update.dueDate instanceof Date ? update.dueDate.getTime() : update.dueDate;
+	}
+	if (update.userAuthId !== undefined) result.userAuthId = update.userAuthId;
+
+	return result;
 }

@@ -26,12 +26,12 @@
 
 		isDeleting = true;
 		try {
-			tasksAPI.getAllUserTasks({ userId: $authState.user.id }).subscribe(async (allTasks) => {
+			tasksAPI.getAllUserTasks().subscribe(async (allTasks) => {
 				if (allTasks.status === 'error') {
 					Err.UNHANDLED(allTasks.error);
 				} else if (allTasks.status === 'resolved') {
 					await tasksAPI.deleteTasks({
-						ids: allTasks.data.map((r) => r.id)
+						ids: allTasks.value.map((r) => r.id)
 					});
 
 					// Delete the user account

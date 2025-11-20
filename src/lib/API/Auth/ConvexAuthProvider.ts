@@ -163,7 +163,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				{ ids },
 				(users) => {
 					if (users === null) {
-						set({ status: "resolved", data: [] });
+						set({ status: "resolved", value: [] });
 					} else {
 						// Transform Convex users to app User format (convert _creationTime to createdAt Date)
 						const transformed: User[] = users.map((u) => ({
@@ -171,7 +171,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 							createdAt: new Date(u._creationTime),
 							_creationTime: undefined
 						}));
-						set({ status: "resolved", data: transformed });
+						set({ status: "resolved", value: transformed });
 					}
 				},
 				(error: Error) => {

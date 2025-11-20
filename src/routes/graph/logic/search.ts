@@ -37,8 +37,8 @@ function searchTasks(tasks: Task[], query: string): {
 				? []
 				: tasks.filter(
 					(t) =>
-						(t.title && t.title.toLowerCase().includes(ql)) ||
-						(t.content && t.content.toLowerCase().includes(ql))
+						(t.data.title && t.data.title.toLowerCase().includes(ql)) ||
+						(t.data.content && t.data.content.toLowerCase().includes(ql))
 				);
 		return { results, isStructured: false };
 	}

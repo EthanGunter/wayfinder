@@ -184,7 +184,7 @@
 			title="Select task for editing"
 			onclick={() => onSelect?.(task.id)}
 		>
-			<span>{task.title}</span>
+			<span>{task.data.title}</span>
 		</button>
 		{#if onDisconnect}
 			<button

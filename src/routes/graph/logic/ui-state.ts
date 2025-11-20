@@ -3,8 +3,9 @@
 import { writable, type Writable } from 'svelte/store';
 import type { Task } from '$domain/models/task';
 import type { TaskEditorLayoutState } from '../TaskEditor.svelte';
+import type { GraphNode } from '$domain/models/node';
 
-export type DrawerParams = { relation: Task; mode: 'parent' | 'child' } | null;
+export type DrawerParams = { relation: GraphNode; mode: 'parent' | 'child' } | null;
 
 export type PendingNodeIntent = {
 	// one of these will be present at different phases

@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import tasksAPI from '$lib/API/Tasks';
 import { nodes, edges, taskById, screenToFlowPosition } from './shared-state';
 import { drawerOpen, drawerParams, pendingNodeParams } from './ui-state';
-import type { WFEdge, WFNode } from '../types';
+import type { FlowEdge, FlowNode } from '../types';
 import type { UpdateTaskParams } from '$domain/models/task';
 //#endregion
 
@@ -16,12 +16,12 @@ let connectionHandleType: string | null = null;
 
 let reconnectionSuccessful = false;
 let reconnectionDetachEnd: 'source' | 'target' | null = null;
-let reconnectionOldEdge: WFEdge | null = null;
+let reconnectionOldEdge: FlowEdge | null = null;
 let reconnectionInProgress = false;
 //#endregion
 
 //#region CONSTRAINTS
-export function wouldCreateCycle(sourceId: string, targetId: string, list: WFEdge[]): boolean {
+export function wouldCreateCycle(sourceId: string, targetId: string, list: FlowEdge[]): boolean {
 	if (!sourceId || !targetId) return false;
 	if (sourceId === targetId) return true;
 
@@ -47,11 +47,11 @@ export function wouldCreateCycle(sourceId: string, targetId: string, list: WFEdg
 	return false;
 }
 
-export function connectionExists(list: WFEdge[], sourceId: string, targetId: string): boolean {
+export function connectionExists(list: FlowEdge[], sourceId: string, targetId: string): boolean {
 	return list.some((e) => e.source === sourceId && e.target === targetId);
 }
 
-export function removeDuplicateEdges(list: WFEdge[]): WFEdge[] {
+export function removeDuplicateEdges(list: FlowEdge[]): FlowEdge[] {
 	return list.filter(
 		(e, idx, arr) => arr.findIndex((f) => f.source === e.source && f.target === e.target) === idx
 	);
@@ -94,7 +94,7 @@ function refreshNodesDataFor(ids: string[]) {
 		get(nodes).map((n) => {
 			if (!set.has(n.id)) return n;
 			const t = taskById.get(n.id);
-			return t ? { ...n, data: { task: t } } : n;
+			return t ? { ...n,  task: t }  : n;
 		})
 	);
 }
@@ -137,7 +137,7 @@ export async function handleConnect(connection: Connection) {
 
 	const [_, error] = await tasksAPI.updateTask({
 		id: parentId,
-		data: { addChildren: [childId] },
+		 addChildren: [childId] ,
 	})
 	error?.UNHANDLED();
 
@@ -188,7 +188,7 @@ export const handleConnectEnd = (event: MouseEvent | TouchEvent, connectState: a
 //#region RECONNECT HANDLERS
 export function handleReconnectStart(
 	_event: MouseEvent | TouchEvent,
-	edge: WFEdge,
+	edge: FlowEdge,
 	handleType: 'source' | 'target'
 ) {
 	reconnectionSuccessful = false;
@@ -197,7 +197,7 @@ export function handleReconnectStart(
 	reconnectionInProgress = true;
 }
 
-export function handleBeforeReconnect(reconnectedEdge: WFEdge, oldEdge: WFEdge): WFEdge | false {
+export function handleBeforeReconnect(reconnectedEdge: FlowEdge, oldEdge: FlowEdge): FlowEdge | false {
 	const newSource = String(reconnectedEdge.source ?? oldEdge.source ?? '');
 	const newTarget = String(reconnectedEdge.target ?? oldEdge.target ?? '');
 	if (!newSource || !newTarget) return false;
@@ -206,7 +206,7 @@ export function handleBeforeReconnect(reconnectedEdge: WFEdge, oldEdge: WFEdge):
 }
 
 export async function handleReconnect(
-	oldEdge: WFEdge,
+	oldEdge: FlowEdge,
 	newConnection: { source?: string; target?: string }
 ) {
 	reconnectionSuccessful = true;
@@ -220,14 +220,14 @@ export async function handleReconnect(
 
 	const [_, error] = await tasksAPI.updateTask({
 		id: oldSource,
-		data: { removeChildren: [oldTarget] },
+		 removeChildren: [oldTarget] ,
 	})
 	error?.UNHANDLED();
 
 	if (!connectionExists(get(edges), newSource, newTarget)) {
 		const [_, error] = await tasksAPI.updateTask({
 			id: newSource,
-			data: { addChildren: [newTarget] },
+			 addChildren: [newTarget] ,
 		})
 		error?.UNHANDLED();
 	} else {
@@ -239,7 +239,7 @@ export async function handleReconnect(
 
 export const handleReconnectEnd = async (
 	event: MouseEvent | TouchEvent,
-	edge: WFEdge,
+	edge: FlowEdge,
 	_handleType: 'source' | 'target',
 	connectState: any
 ) => {
@@ -254,7 +254,7 @@ export const handleReconnectEnd = async (
 
 			const [_, error] = await tasksAPI.updateTask({
 				id: src,
-				data: { removeChildren: [tgt] },
+				 removeChildren: [tgt] ,
 			})
 			error?.UNHANDLED();
 
@@ -272,7 +272,7 @@ export const handleReconnectEnd = async (
 
 //#region DELETE
 
-export async function handleDelete(params: { nodes: WFNode[]; edges: WFEdge[] }) {
+export async function handleDelete(params: { nodes: FlowNode[]; edges: FlowEdge[] }) {
 	// If node deleted
 	if (params.nodes.length > 0) {
 		const ids = params.nodes.map((n) => n.id);
@@ -300,14 +300,14 @@ export async function handleDelete(params: { nodes: WFNode[]; edges: WFEdge[] })
 		for (const [taskId, childIds] of childrenToRemove.entries()) {
 			updates.push({
 				id: taskId,
-				data: { removeChildren: childIds },
+				 removeChildren: childIds ,
 			});
 		}
 
 		for (const [taskId, parentIds] of parentsToRemove.entries()) {
 			updates.push({
 				id: taskId,
-				data: { removeParents: parentIds },
+				 removeParents: parentIds ,
 			});
 		}
 

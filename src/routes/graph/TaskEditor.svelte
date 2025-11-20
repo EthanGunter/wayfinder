@@ -1,4 +1,7 @@
 <script lang="ts">
+	// TODO This file is currently task-bound,
+	// but soon we'll want it to accept generic nodes,
+	// and draw custom editors for each node type.
 	import Icon from '@iconify/svelte';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
@@ -7,13 +10,22 @@
 
 	import tasksAPI from '$lib/API/Tasks';
 	import { Err } from '$domain/errors';
-	import { isTaskCompleted, TaskStatus, type Task } from '$domain/models/task';
+	import {
+		isTaskCompleted,
+		TaskStatus,
+		type Task,
+		type TaskData,
+		type UpdateTaskParams
+	} from '$domain/models/task';
 
 	import TaskList from './TaskList.svelte';
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	import ScrollWithHeader from '$lib/components/ScrollWithHeader.svelte';
 	import { drawerOpen, drawerParams } from './logic/ui-state';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
+	import MarkdownEditor from '$lib/components/ui/markdown-editor';
+	import type { GraphNode } from '$domain/models/node';
+
 	export interface TaskEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
@@ -21,7 +33,7 @@
 	}
 	interface Props {
 		task: Task;
-		onTaskChange: (original: Task, update: Partial<Task>) => void;
+		onTaskChange: (original: Task, update: Omit<UpdateTaskParams, 'id'>) => void;
 		onDelete: (task: Task) => void;
 		onSelectNode?: (taskId: string, options?: { select?: boolean }) => void;
 		layoutState?: TaskEditorLayoutState;
@@ -40,12 +52,16 @@
 		onSelectNode
 	}: Props = $props();
 
+	// Internals
+	let showDeleteDialog = $state(false);
+	let showLinkDialog = $state(false);
+	let linkParentId = $state<string | null>(null);
+	let accordionValues = $derived(layoutState.accordionValues);
+
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
 	const siblingsStore = tasksAPI.getSiblingsOf(task.id);
 	const childTasksStore = tasksAPI.getChildrenOf(task.id);
-
-	let notesEl = $state<HTMLTextAreaElement | null>(null);
 
 	$effect(() => {
 		task.id;
@@ -59,32 +75,11 @@
 		}
 	});
 
-	$effect(() => {
-		task.content;
-		if (notesEl) autosize(notesEl);
-	});
-
-	// Internals
-	let showDeleteDialog = $state(false);
-	let showLinkDialog = $state(false);
-	let linkParentId = $state<string | null>(null);
-	let accordionValues = $derived(layoutState.accordionValues);
-
-	function autosize(el: HTMLTextAreaElement | HTMLInputElement) {
-		if (!el || !(el instanceof HTMLTextAreaElement)) return;
-
-		// Only apply height logic to textarea; inputs don't need it
-		el.style.height = '0px';
-		// Compensate for borders/padding reliably
-		const borderBox = el.offsetHeight - el.clientHeight;
-		el.style.height = Math.max(el.scrollHeight + borderBox, 48) + 'px';
-	}
-
 	// Complete status mirrors task.status; no redundant state held
 	function toggleCompleted(next: boolean) {
 		const newStatus = next ? TaskStatus.complete : TaskStatus.incomplete;
-		if (task.status === newStatus) return;
-		task.status = newStatus;
+		if (task.data.status === newStatus) return;
+		task.data.status = newStatus;
 		onTaskChange?.(task, { status: newStatus });
 	}
 
@@ -118,16 +113,16 @@
 		if (siblingsMap.status !== 'resolved') return;
 
 		// Find parent task by ID (Map keys are object references)
-		let parentTask: Task | undefined;
-		for (const [p] of siblingsMap.data.entries()) {
+		let parent: GraphNode | undefined;
+		for (const [p] of siblingsMap.value.entries()) {
 			if (p.id === parentId) {
-				parentTask = p;
+				parent = p;
 				break;
 			}
 		}
-		if (!parentTask) return;
+		if (!parent) return;
 
-		const currentIds = (parentTask.children ?? []).slice();
+		const currentIds = (parent.children ?? []).slice();
 		const from = currentIds.indexOf(movingId);
 		if (from < 0) return;
 
@@ -142,7 +137,7 @@
 
 		const [_, e] = await tasksAPI.updateTask({
 			id: parentId,
-			data: { children: currentIds }
+			children: currentIds
 		});
 		if (e) Err.UNHANDLED(e, 'Failed to reorder siblings');
 	}
@@ -156,7 +151,7 @@
 		const from = currentIds.indexOf(movingId);
 		if (from < 0) return;
 
-		const list = children.data;
+		const list = children.value;
 		const target = list[Math.min(finishIndex, list.length - 1)];
 		let to = target ? currentIds.indexOf(target.id) : currentIds.length;
 		if (to < 0) to = currentIds.length;
@@ -169,33 +164,33 @@
 		task.children = currentIds;
 		const [_, e] = await tasksAPI.updateTask({
 			id: task.id,
-			data: { children: currentIds }
+			children: currentIds
 		});
 		if (e) e.UNHANDLED('Failed to reorder children');
 	}
 
 	function handleAddChildTask(parentId: string) {
-		let parentTask: Task | undefined;
+		let parent: GraphNode | undefined;
 
 		// For children list, parent is the current task
 		if (parentId === task.id) {
-			parentTask = task;
+			parent = task;
 		} else {
 			// For siblings list, look up parent from siblings map
 			const siblingsMap = $siblingsStore;
 			if (siblingsMap.status === 'resolved') {
-				for (const [p] of siblingsMap.data.entries()) {
+				for (const [p] of siblingsMap.value.entries()) {
 					if (p.id === parentId) {
-						parentTask = p;
+						parent = p;
 						break;
 					}
 				}
 			}
 		}
 
-		if (!parentTask) return;
+		if (!parent) return;
 
-		drawerParams.set({ relation: parentTask, mode: 'parent' });
+		drawerParams.set({ relation: parent, mode: 'parent' });
 		drawerOpen.set(true);
 	}
 
@@ -207,7 +202,7 @@
 			// For "Priority" list, look up parent from siblingsStore
 			const siblingsMap = $siblingsStore;
 			if (siblingsMap.status === 'resolved') {
-				for (const [p] of siblingsMap.data.entries()) {
+				for (const [p] of siblingsMap.value.entries()) {
 					if (p.id === parentId) {
 						return p.children ?? [];
 					}
@@ -232,9 +227,7 @@
 		// Update parent: add selectedTask as child
 		const [_, err1] = await tasksAPI.updateTask({
 			id: parentId,
-			data: {
-				addChildren: [selectedTask.id]
-			}
+			addChildren: [selectedTask.id]
 		});
 		if (err1) {
 			Err.UNHANDLED(err1, 'Failed to link task');
@@ -247,9 +240,7 @@
 	async function handleDisconnectTask(child: string, parent: string) {
 		const [_, err] = await tasksAPI.updateTask({
 			id: parent,
-			data: {
-				removeChildren: [child]
-			}
+			removeChildren: [child]
 		});
 		if (err) err?.UNHANDLED('Failed to disconnect task');
 	}
@@ -270,7 +261,7 @@
 				class="text-md mx-1 w-full border-0 border-b-1 bg-transparent font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
 				id="input-task-title"
 				name="title"
-				bind:value={task.title}
+				bind:value={task.data.title}
 				placeholder="Task title"
 				oninput={handleInput}
 			/>
@@ -287,15 +278,7 @@
 
 	{#snippet content()}
 		<div class="flex h-full min-h-0 flex-col p-3">
-			<textarea
-				class="w-full shrink-0 resize-none rounded-md p-2 text-sm text-gray-700 placeholder-gray-400 outline-1 focus:ring-0"
-				bind:this={notesEl}
-				name="content"
-				bind:value={task.content}
-				placeholder="Add notes or description..."
-				oninput={handleInput}
-				use:autosize
-			></textarea>
+			<MarkdownEditor value={task.data.content ?? ''} onChange={(md) => (task.data.content = md)} />
 
 			<Accordion.Root
 				type="multiple"
@@ -312,23 +295,28 @@
 						Blocked By
 					</Accordion.Trigger>
 					<Accordion.Content>
-						<TaskList
-							showCompleted={layoutState.showCompletedTasks}
-							tasks={($childTasksStore as { data: Task[] }).data ?? []}
-							parentId={task.id}
-							id={`child-${task.id}`}
-							onSelect={(id) => {
-								onSelectNode?.(id);
-							}}
-							onDisconnect={handleDisconnectTask}
-							onReorder={(taskId, startIndex, finishIndex) =>
-								reorderChildren(taskId, startIndex, finishIndex)}
-							onAddTask={handleAddChildTask}
-							onLink={(parentId) => {
-								linkParentId = task.id;
-								showLinkDialog = true;
-							}}
-						/>
+						{#if $childTasksStore.status === 'resolved'}
+							{@const taskChildren = $childTasksStore.value.filter(
+								(t) => t.data.type === 'task'
+							) as Task[]}
+							<TaskList
+								showCompleted={layoutState.showCompletedTasks}
+								tasks={taskChildren ?? []}
+								parentId={task.id}
+								id={`child-${task.id}`}
+								onSelect={(id) => {
+									onSelectNode?.(id);
+								}}
+								onDisconnect={handleDisconnectTask}
+								onReorder={(taskId, startIndex, finishIndex) =>
+									reorderChildren(taskId, startIndex, finishIndex)}
+								onAddTask={handleAddChildTask}
+								onLink={(parentId) => {
+									linkParentId = task.id;
+									showLinkDialog = true;
+								}}
+							/>
+						{/if}
 					</Accordion.Content>
 				</Accordion.Item>
 				{#if $siblingsStore.status === 'resolved'}
@@ -340,13 +328,14 @@
 						</Accordion.Trigger>
 						<Accordion.Content>
 							<div class="flex flex-col gap-4">
-								{#each $siblingsStore.data as [parent, siblings] (parent.id)}
+								{#each $siblingsStore.value as [parent, siblings] (parent.id)}
+									{@const taskSiblings = siblings.filter((s) => s.data.type === 'task') as Task[]}
 									<TaskList
 										showCompleted={layoutState.showCompletedSiblings}
-										tasks={siblings}
+										tasks={taskSiblings}
 										parentId={parent.id}
 										id={`sibling-${parent.id}`}
-										title={parent.title}
+										title={parent.data.title}
 										currentTaskId={task.id}
 										onSelect={(id) => onSelectNode?.(id)}
 										onDisconnect={handleDisconnectTask}
@@ -369,7 +358,7 @@
 			<Dialog.Title>Delete Task</Dialog.Title>
 		</Dialog.Header>
 		<div class="p-4">
-			<p class="mb-4">Are you sure you want to delete <strong>{task.title}</strong>?</p>
+			<p class="mb-4">Are you sure you want to delete <strong>{task.data.title}</strong>?</p>
 		</div>
 		<Dialog.Footer class="flex gap-2">
 			<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Cancel</Button>
