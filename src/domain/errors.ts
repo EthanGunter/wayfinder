@@ -92,19 +92,19 @@ export class UnknownError extends Err {
 }
 
 export class InvalidStateError extends Err {
-    constructor(message: string, context?: any) {
+    constructor(message: string, context?: ErrContext) {
         super("InvalidState", message, context);
     }
 }
 
-export class ArgumentError extends Err {
-    constructor(msg: string, argument: any, context?: any) {
-        super("ArgumentError", msg, { argument, context });
+export class ArgumentError<T = unknown> extends Err {
+    constructor(msgForUser: string, argument: T, context?: ErrContext) {
+        super("ArgumentError", msgForUser, { argument, ...context });
     }
 }
 
 export class InputRequiredError extends Err {
-    constructor(message: string, context?: any) {
+    constructor(message: string, context?: ErrContext) {
         super("InputRequired", message, context);
     }
 }
@@ -116,7 +116,7 @@ export class NotFoundError extends Err {
 }
 
 export class NotAuthorizedError extends Err {
-    constructor(msg: string = "Not authorized", context?: any) {
+    constructor(msg: string = "Not authorized", context?: ErrContext) {
         super("NotAuthorizedError", msg, context);
     }
 }
@@ -127,7 +127,7 @@ export class ParseError extends Err {
     }
 }
 export class IOError extends Err {
-    constructor(message: string, internalError: any, context?: any) {
+    constructor(message: string, internalError: any, context?: ErrContext) {
         const internal =
             typeof internalError === "string"
                 ? internalError

@@ -11,9 +11,11 @@ import type {
 	SessionUser,
 } from "$domain/models/user";
 import {
+	ArgumentError,
 	Err,
 	InputRequiredError,
 	InvalidStateError,
+	UnknownError,
 	type NotImplementedError,
 } from "$domain/errors";
 import { err, ok, type Result } from "$domain/result";
@@ -215,6 +217,17 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		// After OAuth completes and redirects back, the session will be active
 		// and bootstrap will be triggered to create/fetch the user
 		return ok();
+	},
+
+	sendResetPassword: async (email: string) => {
+		const { data, error } = await authClient.requestPasswordReset({ email });
+
+		if (error) {
+			if (error.code === "VALIDATION_ERROR")
+				return err(new ArgumentError("Invalid email address", email));
+			Err.UNHANDLED(error);
+		}
+		return ok({ userMessage: data.message });
 	},
 
 	updateUser: async ({ update }) => {

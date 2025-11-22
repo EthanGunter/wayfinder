@@ -5,10 +5,10 @@
 	import LoginView from '$lib/components/AuthComponents/Login.svelte';
 	import { InputRequiredError, type Err } from '$domain/errors';
 	import AppHeader from '$lib/components/AppHeader.svelte';
+	import { Toaster } from '$lib/components/ui/sonner';
 
 	const { children } = $props();
 	let mode = $state</* 'select' | */ 'login' | 'register'>('login');
-	let errorMessage = $state('');
 	let overlayOpen = $state(false);
 
 	// Reactive effect that responds to auth state changes
@@ -50,21 +50,9 @@
 		window.addEventListener('open-auth', handleOpenAuth as EventListener);
 		return () => window.removeEventListener('open-auth', handleOpenAuth as EventListener);
 	});
-
-	async function setErrorMessage(message: string, error?: Err) {
-		errorMessage = message;
-		// Auto-trigger external login on InputRequiredError
-		if (error instanceof InputRequiredError) {
-			// Prefer no UI if external auth is expected
-			mode = 'login';
-			try {
-				await authAPI.login({ type: 'external' });
-			} catch (e) {
-				// leave error bubble in place; user can retry
-			}
-		}
-	}
 </script>
+
+<Toaster position="top-center" />
 
 <div class="page-root">
 	{#if $authState.status === 'loading'}
@@ -85,13 +73,8 @@
 					<Icon icon="lucide:arrow-left" class="h-4 w-4" />
 					<span class="sr-only">Back</span>
 				</Button> -->
-				{#if errorMessage}
-					<div class="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">
-						{errorMessage}
-					</div>
-				{/if}
 
-				<LoginView onError={setErrorMessage} />
+				<LoginView />
 
 				<!-- 				<Accordion.Root type="single" bind:value={mode}>
 					{#if $cachedUsers.length > 0}

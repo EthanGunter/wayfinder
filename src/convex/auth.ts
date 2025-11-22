@@ -1,5 +1,7 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
+import { requireActionCtx } from "@convex-dev/better-auth/utils";
+import { Resend } from "@convex-dev/resend";
 import { multiSession } from "better-auth/plugins";
 import { components } from "./_generated/api";
 import { type DataModel } from "./_generated/dataModel";
@@ -10,6 +12,8 @@ import { betterAuth } from "better-auth";
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
 export const authComponent = createClient<DataModel>(components.betterAuth);
+const resend = new Resend(components.resend);
+
 
 export const createAuth = (
   ctx: GenericCtx<DataModel>,
@@ -28,6 +32,17 @@ export const createAuth = (
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
+      sendResetPassword: async ({ user, url }, request) => {
+        await resend.sendEmail(requireActionCtx(ctx), {
+          from: "",
+          to: user.email,
+          subject: "Reset your password",
+          html: `Click here to reset your password: <a href="${url}">${url}</a>`,
+        });
+      },
+      onPasswordReset: async ({ user }, request) => {
+        console.log('Password reset successful', user);
+      },
     },
     // Register social providers used by the client
     // TODO:TEMP social auth disabled until we figure out why Vercel blocks it...
