@@ -11,6 +11,7 @@
 	import { Dialog } from 'bits-ui';
 	import ResetPasswordButton from './ResetPasswordButton.svelte';
 	import * as Alert from '../ui/alert';
+	import { devEnabled } from '$lib/user-settings';
 
 	interface Props {}
 
@@ -177,7 +178,9 @@
 						{isLoading ? 'Signing in...' : 'Sign in'}
 					</Button>
 				</div>
-				<ResetPasswordButton />
+				{#if devEnabled}
+					<ResetPasswordButton />
+				{/if}
 			</form>
 		</div>
 	{/if}
