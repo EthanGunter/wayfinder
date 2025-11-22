@@ -7,12 +7,15 @@
 	import type { Err } from '$domain/errors';
 	import Register from './Register.svelte';
 	import Icon from '@iconify/svelte';
+	import ForgotPasswordDialogContent from './ResetPasswordButton.svelte';
+	import { Dialog } from 'bits-ui';
+	import ResetPasswordButton from './ResetPasswordButton.svelte';
+	import * as Alert from '../ui/alert';
+	import { devEnabled } from '$lib/user-settings';
 
-	interface Props {
-		onError?: (message: string, error?: Err) => void;
-	}
+	interface Props {}
 
-	const { onError }: Props = $props();
+	const {}: Props = $props();
 
 	let multipleAccounts = $state(false);
 	let showRegister = $state(false);
@@ -37,12 +40,10 @@
 			const [_, error] = await authAPI.login({ type: 'external' });
 			if (error) {
 				errorMessage = error.messageForUser || 'Login failed';
-				onError?.(errorMessage, error);
 			}
 			// OAuth flow will handle redirect via provider/callback
 		} catch (e: any) {
 			errorMessage = 'An unexpected error occurred';
-			onError?.(errorMessage);
 		} finally {
 			isLoading = false;
 		}
@@ -59,13 +60,11 @@
 			const [_, error] = await authAPI.login({ type: 'email_password', email, password });
 			if (error) {
 				errorMessage = error.messageForUser || 'Login failed';
-				onError?.(errorMessage, error);
 				return;
 			}
 			goto(redir || '/planner');
 		} catch (e: any) {
 			errorMessage = 'An unexpected error occurred';
-			onError?.(errorMessage);
 		} finally {
 			isLoading = false;
 		}
@@ -80,6 +79,16 @@
 	}
 </script>
 
+{#if errorMessage}
+	<Alert.Root variant="destructive">
+		<Icon icon="lucide:alert-circle" />
+		<Alert.Title>Uh oh!</Alert.Title>
+		<Alert.Description>
+			{errorMessage}
+		</Alert.Description>
+	</Alert.Root>
+{/if}
+
 <div class="flex items-center justify-center">
 	{#if showRegister}
 		<div class="w-full max-w-md">
@@ -90,7 +99,12 @@
 				<span class="text-xl transition-transform duration-200 group-hover:-translate-x-1">←</span>
 				<span>Back to login</span>
 			</button>
-			<Register {onError} onBack={closeRegister} initialDisplayName={email.split('@')[0]} initialEmail={email} initialPassword={password} />
+			<Register
+				onBack={closeRegister}
+				initialDisplayName={email.split('@')[0]}
+				initialEmail={email}
+				initialPassword={password}
+			/>
 		</div>
 	{:else}
 		<div class="w-full max-w-md p-4 sm:p-6">
@@ -100,15 +114,6 @@
 				</h2>
 				<p class="text-sm text-zinc-500 dark:text-zinc-400">Sign in to continue</p>
 			</div>
-
-			{#if errorMessage}
-				<div
-					class="mb-4 flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
-				>
-					<span class="shrink-0">⚠</span>
-					<span>{errorMessage}</span>
-				</div>
-			{/if}
 
 			<!-- TODO:TEMP social auth disabled until we figure out why Vercel blocks it... -->
 			<!-- <div class="mb-4">
@@ -166,20 +171,16 @@
 						class="w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
 					/>
 				</div>
-				<div
-					class="flex items-center justify-center gap-2 text-sm"
-				>
+				<div class="flex items-center justify-center gap-2 text-sm">
 					<Button variant="link" onclick={openRegister}>Register</Button>
 					/
-					<Button
-						type="submit"
-						variant="link"
-						
-						disabled={isLoading}
-					>
+					<Button type="submit" variant="link" disabled={isLoading}>
 						{isLoading ? 'Signing in...' : 'Sign in'}
 					</Button>
 				</div>
+				{#if devEnabled}
+					<ResetPasswordButton />
+				{/if}
 			</form>
 		</div>
 	{/if}

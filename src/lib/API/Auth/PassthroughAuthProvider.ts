@@ -123,6 +123,7 @@ const api: IAuthLocal = {
 		// after the WorkOS callback completes and auth state changes to signed-in
 		return ok(undefined);
 	},
+	sendResetPassword: async (email: string) => remoteAuth.sendResetPassword(email),
 
 	getRegistrationRequirements: (signUpCred: any) => {
 		return remoteAuth.getRegistrationRequirements(signUpCred);
