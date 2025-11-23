@@ -7,7 +7,7 @@
 	import { Err } from '$domain/errors';
 	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
 	import tasksAPI from '$lib/API/Tasks';
-	import { pendingNodeParams } from '../../routes/graph/logic/ui-state';
+	import { pendingNodeParams } from './logic/ui-state';
 	import type { GraphNode } from '$domain/models/node';
 
 	type Props = {

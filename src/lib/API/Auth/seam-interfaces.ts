@@ -3,6 +3,7 @@ import type {
 	Err,
 	InputRequiredError,
 	InvalidStateError,
+	NotAuthorizedError,
 	NotFoundError,
 	NotImplementedError,
 } from "$domain/errors";
@@ -14,11 +15,8 @@ import type {
 	User,
 } from "$domain/models/user";
 import type { Result } from "$domain/result";
+import type { Session } from "better-auth";
 import type { Readable } from "svelte/store";
-
-/* -------------------------------------------------------------------------- */
-/*  Shared aliases                                                            */
-/* -------------------------------------------------------------------------- */
 
 export type LiveStore<T> = Readable<T>;
 
@@ -31,42 +29,37 @@ export type AuthState =
 	}
 	| { status: "signed-out" };
 
-/* -------------------------------------------------------------------------- */
-/*  Small capability-style fragments to dedupe signatures                     */
-/* -------------------------------------------------------------------------- */
-
-type RegistrationResult = Result<
-	RegistrationRequirements[],
-	NotImplementedError
->;
-
-type ResetPasswordResult = Result<{ userMessage: string }, ArgumentError>;
-
-type LoginResult = Result<
-	void,
-	NotFoundError | ArgumentError | NotImplementedError
->;
-
-/** shared shape for registration params */
-type RegistrationParams<TUser> = {
-	creds: LoginCredentials;
-	userData: TUser;
-};
-
-/* -------------------------------------------------------------------------- */
-/*  Common observer capabilities                                              */
-/* -------------------------------------------------------------------------- */
 
 interface AuthStateWatcher {
 	/** Observes authentication state changes */
 	watchAuthState(): LiveStore<AuthState>;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Interface: IAuthLocal                                                     */
-/* -------------------------------------------------------------------------- */
 
-export interface IAuthLocal extends AuthStateWatcher {
+interface AuthCommon {
+	/** Defines the requirements and availability for different Authentication methods */
+	getRegistrationRequirements(
+		creds: LoginCredentials,
+	): Result<
+		RegistrationRequirements[],
+		NotImplementedError
+	>;
+
+	/** Sends a reset password email to the given email address */
+	sendResetPassword(email: string): Promise<Result<{ userMessage: string }, ArgumentError>>;
+	resetPassword(token: string, newPassword: string): Promise<Result<void, NotAuthorizedError>>;
+
+	login(creds: LoginCredentials): Promise<Result<
+		void,
+		NotFoundError | ArgumentError | NotImplementedError
+	>>;
+
+	deleteUser(params: {
+		userId: string;
+	}): Promise<Result<void, NotFoundError>>;
+}
+
+export interface IAuthLocal extends AuthStateWatcher, AuthCommon {
 	/* --- Observers --- */
 	// watchAuthState inherited
 
@@ -77,14 +70,6 @@ export interface IAuthLocal extends AuthStateWatcher {
 		creds: LoginCredentials;
 		userData: User;
 	}): Promise<Result<void, NotImplementedError | ArgumentError>>;
-
-	/** Defines the requirements and availability for different Authentication methods */
-	getRegistrationRequirements(
-		method: LoginCredentials,
-	): RegistrationResult;
-
-	/** Sends a reset password email to the given email address */
-	sendResetPassword(email: string): Promise<ResetPasswordResult>;
 
 	/** Sets the active user for this device */
 	switchUser(
@@ -100,13 +85,6 @@ export interface IAuthLocal extends AuthStateWatcher {
 		response: Result<void, { oldUser: SessionUser }>,
 	): Promise<void>;
 
-	/** Marks a user account as deleted in the server's database
-	 * There is currently no method of reactivating deleted accounts
-	 */
-	deleteUser(params: {
-		userId: string;
-	}): Promise<Result<void, NotFoundError>>;
-
 	handleDeleteUserResponse(
 		response: Result<void, { oldUser: SessionUser }>,
 	): Promise<void>;
@@ -114,16 +92,10 @@ export interface IAuthLocal extends AuthStateWatcher {
 	/** Removes a cached user account from the local machine. It still be logged into remotely */
 	removeCachedUser(userId: string): Promise<void>;
 
-	login(creds: LoginCredentials): Promise<LoginResult>;
-
-	logout(): Promise<void>;
+	logout(options?: { keepCached?: boolean }): Promise<void>;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Interface: IAuthRemote                                                    */
-/* -------------------------------------------------------------------------- */
-
-export interface IAuthRemote extends AuthStateWatcher {
+export interface IAuthRemote extends AuthStateWatcher, AuthCommon {
 	/* --- Observers --- */
 	// watchAuthState inherited
 
@@ -133,17 +105,12 @@ export interface IAuthRemote extends AuthStateWatcher {
 
 	/* --- Mutators --- */
 
-	/** Defines the requirements and availability for different Authentication methods */
-	getRegistrationRequirements(
-		creds: LoginCredentials,
-	): RegistrationResult;
-
-	/** Sends a reset password email to the given email address */
-	sendResetPassword(email: string): Promise<ResetPasswordResult>;
-
 	/** Responsible for creating a new user account with the given credentials */
 	register(
-		params: RegistrationParams<SessionUser>,
+		params: {
+			creds: LoginCredentials;
+			userData: SessionUser;
+		},
 	): Promise<
 		Result<void, NotImplementedError | ArgumentError | InvalidStateError>
 	>;
@@ -152,18 +119,8 @@ export interface IAuthRemote extends AuthStateWatcher {
 		update: Partial<User> & { id: string };
 	}): Promise<Result<User, NotFoundError>>;
 
-	deleteUser(params: {
-		userId: string;
-	}): Promise<Result<void, NotFoundError>>;
-
-	login(creds: LoginCredentials): Promise<LoginResult>;
-
 	logout(options?: { keepCached?: boolean }): Promise<void>;
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Interface: IAuthSessionCapable                                            */
-/* -------------------------------------------------------------------------- */
 
 export interface IAuthSessionCapable {
 	/** Returns opaque session material for the currently authenticated user (e.g., refresh token)
@@ -203,9 +160,8 @@ export interface IAuthSessionCapable {
 	>;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Type guard & Error class                                                  */
-/* -------------------------------------------------------------------------- */
+
+//#region UTILITY FUNCTIONS
 
 export function isSessionCapable(
 	auth: IAuthRemote,
@@ -227,3 +183,5 @@ export class NetworkError extends Error {
 		}
 	}
 }
+
+//#endregion

@@ -7,8 +7,13 @@
 	import * as Alert from '../ui/alert';
 	import Icon from '@iconify/svelte';
 
+	type Props = {
+		email?: string;
+	};
+
+	let { email = $bindable('') }: Props = $props();
+
 	let showForgotPassword = $state(false);
-	let email = $state('');
 	let errorMessage = $state('');
 
 	async function handleResetPassword() {

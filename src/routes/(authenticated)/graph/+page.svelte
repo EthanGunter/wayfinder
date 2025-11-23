@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { SvelteFlow, SvelteFlowProvider, Background, useSvelteFlow } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import TaskCreationDrawer from '../../lib/components/TaskCreationDrawer.svelte';
+	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 	import TaskNode from './TaskNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
@@ -12,7 +12,7 @@
 	import { TaskStatus, type Task } from '$domain/models/task';
 	import { page } from '$app/state';
 	import SearchBar from '$lib/components/SearchBar.svelte';
-	import SearchTaskListItem from '../../lib/components/ui/task-searchbar/SearchTaskListItem.svelte';
+	import SearchTaskListItem from '$lib/components/ui/task-searchbar/SearchTaskListItem.svelte';
 	import Icon from '@iconify/svelte';
 
 	import {
