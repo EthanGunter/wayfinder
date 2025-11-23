@@ -203,4 +203,8 @@
   h6 {
     @apply text-[0.75rem] text-foreground/50 font-extralight mb-1;
   }
+
+  a {
+    @apply text-primary underline;
+  }
 }

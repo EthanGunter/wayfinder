@@ -15,6 +15,7 @@ import {
 	Err,
 	InputRequiredError,
 	InvalidStateError,
+	NotAuthorizedError,
 	UnknownError,
 	type NotImplementedError,
 } from "$domain/errors";
@@ -228,6 +229,15 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 			Err.UNHANDLED(error);
 		}
 		return ok({ userMessage: data.message });
+	},
+	resetPassword: async (token: string, newPassword: string) => {
+		const res = await authClient.resetPassword({ token, newPassword });
+		if (res.error) {
+			if (res.error.code === "INVALID_TOKEN")
+				return err(new NotAuthorizedError("This reset link is invalid or has expired. Please request a new one", { messageForDev: res.error.message }));
+			else Err.UNHANDLED(res.error);
+		}
+		return ok();
 	},
 
 	updateUser: async ({ update }) => {

@@ -86,14 +86,14 @@ export class Err extends Error {
 }
 
 export class UnknownError extends Err {
-    constructor(message: string, cause?: Error) {
-        super("UnknownError", message, cause);
+    constructor(messageForUser: string, cause?: Error) {
+        super("UnknownError", messageForUser, cause);
     }
 }
 
 export class InvalidStateError extends Err {
-    constructor(message: string, context?: ErrContext) {
-        super("InvalidState", message, context);
+    constructor(messageForUser: string, context?: ErrContext) {
+        super("InvalidState", messageForUser, context);
     }
 }
 
@@ -104,20 +104,20 @@ export class ArgumentError<T = unknown> extends Err {
 }
 
 export class InputRequiredError extends Err {
-    constructor(message: string, context?: ErrContext) {
-        super("InputRequired", message, context);
+    constructor(messageForUser: string, context?: ErrContext) {
+        super("InputRequired", messageForUser, context);
     }
 }
 
 export class NotFoundError extends Err {
-    constructor(msg: string, key?: any) {
-        super("NotFoundError", msg, key);
+    constructor(messageForUser: string, key?: any) {
+        super("NotFoundError", messageForUser, key);
     }
 }
 
 export class NotAuthorizedError extends Err {
-    constructor(msg: string = "Not authorized", context?: ErrContext) {
-        super("NotAuthorizedError", msg, context);
+    constructor(messageForUser: string = "Not authorized", context?: ErrContext) {
+        super("NotAuthorizedError", messageForUser, context);
     }
 }
 
@@ -127,7 +127,7 @@ export class ParseError extends Err {
     }
 }
 export class IOError extends Err {
-    constructor(message: string, internalError: any, context?: ErrContext) {
+    constructor(messageForUser: string, internalError: any, context?: ErrContext) {
         const internal =
             typeof internalError === "string"
                 ? internalError
@@ -135,7 +135,7 @@ export class IOError extends Err {
                     ? internalError.message
                     : internalError;
 
-        super("IOError", message, { internalError: internal, dataToWrite: context });
+        super("IOError", messageForUser, { internalError: internal, dataToWrite: context });
 
         if (internalError instanceof Error) {
             this.cause = internalError;

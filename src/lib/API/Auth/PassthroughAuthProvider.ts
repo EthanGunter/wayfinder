@@ -124,7 +124,7 @@ const api: IAuthLocal = {
 		return ok(undefined);
 	},
 	sendResetPassword: async (email: string) => remoteAuth.sendResetPassword(email),
-
+	resetPassword: async (token: string, newPassword: string) => remoteAuth.resetPassword(token, newPassword),
 	getRegistrationRequirements: (signUpCred: any) => {
 		return remoteAuth.getRegistrationRequirements(signUpCred);
 	},
