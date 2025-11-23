@@ -9,6 +9,7 @@ import { createFetchableReadable as createFetchable, createQueryable } from "$li
 import type { ITasksRemote, ITasksLocal } from "./seam-interfaces";
 import { ConvexError } from "convex/values";
 import type { IGraphNode, GraphData, GraphNode } from "$domain/models/node";
+import debounce from "$lib/debounce";
 
 // Type alias for server-side nodes with number timestamps
 type ServerNode<T extends GraphData<number>> = IGraphNode<T & { givenId?: string }, number>;
@@ -41,6 +42,37 @@ function reconstructError(error: unknown): Err {
 	return new Err("Unknown", String(error));
 }
 
+// Internal update functions (non-debounced)
+async function _updateTask(update: UpdateTaskParams) {
+	try {
+		const res = await client.mutation(convexApi.tasks.updateTask, convexifyTaskUpdate(update));
+		return ok({
+			updated: convertFromServerNode(res.updated),
+			affected: res.affected.map(convertFromServerNode)
+		});
+	} catch (error) {
+		console.error(error)
+		return err(reconstructError(error));
+	}
+}
+
+async function _updateTasks({ updates }: { updates: UpdateTaskParams[] }) {
+	try {
+		const res = await client.mutation(convexApi.tasks.updateTasks, { updates: updates.map(u => convexifyTaskUpdate(u)) });
+		return ok({
+			updated: res.updated.map(convertFromServerNode),
+			affected: res.affected.map(convertFromServerNode)
+		});
+	} catch (error) {
+		console.error(error)
+		return err(reconstructError(error));
+	}
+}
+
+// Debounced versions (300ms delay)
+const debouncedUpdateTask = debounce(_updateTask, 300);
+const debouncedUpdateTasks = debounce(_updateTasks, 300);
+
 export const api: ITasksRemote = {
 	// Mutators
 	createTask: async ({ createDetail }) => {
@@ -69,31 +101,9 @@ export const api: ITasksRemote = {
 		}
 	},
 
-	updateTask: async (update: UpdateTaskParams) => {
-		try {
-			const res = await client.mutation(convexApi.tasks.updateTask, convexifyTaskUpdate(update));
-			return ok({
-				updated: convertFromServerNode(res.updated),
-				affected: res.affected.map(convertFromServerNode)
-			});
-		} catch (error) {
-			console.error(error)
-			return err(reconstructError(error));
-		}
-	},
+	updateTask: debouncedUpdateTask,
 
-	updateTasks: async ({ updates }) => {
-		try {
-			const res = await client.mutation(convexApi.tasks.updateTasks, { updates: updates.map(u => convexifyTaskUpdate(u)) });
-			return ok({
-				updated: res.updated.map(convertFromServerNode),
-				affected: res.affected.map(convertFromServerNode)
-			});
-		} catch (error) {
-			console.error(error)
-			return err(reconstructError(error));
-		}
-	},
+	updateTasks: debouncedUpdateTasks,
 
 	deleteTask: async ({ id }) => {
 		try {

@@ -47,7 +47,6 @@
 			showCompletedTasks: false,
 			showCompletedSiblings: false
 		}),
-		onTaskChange,
 		onDelete,
 		onSelectNode
 	}: Props = $props();
@@ -80,7 +79,7 @@
 		const newStatus = next ? TaskStatus.complete : TaskStatus.incomplete;
 		if (task.data.status === newStatus) return;
 		task.data.status = newStatus;
-		onTaskChange?.(task, { status: newStatus });
+		tasksAPI.updateTask({ id: task.id, status: newStatus });
 	}
 
 	function handleInput(event: Event) {
@@ -88,7 +87,7 @@
 		if (!el?.name) return;
 		const patch: Partial<Task> = { [el.name]: el.value };
 		Object.assign(task, patch);
-		onTaskChange?.(task, patch);
+		tasksAPI.updateTask({ id: task.id, ...patch });
 	}
 
 	function confirmDelete() {
@@ -278,7 +277,10 @@
 
 	{#snippet content()}
 		<div class="flex h-full min-h-0 flex-col p-3">
-			<MarkdownEditor value={task.data.content ?? ''} onChange={(md) => (task.data.content = md)} />
+			<MarkdownEditor
+				value={task.data.content ?? ''}
+				onChange={(md) => tasksAPI.updateTask({ id: task.id, content: md })}
+			/>
 
 			<Accordion.Root
 				type="multiple"
