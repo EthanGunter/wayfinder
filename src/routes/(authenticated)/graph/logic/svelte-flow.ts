@@ -94,7 +94,7 @@ function refreshNodesDataFor(ids: string[]) {
 		get(nodes).map((n) => {
 			if (!set.has(n.id)) return n;
 			const t = taskById.get(n.id);
-			return t ? { ...n,  task: t }  : n;
+			return t ? { ...n, task: t } : n;
 		})
 	);
 }
@@ -137,7 +137,7 @@ export async function handleConnect(connection: Connection) {
 
 	const [_, error] = await tasksAPI.updateTask({
 		id: parentId,
-		 addChildren: [childId] ,
+		addChildren: [childId],
 	})
 	error?.UNHANDLED();
 
@@ -220,14 +220,14 @@ export async function handleReconnect(
 
 	const [_, error] = await tasksAPI.updateTask({
 		id: oldSource,
-		 removeChildren: [oldTarget] ,
+		removeChildren: [oldTarget],
 	})
 	error?.UNHANDLED();
 
 	if (!connectionExists(get(edges), newSource, newTarget)) {
 		const [_, error] = await tasksAPI.updateTask({
 			id: newSource,
-			 addChildren: [newTarget] ,
+			addChildren: [newTarget],
 		})
 		error?.UNHANDLED();
 	} else {
@@ -254,7 +254,7 @@ export const handleReconnectEnd = async (
 
 			const [_, error] = await tasksAPI.updateTask({
 				id: src,
-				 removeChildren: [tgt] ,
+				removeChildren: [tgt],
 			})
 			error?.UNHANDLED();
 
@@ -276,11 +276,14 @@ export async function handleDelete(params: { nodes: FlowNode[]; edges: FlowEdge[
 	// If node deleted
 	if (params.nodes.length > 0) {
 		const ids = params.nodes.map((n) => n.id);
-		(await tasksAPI.deleteTasks({ ids }))[1]?.UNHANDLED();
+		const [_, error] = await tasksAPI.deleteTasks({ ids });
+		error?.UNHANDLED();
 	}
 
+	const filteredEdges = params.edges.filter((e) => !params.nodes.some((n) => n.id === e.source || n.id === e.target));
+
 	// If edge deleted
-	if (params.edges.length > 0) {
+	if (filteredEdges.length > 0) {
 		const childrenToRemove = new Map<string, string[]>();
 		const parentsToRemove = new Map<string, string[]>();
 
@@ -300,14 +303,14 @@ export async function handleDelete(params: { nodes: FlowNode[]; edges: FlowEdge[
 		for (const [taskId, childIds] of childrenToRemove.entries()) {
 			updates.push({
 				id: taskId,
-				 removeChildren: childIds ,
+				removeChildren: childIds,
 			});
 		}
 
 		for (const [taskId, parentIds] of parentsToRemove.entries()) {
 			updates.push({
 				id: taskId,
-				 removeParents: parentIds ,
+				removeParents: parentIds,
 			});
 		}
 
