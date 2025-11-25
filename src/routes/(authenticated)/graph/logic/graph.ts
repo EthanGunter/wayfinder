@@ -1,11 +1,12 @@
 //#region IMPORTS
 import type { FlowEdge, FlowNode } from '../types';
 import type { Task } from '$domain/models/task';
+import { isTaskCompleted } from '$domain/models/task';
 import { get } from 'svelte/store';
 import { elkLayoutEngine } from './LayoutEngines';
 import { allTasks, taskById, nodes, edges } from './shared-state';
 import { filteredIds } from './search';
-import { pendingNodeParams, type PendingNodeIntent } from './ui-state';
+import { hideCompleted, pendingNodeParams, type PendingNodeIntent } from './ui-state';
 //#endregion
 
 //#region INTERNAL HELPERS
@@ -16,8 +17,15 @@ function buildVisibleIdSet(): Set<string> | null {
 }
 
 function selectTasksForLayout(all: Task[], visible: Set<string> | null): Task[] {
-	if (!visible) return all;
-	return all.filter((t) => visible.has(t.id));
+	let filtered = all;
+	if (visible) {
+		filtered = filtered.filter((t) => visible.has(t.id));
+	}
+	const hideCompletedValue = get(hideCompleted);
+	if (hideCompletedValue) {
+		filtered = filtered.filter((t) => !isTaskCompleted(t));
+	}
+	return filtered;
 }
 
 function decorateDimming(
@@ -185,8 +193,30 @@ export function refreshNodesData(tasks: Task[]) {
 	});
 
 	const decorated = decorateDimming(updatedNodes, mergedEdges);
-	nodes.set(decorated.nodes);
-	edges.set(decorated.edges);
+	
+	// Filter out completed nodes/edges if hideCompleted is enabled
+	const hideCompletedValue = get(hideCompleted);
+	let finalNodes = decorated.nodes;
+	let finalEdges = decorated.edges;
+	
+	if (hideCompletedValue) {
+		const completedIds = new Set(
+			decorated.nodes
+				.filter((n) => {
+					const task = taskById.get(n.id);
+					return task && isTaskCompleted(task);
+				})
+				.map((n) => n.id)
+		);
+		
+		finalNodes = decorated.nodes.filter((n) => !completedIds.has(n.id));
+		finalEdges = decorated.edges.filter(
+			(e) => !completedIds.has(e.source) && !completedIds.has(e.target)
+		);
+	}
+	
+	nodes.set(finalNodes);
+	edges.set(finalEdges);
 }
 
 export async function updateGraph(useLayout: boolean) {
@@ -224,7 +254,29 @@ export async function updateGraph(useLayout: boolean) {
 	}
 
 	const decorated = decorateDimming(baseNodes, baseEdges);
-	nodes.set(decorated.nodes);
-	edges.set(decorated.edges);
+	
+	// Filter out completed nodes/edges if hideCompleted is enabled
+	const hideCompletedValue = get(hideCompleted);
+	let finalNodes = decorated.nodes;
+	let finalEdges = decorated.edges;
+	
+	if (hideCompletedValue) {
+		const completedIds = new Set(
+			decorated.nodes
+				.filter((n) => {
+					const task = taskById.get(n.id);
+					return task && isTaskCompleted(task);
+				})
+				.map((n) => n.id)
+		);
+		
+		finalNodes = decorated.nodes.filter((n) => !completedIds.has(n.id));
+		finalEdges = decorated.edges.filter(
+			(e) => !completedIds.has(e.source) && !completedIds.has(e.target)
+		);
+	}
+	
+	nodes.set(finalNodes);
+	edges.set(finalEdges);
 }
 //#endregion

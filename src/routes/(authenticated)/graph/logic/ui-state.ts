@@ -16,6 +16,8 @@ export type PendingNodeIntent = {
 	ts?: number;
 };
 
+export const hideCompleted: Writable<boolean> = writable(true);
+
 export const pendingNodeParams = writable<PendingNodeIntent>({});
 export const selectedTask: Writable<Task | null> = writable(null);
 export const drawerOpen: Writable<boolean> = writable(false);

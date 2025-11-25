@@ -14,6 +14,7 @@
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import SearchTaskListItem from '$lib/components/ui/task-searchbar/SearchTaskListItem.svelte';
 	import Icon from '@iconify/svelte';
+	import { Switch } from '$lib/components/ui/switch';
 
 	import {
 		allTasks,
@@ -21,7 +22,7 @@
 		nodes,
 		screenToFlowPosition,
 		svelteFlowInstance,
-		taskById
+		taskById,
 	} from './logic/shared-state';
 	import { refreshNodesData, updateGraph } from './logic/graph';
 	import {
@@ -51,7 +52,7 @@
 		handleReconnectEnd,
 		isValidConnection
 	} from './logic/svelte-flow';
-	import { selectedTask as selectedNode, editorLayoutState, drawerParams, drawerOpen } from './logic/ui-state';
+	import { selectedTask as selectedNode, editorLayoutState, drawerParams, drawerOpen, hideCompleted } from './logic/ui-state';
 	import type { FlowNode, FlowEdge } from './types';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
@@ -98,6 +99,12 @@
 		// If you also want filters cleared when there are no tasks, you can check $allTasks here
 		// but do not call updateGraph in this effect.
 		recomputeFilters();
+	});
+
+	$effect(() => {
+		// Update graph when hideCompleted toggle changes
+		$hideCompleted;
+		updateGraph(false);
 	});
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
@@ -185,15 +192,21 @@
 				>
 					+
 				</Button>
-				<Button
-					variant="outline"
-					class="absolute top-6 right-6 h-9 w-10 rounded-full border-1 border-border bg-white"
-					onclick={() => {
-						updateGraph(true);
-					}}
-				>
-					<Icon icon="lucide:refresh-cw" />
-				</Button>
+				<div class="absolute top-6 right-6 flex items-center gap-3">
+					<label class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm">
+						<Switch bind:checked={$hideCompleted} />
+						<span>Hide completed</span>
+					</label>
+					<Button
+						variant="outline"
+						class="h-9 w-10 rounded-full border-1 border-border bg-white"
+						onclick={() => {
+							updateGraph(true);
+						}}
+					>
+						<Icon icon="lucide:refresh-cw" />
+					</Button>
+				</div>
 			</div>
 		</SvelteFlowProvider>
 	</Resizable.Pane>
