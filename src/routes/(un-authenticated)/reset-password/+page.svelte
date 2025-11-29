@@ -13,7 +13,6 @@
 	let data: PageData = $props();
 
 	const token = page.url.searchParams.get('token') ?? '';
-	console.log(token);
 
 	let password = $state('');
 	let confirmPassword = $state('');

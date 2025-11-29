@@ -69,24 +69,16 @@
 >
 	<div class="flex items-start gap-2 px-3 py-2">
 		<div class="min-w-0 flex-1">
-			<div
-				class="truncate text-sm font-semibold text-gray-900"
-				title={flowNode.wfNode.data.title}
-			>
+			<div class="truncate text-sm font-semibold text-gray-900" title={flowNode.wfNode.data.title}>
 				{flowNode.wfNode.data.title}
 			</div>
 			{#if flowNode.wfNode.data.content}
-				<div
-					class="mt-0.5 line-clamp-2 text-xs text-gray-600"
-					title={flowNode.wfNode.data.content}
-				>
+				<div class="mt-0.5 line-clamp-2 text-xs text-gray-600" title={flowNode.wfNode.data.content}>
 					{flowNode.wfNode.data.content}
 				</div>
 			{/if}
 			{#if $devEnabled}
 				<div class="text-[7px]">
-					<span>task-id: {flowNode.wfNode.id.substring(0, 5)}</span>
-					<br />
 					<span>node-id: {id}</span>
 					{#if flowNode.wfNode.parents.length > 0}
 						<h6>Parents</h6>

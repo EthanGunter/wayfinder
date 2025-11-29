@@ -318,6 +318,7 @@ export const deleteTasks = mutation({
 });
 
 async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affected: ClientTaskNode[] }> {
+	
 	// Get node
 	const node = await ctx.db.get(id);
 	if (!node) throw new ConvexError({ type: "NotFoundError", msg: "Node not found", ctx: id });
@@ -337,10 +338,13 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affecte
 	let affected = await propagateRelationshipChanges(ctx, [
 		{ oldTask: node, newTask: null }
 	]);
+	
+
 
 	// Attach orphaned nodes (those with no parents) to root
 	const orphanedNodes: DBNode[] = affected.filter(n => n.data.type !== "project" && (n.parents?.length ?? 0) === 0);
 	if (orphanedNodes.length > 0) {
+		
 		const rootProject = await getOrCreateProject(ctx, node.userAuthId);
 		const rootId = String(rootProject._id);
 
@@ -361,6 +365,7 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affecte
 
 		// Propagate these changes (this will automatically update root's children)
 		const orphanAffected = await propagateRelationshipChanges(ctx, orphanChanges);
+		
 
 		// Merge affected nodes, deduplicating
 		const affectedMap = new Map<string, DBNode>();
@@ -379,6 +384,7 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affecte
 
 	// Delete node
 	await ctx.db.delete(id);
+	
 
 	return { affected: affected.map(cleanNodeForClient) };
 }
@@ -515,13 +521,18 @@ export const importData = mutation({
 			// Create node with original relationships (old IDs)
 			// Don't normalize parents - we'll handle that after remapping
 			delete (createDetail as any).id;
-			const newId = await ctx.db.insert("nodes", createDetail);
+			let newId: Id<'nodes'>;
+			if (createDetail.data.type === 'project') {
+				newId = rootProject._id;
+				createdNodes.push({ oldId, newId, node: rootProject });
+			} else {
+				newId = await ctx.db.insert("nodes", createDetail);
+				const createdNode = await ctx.db.get(newId);
+				if (!createdNode) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created node", ctx: newId });
+				createdNodes.push({ oldId, newId, node: createdNode });
+			}
 
 			idMapping.set(oldId, newId);
-
-			const createdNode = await ctx.db.get(newId);
-			if (!createdNode) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created node", ctx: newId });
-			createdNodes.push({ oldId, newId, node: createdNode });
 		}
 
 		// Remap relationships and establish bidirectional consistency

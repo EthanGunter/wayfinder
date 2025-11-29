@@ -17,7 +17,7 @@ type ServerNode<T extends GraphData<number>> = IGraphNode<T & { givenId?: string
 
 function reconstructError(error: unknown): Err {
 	if (error instanceof ConvexError) {
-		const data = JSON.parse(error.data);
+		const data = error.data;
 		const messageForUser = data.msgForUser ?? data.msg;
 
 		switch (data.type) {
@@ -43,7 +43,7 @@ function reconstructError(error: unknown): Err {
 }
 
 // Internal update functions (non-debounced)
-async function _updateTask(update: UpdateTaskParams) {
+async function _updateTask(update: UpdateTaskParams) {	
 	try {
 		const res = await client.mutation(convexApi.tasks.updateTask, convexifyTaskUpdate(update));
 		return ok({
