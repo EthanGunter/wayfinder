@@ -8,8 +8,8 @@ import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js';
 
 //#region CONSTANTS
 const elk = new ELK();
-const DEFAULT_NODE_WIDTH = 260;
-const DEFAULT_NODE_HEIGHT = 84;
+const DEFAULT_NODE_WIDTH = 20;
+const DEFAULT_NODE_HEIGHT = 20;
 const MIN_NODE_WIDTH = 100;
 const MIN_NODE_HEIGHT = 0;
 //#endregion
@@ -85,8 +85,8 @@ export async function layoutTasksWithElk(
 		id: String(n.id),
 		type: 'task',
 		position: { x: n.x ?? 0, y: n.y ?? 0 },
-		width: n.width ?? nodeWidth,
-		height: n.height ?? nodeHeight,
+		// Don't set width/height - let nodes size themselves naturally
+		// ELK uses measurements internally for layout, but we don't constrain the rendered nodes
 		data: { wfNode: {} as Task },
 		sourcePosition: Position.Right,
 		targetPosition: Position.Left,
@@ -161,7 +161,7 @@ function getOrCreateMeasureContainer(): HTMLElement {
 function buildMeasureNode(task: Task): HTMLElement {
 	const root = document.createElement('div');
 	root.className =
-		'task-node group relative max-w-[280px] rounded-md border-1 border-gray-300 bg-white shadow-sm';
+		'task-node group relative max-w-[280px]';
 	root.style.display = 'inline-block';
 	root.style.maxWidth = '280px';
 	root.style.boxSizing = 'border-box';

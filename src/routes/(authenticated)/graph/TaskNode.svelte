@@ -3,6 +3,7 @@
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 	import { devEnabled } from '$lib/user-settings';
 	import { type FlowNode, type FlowData } from './types';
+	import Icon from '@iconify/svelte';
 
 	interface Props {
 		id: string;
@@ -62,21 +63,21 @@
 <div
 	bind:this={nodeElement}
 	data-tasknodeid={flowNode.wfNode.id}
-	class="task-node relative min-w-[200px] rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
+	class="task-node relative rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
 	{isTaskCompleted(flowNode.wfNode) ? 'bg-green-100' : 'bg-white'}"
 	class:highlighted={isAnimating}
 	class:dimmed={isDimmed}
 >
 	<div class="flex items-start gap-2 px-3 py-2">
-		<div class="min-w-0 flex-1">
-			<div class="truncate text-sm font-semibold text-gray-900" title={flowNode.wfNode.data.title}>
+		<div class="flex min-w-0 flex-1 items-center gap-2">
+			<div class="text-wrap max-w-[16rem] line-clamp-2 text-sm font-semibold text-gray-900" title={flowNode.wfNode.data.title}>
 				{flowNode.wfNode.data.title}
 			</div>
-			{#if flowNode.wfNode.data.content}
-				<div class="mt-0.5 line-clamp-2 text-xs text-gray-600" title={flowNode.wfNode.data.content}>
-					{flowNode.wfNode.data.content}
-				</div>
-			{/if}
+			<span class="text-xs text-gray-400">
+				{#if flowNode.wfNode.data.content}
+					<Icon icon="lucide:text" />
+				{/if}
+			</span>
 			{#if $devEnabled}
 				<div class="text-[7px]">
 					<span>node-id: {id}</span>
