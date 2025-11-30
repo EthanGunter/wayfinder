@@ -19,6 +19,7 @@ export type PendingNodeIntent = {
 	ts?: number;
 };
 
+export const autoLayout = settings.graph.core.autoLayout;
 export const showCompletedNodes = settings.graph.core.showCompleted;
 showCompletedNodes.subscribe((show) => {
 	// Iterate appData (always populated) not viewNodes

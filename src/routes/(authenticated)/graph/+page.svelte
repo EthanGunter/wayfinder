@@ -22,7 +22,8 @@
 		drawerParams,
 		drawerOpen,
 		// layoutPaused,
-		showCompletedNodes
+		showCompletedNodes,
+		autoLayout
 	} from './logic/ui-state';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
@@ -146,22 +147,30 @@
 				>
 					+
 				</Button>
-				<div class="absolute top-6 right-6 flex items-center gap-3">
+				<div class="width-max absolute top-6 right-6 grid grid-cols-[12rem] [&>*]:h-[3rem] items-center gap-1">
 					<label
 						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
 					>
 						<Switch bind:checked={$showCompletedNodes} />
 						<span>Show completed</span>
 					</label>
-					<Button
-						variant="outline"
-						class="h-9 w-10 rounded-full border-1 border-border bg-white"
-						onclick={() => {
-							layoutEngine.start();
-						}}
+					<label
+						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
 					>
-						<Icon icon="lucide:refresh-cw" />
-					</Button>
+						<Switch bind:checked={$autoLayout} />
+						<span>Auto layout</span>
+						{#if !$autoLayout}
+							<Button
+								variant="outline"
+								class="h-7 w-8 rounded-full border-1 border-border bg-white p-0 m-auto"
+								onclick={() => {
+									layoutEngine.start();
+								}}
+							>
+								<Icon icon="lucide:refresh-cw" />
+							</Button>
+						{/if}
+					</label>
 				</div>
 			</div>
 		</SvelteFlowProvider>

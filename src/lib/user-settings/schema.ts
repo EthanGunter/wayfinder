@@ -19,6 +19,11 @@ export const settings = {
 				desc: "Should completed tasks be shown in the graph",
 				defaultValue: true,
 			}),
+			autoLayout: new BoolSetting({
+				label: "Auto layout",
+				desc: "Should the graph layout automatically update when tasks are added or completed?",
+				defaultValue: true,
+			}),
 		}
 	},
 	dev: {

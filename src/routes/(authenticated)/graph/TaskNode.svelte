@@ -4,6 +4,7 @@
 	import { devEnabled } from '$lib/user-settings';
 	import type { ViewNodeData } from './logic/layout/LayoutEngine';
 	import Icon from '@iconify/svelte';
+	import * as ContextMenu from '$lib/components/ui/context-menu';
 
 	interface Props {
 		id: string;
@@ -59,53 +60,59 @@
 	});
 </script>
 
-<div
-	bind:this={nodeElement}
-	data-tasknodeid={flowData.appNode.id}
-	class="task-node relative min-w-[200px] rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
+<ContextMenu.Root>
+	<ContextMenu.Trigger>
+		<div
+			bind:this={nodeElement}
+			data-tasknodeid={flowData.appNode.id}
+			class="task-node relative rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
 	{isTaskCompleted(flowData.appNode) ? 'bg-green-100' : 'bg-white'}"
-	class:highlighted={isAnimating}
-	class:dimmed={isDimmed}
->
-	<div class="flex items-start gap-2 px-3 py-2">
-		<div class="flex min-w-0 flex-1 items-center gap-2">
-			<div
-				class="line-clamp-2 max-w-[16rem] text-sm font-semibold text-wrap text-gray-900"
-				title={flowData.appNode.data.title}
-			>
-				{flowData.appNode.data.title}
-			</div>
-			<span class="text-xs text-gray-400">
-				{#if flowData.appNode.data.content}
-					<Icon icon="lucide:text" />
-				{/if}
-			</span>
-			{#if $devEnabled}
-				<div class="text-[7px]">
-					<span>node-id: {id}</span>
-					{#if flowData.appNode.parents.length > 0}
-						<h6>Parents</h6>
+			class:highlighted={isAnimating}
+			class:dimmed={isDimmed}
+		>
+			<div class="flex items-start gap-2 px-3 py-2">
+				<div class="flex min-w-0 flex-1 items-center gap-2">
+					<div
+						class="line-clamp-2 max-w-[16rem] text-sm font-semibold text-wrap text-gray-900"
+						title={flowData.appNode.data.title}
+					>
+						{flowData.appNode.data.title}
+					</div>
+					<span class="text-xs text-gray-400">
+						{#if flowData.appNode.data.content}
+							<Icon icon="lucide:text" />
+						{/if}
+					</span>
+					{#if $devEnabled}
+						<div class="text-[7px]">
+							<span>node-id: {id}</span>
+							{#if flowData.appNode.parents.length > 0}
+								<h6>Parents</h6>
+							{/if}
+							{#each flowData.appNode.parents as parent}
+								<span>- {parent.substring(0, 5)}</span>
+								<br />
+							{/each}
+							{#if flowData.appNode.children.length > 0}
+								<h6>Children</h6>
+							{/if}
+							{#each flowData.appNode.children as child}
+								<span>- {child.substring(0, 5)}</span>
+								<br />
+							{/each}
+						</div>
 					{/if}
-					{#each flowData.appNode.parents as parent}
-						<span>- {parent.substring(0, 5)}</span>
-						<br />
-					{/each}
-					{#if flowData.appNode.children.length > 0}
-						<h6>Children</h6>
-					{/if}
-					{#each flowData.appNode.children as child}
-						<span>- {child.substring(0, 5)}</span>
-						<br />
-					{/each}
-					<pre>{JSON.stringify(rest, null, 2)}</pre>
 				</div>
-			{/if}
-		</div>
-	</div>
+			</div>
 
-	<Handle type="target" position={Position.Left} />
-	<Handle type="source" position={Position.Right} />
-</div>
+			<Handle type="target" position={Position.Left} />
+			<Handle type="source" position={Position.Right} />
+		</div>
+	</ContextMenu.Trigger>
+	<ContextMenu.Content>
+		<ContextMenu.CheckboxItem>Pinned</ContextMenu.CheckboxItem>
+	</ContextMenu.Content>
+</ContextMenu.Root>
 
 <style>
 	.task-node :global(.svelte-flow__handle) {
