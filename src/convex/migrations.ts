@@ -1,7 +1,7 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api";
 import { type Id, type DataModel } from "./_generated/dataModel";
-import { getOrCreateRoot } from "./tasks";
+import { getOrCreateProject } from "./tasks";
 import { mutation } from "./_generated/server";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
@@ -34,7 +34,7 @@ export const addProjectsAndNodeType = migrations.define({
 			}
 
 			if (attachToRoot) {
-				const root = await getOrCreateRoot(ctx, doc.userAuthId);
+				const root = await getOrCreateProject(ctx, doc.userAuthId);
 				// Add this task to the root's children
 				await ctx.db.patch(root._id, { children: [...(root.children ?? []), doc._id] });
 				// Add the root to this task's parents

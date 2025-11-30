@@ -1,11 +1,11 @@
-import { ArgumentError } from "$domain/errors";
+import { ArgumentError, InvalidStateError } from "$domain/errors";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { applyRelationshipOperations, calculateRelationshipUpdates } from "$domain/models/task";
 import type { CreateNodeParams, CreateTaskParams, ExportedData, Task, TaskData, UpdateTaskParams } from "$domain/models/task";
 
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { GraphData as GraphData, IGraphNode } from "$domain/models/node";
 import type { ProjectData } from "$domain/models/project";
 
@@ -908,19 +908,24 @@ export const exportData = query({
  */
 // TODO:refactor This will eventually need to be removed,
 // and instead error if a task is created without a parent
-export async function getOrCreateProject(ctx: any, userAuthId: string): Promise<DBNode> {
+export async function getOrCreateProject(ctx: QueryCtx | MutationCtx, userAuthId: string): Promise<DBNode> {
 	// Look for existing root project
 	const existingRoots = await ctx.db
 		.query("nodes")
-		.withIndex("by_user_type", (q: any) => q.eq("userAuthId", userAuthId).eq("data.type", "project"))
+		.withIndex("by_user_type", (q) => q.eq("userAuthId", userAuthId).eq("data.type", "project"))
 		.collect();
 
 	if (existingRoots.length === 1) {
 		return existingRoots[0];
 	} else if (existingRoots.length > 1) {
 		// TODO: Consider cleanup migration if multiple roots found
-		throw new ConvexError({ type: "NotImplementedError", msg: "Multiple root projects found for user" });
-	} else {
+		const root = existingRoots.find(r => r.data.title === "");
+		if (root) {
+			return root;
+		} else {
+			throw new ConvexError({ type: "NotImplementedError", msg: "Multiple root projects found for user" });
+		}
+	} else if ('insert' in ctx.db) {
 		// Create root project
 		const now = Date.now();
 		const rootId = await ctx.db.insert("nodes", {
@@ -944,14 +949,7 @@ export async function getOrCreateProject(ctx: any, userAuthId: string): Promise<
 		}
 		return root;
 	}
-}
-
-/**
- * DEPRECATED: Legacy alias for getOrCreateProject
- * @deprecated Use getOrCreateProject instead
- */
-export async function getOrCreateRoot(ctx: any, userAuthId: string): Promise<DBNode> {
-	return getOrCreateProject(ctx, userAuthId);
+	else throw new InvalidStateError("Invalid context for getRootProject");
 }
 
 /**
