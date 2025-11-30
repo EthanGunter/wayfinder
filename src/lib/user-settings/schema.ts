@@ -10,6 +10,17 @@ import {
 import { dev as devEnv } from '$app/environment';
 
 export const settings = {
+	graph: {
+		$label: "Graph",
+		core: {
+			$label: "Visibility",
+			showCompleted: new BoolSetting({
+				label: "Show completed",
+				desc: "Should completed tasks be shown in the graph",
+				defaultValue: true,
+			}),
+		}
+	},
 	dev: {
 		$label: "Dev",
 		$userFeature: "dev",
@@ -24,9 +35,6 @@ export const settings = {
 				desc: "Should dev settings have an effect on anything?",
 				defaultValue: devEnv,
 			})
-		},
-		overrides: {
-			$label: 'Overrides',
 		},
 	}
 } satisfies SettingsTree;

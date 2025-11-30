@@ -22,7 +22,7 @@
 		nodes,
 		screenToFlowPosition,
 		svelteFlowInstance,
-		taskById,
+		taskById
 	} from './logic/shared-state';
 	import { refreshNodesData, updateGraph } from './logic/graph';
 	import {
@@ -52,10 +52,17 @@
 		handleReconnectEnd,
 		isValidConnection
 	} from './logic/svelte-flow';
-	import { selectedTask as selectedNode, editorLayoutState, drawerParams, drawerOpen, hideCompleted } from './logic/ui-state';
+	import {
+		selectedTask as selectedNode,
+		editorLayoutState,
+		drawerParams,
+		drawerOpen,
+		showCompleted
+	} from './logic/ui-state';
 	import type { FlowNode, FlowEdge } from './types';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
+	import { settings } from '$lib/user-settings';
 
 	let unsubscribeTasksStore: (() => void) | null = null;
 	let didRunInitialLayout = false;
@@ -102,8 +109,8 @@
 	});
 
 	$effect(() => {
-		// Update graph when hideCompleted toggle changes
-		$hideCompleted;
+		// Update graph when showCompleted toggle changes
+		$showCompleted;
 		updateGraph(false);
 	});
 
@@ -193,9 +200,11 @@
 					+
 				</Button>
 				<div class="absolute top-6 right-6 flex items-center gap-3">
-					<label class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm">
-						<Switch bind:checked={$hideCompleted} />
-						<span>Hide completed</span>
+					<label
+						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
+					>
+						<Switch bind:checked={$showCompleted} />
+						<span>Show completed</span>
 					</label>
 					<Button
 						variant="outline"

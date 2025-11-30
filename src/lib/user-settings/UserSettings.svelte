@@ -49,7 +49,8 @@
 			// Disable unauthorized tabs
 			.filter(([label, tab]) => {
 				if (label.startsWith('$')) return false;
-				return checkFeature(tab.$userFeature as UserFeature | undefined);
+				if ('$userFeature' in tab) return checkFeature(tab.$userFeature as UserFeature | undefined);
+				else return true;
 			})
 			// Parse sections
 			.map(([_, tab]) => ({

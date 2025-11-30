@@ -4,6 +4,7 @@ import { writable, type Writable } from 'svelte/store';
 import type { Task } from '$domain/models/task';
 import type { TaskEditorLayoutState } from '../TaskEditor.svelte';
 import type { GraphNode } from '$domain/models/node';
+import { settings } from '$lib/user-settings';
 
 export type DrawerParams = { relation: GraphNode; mode: 'parent' | 'child' } | null;
 
@@ -16,7 +17,8 @@ export type PendingNodeIntent = {
 	ts?: number;
 };
 
-export const hideCompleted: Writable<boolean> = writable(true);
+export const showCompleted = settings.graph.core.showCompleted;
+
 
 export const pendingNodeParams = writable<PendingNodeIntent>({});
 export const selectedTask: Writable<Task | null> = writable(null);

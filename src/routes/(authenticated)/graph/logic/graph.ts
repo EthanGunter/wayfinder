@@ -6,7 +6,7 @@ import { get } from 'svelte/store';
 import { elkLayoutEngine } from './LayoutEngines';
 import { allTasks, taskById, nodes, edges } from './shared-state';
 import { filteredIds } from './search';
-import { hideCompleted, pendingNodeParams, type PendingNodeIntent } from './ui-state';
+import { showCompleted, pendingNodeParams, type PendingNodeIntent } from './ui-state';
 //#endregion
 
 //#region INTERNAL HELPERS
@@ -21,8 +21,8 @@ function selectTasksForLayout(all: Task[], visible: Set<string> | null): Task[] 
 	if (visible) {
 		filtered = filtered.filter((t) => visible.has(t.id));
 	}
-	const hideCompletedValue = get(hideCompleted);
-	if (hideCompletedValue) {
+	const showCompletedValue = get(showCompleted);
+	if (!showCompletedValue) {
 		filtered = filtered.filter((t) => !isTaskCompleted(t));
 	}
 	return filtered;
@@ -194,12 +194,12 @@ export function refreshNodesData(tasks: Task[]) {
 
 	const decorated = decorateDimming(updatedNodes, mergedEdges);
 	
-	// Filter out completed nodes/edges if hideCompleted is enabled
-	const hideCompletedValue = get(hideCompleted);
+	// Filter out completed nodes/edges if showCompleted is enabled
+	const showCompletedValue = get(showCompleted);
 	let finalNodes = decorated.nodes;
 	let finalEdges = decorated.edges;
 	
-	if (hideCompletedValue) {
+	if (!showCompletedValue) {
 		const completedIds = new Set(
 			decorated.nodes
 				.filter((n) => {
@@ -255,12 +255,12 @@ export async function updateGraph(useLayout: boolean) {
 
 	const decorated = decorateDimming(baseNodes, baseEdges);
 	
-	// Filter out completed nodes/edges if hideCompleted is enabled
-	const hideCompletedValue = get(hideCompleted);
+	// Filter out completed nodes/edges if showCompleted is enabled
+	const showCompletedValue = get(showCompleted);
 	let finalNodes = decorated.nodes;
 	let finalEdges = decorated.edges;
 	
-	if (hideCompletedValue) {
+	if (!showCompletedValue) {
 		const completedIds = new Set(
 			decorated.nodes
 				.filter((n) => {
