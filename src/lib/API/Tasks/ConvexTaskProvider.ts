@@ -8,11 +8,11 @@ import { sharedConvexClient as client } from "$lib/API/ConvexClient";
 import { createFetchableReadable as createFetchable, createQueryable } from "$lib/API/fetchableStore";
 import type { ITasksRemote, ITasksLocal } from "./seam-interfaces";
 import { ConvexError } from "convex/values";
-import type { IGraphNode, GraphData, GraphNode } from "$domain/models/node";
+import type { IAppNode, AppData, AppNode } from "$domain/models/node";
 import debounce from "$lib/debounce";
 
 // Type alias for server-side nodes with number timestamps
-type ServerNode<T extends GraphData<number>> = IGraphNode<T & { givenId?: string }, number>;
+type ServerNode<T extends AppData<number>> = IAppNode<T & { givenId?: string }, number>;
 
 
 function reconstructError(error: unknown): Err {
@@ -287,6 +287,8 @@ export const api: ITasksRemote = {
 					set({ status: "resolved", value: siblings });
 				},
 				(error: Error) => {
+					console.log(error);
+
 					set({ status: "error", error: reconstructError(error) });
 				}
 			);
@@ -425,15 +427,15 @@ export function convexifyCreateTaskDetails(params: CreateTaskParams): CreateTask
  * Converts server node with numeric timestamps to client node with Date timestamps
  * Preserves the nested data structure - no flattening
  */
-function convertFromServerNode<T extends GraphNode>(node: ServerNode<GraphData<number>>): T {
+function convertFromServerNode<T extends AppNode>(node: ServerNode<AppData<number>>): T {
 	const { data, ...graphFields } = node;
 
-	const clientNodeFields: Omit<GraphNode, "data"> = {
+	const clientNodeFields: Omit<AppNode, "data"> = {
 		...graphFields,
 		created: new Date(graphFields.created),
 		lastEdit: new Date(graphFields.lastEdit),
 	}
-	let clientDataFields: GraphData<Date>;
+	let clientDataFields: AppData<Date>;
 
 	switch (data.type) {
 		case "task":

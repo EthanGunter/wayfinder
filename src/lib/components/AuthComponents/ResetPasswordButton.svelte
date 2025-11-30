@@ -19,7 +19,7 @@
 	async function handleResetPassword() {
 		const [res, error] = await authAPI.sendResetPassword(email);
 		if (error) {
-			errorMessage = error.messageForUser;
+			errorMessage = error.message;
 		} else {
 			toast.success(res.userMessage);
 			showForgotPassword = false;

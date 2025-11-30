@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { SvelteFlow, SvelteFlowProvider, Background, useSvelteFlow } from '@xyflow/svelte';
+	import { SvelteFlow, SvelteFlowProvider, Background } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 	import TaskNode from './TaskNode.svelte';
@@ -9,109 +9,90 @@
 	import * as Resizable from '$lib/components/ui/resizable';
 	import TaskEditor from './TaskEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
-	import { TaskStatus, type Task } from '$domain/models/task';
+	import { type Task } from '$domain/models/task';
 	import { page } from '$app/state';
-	import SearchBar from '$lib/components/SearchBar.svelte';
-	import SearchTaskListItem from '$lib/components/ui/task-searchbar/SearchTaskListItem.svelte';
 	import Icon from '@iconify/svelte';
-	import { Switch } from '$lib/components/ui/switch';
 
+	import { appData, svelteFlowInstance } from './logic/shared-state';
+	import { initializeFromUrl, centerAndHighlightNode } from './logic/navigation';
+	import { SvelteFlowAdapter, SvelteFlowEventHandlers } from './logic/svelte-flow';
 	import {
-		allTasks,
-		edges,
-		nodes,
-		screenToFlowPosition,
-		svelteFlowInstance,
-		taskById
-	} from './logic/shared-state';
-	import { refreshNodesData, updateGraph } from './logic/graph';
-	import {
-		initializeFromUrl,
-		highlightNode,
-		handleShare,
-		centerAndHighlightNode
-	} from './logic/navigation';
-	import {
-		handleSearch,
-		filteredIds,
-		searchQuery,
-		activeSearchResults,
-		isValidQuery,
-		showRelatedNodes,
-		relatedDepth,
-		recomputeFilters
-	} from './logic/search';
-	import {
-		handleDelete,
-		handleConnectStart,
-		handleReconnectStart,
-		handleConnect,
-		handleBeforeReconnect,
-		handleReconnect,
-		handleConnectEnd,
-		handleReconnectEnd,
-		isValidConnection
-	} from './logic/svelte-flow';
-	import {
-		selectedTask as selectedNode,
+		selectedNode as selectedNode,
 		editorLayoutState,
 		drawerParams,
 		drawerOpen,
-		showCompleted
+		// layoutPaused,
+		showCompletedNodes
 	} from './logic/ui-state';
-	import type { FlowNode, FlowEdge } from './types';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
-	import { settings } from '$lib/user-settings';
+	import { layoutEngine } from './logic/layout';
+	import { Switch } from '$lib/components/ui/switch';
 
-	let unsubscribeTasksStore: (() => void) | null = null;
-	let didRunInitialLayout = false;
+	let unsubTasksStore: (() => void) | null = null;
+	let unsubShowNodes: (() => void) | null = null;
+	const sfAdapter: SvelteFlowAdapter = new SvelteFlowAdapter();
+	const nodes = sfAdapter.nodes;
+	const edges = sfAdapter.edges;
 
 	onMount(() => {
-		unsubscribeTasksStore = tasksAPI.getAllUserTasks().subscribe(async (taskSub) => {
+		unsubTasksStore = tasksAPI.getAllUserTasks().subscribe(async (taskSub) => {
 			if (taskSub.status !== 'resolved') return;
 
-			// always keep stores current
-			refreshNodesData(taskSub.value);
+			// Get set of IDs from server
+			const serverIds = new Set(taskSub.value.map((node) => node.id));
+			// Get set of IDs currently in appData
+			const currentIds = new Set(appData.keys());
 
-			// only do layout once on first data load
-			if (!didRunInitialLayout) {
-				didRunInitialLayout = true;
-				await updateGraph(true);
+			// Find IDs to delete (in appData but not in server)
+			const idsToDelete = Array.from(currentIds).filter((id) => !serverIds.has(id));
 
-				// conditionally seed search from current URL or query store
-				if ($searchQuery?.trim()) {
-					await handleSearch($searchQuery);
+			// Delete items that are no longer in server response
+			for (const id of idsToDelete) {
+				appData.delete(id);
+			}
+
+			// Calculate what items have changed
+			// Efficiently find changed/added tasks to avoid unnecessary updates
+			const changes: [string, Task][] = [];
+			// TODO:Refactor this should be moved up to the convex task provider,
+			// probably inside the createQueryable function.
+			for (const node of taskSub.value) {
+				const existing = appData.get(node.id);
+				// Compare existing node with new node. If different or missing, add to changes.
+				if (!existing || JSON.stringify(existing) !== JSON.stringify(node)) {
+					changes.push([node.id, node]);
 				}
+			}
+
+			// Add/update items from server
+			changes.forEach(([id, node]) => {
+				appData.set(id, node);
+			});
+
+			layoutEngine.start(300);
+			// $layoutPaused = false;
+
+			setTimeout(() => {
+				$svelteFlowInstance?.fitView();
+			}, 100);
+		});
+		unsubShowNodes = showCompletedNodes.subscribe((show) => {
+			if (show) {
+				layoutEngine.start();
 			}
 		});
 
 		initializeFromUrl(page.url.searchParams);
 		return () => {
-			unsubscribeTasksStore?.();
+			unsubTasksStore?.();
 		};
 	});
 
 	onDestroy(() => {
-		unsubscribeTasksStore?.();
-	});
-
-	$effect(() => {
-		// dependencies to recompute filters when search state changes
-		$activeSearchResults;
-		$isValidQuery;
-		$showRelatedNodes;
-		$relatedDepth;
-
-		// If you also want filters cleared when there are no tasks, you can check $allTasks here
-		// but do not call updateGraph in this effect.
-		recomputeFilters();
-	});
-
-	$effect(() => {
-		// Update graph when showCompleted toggle changes
-		$showCompleted;
-		updateGraph(false);
+		unsubTasksStore?.();
+		layoutEngine.destroy();
+		sfAdapter.destroy();
 	});
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
@@ -119,25 +100,14 @@
 		if (err) err.UNHANDLED();
 	}
 
-	function onGraphDelete(params: { nodes: FlowNode[]; edges: FlowEdge[] }): void {
-		if (params.nodes.length === 1) {
-			const task = params.nodes[0].data.wfNode;
-			const parent = taskById.get(task.parents[0]);
-			$selectedNode = parent ?? null;
-		} else {
-			$selectedNode = null;
-		}
-		handleDelete({ nodes: params.nodes, edges: params.edges });
-	}
-
 	async function onEditorDelete(task: Task) {
-		const parent = taskById.get(task.parents[0]);
+		const parent = appData.get(task.parents[0]);
 		$selectedNode = parent ?? null;
 		await tasksAPI.deleteTask({ id: task.id });
 	}
 
 	function onSelectNode(taskId: string) {
-		$selectedNode = $allTasks.find((t) => t.id === taskId) ?? null;
+		$selectedNode = appData.get(taskId) ?? null;
 		centerAndHighlightNode(taskId);
 	}
 </script>
@@ -154,38 +124,15 @@
 			<div class="relative flex h-full w-full">
 				<SvelteFlow
 					class="h-full w-full"
-					bind:nodes={$nodes}
-					bind:edges={$edges}
-					fitView
 					minZoom={0.1}
 					maxZoom={2}
 					nodeTypes={{ task: TaskNode }}
 					nodeOrigin={[0.5, 0.5]}
 					edgeTypes={{ task: TaskEdge }}
 					defaultEdgeOptions={{ type: 'task' }}
-					oninit={() => {
-						const instance = useSvelteFlow();
-						svelteFlowInstance.set(instance);
-						screenToFlowPosition.set(instance.screenToFlowPosition);
-					}}
-					ondelete={onGraphDelete}
-					onconnectstart={handleConnectStart}
-					onreconnectstart={handleReconnectStart}
-					onconnect={handleConnect}
-					onbeforereconnect={handleBeforeReconnect}
-					onreconnect={handleReconnect}
-					onconnectend={handleConnectEnd}
-					onreconnectend={handleReconnectEnd}
-					{isValidConnection}
-					onnodeclick={({ node, event }) => {
-						if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
-						$selectedNode = node.id
-							? ($nodes.find((n) => n.id === node.id)?.data.wfNode ?? null)
-							: null;
-					}}
-					onpaneclick={() => {
-						$selectedNode = null;
-					}}
+					bind:nodes={$nodes}
+					bind:edges={$edges}
+					{...SvelteFlowEventHandlers}
 				>
 					<Background bgColor="var(--background)" />
 				</SvelteFlow>
@@ -203,14 +150,14 @@
 					<label
 						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
 					>
-						<Switch bind:checked={$showCompleted} />
+						<Switch bind:checked={$showCompletedNodes} />
 						<span>Show completed</span>
 					</label>
 					<Button
 						variant="outline"
 						class="h-9 w-10 rounded-full border-1 border-border bg-white"
 						onclick={() => {
-							updateGraph(true);
+							layoutEngine.start();
 						}}
 					>
 						<Icon icon="lucide:refresh-cw" />
@@ -226,13 +173,15 @@
 			defaultSize={30}
 			minSize={24}
 		>
-			<TaskEditor
-				bind:task={$selectedNode}
-				bind:layoutState={$editorLayoutState}
-				{onTaskChange}
-				onDelete={onEditorDelete}
-				{onSelectNode}
-			/>
+			{#if $selectedNode.data.type === 'task'}
+				<TaskEditor
+					bind:task={$selectedNode as Task}
+					bind:layoutState={$editorLayoutState}
+					{onTaskChange}
+					onDelete={onEditorDelete}
+					{onSelectNode}
+				/>
+			{/if}
 		</Resizable.Pane>
 	{/if}
 </Resizable.PaneGroup>

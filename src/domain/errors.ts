@@ -10,13 +10,13 @@ function captureHere(err: Error, excludeFn: Function) {
         (Error as any).captureStackTrace(err, excludeFn);
     }
 }
-type ErrContext = { messageForDev?: string, [key: string]: any };
+type ErrContext = { messageForUser?: string, [key: string]: any };
 export class Err extends Error {
     context?: ErrContext;
     cause?: unknown;
 
-    constructor(name: string, public messageForUser: string, context?: ErrContext) {
-        super(messageForUser);
+    constructor(name: string, public message: string, context?: ErrContext) {
+        super(message);
         this.name = name;
         this.context = context;
         // Important: pass the concrete constructor to exclude it from the stack
@@ -48,9 +48,9 @@ export class Err extends Error {
         e.cause = error instanceof Error ? error : undefined;
 
         if (e.context) {
-            e.messageForUser += "\nContext: " + JSON.stringify(e.context, undefined, 2) + "\n";
+            e.message += "\nContext: " + JSON.stringify(e.context, undefined, 2) + "\n";
         }
-        e.messageForUser += "\nHANDLER NOT IMPLEMENTED";
+        e.message += "\nHANDLER NOT IMPLEMENTED";
 
         // Exclude UNHANDLED itself from the stack; preserves mapping
         captureHere(e, Err.UNHANDLED);
@@ -86,38 +86,38 @@ export class Err extends Error {
 }
 
 export class UnknownError extends Err {
-    constructor(messageForUser: string, cause?: Error) {
-        super("UnknownError", messageForUser, cause);
+    constructor(message: string, context?: ErrContext) {
+        super("UnknownError", message, context);
     }
 }
 
 export class InvalidStateError extends Err {
-    constructor(messageForUser: string, context?: ErrContext) {
-        super("InvalidState", messageForUser, context);
+    constructor(message: string, context?: ErrContext) {
+        super("InvalidState", message, context);
     }
 }
 
 export class ArgumentError<T = unknown> extends Err {
-    constructor(msgForUser: string, argument: T, context?: ErrContext) {
-        super("ArgumentError", msgForUser, { argument, ...context });
+    constructor(message: string, argument: T, context?: ErrContext) {
+        super("ArgumentError", message, { argument, ...context });
     }
 }
 
 export class InputRequiredError extends Err {
-    constructor(messageForUser: string, context?: ErrContext) {
-        super("InputRequired", messageForUser, context);
+    constructor(message: string, context?: ErrContext) {
+        super("InputRequired", message, context);
     }
 }
 
 export class NotFoundError extends Err {
-    constructor(messageForUser: string, key?: any) {
-        super("NotFoundError", messageForUser, key);
+    constructor(message: string, key?: any) {
+        super("NotFoundError", message, key);
     }
 }
 
 export class NotAuthorizedError extends Err {
-    constructor(messageForUser: string = "Not authorized", context?: ErrContext) {
-        super("NotAuthorizedError", messageForUser, context);
+    constructor(message: string, context?: ErrContext) {
+        super("NotAuthorizedError", message, context);
     }
 }
 
@@ -126,25 +126,10 @@ export class ParseError extends Err {
         super("ParseError", `Failed to parse content to ${targetType}`, content);
     }
 }
-export class IOError extends Err {
-    constructor(messageForUser: string, internalError: any, context?: ErrContext) {
-        const internal =
-            typeof internalError === "string"
-                ? internalError
-                : internalError instanceof Error
-                    ? internalError.message
-                    : internalError;
 
-        super("IOError", messageForUser, { internalError: internal, dataToWrite: context });
-
-        if (internalError instanceof Error) {
-            this.cause = internalError;
-        }
-    }
-}
 
 export class NotImplementedError extends Err {
-    constructor(methodName: string) {
-        super("NotImplementedError", `${methodName}`);
+    constructor(methodName: string, context?: ErrContext) {
+        super("NotImplementedError", `${methodName}`, context);
     }
 }

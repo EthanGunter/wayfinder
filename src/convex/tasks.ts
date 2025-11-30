@@ -6,15 +6,15 @@ import { applyRelationshipOperations, calculateRelationshipUpdates } from "$doma
 import type { CreateNodeParams, CreateTaskParams, ExportedData, Task, TaskData, UpdateTaskParams } from "$domain/models/task";
 
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import type { GraphData as GraphData, IGraphNode } from "$domain/models/node";
+import type { AppData as AppData, IAppNode } from "$domain/models/node";
 import type { ProjectData } from "$domain/models/project";
 
 //#region Types
 
 type DBNode = Doc<'nodes'>;
-type ClientNode<T extends GraphData<number>> = IGraphNode<T, number>;
+type ClientNode<T extends AppData<number>> = IAppNode<T, number>;
 type ClientTaskData = TaskData<number>;
-type ClientTaskNode = IGraphNode<ClientTaskData, number>;
+type ClientTaskNode = IAppNode<ClientTaskData, number>;
 type CreateTaskArgs = CreateTaskParams<number> & { id?: string };
 
 const argsCreateTask = v.object({
@@ -82,7 +82,7 @@ export const createTasks = mutation({
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
 		const userAuthId = identity.subject;
-		const created: IGraphNode<ClientTaskData & { givenId: string | undefined }, number>[] = [];
+		const created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>[] = [];
 		let affected: ClientTaskNode[] = [];
 		for (const createDetail of createDetails) {
 			const { created: createdTask, affected: affectedTasks } = await _createTask(ctx, {
@@ -103,7 +103,7 @@ export const createTasks = mutation({
 	},
 });
 
-async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IGraphNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientTaskNode[] }> {
+async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientTaskNode[] }> {
 	const now = Date.now();
 
 	// Normalize parents (attach to root if empty)
@@ -410,7 +410,7 @@ export const importData = mutation({
 			throw new ArgumentError("Invalid export format: missing version or tasks", parsed);
 		}
 
-		let dataToImport: IGraphNode<any, number>[] = [];
+		let dataToImport: IAppNode<any, number>[] = [];
 		switch (parsed.version) {
 			case "0.0.0": if ((parsed as any).tasks.length == 0) return 0;
 				// Convert ISO strings to timestamps (numbers) for Convex
@@ -460,7 +460,7 @@ export const importData = mutation({
 								status: node.status,
 								dueDate: node.dueDate ? new Date(node.dueDate).getTime() : undefined,
 							},
-						} satisfies IGraphNode<ProjectData<number>, number>
+						} satisfies IAppNode<ProjectData<number>, number>
 					} else {
 						throw new ConvexError({ type: "InvalidState", msg: "Failed to parse node type", ctx: { version: '0.0.0', data: node } });
 					}
@@ -469,7 +469,7 @@ export const importData = mutation({
 			case "0.0.1":
 				if ((parsed as any).nodes.length == 0) return 0;
 				// v0.0.1 uses nodes array with nested data structure (already in INode format)
-				dataToImport = (parsed as any).nodes.map((node: IGraphNode<TaskData<number> | ProjectData<number>, number>) => {
+				dataToImport = (parsed as any).nodes.map((node: IAppNode<TaskData<number> | ProjectData<number>, number>) => {
 					// Extract id for mapping, override userAuthId
 					return {
 						id: node.id,
@@ -479,7 +479,7 @@ export const importData = mutation({
 						created: node.created,
 						lastEdit: node.lastEdit,
 						data: node.data,
-					} satisfies IGraphNode<TaskData<number> | ProjectData<number>, number>;
+					} satisfies IAppNode<TaskData<number> | ProjectData<number>, number>;
 				});
 				break;
 			default:

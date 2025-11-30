@@ -8,11 +8,11 @@
 	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
 	import tasksAPI from '$lib/API/Tasks';
 	import { pendingNodeParams } from './logic/ui-state';
-	import type { GraphNode } from '$domain/models/node';
+	import type { AppNode } from '$domain/models/node';
 
 	type Props = {
 		open: boolean;
-		relation?: GraphNode;
+		relation?: AppNode;
 		relationMode?: 'child' | 'parent';
 	};
 

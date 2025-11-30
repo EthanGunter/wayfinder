@@ -106,7 +106,7 @@ export type FieldRegistry<TEntity> = Record<
 
 /** Value transform error */
 export class ValueTransformError extends Err {
-	constructor(public messageForUser: string, devMessage?: string, cause?: unknown) {
-		super("ValueTransformError", messageForUser, { messageForDev: devMessage, cause });
+	constructor(public msg: string, devMessage?: string, cause?: unknown) {
+		super("ValueTransformError", msg, { messageForDev: devMessage, cause });
 	}
 }

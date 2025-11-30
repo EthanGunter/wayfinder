@@ -39,7 +39,7 @@
 		try {
 			const [_, error] = await authAPI.login({ type: 'external' });
 			if (error) {
-				errorMessage = error.messageForUser || 'Login failed';
+				errorMessage = error.message || 'Login failed';
 			}
 			// OAuth flow will handle redirect via provider/callback
 		} catch (e: any) {
@@ -59,7 +59,7 @@
 		try {
 			const [_, error] = await authAPI.login({ type: 'email_password', email, password });
 			if (error) {
-				errorMessage = error.messageForUser || 'Login failed';
+				errorMessage = error.message || 'Login failed';
 				return;
 			}
 			goto(redir || '/planner');

@@ -1,10 +1,7 @@
 //#region IMPORTS
 import { get } from 'svelte/store';
-import type { Task } from '$domain/models/task';
-import type { SvelteFlowInstance } from '@xyflow/svelte';
-import type { FlowNode } from '../types';
-import { nodes, svelteFlowInstance } from './shared-state';
-import { selectedTask } from './ui-state';
+import { viewNodes, svelteFlowInstance } from './shared-state';
+import { selectedNode } from './ui-state';
 import { searchQuery, showRelatedNodes, handleSearch } from './search';
 import { Err } from '$domain/errors';
 //#endregion
@@ -15,7 +12,7 @@ export function centerAndHighlightNode(
 	options: { zoom: number } = { zoom: 1.5 }
 ) {
 	const instance = get(svelteFlowInstance);
-	const node = get(nodes).find((n) => n.id === taskId);
+	const node = viewNodes.get(taskId);
 	if (!instance || !node) return;
 
 	instance.setCenter(node.position.x, node.position.y, {
@@ -97,10 +94,10 @@ export async function initializeFromUrl(params: URLSearchParams) {
 
 	if (selectId) {
 		setTimeout(() => {
-			const node = get(nodes).find((n) => n.id === selectId);
+			const node = viewNodes.get(selectId);
 			centerAndHighlightNode(selectId);
-			if (node?.data.wfNode.data.type === 'task') { // ew lol
-				selectedTask.set(node.data.wfNode);
+			if (node?.data.appNode.data.type === 'task') { // ew lol
+				selectedNode.set(node.data.appNode);
 			}
 		}, 500);
 	}

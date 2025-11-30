@@ -1,5 +1,5 @@
 import type { InvalidStateError, ArgumentError, NotAuthorizedError, NotFoundError } from "$domain/errors";
-import type { GraphNode, IGraphNode } from "$domain/models/node";
+import type { AppNode, IAppNode } from "$domain/models/node";
 import type { ProjectData } from "$domain/models/project";
 import type { CreateTaskParams, ExportedData, TaskData, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
@@ -16,25 +16,25 @@ export interface ITasksBase {
 	getTasks(ids: string[]): QueryableStore<{ ids: string[] }, Task[]>;
 	getAllUserTasks(userId?: string): QueryableStore<{ userId?: string }, Task[]>;
 
-	updateTask(params: UpdateTaskParams): Promise<Result<{ updated: GraphNode, affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
-	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<{ updated: GraphNode[], affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	updateTask(params: UpdateTaskParams): Promise<Result<{ updated: AppNode, affected: AppNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	updateTasks(params: { updates: UpdateTaskParams[] }): Promise<Result<{ updated: AppNode[], affected: AppNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 
-	deleteTask(params: { id: string }): Promise<Result<{ affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
-	deleteTasks(params: { ids: string[] }): Promise<Result<{ affected: GraphNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	deleteTask(params: { id: string }): Promise<Result<{ affected: AppNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
+	deleteTasks(params: { ids: string[] }): Promise<Result<{ affected: AppNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 
 	/**
 	 * Finds all GraphNodes that must be completed before `id`
 	 */
-	getChildrenOf(id: string): QueryableStore<{ id: string }, GraphNode[]>;
+	getChildrenOf(id: string): QueryableStore<{ id: string }, AppNode[]>;
 	/**
 	 * Gets all GraphNodes that are waiting for `id`
 	 */
-	getParentsOf(id: string): QueryableStore<{ id: string }, GraphNode[]>;
+	getParentsOf(id: string): QueryableStore<{ id: string }, AppNode[]>;
 	/**
 	 * Gets all GraphNodes that are children of the same parents as `id`
 	 * @note keyed by parent
 	 */
-	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<GraphNode, GraphNode[]>>;
+	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<AppNode, AppNode[]>>;
 	/**
 	 * Gets all GraphNodes that nothing depends on
 	*/
@@ -70,8 +70,8 @@ export interface ITasksRemote extends ITasksBase {
 	*/
 	/* TODO:sync/tasks/refactor An example of divergence between the client-side and remote side APIs. The server should return id updates, 
 	the client should frankly return void, since we're using a subscription-based data model */
-	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ created: Task & { data: TaskData<Date> & { givenId?: string } }, affected: GraphNode[] }, NotAuthorizedError | InvalidStateError>>;
-	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ created: (Task & { data: TaskData<Date> & { givenId?: string } })[], affected: GraphNode[] }, NotAuthorizedError>>;
+	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ created: Task & { data: TaskData<Date> & { givenId?: string } }, affected: AppNode[] }, NotAuthorizedError | InvalidStateError>>;
+	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ created: (Task & { data: TaskData<Date> & { givenId?: string } })[], affected: AppNode[] }, NotAuthorizedError>>;
 
 	// TODO:sync migrate un-synced user data
 	// changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<Result<Task[], NotAuthorizedError>>;
@@ -80,7 +80,7 @@ export interface ITasksRemote extends ITasksBase {
 export interface ITasksLocal extends ITasksBase {
 	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<string, InvalidStateError>>;
 	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<string[], InvalidStateError | ArgumentError>>;
-	handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string>, affectedTasks: GraphNode[] }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
+	handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string>, affectedTasks: AppNode[] }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
 
 	handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;
 

@@ -190,7 +190,7 @@
 		<button onclick={toggleLink}><Icon icon="lucide:link" /></button>
 	</div> -->
 
-	<div bind:this={container} class="markdown p-2" />
+	<div bind:this={container} class="markdown p-2" ></div>
 </div>
 
 <style>

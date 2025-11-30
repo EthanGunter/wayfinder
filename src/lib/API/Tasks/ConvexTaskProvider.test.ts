@@ -13,7 +13,7 @@ import {
 	waitForStoreValue,
 } from "./seam-interfaces.test";
 import { ConvexError } from "convex/values";
-import type { GraphNode } from "$domain/models/node";
+import type { AppNode } from "$domain/models/node";
 
 //#region Mock ConvexClient
 
@@ -122,7 +122,7 @@ function createTestHelpers(testCtx: any, provider: ITasksRemote): TestHelpers {
 			return null;
 		},
 
-		async getAllTasksForUser(userId: string, excludeRoot = false): Promise<GraphNode[]> {
+		async getAllTasksForUser(userId: string, excludeRoot = false): Promise<AppNode[]> {
 			const store = provider.getAllUserTasks(userId);
 			const value = await waitForStoreValue(
 				store,

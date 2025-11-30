@@ -24,9 +24,9 @@
 	import { drawerOpen, drawerParams } from './logic/ui-state';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	import MarkdownEditor from '$lib/components/ui/markdown-editor';
-	import type { GraphNode } from '$domain/models/node';
+	import type { AppNode } from '$domain/models/node';
 
-	export interface TaskEditorLayoutState {
+	export interface NodeEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
 		showCompletedSiblings: boolean;
@@ -36,7 +36,7 @@
 		onTaskChange: (original: Task, update: Omit<UpdateTaskParams, 'id'>) => void;
 		onDelete: (task: Task) => void;
 		onSelectNode?: (taskId: string, options?: { select?: boolean }) => void;
-		layoutState?: TaskEditorLayoutState;
+		layoutState?: NodeEditorLayoutState;
 	}
 
 	// Props
@@ -112,7 +112,7 @@
 		if (siblingsMap.status !== 'resolved') return;
 
 		// Find parent task by ID (Map keys are object references)
-		let parent: GraphNode | undefined;
+		let parent: AppNode | undefined;
 		for (const [p] of siblingsMap.value.entries()) {
 			if (p.id === parentId) {
 				parent = p;
@@ -169,7 +169,7 @@
 	}
 
 	function handleAddChildTask(parentId: string) {
-		let parent: GraphNode | undefined;
+		let parent: AppNode | undefined;
 
 		// For children list, parent is the current task
 		if (parentId === task.id) {

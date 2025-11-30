@@ -42,7 +42,7 @@
 		const [data, resetError] = await authAPI.resetPassword(token, password);
 
 		if (resetError) {
-			error = resetError.messageForUser;
+			error = resetError.message;
 			loading = false;
 			return;
 		} else {

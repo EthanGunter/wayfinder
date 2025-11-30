@@ -1,6 +1,6 @@
 import type { NotFoundError, Err, NotAuthorizedError, InvalidStateError } from "$domain/errors";
 import { type Result } from "$domain/result";
-import type { GraphData, IGraphNode as IGraphNode } from "./node";
+import type { AppData, AppNode, IAppNode as IAppNode } from "./node";
 import type { ProjectData } from "./project";
 
 //#region Task Data Interface and Utilities
@@ -9,7 +9,7 @@ import type { ProjectData } from "./project";
  * Task type alias - a full node containing task data
  * This is what the API returns and what the UI consumes
  */
-export type Task<TimeFormat = Date> = IGraphNode<TaskData<TimeFormat>, TimeFormat>;
+export type Task<TimeFormat = Date> = IAppNode<TaskData<TimeFormat>, TimeFormat>;
 
 /**
  * Task-specific data embedded in nodes
@@ -39,8 +39,8 @@ export enum TaskStatus {
 }
 
 
-export function isTaskCompleted(task: Task): boolean {
-    return task.data.status === TaskStatus.complete;
+export function isTaskCompleted(task: AppNode): boolean {
+    return task.data.type === 'task' && task.data.status === TaskStatus.complete;
 }
 
 //#endregion
@@ -175,7 +175,7 @@ export interface ExportedData {
 
 // #region Shared function parameter types
 
-type StrippedNodeParams<DataType, TimeFormat = Date> = Partial<Omit<IGraphNode<any, TimeFormat>, "data" | "id">> & Omit<DataType, "type">;
+type StrippedNodeParams<DataType, TimeFormat = Date> = Partial<Omit<IAppNode<any, TimeFormat>, "data" | "id">> & Omit<DataType, "type">;
 
 export type CreateNodeParams<DataType = unknown, TimeFormat = Date> = Partial<StrippedNodeParams<DataType, TimeFormat>> & DataType;
 export type CreateTaskParams<TimeFormat = Date> = Partial<StrippedNodeParams<TaskData<TimeFormat>, TimeFormat>> & { id?: string; title: string }

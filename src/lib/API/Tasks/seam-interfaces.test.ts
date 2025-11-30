@@ -5,7 +5,7 @@ import type { Result } from "$domain/result";
 import type { NotAuthorizedError, NotFoundError, InvalidStateError, ArgumentError } from "$domain/errors";
 import type { FetchableStore, QueryableStore } from "../fetchableStore";
 import type { Fetchable } from "$domain/fetchable";
-import type { GraphNode, IGraphNode } from "$domain/models/node";
+import type { AppNode, IAppNode } from "$domain/models/node";
 
 //#region Store Testing Utilities
 
@@ -92,12 +92,12 @@ export interface TestHelpers {
 	/**
 	 * Get all tasks for a user (for verification)
 	 */
-	getAllTasksForUser(userId: string, excludeRoot?: boolean): Promise<GraphNode[]>;
+	getAllTasksForUser(userId: string, excludeRoot?: boolean): Promise<AppNode[]>;
 
 	/**
 	 * Assert bidirectional relationship between parent and child
 	 */
-	assertBidirectionalRelationship(parent: GraphNode, child: GraphNode): void;
+	assertBidirectionalRelationship(parent: AppNode, child: AppNode): void;
 
 	/**
 	 * Create a mock authenticated user context
