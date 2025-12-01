@@ -19,6 +19,15 @@ export const settings = {
 				desc: "Should completed tasks be shown in the graph",
 				defaultValue: true,
 			}),
+		},
+		layout: {
+			$label: "Layout",
+			algorithm: EnumSetting.fromValues({
+				label: "Algorithm",
+				desc: "Which algorithm should be used to layout the graph?",
+				defaultValue: "Layered",
+				options: ["Layered", "Stress"],
+			}),
 			autoLayout: new BoolSetting({
 				label: "Auto layout",
 				desc: "Should the graph layout automatically update when tasks are added or completed?",

@@ -2,9 +2,10 @@
 	import { Handle, Position } from '@xyflow/svelte';
 	import { isTaskCompleted } from '$domain/models/task';
 	import { devEnabled } from '$lib/user-settings';
-	import type { ViewNodeData } from './logic/layout/LayoutEngine';
+	import type { ViewNode, ViewNodeData } from './logic/layout/LayoutEngine';
 	import Icon from '@iconify/svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import { viewNodes } from './logic/shared-state';
 
 	interface Props {
 		id: string;
@@ -12,9 +13,24 @@
 		selected: boolean;
 	}
 
-	let { id, data: flowData, ...rest }: Props = $props();
+	let { id, data: flowData, ...rest }: ViewNode = $props();
+
 
 	const isDimmed = $derived(flowData.dimmed ?? false);
+	const isPinned = $derived(!!flowData.pinned);
+
+
+	function togglePinned(pin: boolean) {
+		const node = viewNodes.get(id);
+		if (!node) return;
+
+		// TODO: sync pinned state to DB
+		// Create new data object to trigger reactivity in SvelteFlow
+		viewNodes.set(id, {
+			...node,
+			data: { ...node.data, pinned: pin || undefined }
+		});
+	}
 
 	// Track animation state for one-time fade-out effect
 	let isAnimating = $state(false);
@@ -70,6 +86,11 @@
 			class:highlighted={isAnimating}
 			class:dimmed={isDimmed}
 		>
+			{#if isPinned}
+				<div class="absolute -top-1.5 -right-1.5 text-gray-500" title="Pinned">
+					<Icon icon="lucide:pin" class="size-3.5" />
+				</div>
+			{/if}
 			<div class="flex items-start gap-2 px-3 py-2">
 				<div class="flex min-w-0 flex-1 items-center gap-2">
 					<div
@@ -110,7 +131,9 @@
 		</div>
 	</ContextMenu.Trigger>
 	<ContextMenu.Content>
-		<ContextMenu.CheckboxItem>Pinned</ContextMenu.CheckboxItem>
+		<ContextMenu.CheckboxItem checked={isPinned} onCheckedChange={togglePinned}>
+			Pin 📌
+		</ContextMenu.CheckboxItem>
 	</ContextMenu.Content>
 </ContextMenu.Root>
 

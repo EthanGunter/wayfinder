@@ -4,7 +4,7 @@ import tasksAPI from '$lib/API/Tasks';
 import { viewNodes, viewEdges, appData, getEdgeKey, svelteFlowInstance } from './shared-state';
 import { drawerOpen, drawerParams, pendingNodeParams, selectedNode } from './ui-state';
 import type { Task, UpdateTaskParams } from '$domain/models/task';
-import { viewToLayout, type LayoutNode, type ViewEdge, type ViewNode } from './layout/LayoutEngine';
+import type { ViewEdge, ViewNode } from './layout/LayoutEngine';
 import { layoutEngine } from './layout';
 import type { AppNode } from '$domain/models/node';
 import { ArgumentError, InvalidStateError } from '$domain/errors';
@@ -281,17 +281,17 @@ function onpaneclick() {
 
 const onnodedragstart: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
 	if (!targetNode) return;
-	layoutEngine.onNodeDragged(targetNode.id, viewToLayout(targetNode));
+	layoutEngine.onNodeDragged(targetNode.id, targetNode.position);
 }
 
 const onnodedrag: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
 	if (!targetNode) return;
-	layoutEngine.onNodeDragged(targetNode.id, viewToLayout(targetNode));
+	layoutEngine.onNodeDragged(targetNode.id, targetNode.position);
 }
 
 const onnodedragstop: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
 	if (!targetNode) return;
-	layoutEngine.onNodeDragEnd(targetNode.id, viewToLayout(targetNode));
+	layoutEngine.onNodeDragEnd(targetNode.id, targetNode.position);
 }
 
 async function ondelete(params: { nodes: ViewNode[]; edges: ViewEdge[] }) {
@@ -436,14 +436,11 @@ export class SvelteFlowAdapter {
 				const idx = this.nodeIndex.get(key);
 				if (idx === undefined) return;
 
-				// DON'T replace - object is mutated in place
-				// Just trigger Svelte reactivity if needed
-				const currentArr = get(this.nodes);
-				if (currentArr[idx] !== value) {
-					// Only update if it's actually a different object
-					currentArr[idx] = value!;
-					this.nodes.set(currentArr);
-				}
+				// Create new array to trigger Svelte reactivity
+				this.nodes.update(arr => {
+					arr[idx] = value!;
+					return [...arr];
+				});
 			} else if (op === 'delete') {
 				// delete node
 				const idx = this.nodeIndex.get(key);

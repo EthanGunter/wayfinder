@@ -29,6 +29,11 @@
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	import { layoutEngine } from './logic/layout';
 	import { Switch } from '$lib/components/ui/switch';
+	import * as Select from '$lib/components/ui/select';
+	import * as ButtonGroup from '$lib/components/ui/button-group';
+	import { settings } from '$lib/user-settings';
+
+	const algorithmSetting = settings.graph.layout.algorithm;
 
 	let unsubTasksStore: (() => void) | null = null;
 	let unsubShowNodes: (() => void) | null = null;
@@ -70,21 +75,22 @@
 			changes.forEach(([id, node]) => {
 				appData.set(id, node);
 			});
-
-			layoutEngine.start(300);
-			// $layoutPaused = false;
-
-			setTimeout(() => {
-				$svelteFlowInstance?.fitView();
-			}, 100);
 		});
 		unsubShowNodes = showCompletedNodes.subscribe((show) => {
 			if (show) {
-				layoutEngine.start();
+				layoutEngine.start(150);
 			}
 		});
 
 		initializeFromUrl(page.url.searchParams);
+
+		setTimeout(() => {
+			console.log('[Graph] start layout engine');
+			layoutEngine.start();
+			console.log('[Graph] fit view');
+			$svelteFlowInstance?.fitView({ duration: 100 });
+		}, 200);
+
 		return () => {
 			unsubTasksStore?.();
 		};
@@ -127,7 +133,7 @@
 					class="h-full w-full"
 					minZoom={0.1}
 					maxZoom={2}
-					nodeTypes={{ task: TaskNode }}
+					nodeTypes={{ task: TaskNode as any }}
 					nodeOrigin={[0.5, 0.5]}
 					edgeTypes={{ task: TaskEdge }}
 					defaultEdgeOptions={{ type: 'task' }}
@@ -147,30 +153,63 @@
 				>
 					+
 				</Button>
-				<div class="width-max absolute top-6 right-6 grid grid-cols-[12rem] [&>*]:h-[3rem] items-center gap-1">
-					<label
-						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
+				<div
+					class="width-max absolute top-6 right-6 grid grid-cols-[12rem] items-center gap-1 [&>*]:h-[3rem]"
+				>
+					<!-- 					<Select.Root
+						type="single"
+						value={$algorithmSetting}
+						onValueChange={(v) => {
+							if (v) {
+								algorithmSetting.set(v as typeof $algorithmSetting);
+								layoutEngine.start();
+							}
+						}}
 					>
-						<Switch bind:checked={$showCompletedNodes} />
-						<span>Show completed</span>
-					</label>
+						<Select.Trigger
+							class="h-9 w-full rounded-md border-1 border-border bg-white px-3 text-sm"
+						>
+							{$algorithmSetting}
+						</Select.Trigger>
+						<Select.Content>
+							{#each algorithmSetting.options as opt}
+								<Select.Item value={opt.value}>{opt.label}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root> -->
+
 					<label
 						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
 					>
 						<Switch bind:checked={$autoLayout} />
 						<span>Auto layout</span>
-						{#if !$autoLayout}
 							<Button
 								variant="outline"
-								class="h-7 w-8 rounded-full border-1 border-border bg-white p-0 m-auto"
+								class="m-auto h-7 w-8 rounded-full border-1 border-border bg-white p-0"
 								onclick={() => {
 									layoutEngine.start();
 								}}
 							>
 								<Icon icon="lucide:refresh-cw" />
 							</Button>
-						{/if}
 					</label>
+					<label
+						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
+					>
+						<Switch bind:checked={$showCompletedNodes} />
+						<span>Show completed</span>
+					</label>
+					<ButtonGroup.Root class="flex w-full justify-end">
+						<Button
+							variant="outline"
+							class="flex h-9 items-center justify-center gap-2 rounded-md border-1 border-border bg-white px-3 text-sm"
+							onclick={() => {
+								$svelteFlowInstance?.fitView({ duration: 100 });
+							}}
+						>
+							<Icon icon="fluent:page-fit-24-regular" class="size-6" />
+						</Button>
+					</ButtonGroup.Root>
 				</div>
 			</div>
 		</SvelteFlowProvider>

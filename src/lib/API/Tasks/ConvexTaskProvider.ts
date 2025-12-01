@@ -43,7 +43,7 @@ function reconstructError(error: unknown): Err {
 }
 
 // Internal update functions (non-debounced)
-async function _updateTask(update: UpdateTaskParams) {	
+async function _updateTask(update: UpdateTaskParams) {
 	try {
 		const res = await client.mutation(convexApi.tasks.updateTask, convexifyTaskUpdate(update));
 		return ok({
@@ -368,13 +368,13 @@ export const localApi: ITasksLocal = {
 	createTask: async ({ createDetail }) => {
 		const [res, e] = await api.createTask({ createDetail });
 		if (e) return err(e);
-		return ok(res.created.data.givenId!); // id is required from client, so it will be returned from server
+		return ok({ newId: res.created.id!, oldId: res.created.data.givenId! }); // id is required from client, so it will be returned from server
 	},
 	createTasks: async ({ createDetails }) => {
 		const [res, e] = await api.createTasks({ createDetails });
 		if (e) return err(e);
 		// Prefer authoritative ids from affectedTasks if mapping is empty
-		return ok(res.created.map(t => t.data.givenId!));
+		return ok(res.created.map(t => ({ newId: t.id, oldId: t.data.givenId! })));
 	},
 
 	getTask: (params) => api.getTask(params),

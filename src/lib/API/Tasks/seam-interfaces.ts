@@ -78,8 +78,8 @@ export interface ITasksRemote extends ITasksBase {
 }
 
 export interface ITasksLocal extends ITasksBase {
-	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<string, InvalidStateError>>;
-	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<string[], InvalidStateError | ArgumentError>>;
+	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ oldId: string, newId: string }, InvalidStateError>>;
+	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ oldId: string, newId: string }[], InvalidStateError | ArgumentError>>;
 	handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string>, affectedTasks: AppNode[] }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
 
 	handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;

@@ -4,7 +4,6 @@ import type { SvelteFlowInstance } from '@xyflow/svelte';
 import type { AppNode } from '$domain/models/node';
 import type { ViewNode, ViewEdge } from './layout/LayoutEngine';
 import { ReadableMap } from '$lib/API/ReadableMap';
-import type { LayoutNode } from './layout/LayoutEngine';
 import { isTaskCompleted } from '$domain/models/task';
 import { showCompletedNodes } from './ui-state';
 
@@ -20,8 +19,6 @@ export const appData: ReadableMap<string, AppNode> = new ReadableMap();
 export const viewNodes: ReadableMap<string, ViewNode> = new ReadableMap();
 export const viewEdges: ReadableMap<string, ViewEdge> = new ReadableMap();
 
-export const layoutPositions: ReadableMap<string, LayoutNode> = new ReadableMap();
-
 // Helper to check if two arrays have the same elements (order-independent)
 function arraysEqual(a: string[], b: string[]): boolean {
 	if (a.length !== b.length) return false;
@@ -36,6 +33,7 @@ function arraysEqual(a: string[], b: string[]): boolean {
 
 
 appData.subscribe(({ key, value, op }) => {
+	console.log('[appData] update: ' + key + ' op: ' + op);
 	if (op === "delete") {
 		{
 			const node = viewNodes.get(key);
@@ -157,29 +155,6 @@ appData.subscribe(({ key, value, op }) => {
 			}
 		}
 	}
-});
-layoutPositions.subscribe(({ key, value, op }) => {
-	if (op === 'delete' || !value) return;
-	const node = viewNodes.get(key);
-	if (!node) {
-		return;
-	}
-
-
-	const EPS = 0.25;
-	const dx = Math.abs(node.position.x - value.x);
-	const dy = Math.abs(node.position.y - value.y);
-	const draggingChanged = node.dragging !== value.fixed;
-
-	if (dx < EPS && dy < EPS && !draggingChanged) return;
-
-	// MUTATE instead of replace
-	node.position.x = value.x;
-	node.position.y = value.y;
-	node.dragging = value.fixed;
-
-	// Notify subscribers without creating new object
-	viewNodes.set(key, node); // Same object reference
 });
 
 

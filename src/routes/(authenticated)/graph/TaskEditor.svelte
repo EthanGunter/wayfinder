@@ -25,6 +25,7 @@
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	import MarkdownEditor from '$lib/components/ui/markdown-editor';
 	import type { AppNode } from '$domain/models/node';
+	import { centerAndHighlightNode } from './logic/navigation';
 
 	export interface NodeEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
@@ -249,7 +250,7 @@
 	class="relative flex h-full w-full flex-col bg-white {checked ? 'bg-[#efe]' : ''}"
 >
 	{#snippet header()}
-		<div class="flex items-start gap-2 px-2 py-2">
+		<div class="flex items-start gap-2 p-2 h-10">
 			<Checkbox
 				class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
 				aria-label="Toggle complete"
@@ -264,9 +265,26 @@
 				placeholder="Task title"
 				oninput={handleInput}
 			/>
+			<button
+				class="
+				flex
+				size-6
+				shrink-0
+				items-center
+				justify-center
+				rounded-full
+				text-gray-400
+				hover:cursor-pointer
+				hover:bg-blue-50
+				hover:text-blue-600
+				"
+				onclick={() => centerAndHighlightNode(task.id)}
+			>
+				<Icon icon="lucide:locate" />
+			</button>
 			<Separator orientation="vertical" />
 			<button
-				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+				class="flex size-6 shrink-0 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
 				title="Delete task"
 				onclick={confirmDelete}
 			>

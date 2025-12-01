@@ -2,8 +2,10 @@
 import { isTaskCompleted, type Task } from '$domain/models/task';
 // @ts-ignore
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js';
-import type { LayoutEngine, LayoutNode } from './LayoutEngine';
-import { viewNodes, layoutPositions, getEdgeKey } from '../shared-state';
+import type { LayoutEngine } from './LayoutEngine';
+import { viewNodes, getEdgeKey } from '../shared-state';
+import { settings } from '$lib/user-settings';
+import { get } from 'svelte/store';
 //#endregion
 
 //#region CONSTANTS
@@ -13,43 +15,105 @@ const MIN_NODE_WIDTH = 100;
 const MIN_NODE_HEIGHT = 40;
 //#endregion
 
+//#region ALGORITHM PRESETS
+export type ElkAlgorithm = 'Layered' | 'Stress';
+
+const LAYERED_OPTIONS: Record<string, string> = {
+	'elk.algorithm': 'layered',
+	'elk.direction': 'RIGHT',
+	'elk.layered.spacing.nodeNodeBetweenLayers': '150',
+	'elk.spacing.nodeNode': '40',
+	'elk.layered.nodePlacement.strategy': 'LINEAR_SEGMENTS',
+	'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+	'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+	'elk.layered.crossingMinimization.semiInteractive': 'false',
+	'elk.layered.cycleBreaking.strategy': 'GREEDY',
+	'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+	'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+	'elk.layered.compaction.connectedComponents': 'true',
+	'elk.layered.spacing.edgeNodeBetweenLayers': '20',
+	'elk.layered.spacing.edgeEdgeBetweenLayers': '10',
+	'elk.edgeRouting': 'ORTHOGONAL',
+	'elk.layered.thoroughness': '10',
+	'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+};
+
+const STRESS_OPTIONS: Record<string, string> = {
+	'elk.algorithm': 'stress',
+	'elk.spacing.nodeNode': '80',
+	'elk.stress.desiredEdgeLength': '150',
+	'elk.stress.epsilon': '0.001',
+	'elk.stress.iterationLimit': '300',
+};
+
+const algorithmSetting = settings.graph.layout.algorithm;
+//#endregion
+
 //#region MAIN
 export class ElkLayoutEngine implements LayoutEngine {
 	private elk: InstanceType<typeof ELK>;
-	private direction: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
+	private pendingLayout: ReturnType<typeof setTimeout> | null = null;
 
 	constructor() {
 		this.elk = new ELK();
-		this.direction = 'RIGHT';
 	}
 
-	/** Triggers a one-time layout computation. */
-	start(): void {
-		this.computeLayout();
+	/** Triggers layout computation. If delay is provided, debounces multiple calls. */
+	start(delay?: number): void {
+		if (this.pendingLayout) {
+			clearTimeout(this.pendingLayout);
+			this.pendingLayout = null;
+		}
+
+		if (delay && delay > 0) {
+			this.pendingLayout = setTimeout(() => {
+				this.pendingLayout = null;
+				this.computeLayout();
+			}, delay);
+		} else {
+			this.computeLayout();
+		}
 	}
 
-	/** No-op for ELK (nothing continuously running). */
+	/** Cancels any pending layout computation. */
 	stop(): void {
-		// ELK doesn't run continuously, nothing to stop
+		if (this.pendingLayout) {
+			clearTimeout(this.pendingLayout);
+			this.pendingLayout = null;
+		}
 	}
 
-	/** Track dragged node position (for potential future re-layouts). */
-	onNodeDragged(id: string, pos: LayoutNode): void {
-		layoutPositions.set(id, { ...pos, fixed: true });
+	/** Track dragged node position. */
+	onNodeDragged(id: string, position: { x: number; y: number }): void {
+		const node = viewNodes.get(id);
+		if (!node) return;
+		node.position.x = position.x;
+		node.position.y = position.y;
+		node.dragging = true;
+		viewNodes.set(id, node);
 	}
 
 	/** Update position after drag ends. */
-	onNodeDragEnd(id: string, pos: LayoutNode): void {
-		layoutPositions.set(id, { ...pos, fixed: false });
+	onNodeDragEnd(id: string, position: { x: number; y: number }): void {
+		const node = viewNodes.get(id);
+		if (!node) return;
+		node.position.x = position.x;
+		node.position.y = position.y;
+		node.dragging = false;
+		viewNodes.set(id, node);
 	}
 
 	destroy(): void {
-		// Nothing to clean up for triggered layout
+		this.stop();
 	}
 
 	private async computeLayout(): Promise<void> {
 		const viewNodeData = Array.from(viewNodes.values());
+		console.log('[ELKLayoutEngine] compute layout (computeLayout) on viewNodes: ' + viewNodeData.length);
 		if (viewNodeData.length === 0) return;
+
+		const algorithm = get(algorithmSetting) as ElkAlgorithm;
+		const isStress = algorithm === 'Stress';
 
 		// Measure node sizes from DOM or use defaults
 		const tasks = viewNodeData
@@ -69,11 +133,26 @@ export class ElkLayoutEngine implements LayoutEngine {
 
 		const elkNodes = viewNodeData.map((n) => {
 			const size = getSize(n.id);
-			return { id: n.id, /* width: size.width, height: size.height */ };
+			const nodeOpts: Record<string, string> = {};
+
+			// For stress algorithm, pinned nodes are truly fixed
+			if (isStress && n.data.pinned) {
+				nodeOpts['org.eclipse.elk.stress.fixed'] = 'true';
+			}
+
+			return {
+				id: n.id,
+				width: size.width,
+				height: size.height,
+				// Always provide positions (needed for interactive layered + stress fixed)
+				x: n.position.x,
+				y: n.position.y,
+				...(Object.keys(nodeOpts).length > 0 && { layoutOptions: nodeOpts }),
+			};
 		});
 
 		// Build edges from viewNodes relationships
-		const nodes = new Set<string>(elkNodes.map(n => n.id))
+		const nodes = new Set<string>(elkNodes.map(n => n.id));
 		const seen = new Set<string>();
 		const elkEdges: { id: string; sources: string[]; targets: string[] }[] = [];
 		for (const node of viewNodeData) {
@@ -95,49 +174,26 @@ export class ElkLayoutEngine implements LayoutEngine {
 			}
 		}
 
+		const layoutOptions = isStress ? STRESS_OPTIONS : LAYERED_OPTIONS;
+
 		const elkGraph = {
 			id: 'root',
-			layoutOptions: {
-				'elk.algorithm': 'layered',
-				'elk.direction': this.direction,
-				'elk.layered.spacing.nodeNodeBetweenLayers': this.direction === 'RIGHT' ? "150" : "80",
-				'elk.spacing.nodeNode': "40",
-				'elk.layered.nodePlacement.strategy': 'LINEAR_SEGMENTS',
-				'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
-				'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-				'elk.layered.crossingMinimization.semiInteractive': "false",
-				'elk.layered.cycleBreaking.strategy': 'GREEDY',
-				'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
-				'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-				'elk.layered.compaction.connectedComponents': "true",
-				'elk.layered.spacing.edgeNodeBetweenLayers': "20",
-				'elk.layered.spacing.edgeEdgeBetweenLayers': "10",
-				'elk.edgeRouting': 'ORTHOGONAL',
-				'elk.layered.thoroughness': "10",
-			},
+			layoutOptions,
 			children: elkNodes,
 			edges: elkEdges,
 		} satisfies ElkNode;
 
 		const laidOut = await this.elk.layout(elkGraph);
 
-		// Write positions to layoutPositions store
+		// Write positions directly to viewNodes (skip pinned nodes)
 		for (const elkNode of laidOut.children || []) {
 			const id = String(elkNode.id);
 			const viewNode = viewNodes.get(id);
-			if (!viewNode) continue;
+			if (!viewNode || viewNode.data.pinned) continue;
 
-			const size = getSize(id);
-			const position: LayoutNode = {
-				id,
-				type: viewNode.type,
-				x: elkNode.x ?? 0,
-				y: elkNode.y ?? 0,
-				// width: size.width,
-				// height: size.height,
-				fixed: false,
-			};
-			layoutPositions.set(id, position);
+			viewNode.position.x = elkNode.x ?? 0;
+			viewNode.position.y = elkNode.y ?? 0;
+			viewNodes.set(id, viewNode);
 		}
 	}
 }
