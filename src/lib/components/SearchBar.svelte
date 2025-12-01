@@ -38,8 +38,8 @@
 	let inputElement: HTMLInputElement | undefined = $state();
 	let blurTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-	export function focus() {
-		inputElement?.focus();
+	export function select() {
+		inputElement?.select();
 	}
 
 	export function blur() {
@@ -172,7 +172,7 @@
 
 	{#if isLoading}
 		<div
-			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max min-w-full max-w-[90vw] -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
+			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max max-w-[90vw] min-w-full -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
 		>
 			Searching...
 		</div>
@@ -182,7 +182,7 @@
 			bind:this={resultsElement}
 			onmousedown={handleResultsMouseDown}
 			role="listbox"
-			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max min-w-full max-w-[90vw] -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
+			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max max-w-[90vw] min-w-full -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
 			class:bottom-full={inverted}
 		>
 			{#each sortedDisplayResults as result (getKey(result))}

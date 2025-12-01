@@ -42,7 +42,7 @@ export const settings = {
 				desc: "Fit all nodes in view",
 				defaultValue: { primary: false, shift: false, alt: false, key: 'F' },
 			}),
-			search: new KeybindSetting({
+			search: new KeybindSetting({ // TODO: This is likely a bad category for a keybing that will likely be used in multiple contexts
 				label: "Search",
 				desc: "Search for a task",
 				defaultValue: { primary: true, shift: false, alt: false, key: 'F' },

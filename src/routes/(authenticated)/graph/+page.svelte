@@ -98,7 +98,7 @@
 
 		setTimeout(() => {
 			layoutEngine.start();
-			$svelteFlowInstance?.fitView({ duration: 100 });
+			fitTarget();
 		}, 200);
 
 		return () => {
@@ -127,13 +127,25 @@
 		$selectedNode = appData.get(taskId) ?? null;
 		centerAndHighlightNode(taskId);
 	}
+
+	function fitTarget() {
+		if ($selectedNode) {
+			centerAndHighlightNode($selectedNode.id);
+		} else {
+			$svelteFlowInstance?.fitView({ duration: 400 });
+		}
+	}
 </script>
 
 <AppHeader>
 	<!-- svelte-ignore element_invalid_self_closing_tag -->
 	<div
 		class="hidden"
-		use:keybind={{ setting: settings.graph.keybinds.search, action: () => searchBar?.focus(), target: document }}
+		use:keybind={{
+			setting: settings.graph.keybinds.search,
+			action: () => searchBar?.select(),
+			target: document
+		}}
 	/>
 	<TaskSearchBar
 		bind:this={searchBar}
@@ -147,7 +159,7 @@
 	tabindex="0"
 	use:keybind={{
 		setting: fitViewKeybind,
-		action: () => $svelteFlowInstance?.fitView({ duration: 100 })
+		action: fitTarget
 	}}
 >
 	<Resizable.PaneGroup direction="horizontal" class="flex min-h-0">
@@ -230,7 +242,7 @@
 								variant="outline"
 								class="flex h-9 items-center justify-center gap-2 rounded-md border-1 border-border bg-white px-3 text-sm"
 								onclick={() => {
-									$svelteFlowInstance?.fitView({ duration: 100 });
+									fitTarget();
 								}}
 							>
 								<Icon icon="fluent:page-fit-24-regular" class="size-6" />

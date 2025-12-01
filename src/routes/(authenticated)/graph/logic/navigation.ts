@@ -9,14 +9,14 @@ import { Err } from '$domain/errors';
 //#region CENTER/HIGHLIGHT
 export function centerAndHighlightNode(
 	taskId: string,
-	options: { zoom: number } = { zoom: 1.5 }
+	options: { zoom?: number, duration?: number } = { zoom: 1.5, duration: 400 }
 ) {
 	const instance = get(svelteFlowInstance);
 	const node = viewNodes.get(taskId);
 	if (!instance || !node) return;
 
 	instance.setCenter(node.position.x, node.position.y, {
-		duration: 500,
+		duration: options.duration,
 		zoom: options.zoom,
 	});
 

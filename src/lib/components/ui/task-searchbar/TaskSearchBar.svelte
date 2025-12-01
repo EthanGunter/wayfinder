@@ -15,8 +15,8 @@
 	let num = $state(0);
 	let searchBar: SearchBar<Task> | undefined = $state();
 
-	export function focus() {
-		searchBar?.focus();
+	export function select() {
+		searchBar?.select();
 	}
 
 	export function blur() {
