@@ -35,7 +35,16 @@
 	let showResults = $state(false);
 	let isLoading = $state(false);
 	let resultsElement: HTMLUListElement | null = $state(null);
+	let inputElement: HTMLInputElement | undefined = $state();
 	let blurTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	export function focus() {
+		inputElement?.focus();
+	}
+
+	export function blur() {
+		inputElement?.blur();
+	}
 
 	async function handleInput(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -146,6 +155,7 @@
 <div class="relative flex-1 rounded border-1 border-black/10 {className}">
 	{#if !inverted}
 		<input
+			bind:this={inputElement}
 			name={htmlName}
 			type="text"
 			bind:value={query}
@@ -197,6 +207,7 @@
 
 	{#if inverted}
 		<input
+			bind:this={inputElement}
 			name={htmlName}
 			type="text"
 			bind:value={query}

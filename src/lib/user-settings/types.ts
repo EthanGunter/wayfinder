@@ -4,10 +4,11 @@ import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import type { SvelteComponent } from 'svelte';
 import type { UserFeature } from '$domain/models/user';
 import { authAPI, authState } from '$lib/API/Auth';
+import type { KeybindSetting } from './keybind';
 
 export type SettingScope = 'user' | 'device';
 
-interface BaseSettingArgs<T> {
+export interface BaseSettingArgs<T> {
   label: string;
   defaultValue: T;
   desc?: string;
@@ -237,7 +238,8 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
   asMap(): Readable<Map<string, string>> { return derived(this, obj => new Map(Object.entries(obj))) }
 }
 
-export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting;
+
+export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting | KeybindSetting;
 
 // New shape using $label and direct nesting: tab -> sections -> settings
 export type SettingsSection = {

@@ -7,6 +7,7 @@ import {
 	RangeSetting,
 	type SettingsTree,
 } from './types';
+import { KeybindSetting } from './keybind';
 import { dev as devEnv } from '$app/environment';
 
 export const settings = {
@@ -32,6 +33,19 @@ export const settings = {
 				label: "Auto layout",
 				desc: "Should the graph layout automatically update when tasks are added or completed?",
 				defaultValue: true,
+			}),
+		},
+		keybinds: {
+			$label: "Keybinds",
+			fitView: new KeybindSetting({
+				label: "Fit view",
+				desc: "Fit all nodes in view",
+				defaultValue: { primary: false, shift: false, alt: false, key: 'F' },
+			}),
+			search: new KeybindSetting({
+				label: "Search",
+				desc: "Search for a task",
+				defaultValue: { primary: true, shift: false, alt: false, key: 'F' },
 			}),
 		}
 	},

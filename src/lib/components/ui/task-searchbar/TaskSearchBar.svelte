@@ -13,6 +13,15 @@
 
 	let { class: className, onTaskSelected }: Props = $props();
 	let num = $state(0);
+	let searchBar: SearchBar<Task> | undefined = $state();
+
+	export function focus() {
+		searchBar?.focus();
+	}
+
+	export function blur() {
+		searchBar?.blur();
+	}
 
 	const searchService = new TaskSearchService();
 	let unsubscribeTasks: (() => void) | null = null;
@@ -46,6 +55,7 @@
 </script>
 
 <SearchBar
+	bind:this={searchBar}
 	class={className}
 	onItemSelected={onTaskSelected}
 	handleQuery={handleSearch}
