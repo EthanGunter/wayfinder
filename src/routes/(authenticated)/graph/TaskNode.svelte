@@ -5,20 +5,16 @@
 	import type { ViewNode, ViewNodeData } from './logic/layout/LayoutEngine';
 	import Icon from '@iconify/svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import { viewNodes } from './logic/shared-state';
-
-	interface Props {
-		id: string;
-		data: ViewNodeData;
-		selected: boolean;
-	}
+	import { viewNodes, toggleCollapseChildren } from './logic/shared-state';
+	import { layoutEngine } from './logic/layout';
+	import { autoLayout } from './logic/ui-state';
 
 	let { id, data: flowData, ...rest }: ViewNode = $props();
 
-
 	const isDimmed = $derived(flowData.dimmed ?? false);
 	const isPinned = $derived(!!flowData.pinned);
-
+	const isCollapsed = $derived(!!flowData.collapsedChildren);
+	const hasChildren = $derived(flowData.appNode.children.length > 0);
 
 	function togglePinned(pin: boolean) {
 		const node = viewNodes.get(id);
@@ -30,6 +26,13 @@
 			...node,
 			data: { ...node.data, pinned: pin || undefined }
 		});
+	}
+
+	function handleCollapseToggle(recursive: boolean = false) {
+		toggleCollapseChildren(id, recursive);
+		if ($autoLayout) {
+			layoutEngine.start(150);
+		}
 	}
 
 	// Track animation state for one-time fade-out effect
@@ -127,23 +130,48 @@
 			</div>
 
 			<Handle type="target" position={Position.Left} />
-			<Handle type="source" position={Position.Right} />
+			{#if isCollapsed && hasChildren}
+				<!-- Collapse indicator replaces source handle when collapsed -->
+				<button
+					class="collapse-indicator"
+					onclick={(e) => {
+						e.stopPropagation();
+						handleCollapseToggle();
+					}}
+					title="Expand children"
+				>
+					<Icon icon="lucide:chevron-right" />
+				</button>
+			{:else}
+				<Handle type="source" position={Position.Right} />
+			{/if}
 		</div>
 	</ContextMenu.Trigger>
 	<ContextMenu.Content>
-		<ContextMenu.CheckboxItem checked={isPinned} onCheckedChange={togglePinned}>
+		<!-- 		<ContextMenu.CheckboxItem checked={isPinned} onCheckedChange={togglePinned}>
 			Pin 📌
-		</ContextMenu.CheckboxItem>
+		</ContextMenu.CheckboxItem> -->
+		{#if hasChildren}
+			<ContextMenu.CheckboxItem
+				checked={isCollapsed}
+				onCheckedChange={() => handleCollapseToggle()}
+			>
+				Collapse children
+			</ContextMenu.CheckboxItem>
+			<ContextMenu.Item onclick={(e) => handleCollapseToggle(true)}>
+				Collapse recursively
+			</ContextMenu.Item>
+		{/if}
 	</ContextMenu.Content>
 </ContextMenu.Root>
 
 <style>
 	.task-node :global(.svelte-flow__handle) {
-		width: 12px;
-		height: 12px;
+		width: 1rem;
+		height: 1rem;
 		border-radius: 9999px;
-		border: 2px solid #d1d5db;
-		background: white;
+		border: 2px solid var(--color-gray-300);
+		background: #fff;
 	}
 
 	:global(.svelte-flow__node.selected) .task-node {
@@ -159,6 +187,30 @@
 	.task-node.dimmed {
 		opacity: 0.4;
 		filter: grayscale(0.3);
+	}
+
+	.collapse-indicator {
+		position: absolute;
+		right: -0.5rem;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 1rem;
+		height: 1rem;
+		border-radius: 9999px;
+		border: 2px solid #d1d5db;
+		background: white;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		color: #6b7280;
+		transition: all 0.15s ease;
+	}
+
+	.collapse-indicator:hover {
+		background: #f3f4f6;
+		border-color: #9ca3af;
+		color: #374151;
 	}
 
 	@keyframes highlight-glow {

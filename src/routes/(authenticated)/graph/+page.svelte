@@ -13,7 +13,7 @@
 	import { page } from '$app/state';
 	import Icon from '@iconify/svelte';
 
-	import { appData, svelteFlowInstance } from './logic/shared-state';
+	import { appData, svelteFlowInstance, restoreCollapseState } from './logic/shared-state';
 	import { initializeFromUrl, centerAndHighlightNode } from './logic/navigation';
 	import { SvelteFlowAdapter, SvelteFlowEventHandlers } from './logic/svelte-flow';
 	import {
@@ -37,6 +37,7 @@
 
 	let unsubTasksStore: (() => void) | null = null;
 	let unsubShowNodes: (() => void) | null = null;
+	let initialLoadDone = false;
 	const sfAdapter: SvelteFlowAdapter = new SvelteFlowAdapter();
 	const nodes = sfAdapter.nodes;
 	const edges = sfAdapter.edges;
@@ -75,6 +76,12 @@
 			changes.forEach(([id, node]) => {
 				appData.set(id, node);
 			});
+
+			// Restore persisted collapse state on first load
+			if (!initialLoadDone) {
+				initialLoadDone = true;
+				restoreCollapseState();
+			}
 		});
 		unsubShowNodes = showCompletedNodes.subscribe((show) => {
 			if (show) {
@@ -85,9 +92,7 @@
 		initializeFromUrl(page.url.searchParams);
 
 		setTimeout(() => {
-			console.log('[Graph] start layout engine');
 			layoutEngine.start();
-			console.log('[Graph] fit view');
 			$svelteFlowInstance?.fitView({ duration: 100 });
 		}, 200);
 

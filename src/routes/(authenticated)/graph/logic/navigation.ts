@@ -13,7 +13,6 @@ export function centerAndHighlightNode(
 ) {
 	const instance = get(svelteFlowInstance);
 	const node = viewNodes.get(taskId);
-	console.log('[centerAndHighlightNode] node: ' + node);
 	if (!instance || !node) return;
 
 	instance.setCenter(node.position.x, node.position.y, {

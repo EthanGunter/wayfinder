@@ -424,6 +424,15 @@ export class SvelteFlowAdapter {
 
 	// call once at mount
 	constructor() {
+		// Initialize from existing state (handles navigation back to page)
+		const currentNodes = Array.from(viewNodes.values());
+		this.nodes.set(currentNodes);
+		currentNodes.forEach((node, idx) => this.nodeIndex.set(node.id, idx));
+
+		const currentEdges = Array.from(viewEdges.values());
+		this.edges.set(currentEdges);
+		currentEdges.forEach((edge, idx) => this.edgeIndex.set(edge.id, idx));
+
 		// Subscribe to viewNodes - mirror changes to SvelteFlow nodes array
 		this.unsubViewNodes = viewNodes.subscribe(({ key, value, op }) => {
 			if (op === 'add') {

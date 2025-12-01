@@ -109,7 +109,6 @@ export class ElkLayoutEngine implements LayoutEngine {
 
 	private async computeLayout(): Promise<void> {
 		const viewNodeData = Array.from(viewNodes.values());
-		console.log('[ELKLayoutEngine] compute layout (computeLayout) on viewNodes: ' + viewNodeData.length);
 		if (viewNodeData.length === 0) return;
 
 		const algorithm = get(algorithmSetting) as ElkAlgorithm;

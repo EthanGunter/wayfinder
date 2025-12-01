@@ -5,7 +5,8 @@ import type { AppNode } from '$domain/models/node';
 export type ViewNodeData<T extends AppNode = AppNode> = {
 	appNode: T,
 	dimmed?: boolean,
-	pinned?: boolean  // TODO: sync to DB
+	pinned?: boolean,  // TODO: sync to DB
+	collapsedChildren?: boolean,
 } & Record<string, unknown>;
 export type ViewEdgeData = { dimmed?: boolean } & Record<string, unknown>;
 
