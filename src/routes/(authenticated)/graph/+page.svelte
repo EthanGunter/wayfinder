@@ -188,15 +188,15 @@
 					>
 						<Switch bind:checked={$autoLayout} />
 						<span>Auto layout</span>
-							<Button
-								variant="outline"
-								class="m-auto h-7 w-8 rounded-full border-1 border-border bg-white p-0"
-								onclick={() => {
-									layoutEngine.start();
-								}}
-							>
-								<Icon icon="lucide:refresh-cw" />
-							</Button>
+						<Button
+							variant="outline"
+							class="m-auto h-7 w-8 rounded-full border-1 border-border bg-white p-0"
+							onclick={() => {
+								layoutEngine.start();
+							}}
+						>
+							<Icon icon="lucide:refresh-cw" />
+						</Button>
 					</label>
 					<label
 						class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"

@@ -1,11 +1,11 @@
 // ui/state.ts
 //#region STORES
-import { get, writable, type Writable } from 'svelte/store';
-import { isTaskCompleted, type Task } from '$domain/models/task';
+import { writable, type Writable } from 'svelte/store';
 import type { NodeEditorLayoutState } from '../TaskEditor.svelte';
 import type { AppNode } from '$domain/models/node';
-import { appData, viewNodes, viewEdges, getEdgeKey } from './shared-state';
+import { appData, viewNodes, viewEdges, getEdgeKey, recalculateHiddenByCollapse, shouldShowNode } from './shared-state';
 import { appToView } from './layout/LayoutEngine';
+import { getCollapsedNodeIds } from './data-persistence';
 import { settings } from '$lib/user-settings';
 
 export type DrawerParams = { relation: AppNode; mode: 'parent' | 'child' } | null;
@@ -21,49 +21,68 @@ export type PendingNodeIntent = {
 
 export const autoLayout = settings.graph.layout.autoLayout;
 export const showCompletedNodes = settings.graph.core.showCompleted;
-showCompletedNodes.subscribe((show) => {
-	// Iterate appData (always populated) not viewNodes
-	for (const [id, appNode] of appData.entries()) {
-		if (appNode.data.type !== 'task' || !isTaskCompleted(appNode)) continue;
+showCompletedNodes.subscribe(() => {
+	const persistedCollapsed = getCollapsedNodeIds();
 
-		if (show) {
-			// Re-add completed nodes if not present
-			if (!viewNodes.has(id)) {
-				viewNodes.set(id, appToView(appNode));
-				// Re-add edges for this node
-				for (const childId of appNode.children) {
-					if (viewNodes.has(childId)) {
-						viewEdges.set(getEdgeKey(id, childId), {
-							id: getEdgeKey(id, childId),
-							source: id,
-							target: childId,
-							type: appNode.data.type,
-						});
-					}
-				}
-				for (const parentId of appNode.parents) {
-					if (viewNodes.has(parentId)) {
-						viewEdges.set(getEdgeKey(parentId, id), {
-							id: getEdgeKey(parentId, id),
-							source: parentId,
-							target: id,
-							type: appNode.data.type,
-						});
-					}
+	for (const [id, appNode] of appData.entries()) {
+		const shouldShow = shouldShowNode(appNode);
+		const existsInView = viewNodes.has(id);
+
+		if (shouldShow && !existsInView) {
+			// Add to view with restored collapse state
+			const viewNode = appToView(appNode);
+			if (persistedCollapsed.has(id)) {
+				viewNode.data.collapsedChildren = true;
+			}
+			viewNodes.set(id, viewNode);
+
+			// Re-add edges to visible nodes
+			for (const childId of appNode.children) {
+				const childNode = appData.get(childId);
+				if (childNode && shouldShowNode(childNode)) {
+					viewEdges.set(getEdgeKey(id, childId), {
+						id: getEdgeKey(id, childId),
+						source: id,
+						target: childId,
+						type: appNode.data.type,
+					});
 				}
 			}
-		} else {
-			// Remove completed nodes
-			if (viewNodes.has(id)) {
-				// Remove edges first
-				for (const childId of appNode.children) {
-					viewEdges.delete(getEdgeKey(id, childId));
+			for (const parentId of appNode.parents) {
+				const parentNode = appData.get(parentId);
+				if (parentNode && shouldShowNode(parentNode)) {
+					viewEdges.set(getEdgeKey(parentId, id), {
+						id: getEdgeKey(parentId, id),
+						source: parentId,
+						target: id,
+						type: parentNode.data.type,
+					});
 				}
-				for (const parentId of appNode.parents) {
-					viewEdges.delete(getEdgeKey(parentId, id));
-				}
-				viewNodes.delete(id);
 			}
+		} else if (!shouldShow && existsInView) {
+			// Remove from view
+			for (const childId of appNode.children) {
+				viewEdges.delete(getEdgeKey(id, childId));
+			}
+			for (const parentId of appNode.parents) {
+				viewEdges.delete(getEdgeKey(parentId, id));
+			}
+			viewNodes.delete(id);
+		}
+	}
+
+	// Re-added nodes may have restored collapse state - recalculate and hide their descendants
+	recalculateHiddenByCollapse();
+
+	for (const [id, appNode] of appData.entries()) {
+		if (!shouldShowNode(appNode) && viewNodes.has(id)) {
+			for (const childId of appNode.children) {
+				viewEdges.delete(getEdgeKey(id, childId));
+			}
+			for (const parentId of appNode.parents) {
+				viewEdges.delete(getEdgeKey(parentId, id));
+			}
+			viewNodes.delete(id);
 		}
 	}
 });

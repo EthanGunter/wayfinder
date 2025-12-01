@@ -12,7 +12,7 @@ import { getCollapsedNodeIds, setNodeCollapsed, clearNodeCollapsed } from './dat
 export const hiddenByCollapse: Writable<Set<string>> = writable(new Set());
 
 /** Check if node should be shown based on visibility settings */
-function shouldShowNode(appNode: AppNode): boolean {
+export function shouldShowNode(appNode: AppNode): boolean {
 	if (appNode.data.type !== 'task') return true;
 	if (get(hiddenByCollapse).has(appNode.id)) return false;
 	return get(showCompletedNodes) || !isTaskCompleted(appNode);
