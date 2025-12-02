@@ -10,6 +10,7 @@ import type {
 	RegistrationRequirements,
 	SessionUser,
 	UpdateErr,
+	EnsureUserErr,
 } from "$domain/models/user";
 import {
 	ArgumentError,
@@ -52,6 +53,22 @@ const resolveSignedOut = () => {
 	authState.set({ status: "signed-out" });
 };
 
+const setupConvexAuth = () => {
+	sharedConvexClient.setAuth(async () => {
+		try {
+			// TODO will this result in a double slash and fail to fetch?
+			const resp = await fetch(`${PUBLIC_SITE_URL}/api/auth/convex/token`, {
+				credentials: "include",
+			});
+			if (!resp.ok) return null;
+			const { token } = await resp.json();
+			return token ?? null;
+		} catch {
+			return null;
+		}
+	});
+};
+
 const bootstrap = async () => {
 	try {
 		// Get session from BetterAuth
@@ -64,19 +81,7 @@ const bootstrap = async () => {
 
 		const userId = session.data.user.id;
 		// Ensure Convex client has the latest auth token
-		sharedConvexClient.setAuth(async () => {
-			try {
-				// TODO will this result in a double slash and fail to fetch?
-				const resp = await fetch(`${PUBLIC_SITE_URL}/api/auth/convex/token`, {
-					credentials: "include",
-				});
-				if (!resp.ok) return null;
-				const { token } = await resp.json();
-				return token ?? null;
-			} catch (e) {
-				return null;
-			}
-		});
+		setupConvexAuth();
 		// Ensure user record exists in our app DB (creates if first-time login)
 		// This action validates auth internally via ctx.auth.getUserIdentity()
 		// Cast to any to bypass type mismatch until codegen updates (Mutation -> Action)
@@ -300,6 +305,9 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 
 				// Verify Convex requirements (e.g. not deleted) before proceeding
 				try {
+					// Setup auth so the client can communicate as the user
+					setupConvexAuth();
+
 					// Cast to any to bypass type mismatch until codegen updates (Mutation -> Action)
 					await sharedConvexClient.action(api.users.ensureCurrentUser, {});
 				} catch (e) {
@@ -309,8 +317,9 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 						if (e.data.type === "NotAuthorizedError") {
 							return err(new NotAuthorizedError("Not authenticated", { messageForDev: e.data.msg, ctx: creds }));
 						} else if (e.data.type === "InvalidStateError") {
-							// TODO:ux this is a terrible error message. The user should not encounter the friction of implementation details
-							return err(new InvalidStateError("Account pending deletion. Try again tomorrow", { messageForDev: "authClient registration succeeded, but ctx.auth.getUserIdentity() returned null... why?", ctx: { creds } }));
+							if ((e.data as EnsureUserErr).msg === "No user session found") {
+								return err(new NotAuthorizedError("Not authenticated", { messageForDev: "No user session found in ensureCurrentUser", ctx: creds }));
+							}
 						}
 					}
 					throw e;
