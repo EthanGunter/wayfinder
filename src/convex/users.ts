@@ -1,10 +1,12 @@
 // convex/auth.ts
-import { Err, NotAuthorizedError, NotFoundError, NotImplementedError } from "$domain/errors";
+import { Err, InvalidStateError, NotAuthorizedError, NotFoundError, NotImplementedError } from "$domain/errors";
 import { type User } from "$domain/models/user";
 import { type Doc } from "./_generated/dataModel";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery, internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { UserDef, UserFeatureDef, UserStatusDef } from "./schema";
+import { authComponent, createAuth } from "./auth";
 
 
 //#region Shared Types
@@ -40,13 +42,17 @@ export const watchUser = query({
 
     if (!user) return null;
 
+    if (user.status === 'deleted') {
+      throw new InvalidStateError("Account scheduled for deletion. Please wait.");
+    }
+
     // Normalize: Convex stores timestamps as numbers; your model expects Date.
     return {
       id: user.authId,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl ?? undefined,
       _creationTime: user._creationTime, // not stored yet; adjust if you add createdAt
-      status: (user.status ?? "active") as "active" | "deleted",
+      status: user.status,
       features: user.features ?? [],
       settingOverrides: user.settingOverrides ?? undefined,
     };
@@ -69,12 +75,19 @@ export const watchUsers = query({
     );
     return results
       .filter(Boolean)
+      .filter((user) => {
+        if (user && user.status === 'deleted') {
+          // We filter out deleted users silently in bulk fetch to avoid breaking the entire batch
+          return false;
+        }
+        return !!user;
+      })
       .map((user) => ({
         id: user!.authId,
         displayName: user!.displayName,
         avatarUrl: user!.avatarUrl ?? undefined,
         _creationTime: user!._creationTime,
-        status: (user!.status ?? "active") as "active" | "deleted",
+        status: (user!.status ?? "active"),
         features: user!.features ?? [],
         settingOverrides: user!.settingOverrides ?? undefined,
       }));
@@ -105,6 +118,9 @@ export const register = mutation({
       .unique();
 
     if (existing) {
+      if (existing.status === 'deleted') {
+        throw new InvalidStateError("Account scheduled for deletion. Please wait.");
+      }
       // Update minimal fields
       await ctx.db.patch(existing._id, {
         displayName: userData.displayName,
@@ -120,7 +136,7 @@ export const register = mutation({
           displayName: userData.displayName,
           avatarUrl: userData.avatarUrl ?? undefined,
           createdAt: new Date(0),
-          status: (userData.status ?? "active") as "active" | "deleted",
+          status: (userData.status ?? "active"),
           features: userData.features ?? [],
           settingOverrides: userData.settingOverrides ?? undefined,
         },
@@ -144,7 +160,7 @@ export const register = mutation({
         displayName: inserted!.displayName,
         avatarUrl: inserted!.avatarUrl ?? undefined,
         createdAt: new Date(0),
-        status: (inserted!.status ?? "active") as "active" | "deleted",
+        status: (inserted!.status ?? "active"),
         features: inserted!.features ?? [],
         settingOverrides: inserted!.settingOverrides ?? undefined,
       },
@@ -255,6 +271,22 @@ export const ensureCurrentUser = mutation({
       .unique();
 
     if (existing) {
+      if (existing.status === "deleted") {
+        // If the user is marked for deletion, we shouldn't allow them to log in
+        // This ensures that when the hard delete runs, they are fully removed,
+        // and if they sign up again, they get a new authId.
+
+        // Since this is a mutation, we CAN schedule the wipe immediately.
+        await ctx.scheduler.runAfter(0, internal.users.permanentlyWipeDeletedUsers, { userId: existing.authId });
+        const take2 = await ctx.db
+          .query("users")
+          .withIndex("by_authId", (q) => q.eq("authId", authId))
+          .unique();
+
+        if (take2) {
+          throw new InvalidStateError("Account is scheduled for deletion. Please wait for the process to complete.");
+        }
+      }
       return { ok: true as const, userId: existing.authId };
     }
 
@@ -278,34 +310,89 @@ export const ensureCurrentUser = mutation({
   },
 });
 
-/* export const upsertCurrentUser = internalMutation({
-  args: argsUser,
-  handler: async (ctx, { id, displayName }) => {
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", id))
-      .unique();
-
-    if (existing) {
-      return { ok: true as const, userId: existing.authId };
-    }
-
-    const _id = await ctx.db.insert("users", {
-      authId: id,
-      displayName: displayName ?? "New User",
-      avatarUrl: undefined,
-      status: "active",
-      features: [],
-      settingOverrides: undefined,
-    });
-
-    const inserted = await ctx.db.get(_id);
-    return { ok: true as const, userId: inserted!.authId };
-  },
-}); */
-
 
 //#region Utilities
+
+export const permanentlyWipeDeletedUsers = internalAction({
+  args: { userId: v.optional(v.string()) },
+  handler: async (ctx, { userId }) => {
+    let deletedUsers;
+    if (userId) {
+      // Targeted deletion: verify the user is actually marked as deleted first to be safe
+      // We can't reuse getDeletedUsers directly as it returns all of them.
+      // Instead, we'll fetch this specific user via a new internal query or just filter in memory if the list is small?
+      // Better: create a specific internal query for a single deleted user.
+      const user = await ctx.runQuery(internal.users.getDeletedUser, { authId: userId });
+      deletedUsers = user ? [user] : [];
+    } else {
+      // Bulk deletion
+      deletedUsers = await ctx.runQuery(internal.users.getDeletedUsers);
+    }
+
+    // Force cast to expected adapter shape - types seem to mismatch or define it as a factory
+    const adapter = authComponent.adapter(ctx) as unknown as { deleteUser: (id: string) => Promise<void> };
+
+    for (const user of deletedUsers) {
+      console.log(`Hard deleting user ${user.authId}`);
+
+      // 1. Delete from BetterAuth
+      try {
+        await adapter.deleteUser(user.authId);
+      } catch (error) {
+        // Log but continue - user might already be gone from Auth
+        console.error(`Failed to delete user ${user.authId} from BetterAuth`, error);
+      }
+
+      // 2. Delete app data and user record
+      await ctx.runMutation(internal.users.deleteUserAndData, { authId: user.authId });
+    }
+  }
+});
+
+export const getDeletedUsers = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return ctx.db.query("users")
+      .withIndex("by_status", q => q.eq("status", "deleted"))
+      .collect();
+  }
+});
+
+export const getDeletedUser = internalQuery({
+  args: { authId: v.string() },
+  handler: async (ctx, { authId }) => {
+    const user = await ctx.db.query("users")
+      .withIndex("by_authId", q => q.eq("authId", authId))
+      .unique();
+
+    return user?.status === "deleted" ? user : null;
+  }
+});
+
+export const deleteUserAndData = internalMutation({
+  args: { authId: v.string() },
+  handler: async (ctx, { authId }) => {
+    // 1. Delete nodes
+    const nodes = await ctx.db.query("nodes").withIndex("by_user", q => q.eq("userAuthId", authId)).collect();
+    for (const node of nodes) {
+      await ctx.db.delete(node._id);
+    }
+
+    // 2. Delete legacy tasks (if any)
+    const tasks = await ctx.db.query("tasks").withIndex("by_user", q => q.eq("userAuthId", authId)).collect();
+    for (const task of tasks) {
+      await ctx.db.delete(task._id);
+    }
+
+    // 3. Delete user
+    const user = await ctx.db.query("users").withIndex("by_authId", q => q.eq("authId", authId)).unique();
+    if (user) {
+      await ctx.db.delete(user._id);
+    }
+  }
+});
+
+
 
 function serializeError<T extends Err>(err: T): T {
   return JSON.parse(JSON.stringify(err, Object.getOwnPropertyNames(err)));

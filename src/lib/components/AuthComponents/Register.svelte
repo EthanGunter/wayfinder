@@ -9,6 +9,8 @@
 	import { v4 } from 'uuid';
 	import type { SessionUser, LoginCredentials, User } from '$domain/models/user';
 	import { Err } from '$domain/errors';
+	import * as Alert from '../ui/alert';
+	import Icon from '@iconify/svelte';
 
 	interface Props {
 		onError?: (message: string, error?: Err) => void;
@@ -57,18 +59,26 @@
 		};
 	});
 
+	function reportError(message: string, error?: Err) {
+		if (onError) {
+			onError(message, error);
+		} else {
+			errorMessage = message;
+		}
+	}
+
 	async function handleRegister() {
 		// Validation
 		if (password !== confirmPassword) {
-			errorMessage = 'Passwords do not match';
+			reportError('Passwords do not match');
 			return;
 		}
 		if (!tempUser.displayName?.trim()) {
-			errorMessage = 'Display name is required';
+			reportError('Display name is required');
 			return;
 		}
 		isLoading = true;
-		errorMessage = '';
+		reportError('');
 		try {
 			const userData: SessionUser = {
 				id: v4(),
@@ -82,20 +92,23 @@
 			const creds: LoginCredentials = { type: 'email_password', email, password };
 			const [reqs, reqError] = authAPI.getRegistrationRequirements(creds);
 			if (reqError) {
-				errorMessage = 'Invalid registration data';
+				reportError('Invalid registration data');
 				return;
 			} else if (reqs.length > 0) {
-				errorMessage = 'Invalid registration data: ' + reqs.map((r: any) => r.message).join(', ');
+				reportError('Invalid registration data: ' + reqs.map((r: any) => r.message).join(', '));
 				return;
 			}
 			const [_, registerError] = await authAPI.register({ creds, userData });
 			if (registerError) {
-				errorMessage = registerError.message || 'Registration failed';
+				// TODO:security This blindly trusts the error message from the backend.
+				// Safe for alpha with trusted users, but should be sanitized for release.
+				reportError(registerError.message || 'Registration failed', registerError);
 			} else {
 				goto(redir || '/planner');
 			}
-		} catch (error) {
-			errorMessage = 'An unexpected error occurred';
+		} catch (error: any) {
+			// TODO:security This blindly trusts the error message from the backend.
+			reportError(error.message || 'An unexpected error occurred');
 			Err.UNHANDLED(error, 'Registration error:');
 		} finally {
 			isLoading = false;
@@ -116,12 +129,13 @@
 	</div>
 
 	{#if errorMessage}
-		<div
-			class="mb-4 flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
-		>
-			<span class="shrink-0">⚠</span>
-			<span>{errorMessage}</span>
-		</div>
+		<Alert.Root variant="destructive" class="mb-4">
+			<Icon icon="lucide:alert-circle" />
+			<Alert.Title>Uh oh!</Alert.Title>
+			<Alert.Description>
+				{errorMessage}
+			</Alert.Description>
+		</Alert.Root>
 	{/if}
 
 	<form

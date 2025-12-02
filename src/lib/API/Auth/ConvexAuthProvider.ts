@@ -17,6 +17,7 @@ import {
 	InvalidStateError,
 	NotAuthorizedError,
 	UnknownError,
+	NotFoundError,
 	type NotImplementedError,
 } from "$domain/errors";
 import { err, ok, type Result } from "$domain/result";
@@ -205,13 +206,20 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				password: creds.password,
 				image: userData.avatarUrl,
 			});
-			if (res.error && res.error.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
-				// TODO attempt to login with the email and password
-				const loginRes = await authClient.signIn.email({
-					email: creds.email,
-					password: creds.password,
-				});
-				if (loginRes.error) throw loginRes.error;
+			if (res.error) {
+				if (res.error.code === authClient.$ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL) {
+					// Attempt to login with the email and password
+					const loginRes = await authClient.signIn.email({
+						email: creds.email,
+						password: creds.password,
+					});
+					if (loginRes.error) {
+						// If login fails after "user already exists", it means the password was wrong
+						return err(new ArgumentError("Account already exists and password does not match", creds));
+					}
+				} else {
+					return err(new UnknownError(res.error.message || "Registration failed", { cause: res.error }));
+				}
 			}
 			bootstrap();
 		}
@@ -264,11 +272,22 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 					email: creds.email,
 					password: creds.password,
 				});
-				if (res.error) throw res.error;
+				if (res.error) {
+					console.log("res.error", res.error);
+					if (res.error.code === authClient.$ERROR_CODES.INVALID_EMAIL_OR_PASSWORD || res.error.code === authClient.$ERROR_CODES.INVALID_PASSWORD) {
+						return err(new ArgumentError("Invalid email or password", creds, { messageForDev: res.error }));
+					}
+					if (res.error.code === authClient.$ERROR_CODES.USER_NOT_FOUND) {
+						return err(new NotFoundError("User not found", creds.email));
+					}
+					return err(new UnknownError(res.error.message || "Unknown error", { cause: res.error }));
+				}
 				bootstrap();
 			}
 		} catch (e: any) {
-			Err.UNHANDLED('[ConvexAuthProvider] signIn error:', e);
+			// TODO:security This error message contains the reason for the failure.
+			// In production, we should probably not expose this to the user.
+			return err(Err.UNHANDLED(e, '[ConvexAuthProvider] signIn error:'));
 		}
 		return ok();
 	},

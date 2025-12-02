@@ -652,8 +652,7 @@ export function createLocalTestSuite(
 					expect(error).toBeNull();
 					expect(id).toBeDefined();
 					if (!id) throw new Error("Expected id to be defined");
-					expect(typeof id).toBe("string");
-					expect(id.length).toBeGreaterThan(0);
+					expect(typeof id.newId).toBe("string");
 				});
 
 				test("returns InvalidStateError on validation failure", async () => {
@@ -672,16 +671,16 @@ export function createLocalTestSuite(
 				});
 
 				test("creates task with parent relationship", async () => {
-					const parentResult = await helpers.withAuth("user1", async () => {
+					const [parentResult, parentError] = await helpers.withAuth("user1", async () => {
 						return await provider.createTask({
 							createDetail: helpers.buildTaskCreate({ title: "Parent" }),
 						});
 					});
 
-					const [parentId] = parentResult;
-					if (!parentId) throw new Error("Parent creation failed");
+					if (!parentResult) throw new Error("Parent creation failed");
+					const { newId: parentId } = parentResult;
 
-					const childResult = await helpers.withAuth("user1", async () => {
+					const [childResult, childError] = await helpers.withAuth("user1", async () => {
 						return await provider.createTask({
 							createDetail: helpers.buildTaskCreate({
 								title: "Child",
@@ -690,9 +689,9 @@ export function createLocalTestSuite(
 						});
 					});
 
-					const [childId] = childResult;
-					expect(childId).toBeDefined();
-					if (childId) {
+					expect(childResult).toBeDefined();
+					if (childResult) {
+						const { newId: childId } = childResult;
 						// Verify relationship via getTaskById
 						const parent = await helpers.getTaskById(parentId);
 						const child = await helpers.getTaskById(childId);
@@ -718,29 +717,28 @@ export function createLocalTestSuite(
 						});
 					});
 
-					const [ids, error] = result;
+					const [idUpdates, error] = result;
 					expect(error).toBeNull();
-					expect(ids).toBeDefined();
-					if (!ids) throw new Error("Expected ids to be defined");
-					expect(Array.isArray(ids)).toBe(true);
-					expect(ids).toHaveLength(3);
-					ids.forEach((id) => {
-						expect(typeof id).toBe("string");
-						expect(id.length).toBeGreaterThan(0);
+					expect(idUpdates).toBeDefined();
+					if (!idUpdates) throw new Error("Expected ids to be defined");
+					expect(Array.isArray(idUpdates)).toBe(true);
+					expect(idUpdates).toHaveLength(3);
+					idUpdates.forEach((upd) => {
+						expect(typeof upd.newId).toBe("string");
 					});
 				});
 
 				test("handles relationships in batch creation", async () => {
-					const parentResult = await helpers.withAuth("user1", async () => {
+					const [parentResult, parentError] = await helpers.withAuth("user1", async () => {
 						return await provider.createTask({
 							createDetail: helpers.buildTaskCreate({ title: "Parent" }),
 						});
 					});
 
-					const [parentId] = parentResult;
-					if (!parentId) throw new Error("Parent creation failed");
+					if (!parentResult) throw new Error("Parent creation failed");
+					const { newId: parentId } = parentResult;
 
-					const result = await helpers.withAuth("user1", async () => {
+					const [childResults, childError] = await helpers.withAuth("user1", async () => {
 						return await provider.createTasks({
 							createDetails: [
 								helpers.buildTaskCreate({
@@ -755,16 +753,14 @@ export function createLocalTestSuite(
 						});
 					});
 
-					const [childIds] = result;
-					expect(childIds).toBeDefined();
-					if (childIds) {
-						expect(childIds).toHaveLength(2);
-						// Verify relationships
-						const parent = await helpers.getTaskById(parentId);
-						if (parent) {
-							expect(parent.children).toContain(childIds[0]);
-							expect(parent.children).toContain(childIds[1]);
-						}
+					if (childError) throw new Error("Child creation failed");
+					const childIds = childResults.map((result) => result.newId);
+					expect(childResults).toHaveLength(2);
+					// Verify relationships
+					const parent = await helpers.getTaskById(parentId);
+					if (parent) {
+						expect(parent.children).toContain(childIds[0]);
+						expect(parent.children).toContain(childIds[1]);
 					}
 				});
 
@@ -789,7 +785,7 @@ export function createLocalTestSuite(
 			describe("handleCreateTasksResponse", () => {
 				test("handles successful response with ID updates", async () => {
 					// Create local tasks first
-					const localResult = await helpers.withAuth("user1", async () => {
+					const [localResult, localError] = await helpers.withAuth("user1", async () => {
 						return await provider.createTasks({
 							createDetails: [
 								helpers.buildTaskCreate({ title: "Task 1" }),
@@ -798,13 +794,14 @@ export function createLocalTestSuite(
 						});
 					});
 
-					const [localIds] = localResult;
-					if (!localIds) throw new Error("Local creation failed");
+					if (localError) throw new Error("Local creation failed");
+					if (!localResult) throw new Error("Local creation failed");
+					const localIds = localResult.map((result) => result.newId);
 
 					// Simulate server response with ID mapping
 					const idMap = new Map<string, string>();
-					localIds.forEach((localId, index) => {
-						idMap.set(localId, `server_${index}`);
+					localIds.forEach((newId, index) => {
+						idMap.set(newId, `server_${index}`);
 					});
 
 					const response: Result<
@@ -822,14 +819,15 @@ export function createLocalTestSuite(
 				});
 
 				test("handles error response with IDs to delete", async () => {
-					const localResult = await helpers.withAuth("user1", async () => {
+					const [localResult, localError] = await helpers.withAuth("user1", async () => {
 						return await provider.createTask({
 							createDetail: helpers.buildTaskCreate({ title: "Task" }),
 						});
 					});
 
-					const [localId] = localResult;
-					if (!localId) throw new Error("Local creation failed");
+					if (localError) throw new Error("Local creation failed");
+					if (!localResult) throw new Error("Local creation failed");
+					const { newId: localId } = localResult;
 
 					const response: Result<
 						{ updatedIds: Map<string, string>; affectedTasks: Task[] },

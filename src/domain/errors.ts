@@ -10,7 +10,7 @@ function captureHere(err: Error, excludeFn: Function) {
         (Error as any).captureStackTrace(err, excludeFn);
     }
 }
-type ErrContext = { messageForUser?: string, [key: string]: any };
+type ErrContext = { messageForDev?: any, [key: string]: any };
 export class Err extends Error {
     context?: ErrContext;
     cause?: unknown;
