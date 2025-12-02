@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
-	import { onMount } from 'svelte';
-	import { authAPI, cachedUsers as authUsers } from '$lib/API/Auth';
+	import { authAPI } from '$lib/API/Auth';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import { v4 } from 'uuid';
 	import type { SessionUser, LoginCredentials, User } from '$domain/models/user';
@@ -28,7 +26,6 @@
 		initialDisplayName = ''
 	}: Props = $props();
 
-	let multipleAccounts = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/planner';
 
 	// Temporary user data for registration
@@ -38,8 +35,7 @@
 		avatarUrl: '',
 		createdAt: new Date(),
 		status: 'active',
-		features: [],
-		sessionStatus: 'revoked' // TODO This may need to be active or expired...
+		features: []
 	});
 
 	let email = $state(initialEmail);
@@ -47,17 +43,6 @@
 	let confirmPassword = $state('');
 	let errorMessage = $state('');
 	let isLoading = $state(false);
-
-	onMount(() => {
-		// Subscribe to users for multiple accounts check
-		const unsubscribeUsers = authUsers.subscribe((userList) => {
-			multipleAccounts = userList.length > 1;
-		});
-
-		return () => {
-			unsubscribeUsers();
-		};
-	});
 
 	function reportError(message: string, error?: Err) {
 		if (onError) {
@@ -86,8 +71,7 @@
 				avatarUrl: tempUser.avatarUrl || '',
 				createdAt: new Date(),
 				status: tempUser.status || 'active',
-				features: [...(tempUser.features || [])],
-				sessionStatus: 'revoked' // TODO This may need to be active or expired...
+				features: [...(tempUser.features || [])]
 			};
 			const creds: LoginCredentials = { type: 'email_password', email, password };
 			const [reqs, reqError] = authAPI.getRegistrationRequirements(creds);

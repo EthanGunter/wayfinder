@@ -2,7 +2,6 @@ export * from './schema'
 export { assignPaths, DictSetting, BoolSetting, StringSetting, NumberSetting, EnumSetting, type AnySetting, type SettingsTree } from './types';
 
 import { settings } from './schema';
-import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import { Err } from '$domain/errors';
 import { derived } from 'svelte/store';
 import { hasFeature } from '$lib/API/Auth';
@@ -79,30 +78,6 @@ function collectDeviceSettingPaths(tree: Record<string, any>): string[] {
     }
     return paths;
 }
-
-// Exported promise: resolves when device-scoped settings have been loaded from IDB
-export const deviceSettingsReady: Promise<void> = (async () => {
-    try {
-        const db = await dbPromise;
-        const paths = collectDeviceSettingPaths(settings);
-        if (paths.length === 0) return;
-        const tx = db.transaction(APP_TABLE_NAME);
-        const loads = paths.map(async (p) => {
-            try {
-                const raw = await tx.store.get(`settings:${p}`);
-                if (raw == null) return undefined;
-                return [p, JSON.parse(String(raw))] as [string, any];
-            } catch {
-                return undefined;
-            }
-        });
-        const entries = (await Promise.all(loads)).filter((e): e is [string, any] => Array.isArray(e));
-        const overrides = Object.fromEntries(entries);
-        applySettings(settings, overrides);
-    } catch (e) {
-        console.warn('Failed to initialize device settings', e);
-    }
-})();
 
 // Initialize settings from user object (dynamic import to avoid early cycles)
 void (async () => {

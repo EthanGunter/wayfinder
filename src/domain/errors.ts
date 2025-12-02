@@ -6,11 +6,9 @@ const dev = settings.dev.$enabled;
 if (dev) console.log("Err system in DEV mode"); */
 
 function captureHere(err: Error, excludeFn: Function) {
-    if ((Error as any).captureStackTrace) {
-        (Error as any).captureStackTrace(err, excludeFn);
-    }
+    Error.captureStackTrace(err, excludeFn);
 }
-type ErrContext = { messageForDev?: any, [key: string]: any };
+export type ErrContext = { messageForDev?: string, [key: string]: any };
 export class Err extends Error {
     context?: ErrContext;
     cause?: unknown;
@@ -20,7 +18,7 @@ export class Err extends Error {
         this.name = name;
         this.context = context;
         // Important: pass the concrete constructor to exclude it from the stack
-        captureHere(this, (this as any).constructor);
+        captureHere(this, this.constructor);
     }
 
     static wrap(nativeError: Error): Err {

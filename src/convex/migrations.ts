@@ -1,62 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Migrations } from "@convex-dev/migrations";
-import { components, internal } from "./_generated/api";
+import { components } from "./_generated/api";
 import { type Id, type DataModel } from "./_generated/dataModel";
-import { getOrCreateProject } from "./tasks";
 import { mutation } from "./_generated/server";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 export const run = migrations.runner();
-export const runAll = migrations.runner([
-	internal.migrations.populateTaskCreatedAtColumn,
-	internal.migrations.addProjectsAndNodeType,
-	// Note: migrateTasksToNodesCustom is a mutation, not a migration - run it separately
-])
-
-
-/** 2025-11-11
- * Introduces type field and defaults to "task" and moves away from isRoot abstraction
- * by attaching parentless tasks to a projects-root node
- */
-export const addProjectsAndNodeType = migrations.define({
-	table: "tasks",
-	migrateOne: async (ctx, doc) => {
-		if (doc.type !== "root") {
-			let attachToRoot: boolean = false;
-			if (doc.parents.length === 0) {
-				// Attach to projects-root
-				attachToRoot = true;
-			} else if (doc.parents.length === 1) {
-				// If the parent doesn't exist, attach to projects-root
-				const parent = await ctx.db.get(doc.parents[0] as Id<"tasks">);
-				if (!parent) {
-					attachToRoot = true;
-				}
-			}
-
-			if (attachToRoot) {
-				const root = await getOrCreateProject(ctx, doc.userAuthId);
-				// Add this task to the root's children
-				await ctx.db.patch(root._id, { children: [...(root.children ?? []), doc._id] });
-				// Add the root to this task's parents
-				return {
-					parents: [String(root._id)],
-					type: "task" as const
-				}
-			}
-		}
-		return {}
-	},
-})
-
-// 2025-11-10
-export const populateTaskCreatedAtColumn = migrations.define({
-	table: "tasks",
-	migrateOne(ctx, doc) {
-		return {
-			created: doc._creationTime
-		}
-	},
-})
 
 /** 2025-11-20
  * Migrates from unified tasks table to nodes table with embedded discriminated union data.
@@ -88,14 +37,14 @@ export const migrateTasksToNodesCustom = mutation({
 		// Phase 1: Read all tasks and create nodes without relationships
 		const allTasks = await ctx.db.query("tasks").collect();
 		const idMapping = new Map<string, Id<"nodes">>(); // old task ID -> new node ID
-		
+
 		console.log(`Starting migration of ${allTasks.length} tasks to nodes...`);
 
 		// Phase 2: Create all nodes with temporary empty relationships
 		for (const task of allTasks) {
 			// Build the data object based on type
 			let data: any;
-			
+
 			if (task.type === "root") {
 				// Convert root to project
 				data = {

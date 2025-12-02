@@ -1,4 +1,4 @@
-import { derived, get, readable, writable } from "svelte/store";
+import { derived, readable, writable } from "svelte/store";
 import {
 	type AuthState,
 	type IAuthRemote,
@@ -9,7 +9,6 @@ import type {
 	User,
 	RegistrationRequirements,
 	SessionUser,
-	UserServerErr,
 	UpdateErr,
 } from "$domain/models/user";
 import {
@@ -29,7 +28,6 @@ import { createAuthClient } from 'better-auth/svelte';
 import { convexClient as convexPlugin } from "@convex-dev/better-auth/client/plugins";
 import { multiSessionClient } from "better-auth/client/plugins";
 import { page } from "$app/state";
-import { cachedUsers } from ".";
 import { sharedConvexClient } from "../ConvexClient";
 import { PUBLIC_SITE_URL } from "$env/static/public";
 import type { Fetchable } from "$domain/fetchable";
@@ -143,7 +141,7 @@ const bootstrap = async () => {
 				});
 			}
 		);
-	} catch (e: any) {
+	} catch (e) {
 		resolveSignedOut();
 		console.error("[ConvexAuthProvider] Bootstrap failed:", e);
 	}
@@ -186,7 +184,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		});
 	},
 
-	getRegistrationRequirements(creds): Result<RegistrationRequirements[], NotImplementedError> {
+	getRegistrationRequirements(): Result<RegistrationRequirements[], NotImplementedError> {
 		return ok<RegistrationRequirements[]>([]);
 	},
 
@@ -262,12 +260,18 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		}
 	},
 
-	deleteUser: async ({ userId }) => {
+	deleteSelf: async () => {
 		try {
-			await sharedConvexClient.mutation(api.users.deleteUser, { userId });
+			await sharedConvexClient.mutation(api.users.deleteSelf, {});
+			await convexApi.logout();
 			return ok();
 		} catch (e) {
-			return err(Err.wrap(e as Error));
+			if (e instanceof ConvexError) {
+				if (e.data.type === "NotAuthorizedError") {
+					return err(new InvalidStateError("No authenticated user to delete", { messageForDev: e.data.msg, ctx: {} }));
+				}
+			}
+			Err.AssertNever(e, "Unexpected delete self error");
 		}
 	},
 
@@ -286,7 +290,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				if (res.error) {
 					console.log("res.error", res.error);
 					if (res.error.code === authClient.$ERROR_CODES.INVALID_EMAIL_OR_PASSWORD || res.error.code === authClient.$ERROR_CODES.INVALID_PASSWORD) {
-						return err(new ArgumentError("Invalid email or password", creds, { messageForDev: res.error }));
+						return err(new ArgumentError("Invalid email or password", creds, { ctx: res.error }));
 					}
 					if (res.error.code === authClient.$ERROR_CODES.USER_NOT_FOUND) {
 						return err(new NotFoundError("User not found", creds.email));
@@ -314,10 +318,18 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 
 				bootstrap();
 			}
-		} catch (e: any) {
-			// TODO:security This error message contains the reason for the failure.
-			// In production, we should probably not expose this to the user.
-			return err(new UnknownError(e.message || 'Unknown sign-in error', { cause: e }));
+		} catch (e) {
+			if (e instanceof ConvexError) {
+				if (e.data.type === "NotAuthorizedError") {
+					return err(new NotAuthorizedError("Not authenticated", { messageForDev: e.data.msg, ctx: creds }));
+				} else if (e.data.type === "InvalidStateError") {
+					return err(new InvalidStateError("Account pending deletion. Try again tomorrow", { messageForDev: "authClient registration succeeded, but ctx.auth.getUserIdentity() returned null... why?", ctx: { creds } }));
+				}
+			} else if (e instanceof Error) {
+				// TODO:security This error message contains the reason for the failure.
+				// In production, we should probably not expose this to the user.
+				return err(new UnknownError(e.message || 'Unknown sign-in error', { cause: e }));
+			}
 		}
 		return ok();
 	},
@@ -407,28 +419,6 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 			return err(new InputRequiredError('Failed to activate session', { userId }));
 		}
 	},
-
-	// List sessions in an interface-safe DTO
-	getUserSessions: async () => {
-		try {
-			const res = await authClient.multiSession.listDeviceSessions();
-			if (res.error) return err(new InvalidStateError('Unable to list sessions'));
-			const cached = get(cachedUsers);
-
-			const mapped = res.data.map((s) => ({
-				session: { token: s.session.token, userId: s.session.userId, expiresAt: new Date(s.session.expiresAt) },
-				user: {
-					...cached.find(u => u.id === s.user.id),
-					id: s.user.id,
-					displayName: s.user.name,
-					avatarUrl: s.user.image ?? undefined,
-				},
-			}));
-			return ok(mapped);
-		} catch (e) {
-			return err(new InvalidStateError('Unable to list sessions'));
-		}
-	},
 };
 
 export default convexApi;
@@ -438,21 +428,21 @@ export default convexApi;
  * Converts client user update to Convex format
  * Filters out fields that are not updatable via mutation (like createdAt)
  */
-function convexifyUserUpdate(update: Partial<User> & { id: string }): any {
+function convexifyUserUpdate(update: Partial<User> & { id: string }): Partial<User<number>> & { id: string } {
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const { createdAt, ...rest } = update;
-	return rest;
+	return {
+		...rest,
+	}
 }
 
 /**
  * Converts server user with number timestamps to client user with Date timestamps
  * Handles both _creationTime (from watchUser) and createdAt (from updateUser return)
  */
-function convertFromServerUser(user: any): User {
-	const createdAt = user.createdAt ?? user._creationTime;
-	const { _creationTime, ...rest } = user;
-
+function convertFromServerUser(user: User<number>): User {
 	return {
-		...rest,
-		createdAt: new Date(createdAt),
-	} as User;
+		...user,
+		createdAt: new Date(user.createdAt),
+	};
 }

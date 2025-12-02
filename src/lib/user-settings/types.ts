@@ -1,6 +1,5 @@
 import { Err, InvalidStateError } from '$domain/errors';
 import { writable, derived, get, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
-import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import type { SvelteComponent } from 'svelte';
 import type { UserFeature } from '$domain/models/user';
 import { authAPI, authState } from '$lib/API/Auth';
@@ -72,7 +71,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
     this.store.set(value);
   }
 
-  private async persistToUser(key: string, value: any): Promise<void> {
+  private async persistToUser(key: string, value: unknown): Promise<void> {
     try {
       // Get current auth state from store
       const state = get(authState);
@@ -93,7 +92,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
         if (!current[part] || typeof current[part] !== 'object') {
           current[part] = {};
         }
-        current = current[part];
+        current = current[part] as Record<string, unknown>;
       }
 
       // Set the final value

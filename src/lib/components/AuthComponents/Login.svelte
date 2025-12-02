@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
-	import { authAPI, cachedUsers as authUsers } from '$lib/API/Auth';
+	import { authAPI } from '$lib/API/Auth';
 	import { type Err, NotFoundError } from '$domain/errors';
 	import Register from './Register.svelte';
 	import Icon from '@iconify/svelte';
@@ -17,7 +17,6 @@
 
 	const {}: Props = $props();
 
-	let multipleAccounts = $state(false);
 	let showRegister = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/planner';
 
@@ -25,13 +24,6 @@
 	let password = $state('');
 	let errorMessage = $state('');
 	let isLoading = $state(false);
-
-	onMount(() => {
-		const unsubscribeUsers = authUsers.subscribe((userList) => {
-			multipleAccounts = userList.length > 1;
-		});
-		return () => unsubscribeUsers();
-	});
 
 	async function handleOAuthLogin() {
 		isLoading = true;

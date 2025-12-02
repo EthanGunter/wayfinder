@@ -17,7 +17,6 @@ const resend = new Resend(components.resend);
 
 export const createAuth = (
   ctx: GenericCtx<DataModel>,
-  { optionsOnly } = { optionsOnly: false },
 ) => {
   return betterAuth({
     // disable logging when createAuth is called just to generate options.
@@ -32,7 +31,7 @@ export const createAuth = (
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
-      sendResetPassword: async ({ user, url }, request) => {
+      sendResetPassword: async ({ user, url }) => {
         await resend.sendEmail(requireActionCtx(ctx), {
           from: "",
           to: user.email,
@@ -40,10 +39,11 @@ export const createAuth = (
           html: `Click here to reset your password: <a href="${url}">${url}</a>`,
         });
       },
-      onPasswordReset: async ({ user }, request) => {
+      onPasswordReset: async ({ user }) => {
         console.log('Password reset successful', user);
       },
     },
+    user: { deleteUser: { enabled: true } },
     // Register social providers used by the client
     // TODO:TEMP social auth disabled until we figure out why Vercel blocks it...
     /* socialProviders: {

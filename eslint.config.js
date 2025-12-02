@@ -6,23 +6,28 @@ import globals from 'globals';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript-eslint';
 import svelteConfig from './svelte.config.js';
-import neverthrow from 'eslint-plugin-neverthrow'
+import { defineConfig } from 'eslint/config';
 
 const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
-export default ts.config(
+
+export default defineConfig(
 	includeIgnoreFile(gitignorePath),
-	...js.configs.recommended,
+	js.configs.recommended,
 	...ts.configs.recommended,
 	...svelte.configs.recommended,
-	...neverthrow.configs.recommended,
 	prettier,
 	...svelte.configs.prettier,
 	{
 		languageOptions: {
 			globals: { ...globals.browser, ...globals.node }
 		},
-		rules: { 'no-undef': 'off' }
+		rules: {
+			'no-undef': 'off',
+			'prefer-const': 'warn',
+			"@typescript-eslint/no-explicit-any": "error",
+			"@typescript-eslint/no-unused-vars": "warn"
+		}
 	},
 	{
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],

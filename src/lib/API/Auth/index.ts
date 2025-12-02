@@ -1,11 +1,11 @@
-import type { SessionUser, UserFeature } from '$domain/models/user';
+import type { UserFeature } from '$domain/models/user';
 import { Err, NotImplementedError } from '$domain/errors';
 import type { Readable } from 'svelte/store';
 import { derived } from 'svelte/store';
 
 import ConvexAuthProvider from './ConvexAuthProvider';
-import type { AuthState, IAuthLocal, IAuthRemote } from './seam-interfaces';
-import PassthroughAuthProvider, { passthroughAuthState, passthroughCachedUsers } from './PassthroughAuthProvider';
+import type { AuthState, IAuthLocal } from './seam-interfaces';
+import PassthroughAuthProvider, { passthroughAuthState } from './PassthroughAuthProvider';
 
 // Canonical source for whether remote auth operations are available.
 // null => remote unavailable; non-null => remote enabled and usable.
@@ -13,12 +13,11 @@ import PassthroughAuthProvider, { passthroughAuthState, passthroughCachedUsers }
 export const remoteAuth = ConvexAuthProvider;
 
 let authAPI: IAuthLocal,
-	authState: Readable<AuthState>,
-	cachedUsers: Readable<SessionUser[]>
+	authState: Readable<AuthState>
 
+// eslint-disable-next-line no-constant-condition
 if (true /* browser */) {
 	authAPI = PassthroughAuthProvider;
-	cachedUsers = passthroughCachedUsers;
 	authState = passthroughAuthState;
 } else /* if ( mobile ) */ {
 	Err.throw(new NotImplementedError("Mobile auth provider not implemented"));
@@ -61,6 +60,5 @@ export function hasFeature(feature: UserFeature): Readable<boolean> {
 export {
 	authAPI,
 	authState,
-	cachedUsers,
 }
 

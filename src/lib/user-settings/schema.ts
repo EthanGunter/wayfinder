@@ -1,10 +1,7 @@
 import {
 	BoolSetting,
-	StringSetting,
 	EnumSetting,
-	NumberSetting,
 	assignPaths,
-	RangeSetting,
 	type SettingsTree,
 } from './types';
 import { KeybindSetting } from './keybind';
@@ -67,5 +64,5 @@ export const settings = {
 	}
 } satisfies SettingsTree;
 
-export type AppSettings = typeof settings;
+export type AppSettings = Partial<typeof settings>;
 assignPaths(settings);

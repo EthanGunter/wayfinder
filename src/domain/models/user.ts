@@ -1,4 +1,4 @@
-import { Err } from "$domain/errors";
+import { Err, type ErrContext } from "$domain/errors";
 
 
 //#region User Interface and Utilities
@@ -17,11 +17,11 @@ export interface User<TimeFormat = Date> {
 	createdAt: TimeFormat;
 	status: UserStatus;
 	features: UserFeature[];
-	settingOverrides?: any/* AppSettings */;
+	settingOverrides?: Record<string, unknown>;
 }
 
 // Local user interface extends base user with local avatar, settings, and session material
-export type SessionUser = User &
+export type SessionUser = User/*  &
 	({
 		sessionStatus: 'active' | 'expired';
 		expiresAt: Date;
@@ -31,7 +31,7 @@ export type SessionUser = User &
 		sessionRefreshMaterial?: string; // Refresh token or other session restoration data
 	} | {
 		sessionStatus: 'revoked'
-	})
+	}) */
 
 /**
  * Check if the user is anonymous (has a special anonymous ID)
@@ -55,7 +55,7 @@ export type LoginCredentials =
 	| { type: 'external'; }
 
 export class IncorrectPasswordError extends Err {
-	constructor(message: string, ctx?: any) {
+	constructor(message: string, ctx?: ErrContext) {
 		super("IncorrectPasswordError", message, ctx);
 	}
 }
@@ -81,13 +81,13 @@ export enum AccountIssueTarget {
 
 // This is a weird way of type-limiting throw types for clients. 
 // Convex doesn't codegen thrown error types
-export type UserServerErr = {
-	type: any, msg: string, ctx?: any
+export type UserServerErr<T extends string> = {
+	type: T, msg: string, ctx?: ErrContext
 }
 
-export type UpdateErr = UserServerErr & { type: "NotFoundError" | "NotAuthorizedError" };
-export type DeleteErr = UserServerErr & { type: "NotFoundError" };
-export type EnsureUserErr = UserServerErr & { type: "NotAuthorizedError" | "InvalidStateError" };
-export type WatchUserErr = UserServerErr & { type: "InvalidStateError" };
+export type UpdateErr = UserServerErr<"NotFoundError" | "NotAuthorizedError">;
+export type DeleteErr = UserServerErr<"NotFoundError">;
+export type EnsureUserErr = UserServerErr<"NotAuthorizedError" | "InvalidStateError">;
+export type WatchUserErr = UserServerErr<"InvalidStateError">;
 
 //#endregion

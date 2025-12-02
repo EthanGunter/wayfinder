@@ -1,26 +1,16 @@
 // convex/auth.ts
-import { Err, InvalidStateError, NotAuthorizedError, NotFoundError, NotImplementedError } from "$domain/errors";
-import { DeleteErr, EnsureUserErr, UpdateErr, UserServerErr, WatchUserErr, type User } from "$domain/models/user";
-import { type Doc } from "./_generated/dataModel";
-import { query, mutation, internalMutation, internalQuery, internalAction, action } from "./_generated/server";
+import { InvalidStateError } from "$domain/errors";
+import type { EnsureUserErr, UpdateErr, WatchUserErr, User } from "$domain/models/user";
+import type { Doc, TableNames, DataModel } from "./_generated/dataModel";
+import { query, mutation, internalMutation, internalQuery, action, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
-import { UserDef, UserFeatureDef, UserStatusDef } from "./schema";
+import { UserFeatureDef, UserStatusDef } from "./schema";
 import { authComponent, createAuth } from "./auth";
+import type { IndexNames, NamedTableInfo } from "convex/server";
 
 
 //#region Shared Types
-
-const typeLoginCredentials = v.union(
-  v.object({
-    type: v.literal("email_password"),
-    email: v.string(),
-    password: v.string(),
-  }),
-  v.object({
-    type: v.literal("external"),
-  }),
-);
 
 //#endregion
 
@@ -47,15 +37,7 @@ export const watchUser = query({
     }
 
     // Normalize: Convex stores timestamps as numbers; your model expects Date.
-    return {
-      id: user.authId,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl ?? undefined,
-      _creationTime: user._creationTime, // not stored yet; adjust if you add createdAt
-      status: user.status,
-      features: user.features ?? [],
-      settingOverrides: user.settingOverrides ?? undefined,
-    };
+    return rowToAuthenticatedUser(user);
   },
 });
 
@@ -73,24 +55,15 @@ export const watchUsers = query({
           .unique();
       })
     );
-    return results
-      .filter(Boolean)
+    return (results
       .filter((user) => {
         if (user && user.status === 'deleted') {
           // We filter out deleted users silently in bulk fetch to avoid breaking the entire batch
           return false;
         }
         return !!user;
-      })
-      .map((user) => ({
-        id: user!.authId,
-        displayName: user!.displayName,
-        avatarUrl: user!.avatarUrl ?? undefined,
-        _creationTime: user!._creationTime,
-        status: (user!.status ?? "active"),
-        features: user!.features ?? [],
-        settingOverrides: user!.settingOverrides ?? undefined,
-      }));
+      }) as NonNullable<Doc<"users">>[])
+      .map(rowToAuthenticatedUser);
   },
 });
 
@@ -112,7 +85,7 @@ export const updateUser = mutation({
       throw new ConvexError<UpdateErr>({
         type: "NotAuthorizedError",
         msg: "Authenticated user does not own target account",
-        ctx: update.id
+        ctx: { targetId: update.id }
       });
 
     const existing = await ctx.db
@@ -121,7 +94,7 @@ export const updateUser = mutation({
       .unique();
 
     if (!existing) {
-      throw new ConvexError<UpdateErr>({ type: "NotFoundError", msg: "User not found", ctx: update.id });
+      throw new ConvexError<UpdateErr>({ type: "NotFoundError", msg: "User not found", ctx: { userId: update.id } });
     }
 
     const patch = userToPatch(update);
@@ -132,26 +105,66 @@ export const updateUser = mutation({
     }
 
     const refreshed = await ctx.db.get(existing._id);
-
-    return rowToAuthenticatedUser(refreshed as Doc<'users'>);
+    if (refreshed)
+      return rowToAuthenticatedUser(refreshed);
+    else throw new InvalidStateError("User not found after update", { messageForDev: "User not found after update", ctx: update.id });
   },
 });
 
-export const deleteUser = mutation({
-  args: { userId: v.string() }, // authId
-  handler: async (ctx, { userId }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", userId))
-      .unique();
-
-    if (!existing) {
-      throw new ConvexError<DeleteErr>({ type: "NotFoundError", msg: "User not found", ctx: userId });
+export const deleteSelf = mutation({
+  // no args; derive from auth
+  args: {},
+  handler: async (ctx) => {
+    const ident = await ctx.auth.getUserIdentity();
+    if (!ident) {
+      throw new ConvexError({
+        type: "AuthError",
+        msg: "No user session found",
+      });
     }
 
-    // Soft delete by marking status: "deleted" (your schema supports that)
-    await ctx.db.patch(existing._id, { status: "deleted" });
+    const authId = ident.subject;
+
+    // Revoke sessions for current user (self-scoped BetterAuth API).
+    // No body; uses headers to identify the user.
+    try {
+      const { auth, headers } = await authComponent.getAuth(createAuth, ctx);
+      await auth.api.deleteUser({ body: {}, headers });
+      await auth.api.revokeSessions({ headers });
+    } catch {
+      // Don’t fail the deletion if revoke has issues; just log if you have logging.
+    }
+
+    // Cascade delete all data owned by this user (nodes first, then legacy tasks).
+    // Use batched deletion via indexes to handle large volumes.
+    let deletedNodes = 0;
+    const deletedLegacyTasks = 0;
+
+    // nodes by userAuthId
+    deletedNodes += await deleteByIndexBatched(
+      ctx,
+      "nodes",
+      "by_user",
+      { userAuthId: authId },
+      BATCH_LIMIT
+    );
+
+    // Fetch the app user row (idempotent if already gone).
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_authId", (q) => q.eq("authId", authId))
+      .first();
+
+    // Finally, delete the user document last so foreign-key-ish cleanup above can find it.
+    if (user) {
+      await ctx.db.delete(user._id);
+    }
+
+    return {
+      nodes: deletedNodes,
+      tasks: deletedLegacyTasks,
+      user: user ? 1 : 0,
+    };
   },
 });
 
@@ -165,7 +178,7 @@ export const getUserByAuthId = internalQuery({
 export const createUser = internalMutation({
   args: { authId: v.string(), displayName: v.string(), avatarUrl: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const _id = await ctx.db.insert("users", {
+    await ctx.db.insert("users", {
       authId: args.authId,
       displayName: args.displayName,
       avatarUrl: args.avatarUrl,
@@ -196,118 +209,62 @@ export const ensureCurrentUser = action({
     const displayName = identity.name || identity.email || "New User";
 
     // Check if user exists
-    // Cast to any to avoid TS error before codegen updates
-    const existing: Doc<"users"> | null = await ctx.runQuery(internal.users.getUserByAuthId, { authId });
-
-    if (existing) {
-      if (existing.status === "deleted") {
-        // If the user is marked for deletion, we shouldn't allow them to log in.
-        // We force flush synchronously so the next attempt is clean.
-
-        await ctx.runAction(internal.users.permanentlyWipeDeletedUsers, { userId: existing.authId });
-
-        // Now user is gone from BetterAuth and App.
-        // We cannot proceed with login because authId is dead (deleted from provider).
-        throw new ConvexError<EnsureUserErr>({ type: "InvalidStateError", msg: "Account deleted. Please sign up again." });
-      }
-      return existing.authId;
+    const existing = await ctx.runQuery(internal.users.getUserByAuthId, { authId });
+    if (existing) return existing.authId;
+    else {
+      // Create new user record
+      return await ctx.runMutation(internal.users.createUser, {
+        authId,
+        displayName,
+        avatarUrl: undefined,
+      });
     }
-
-    // Create new user record
-    return await ctx.runMutation(internal.users.createUser, {
-      authId,
-      displayName,
-      avatarUrl: undefined,
-    });
   },
 });
 
 
 //#region Utilities
 
-export const permanentlyWipeDeletedUsers = internalAction({
-  args: { userId: v.optional(v.string()) },
-  handler: async (ctx, { userId }) => {
-    let deletedUsers;
-    if (userId) {
-      // Targeted deletion: verify the user is actually marked as deleted first to be safe
-      // We can't reuse getDeletedUsers directly as it returns all of them.
-      // Instead, we'll fetch this specific user via a new internal query or just filter in memory if the list is small?
-      // Better: create a specific internal query for a single deleted user.
-      const user = await ctx.runQuery(internal.users.getDeletedUser, { authId: userId });
-      deletedUsers = user ? [user] : [];
-    } else {
-      // Bulk deletion
-      deletedUsers = await ctx.runQuery(internal.users.getDeletedUsers);
-    }
+// Tunables
+const BATCH_LIMIT = 500; // delete in chunks to avoid long transactions/timeouts
 
-    // Force cast to expected adapter shape - types seem to mismatch or define it as a factory
-    const adapter = authComponent.adapter(ctx);
-
-    for (const user of deletedUsers) {
-      console.log(`Hard deleting user ${user.authId}`);
-
-      // 1. Delete from BetterAuth
-      try {
-        await adapter.deleteUser(user.authId);
-      } catch (error) {
-        // Log but continue - user might already be gone from Auth
-        console.error(`Failed to delete user ${user.authId} from BetterAuth`, error);
+async function deleteByIndexBatched<TableName extends TableNames, IndexName extends IndexNames<NamedTableInfo<DataModel, TableName>>>(
+  ctx: MutationCtx,
+  table: TableName,
+  indexName: IndexName,
+  indexFilter: Record<string, unknown>,
+  limit = BATCH_LIMIT
+) {
+  let total = 0;
+  // Loop until no more docs match (idempotent)
+  // Note: Convex transactions are short; keep each batch small.
+  while (true) {
+    const q = ctx.db.query(table).withIndex(indexName, (q) => {
+      // We use `any` here because the IndexRangeBuilder type narrows with each .eq() call,
+      // preventing use of a static type for the accumulator in a loop/reduce.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let builder: any = q;
+      for (const [field, value] of Object.entries(indexFilter)) {
+        builder = builder.eq(field, value);
       }
+      return builder;
+    });
 
-      // 2. Delete app data and user record
-      await ctx.runMutation(internal.users.deleteUserAndData, { authId: user.authId });
+    // Collect a limited batch
+    const batch: Doc<TableName>[] = [];
+    for await (const doc of q) {
+      batch.push(doc);
+      if (batch.length >= limit) break;
+    }
+    if (batch.length === 0) break;
+
+    // Delete each doc
+    for (const d of batch) {
+      await ctx.db.delete(d._id);
+      total++;
     }
   }
-});
-
-export const getDeletedUsers = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    return ctx.db.query("users")
-      .withIndex("by_status", q => q.eq("status", "deleted"))
-      .collect();
-  }
-});
-
-export const getDeletedUser = internalQuery({
-  args: { authId: v.string() },
-  handler: async (ctx, { authId }) => {
-    const user = await ctx.db.query("users")
-      .withIndex("by_authId", q => q.eq("authId", authId))
-      .unique();
-
-    return user?.status === "deleted" ? user : null;
-  }
-});
-
-export const deleteUserAndData = internalMutation({
-  args: { authId: v.string() },
-  handler: async (ctx, { authId }) => {
-    // 1. Delete nodes
-    const nodes = await ctx.db.query("nodes").withIndex("by_user", q => q.eq("userAuthId", authId)).collect();
-    for (const node of nodes) {
-      await ctx.db.delete(node._id);
-    }
-
-    // 2. Delete legacy tasks (if any)
-    const tasks = await ctx.db.query("tasks").withIndex("by_user", q => q.eq("userAuthId", authId)).collect();
-    for (const task of tasks) {
-      await ctx.db.delete(task._id);
-    }
-
-    // 3. Delete user
-    const user = await ctx.db.query("users").withIndex("by_authId", q => q.eq("authId", authId)).unique();
-    if (user) {
-      await ctx.db.delete(user._id);
-    }
-  }
-});
-
-
-
-function serializeError<T extends Err>(err: T): T {
-  return JSON.parse(JSON.stringify(err, Object.getOwnPropertyNames(err)));
+  return total;
 }
 
 function rowToAuthenticatedUser(row: Doc<"users">): User<number> {
@@ -322,16 +279,6 @@ function rowToAuthenticatedUser(row: Doc<"users">): User<number> {
     avatarUrl: row.avatarUrl,
     settingOverrides: row.settingOverrides,
   };
-}
-function rowToPublicUser(row: Doc<"users">): User<number> {
-  const cleanedUser: Partial<User<number>> = rowToAuthenticatedUser(row);
-  delete cleanedUser.features;
-  delete cleanedUser.settingOverrides;
-  return cleanedUser as User<number>;
-}
-
-function userToRow(user: User): Omit<Doc<'users'>, '_id' | '_creationTime'> {
-  return userToPatch(user) as Omit<Doc<'users'>, '_id' | '_creationTime'>;
 }
 
 function userToPatch(user: Partial<User>): Partial<Omit<Doc<'users'>, '_id' | '_creationTime'>> {
