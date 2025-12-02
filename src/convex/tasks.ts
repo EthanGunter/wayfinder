@@ -9,6 +9,8 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { AppData as AppData, IAppNode } from "$domain/models/node";
 import type { ProjectData } from "$domain/models/project";
 
+// TODO:refactor Replace all errors with ConvexError<TaskServerErr>
+
 //#region Types
 
 type DBNode = Doc<'nodes'>;

@@ -66,6 +66,7 @@
 				// TODO:security This blindly trusts the error message from the backend.
 				// Safe for alpha with trusted users, but should be sanitized for release.
 				errorMessage = error.message || 'Login failed';
+				console.log(error.context);
 				return;
 			}
 			goto(redir || '/planner');

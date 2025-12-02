@@ -57,6 +57,13 @@ export class Err extends Error {
         throw e;
     }
 
+    static AssertNever(value: any, message?: string): never {
+        const msg = message || "Unexpected value should never happen";
+        const e = new Err("AssertNever", msg, { value });
+        captureHere(e, Err.AssertNever);
+        throw e;
+    }
+
     static NotImplemented(location: string): never {
         throw new NotImplementedError(location);
     }

@@ -1,10 +1,10 @@
 // convex/auth.ts
 import { Err, InvalidStateError, NotAuthorizedError, NotFoundError, NotImplementedError } from "$domain/errors";
-import { type User } from "$domain/models/user";
+import { DeleteErr, EnsureUserErr, UpdateErr, UserServerErr, WatchUserErr, type User } from "$domain/models/user";
 import { type Doc } from "./_generated/dataModel";
-import { query, mutation, internalMutation, internalQuery, internalAction } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery, internalAction, action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { UserDef, UserFeatureDef, UserStatusDef } from "./schema";
 import { authComponent, createAuth } from "./auth";
 
@@ -43,7 +43,7 @@ export const watchUser = query({
     if (!user) return null;
 
     if (user.status === 'deleted') {
-      throw new InvalidStateError("Account scheduled for deletion. Please wait.");
+      throw new ConvexError<WatchUserErr>({ type: "InvalidStateError", msg: "Account scheduled for deletion. Please wait." });
     }
 
     // Normalize: Convex stores timestamps as numbers; your model expects Date.
@@ -94,80 +94,6 @@ export const watchUsers = query({
   },
 });
 
-export const register = mutation({
-  args: {
-    // You may validate shape more strictly; align with your LocalUser
-    creds: typeLoginCredentials,
-    userData: v.object(UserDef),
-  },
-  handler: async (ctx, { creds, userData }) => {
-    // Normally you'd validate creds via BetterAuth and ensure authId (userData.id)
-    // exists/allowed. For now assume userData.id is validated externally.
-    if (creds.type !== "external") {
-      throw new Error("Only social login is implemented with Convex + WorkOS");
-    }
-
-    // TODO get authId from auth provider registration
-    const authId = "TODO:authId";
-    ctx.auth.getUserIdentity();
-
-    // Upsert by authId
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", authId))
-      .unique();
-
-    if (existing) {
-      if (existing.status === 'deleted') {
-        throw new InvalidStateError("Account scheduled for deletion. Please wait.");
-      }
-      // Update minimal fields
-      await ctx.db.patch(existing._id, {
-        displayName: userData.displayName,
-        avatarUrl: userData.avatarUrl,
-        status: userData.status ?? "active",
-        features: userData.features ?? [],
-        settingOverrides: userData.settingOverrides,
-      });
-      return {
-        ok: true as const,
-        value: {
-          id: existing.authId,
-          displayName: userData.displayName,
-          avatarUrl: userData.avatarUrl ?? undefined,
-          createdAt: new Date(0),
-          status: (userData.status ?? "active"),
-          features: userData.features ?? [],
-          settingOverrides: userData.settingOverrides ?? undefined,
-        },
-      };
-    }
-
-    const _id = await ctx.db.insert("users", {
-      authId: authId,
-      displayName: userData.displayName,
-      avatarUrl: userData.avatarUrl,
-      status: userData.status ?? "active",
-      features: userData.features ?? [],
-      settingOverrides: userData.settingOverrides,
-    });
-
-    const inserted = await ctx.db.get(_id);
-    return {
-      ok: true as const,
-      value: {
-        id: inserted!.authId,
-        displayName: inserted!.displayName,
-        avatarUrl: inserted!.avatarUrl ?? undefined,
-        createdAt: new Date(0),
-        status: (inserted!.status ?? "active"),
-        features: inserted!.features ?? [],
-        settingOverrides: inserted!.settingOverrides ?? undefined,
-      },
-    };
-  },
-});
-
 export const updateUser = mutation({
   args: v.object({
     id: v.string(), // external user id from BetterAuth
@@ -179,13 +105,15 @@ export const updateUser = mutation({
   }),
   handler: async (ctx, update) => {
     const id = await ctx.auth.getUserIdentity();
-    if (!id) throw new Error("User identity not available");
+    if (!id) throw new ConvexError<UpdateErr>({ type: "NotAuthorizedError", msg: "User identity not available" });
 
     const authId = id.subject;
-    if (authId !== update.id) return {
-      ok: false as const,
-      error: serializeError(new NotAuthorizedError(`Authenticated user does not ow target account`, update))
-    }
+    if (authId !== update.id)
+      throw new ConvexError<UpdateErr>({
+        type: "NotAuthorizedError",
+        msg: "Authenticated user does not own target account",
+        ctx: update.id
+      });
 
     const existing = await ctx.db
       .query("users")
@@ -193,10 +121,7 @@ export const updateUser = mutation({
       .unique();
 
     if (!existing) {
-      return {
-        ok: false as const,
-        error: serializeError(new NotFoundError("User not found", update.id)),
-      };
+      throw new ConvexError<UpdateErr>({ type: "NotFoundError", msg: "User not found", ctx: update.id });
     }
 
     const patch = userToPatch(update);
@@ -208,10 +133,7 @@ export const updateUser = mutation({
 
     const refreshed = await ctx.db.get(existing._id);
 
-    return {
-      ok: true as const,
-      value: rowToAuthenticatedUser(refreshed as Doc<'users'>),
-    }
+    return rowToAuthenticatedUser(refreshed as Doc<'users'>);
   },
 });
 
@@ -225,76 +147,28 @@ export const deleteUser = mutation({
       .unique();
 
     if (!existing) {
-      return {
-        ok: false as const,
-        error: serializeError(new NotFoundError("User not found", userId)),
-      };
+      throw new ConvexError<DeleteErr>({ type: "NotFoundError", msg: "User not found", ctx: userId });
     }
 
     // Soft delete by marking status: "deleted" (your schema supports that)
     await ctx.db.patch(existing._id, { status: "deleted" });
-
-    return { ok: true as const, value: undefined };
   },
 });
 
-export const login = mutation({
-  args: {
-    creds: typeLoginCredentials,
-  },
-  handler: async (_ctx, _args) => {
-    // Delegated to your auth provider; return NotImplemented as Result
-    return {
-      ok: false as const,
-      error: serializeError(new NotImplementedError("ConvexAuth.login"))
-    };
-  },
+export const getUserByAuthId = internalQuery({
+  args: { authId: v.string() },
+  handler: async (ctx, { authId }) => {
+    return ctx.db.query("users").withIndex("by_authId", q => q.eq("authId", authId)).unique();
+  }
 });
 
-export const ensureCurrentUser = mutation({
-  args: {},
-  handler: async (ctx) => {
-    // Get authenticated user from BetterAuth
-    const identity = await ctx.auth.getUserIdentity();
-
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const authId = identity.subject;
-    const displayName = identity.name || identity.email || "New User";
-
-    // Check if user exists
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_authId", (q) => q.eq("authId", authId))
-      .unique();
-
-    if (existing) {
-      if (existing.status === "deleted") {
-        // If the user is marked for deletion, we shouldn't allow them to log in
-        // This ensures that when the hard delete runs, they are fully removed,
-        // and if they sign up again, they get a new authId.
-
-        // Since this is a mutation, we CAN schedule the wipe immediately.
-        await ctx.scheduler.runAfter(0, internal.users.permanentlyWipeDeletedUsers, { userId: existing.authId });
-        const take2 = await ctx.db
-          .query("users")
-          .withIndex("by_authId", (q) => q.eq("authId", authId))
-          .unique();
-
-        if (take2) {
-          throw new InvalidStateError("Account is scheduled for deletion. Please wait for the process to complete.");
-        }
-      }
-      return { ok: true as const, userId: existing.authId };
-    }
-
-    // Create new user record
+export const createUser = internalMutation({
+  args: { authId: v.string(), displayName: v.string(), avatarUrl: v.optional(v.string()) },
+  handler: async (ctx, args) => {
     const _id = await ctx.db.insert("users", {
-      authId,
-      displayName,
-      avatarUrl: undefined,
+      authId: args.authId,
+      displayName: args.displayName,
+      avatarUrl: args.avatarUrl,
       status: "active",
       /**
        * TODO: Temp:IMPORTANT - This allows us to skip local optimistic updates, 
@@ -304,9 +178,47 @@ export const ensureCurrentUser = mutation({
       features: [],
       settingOverrides: undefined,
     });
+    return args.authId;
+  }
+});
 
-    const inserted = await ctx.db.get(_id);
-    return { ok: true as const, userId: inserted!.authId };
+export const ensureCurrentUser = action({
+  args: {},
+  handler: async (ctx): Promise<string> => {
+    // Get authenticated user from BetterAuth
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity) {
+      throw new ConvexError<EnsureUserErr>({ type: "InvalidStateError", msg: "No user session found" });
+    }
+
+    const authId = identity.subject;
+    const displayName = identity.name || identity.email || "New User";
+
+    // Check if user exists
+    // Cast to any to avoid TS error before codegen updates
+    const existing: Doc<"users"> | null = await ctx.runQuery(internal.users.getUserByAuthId, { authId });
+
+    if (existing) {
+      if (existing.status === "deleted") {
+        // If the user is marked for deletion, we shouldn't allow them to log in.
+        // We force flush synchronously so the next attempt is clean.
+
+        await ctx.runAction(internal.users.permanentlyWipeDeletedUsers, { userId: existing.authId });
+
+        // Now user is gone from BetterAuth and App.
+        // We cannot proceed with login because authId is dead (deleted from provider).
+        throw new ConvexError<EnsureUserErr>({ type: "InvalidStateError", msg: "Account deleted. Please sign up again." });
+      }
+      return existing.authId;
+    }
+
+    // Create new user record
+    return await ctx.runMutation(internal.users.createUser, {
+      authId,
+      displayName,
+      avatarUrl: undefined,
+    });
   },
 });
 
@@ -330,7 +242,7 @@ export const permanentlyWipeDeletedUsers = internalAction({
     }
 
     // Force cast to expected adapter shape - types seem to mismatch or define it as a factory
-    const adapter = authComponent.adapter(ctx) as unknown as { deleteUser: (id: string) => Promise<void> };
+    const adapter = authComponent.adapter(ctx);
 
     for (const user of deletedUsers) {
       console.log(`Hard deleting user ${user.authId}`);
@@ -398,24 +310,24 @@ function serializeError<T extends Err>(err: T): T {
   return JSON.parse(JSON.stringify(err, Object.getOwnPropertyNames(err)));
 }
 
-function rowToAuthenticatedUser(row: Doc<"users">): User {
+function rowToAuthenticatedUser(row: Doc<"users">): User<number> {
   return {
     id: row.authId,
     displayName: row.displayName,
     // Dates are not supported in Convex
     // TODO:refactor consider SystemAgnosticUser<T>
-    createdAt: row._creationTime as any,
+    createdAt: row._creationTime,
     status: row.status ?? "active",
     features: row.features ?? [],
     avatarUrl: row.avatarUrl,
     settingOverrides: row.settingOverrides,
   };
 }
-function rowToPublicUser(row: Doc<"users">): User {
-  const cleanedUser: Partial<User> = rowToAuthenticatedUser(row);
+function rowToPublicUser(row: Doc<"users">): User<number> {
+  const cleanedUser: Partial<User<number>> = rowToAuthenticatedUser(row);
   delete cleanedUser.features;
   delete cleanedUser.settingOverrides;
-  return cleanedUser as User;
+  return cleanedUser as User<number>;
 }
 
 function userToRow(user: User): Omit<Doc<'users'>, '_id' | '_creationTime'> {

@@ -9,6 +9,8 @@ import type {
 	User,
 	RegistrationRequirements,
 	SessionUser,
+	UserServerErr,
+	UpdateErr,
 } from "$domain/models/user";
 import {
 	ArgumentError,
@@ -31,6 +33,7 @@ import { cachedUsers } from ".";
 import { sharedConvexClient } from "../ConvexClient";
 import { PUBLIC_SITE_URL } from "$env/static/public";
 import type { Fetchable } from "$domain/fetchable";
+import { ConvexError } from "convex/values";
 
 const authClient = createAuthClient({
 	plugins: [convexPlugin(), multiSessionClient()],
@@ -77,8 +80,9 @@ const bootstrap = async () => {
 			}
 		});
 		// Ensure user record exists in our app DB (creates if first-time login)
-		// This mutation validates auth internally via ctx.auth.getUserIdentity()
-		await sharedConvexClient.mutation(api.users.ensureCurrentUser, {});
+		// This action validates auth internally via ctx.auth.getUserIdentity()
+		// Cast to any to bypass type mismatch until codegen updates (Mutation -> Action)
+		await sharedConvexClient.action(api.users.ensureCurrentUser, {});
 
 		// Subscribe to user from Convex
 		if (unsubUser) {
@@ -95,8 +99,7 @@ const bootstrap = async () => {
 					return;
 				}
 				(async () => {
-					const { _creationTime, ...rest } = user;
-					const normalized = { ...rest, createdAt: new Date(user._creationTime) } as User;
+					const normalized = convertFromServerUser(user);
 
 					let sessionUser: SessionUser;
 					try {
@@ -107,26 +110,26 @@ const bootstrap = async () => {
 								const expiresAt = new Date(match.session.expiresAt);
 								const isActive = Date.now() < expiresAt.getTime();
 								sessionUser = {
-									...(normalized as any),
+									...normalized,
 									sessionStatus: isActive ? 'active' : 'expired',
 									expiresAt,
 									sessionRefreshMaterial: match.session.token,
 								} as SessionUser;
 							} else {
 								sessionUser = {
-									...(normalized as any),
+									...normalized,
 									sessionStatus: 'revoked',
 								} as SessionUser;
 							}
 						} else {
 							sessionUser = {
-								...(normalized as any),
+								...normalized,
 								sessionStatus: 'revoked',
 							} as SessionUser;
 						}
 					} catch (e) {
 						sessionUser = {
-							...(normalized as any),
+							...normalized,
 							sessionStatus: 'revoked',
 						} as SessionUser;
 					}
@@ -142,7 +145,7 @@ const bootstrap = async () => {
 		);
 	} catch (e: any) {
 		resolveSignedOut();
-		Err.UNHANDLED("[ConvexAuthProvider] Bootstrap failed:", e);
+		console.error("[ConvexAuthProvider] Bootstrap failed:", e);
 	}
 };
 
@@ -169,13 +172,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 					if (users === null) {
 						set({ status: "resolved", value: [] });
 					} else {
-						// Transform Convex users to app User format (convert _creationTime to createdAt Date)
-						const transformed: User[] = users.map((u) => ({
-							...u,
-							createdAt: new Date(u._creationTime),
-							_creationTime: undefined
-						}));
-						set({ status: "resolved", value: transformed });
+						set({ status: "resolved", value: users.map(convertFromServerUser) });
 					}
 				},
 				(error: Error) => {
@@ -234,7 +231,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		if (error) {
 			if (error.code === "VALIDATION_ERROR")
 				return err(new ArgumentError("Invalid email address", email));
-			Err.UNHANDLED(error);
+			return err(new UnknownError(error.message || 'Password reset failed', { cause: error }));
 		}
 		return ok({ userMessage: data.message });
 	},
@@ -243,21 +240,35 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		if (res.error) {
 			if (res.error.code === "INVALID_TOKEN")
 				return err(new NotAuthorizedError("This reset link is invalid or has expired. Please request a new one", { messageForDev: res.error.message }));
-			else Err.UNHANDLED(res.error);
+			else return err(new UnknownError(res.error.message || 'Reset failed', { cause: res.error }));
 		}
 		return ok();
 	},
 
 	updateUser: async ({ update }) => {
-		const res = await sharedConvexClient.mutation(api.users.updateUser, update);
-		if (res.ok) return ok(res.value);
-		return err(res.error);
+		try {
+			const res = await sharedConvexClient.mutation(api.users.updateUser, convexifyUserUpdate(update));
+			return ok(convertFromServerUser(res));
+		}
+		catch (e) {
+			if (e instanceof ConvexError) {
+				switch ((e.data as UpdateErr).type) {
+					case "NotFoundError":
+						return err(new NotFoundError("User not found", update.id));
+
+				}
+			}
+			Err.AssertNever(e, "Unexpected update user error");
+		}
 	},
 
 	deleteUser: async ({ userId }) => {
-		const res = await sharedConvexClient.mutation(api.users.deleteUser, { userId });
-		if (res.ok) return ok();
-		return err(res.error);
+		try {
+			await sharedConvexClient.mutation(api.users.deleteUser, { userId });
+			return ok();
+		} catch (e) {
+			return err(Err.wrap(e as Error));
+		}
 	},
 
 	login: async (creds) => {
@@ -282,12 +293,31 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 					}
 					return err(new UnknownError(res.error.message || "Unknown error", { cause: res.error }));
 				}
+
+				// Verify Convex requirements (e.g. not deleted) before proceeding
+				try {
+					// Cast to any to bypass type mismatch until codegen updates (Mutation -> Action)
+					await sharedConvexClient.action(api.users.ensureCurrentUser, {});
+				} catch (e) {
+					await authClient.signOut();
+
+					if (e instanceof ConvexError) {
+						if (e.data.type === "NotAuthorizedError") {
+							return err(new NotAuthorizedError("Not authenticated", { messageForDev: e.data.msg, ctx: creds }));
+						} else if (e.data.type === "InvalidStateError") {
+							// TODO:ux this is a terrible error message. The user should not encounter the friction of implementation details
+							return err(new InvalidStateError("Account pending deletion. Try again tomorrow", { messageForDev: "authClient registration succeeded, but ctx.auth.getUserIdentity() returned null... why?", ctx: { creds } }));
+						}
+					}
+					throw e;
+				}
+
 				bootstrap();
 			}
 		} catch (e: any) {
 			// TODO:security This error message contains the reason for the failure.
 			// In production, we should probably not expose this to the user.
-			return err(Err.UNHANDLED(e, '[ConvexAuthProvider] signIn error:'));
+			return err(new UnknownError(e.message || 'Unknown sign-in error', { cause: e }));
 		}
 		return ok();
 	},
@@ -302,7 +332,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		} catch (e) {
 			// Still update UI even if server call failed
 			resolveSignedOut();
-			Err.UNHANDLED(e, "Failed to sign out");
+			console.error("Failed to sign out", e);
 		}
 	},
 
@@ -324,7 +354,8 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		try {
 			await authClient.multiSession.setActive({ sessionToken: material });
 			// Ensure Convex receives a fresh JWT tied to the active BetterAuth session
-			await sharedConvexClient.mutation(api.users.ensureCurrentUser, {});
+			// Cast to any to bypass type mismatch until codegen updates (Mutation -> Action)
+			await sharedConvexClient.action(api.users.ensureCurrentUser, {});
 			// Re-subscribe to the now-active user's data
 			const session = await authClient.getSession();
 			const newUserId = session?.data?.user?.id;
@@ -344,7 +375,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 							return;
 						}
 						(async () => {
-							const normalized = { ...user, createdAt: new Date(user._creationTime) } as any;
+							const normalized = convertFromServerUser(user);
 							let enriched: SessionUser;
 							try {
 								const device = await authClient.multiSession.listDeviceSessions();
@@ -353,15 +384,15 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 									if (match) {
 										const expiresAt = new Date(match.session.expiresAt);
 										const isActive = Date.now() < expiresAt.getTime();
-										enriched = { ...(normalized as any), sessionStatus: isActive ? 'active' : 'expired', expiresAt, sessionRefreshMaterial: match.session.token } as SessionUser;
+										enriched = { ...normalized, sessionStatus: isActive ? 'active' : 'expired', expiresAt, sessionRefreshMaterial: match.session.token } as SessionUser;
 									} else {
-										enriched = { ...(normalized as any), sessionStatus: 'revoked' } as SessionUser;
+										enriched = { ...normalized, sessionStatus: 'revoked' } as SessionUser;
 									}
 								} else {
-									enriched = { ...(normalized as any), sessionStatus: 'revoked' } as SessionUser;
+									enriched = { ...normalized, sessionStatus: 'revoked' } as SessionUser;
 								}
 							} catch {
-								enriched = { ...(normalized as any), sessionStatus: 'revoked' } as SessionUser;
+								enriched = { ...normalized, sessionStatus: 'revoked' } as SessionUser;
 							}
 							authState.set({ status: 'signed-in', user: enriched });
 						})();
@@ -401,3 +432,27 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 };
 
 export default convexApi;
+
+
+/**
+ * Converts client user update to Convex format
+ * Filters out fields that are not updatable via mutation (like createdAt)
+ */
+function convexifyUserUpdate(update: Partial<User> & { id: string }): any {
+	const { createdAt, ...rest } = update;
+	return rest;
+}
+
+/**
+ * Converts server user with number timestamps to client user with Date timestamps
+ * Handles both _creationTime (from watchUser) and createdAt (from updateUser return)
+ */
+function convertFromServerUser(user: any): User {
+	const createdAt = user.createdAt ?? user._creationTime;
+	const { _creationTime, ...rest } = user;
+
+	return {
+		...rest,
+		createdAt: new Date(createdAt),
+	} as User;
+}
