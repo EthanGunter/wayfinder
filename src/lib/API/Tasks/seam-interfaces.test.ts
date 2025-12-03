@@ -1,11 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, test, expect } from "vitest";
 import type { ITasksRemote, ITasksLocal, ITasksBase } from "./seam-interfaces";
-import type { Task, CreateTaskParams, UpdateTaskParams, ExportedData, TaskData } from "$domain/models/task";
+import type { Task, CreateTaskParams, UpdateTaskParams, ExportedData } from "$domain/models/task";
 import type { Result } from "$domain/result";
-import type { NotAuthorizedError, NotFoundError, InvalidStateError, ArgumentError } from "$domain/errors";
-import type { FetchableStore, QueryableStore } from "../fetchableStore";
+import type { NotAuthorizedError } from "$domain/errors";
+import type { FetchableStore } from "../fetchableStore";
 import type { Fetchable } from "$domain/fetchable";
-import type { AppNode, IAppNode } from "$domain/models/node";
+import type { AppNode } from "$domain/models/node";
 
 //#region Store Testing Utilities
 
@@ -121,18 +123,14 @@ export function createBaseTestSuite(
 
 		describeUpdateTask() {
 			describe("updateTask", () => {
-				test("updates task fields", async () => {
+				test.todo("updates task fields", async () => {
 					// Note: This test requires a task to exist, which must be created via provider-specific method
 					// For base tests, we'll skip createTask tests since they differ between Remote and Local
 				});
 
-				test("adds parent relationship", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("adds parent relationship");
 
-				test("removes parent relationship", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("removes parent relationship");
 
 				test("returns NotFoundError for non-existent task", async () => {
 					const result = await helpers.withAuth("user1", async () => {
@@ -155,25 +153,17 @@ export function createBaseTestSuite(
 
 		describeUpdateTasks() {
 			describe("updateTasks", () => {
-				test("updates multiple tasks in batch", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("updates multiple tasks in batch");
 
-				test("deduplicates affected tasks", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("deduplicates affected tasks");
 			});
 		},
 
 		describeDeleteTask() {
 			describe("deleteTask", () => {
-				test("deletes task and removes from parent.children", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("deletes task and removes from parent.children");
 
-				test("handles cascade effects on children", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("handles cascade effects on children");
 
 				test("returns NotFoundError for non-existent task", async () => {
 					const result = await helpers.withAuth("user1", async () => {
@@ -191,13 +181,9 @@ export function createBaseTestSuite(
 
 		describeDeleteTasks() {
 			describe("deleteTasks", () => {
-				test("deletes multiple tasks in batch", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("deletes multiple tasks in batch");
 
-				test("tracks affected tasks correctly", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("tracks affected tasks correctly");
 			});
 		},
 
@@ -205,9 +191,9 @@ export function createBaseTestSuite(
 			describe("importData", () => {
 				test("imports data in add mode", async () => {
 					const exportData: ExportedData = {
-						version: "0.0.1",
-						exportedAt: new Date().toISOString(),
-						nodes: [
+						version: "0.0.0",
+						exportedAt: new Date().getTime(),
+						data: [
 							{
 								id: "imported_1",
 								userAuthId: "original_user",
@@ -238,9 +224,9 @@ export function createBaseTestSuite(
 
 				test("imports data in replace mode", async () => {
 					const exportData: ExportedData = {
-						version: "0.0.1",
-						exportedAt: new Date().toISOString(),
-						nodes: [
+						version: "0.0.0",
+						exportedAt: new Date().getTime(),
+						data: [
 							{
 								id: "imported_1",
 								userAuthId: "original_user",
@@ -271,9 +257,9 @@ export function createBaseTestSuite(
 
 				test("handles relationship remapping", async () => {
 					const exportData: ExportedData = {
-						version: "0.0.1",
-						exportedAt: new Date().toISOString(),
-						nodes: [
+						version: "0.0.0",
+						exportedAt: new Date().getTime(),
+						data: [
 							{
 								id: "parent_1",
 								userAuthId: "original_user",
@@ -327,13 +313,9 @@ export function createBaseTestSuite(
 
 		describeExportData() {
 			describe("exportData", () => {
-				test("exports all tasks", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("exports all tasks");
 
-				test("exports subtree", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("exports subtree");
 			});
 		},
 
@@ -343,9 +325,7 @@ export function createBaseTestSuite(
 
 		describeGetTask() {
 			describe("getTask", () => {
-				test("retrieves single task", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves single task");
 
 				test("handles not found task", async () => {
 					const store = provider.getTask("non_existent_id");
@@ -364,101 +344,71 @@ export function createBaseTestSuite(
 					}
 				});
 
-				test("updates when task changes", async () => {
-					// Implementation-specific - requires task creation and update
-				});
+				test.todo("updates when task changes");
 			});
 		},
 
 		describeGetTasks() {
 			describe("getTasks", () => {
-				test("retrieves multiple tasks", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves multiple tasks");
 
-				test("updates query parameters", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("updates query parameters");
 			});
 		},
 
 		describeGetAllUserTasks() {
 			describe("getAllUserTasks", () => {
-				test("retrieves all user tasks", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves all user tasks");
 
-				test("filters by userId", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("filters by userId");
 			});
 		},
 
 		describeGetChildrenOf() {
 			describe("getChildrenOf", () => {
-				test("retrieves children of a task", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves children of a task");
 
-				test("updates when relationships change", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("updates when relationships change");
 			});
 		},
 
 		describeGetParentsOf() {
 			describe("getParentsOf", () => {
-				test("retrieves parents of a task", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves parents of a task");
 			});
 		},
 
 		describeGetSiblingsOf() {
 			describe("getSiblingsOf", () => {
-				test("retrieves siblings grouped by parent", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves siblings grouped by parent");
 			});
 		},
 
 		describeGetRootTasks() {
 			describe("getRootTasks", () => {
-				test("retrieves root tasks", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves root tasks");
 			});
 		},
 
 		describeGetTodaysTasks() {
 			describe("getTodaysTasks", () => {
-				test("retrieves today's tasks", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves today's tasks");
 			});
 		},
 
 		describeGetPrioritizedTasks() {
 			describe("getPrioritizedTasks", () => {
-				test("retrieves prioritized tasks with limit", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("retrieves prioritized tasks with limit");
 
-				test("updates query parameters", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("updates query parameters");
 			});
 		},
 
 		describeSearchTasks() {
 			describe("searchTasks", () => {
-				test("searches tasks by text", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("searches tasks by text");
 
-				test("returns empty array for no matches", async () => {
-					// Implementation-specific - requires task creation
-				});
+				test.todo("returns empty array for no matches");
 			});
 		},
 
