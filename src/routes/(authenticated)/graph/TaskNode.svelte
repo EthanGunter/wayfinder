@@ -152,15 +152,17 @@
 			Pin 📌
 		</ContextMenu.CheckboxItem> -->
 		{#if hasChildren}
-			<ContextMenu.CheckboxItem
-				checked={isCollapsed}
-				onCheckedChange={() => handleCollapseToggle()}
-			>
-				Collapse children
-			</ContextMenu.CheckboxItem>
-			<ContextMenu.Item onclick={(e) => handleCollapseToggle(true)}>
-				Collapse recursively
-			</ContextMenu.Item>
+			{#if isCollapsed}
+				<ContextMenu.Item onclick={() => handleCollapseToggle()}>Show children</ContextMenu.Item>
+				<ContextMenu.Item onclick={(e) => handleCollapseToggle(true)}>
+					Show recursively
+				</ContextMenu.Item>
+			{:else}
+				<ContextMenu.Item onclick={() => handleCollapseToggle()}>Hide children</ContextMenu.Item>
+				<ContextMenu.Item onclick={(e) => handleCollapseToggle(true)}>
+					Hide recursively
+				</ContextMenu.Item>
+			{/if}
 		{/if}
 	</ContextMenu.Content>
 </ContextMenu.Root>

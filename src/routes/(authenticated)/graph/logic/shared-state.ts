@@ -289,18 +289,18 @@ export function toggleCollapseChildren(nodeId: string, recursive: boolean = fals
 
 	// Update all nodes' collapse state and persist
 	for (const id of nodesToToggle) {
+		if (newCollapsed) {
+			setNodeCollapsed(id);
+		} else {
+			clearNodeCollapsed(id);
+		}
+
 		const n = viewNodes.get(id);
 		if (n) {
 			viewNodes.set(id, {
 				...n,
 				data: { ...n.data, collapsedChildren: newCollapsed || undefined }
 			});
-
-			if (newCollapsed) {
-				setNodeCollapsed(id);
-			} else {
-				clearNodeCollapsed(id);
-			}
 		}
 	}
 
