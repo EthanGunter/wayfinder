@@ -1,7 +1,4 @@
-import type { NotFoundError, Err, NotAuthorizedError, InvalidStateError } from "$domain/errors";
-import { type Result } from "$domain/result";
 import type { AppData, AppNode, IAppNode as IAppNode } from "./node";
-import type { ProjectData } from "./project";
 
 //#region Task Data Interface and Utilities
 
@@ -166,16 +163,18 @@ export function applyRelationshipOperations<T extends GraphEntity>(
 
 // TODO: In the future, add CRDT/merge-aware methods for concurrent edits
 
+export const EXPORT_VERSIONS = ["0.0.0"];
 export interface ExportedData {
     version: string;
-    exportedAt: string;
-    nodes: any[];
+    exportedAt: number;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: any;
 }
 
 
 // #region Shared function parameter types
 
-type StrippedNodeParams<DataType, TimeFormat = Date> = Partial<Omit<IAppNode<any, TimeFormat>, "data" | "id">> & Omit<DataType, "type">;
+type StrippedNodeParams<DataType, TimeFormat = Date> = Partial<Omit<IAppNode<AppData<TimeFormat>, TimeFormat>, "data" | "id">> & Omit<DataType, "type">;
 
 export type CreateNodeParams<DataType = unknown, TimeFormat = Date> = Partial<StrippedNodeParams<DataType, TimeFormat>> & DataType;
 export type CreateTaskParams<TimeFormat = Date> = Partial<StrippedNodeParams<TaskData<TimeFormat>, TimeFormat>> & { id?: string; title: string }

@@ -8,10 +8,11 @@
 
 	type Props = {
 		onTaskSelected?: (task: Task) => void;
+		onLocateTask?: (task: Task) => void;
 		class?: string;
 	};
 
-	let { class: className, onTaskSelected }: Props = $props();
+	let { class: className, onTaskSelected, onLocateTask }: Props = $props();
 	let num = $state(0);
 	let searchBar: SearchBar<Task> | undefined = $state();
 
@@ -62,6 +63,6 @@
 	{refreshTrigger}
 >
 	{#snippet searchItems(task: Task, onSelect)}
-		<SearchTaskListItem {task} {onSelect} />
+		<SearchTaskListItem {task} {onSelect} {onLocateTask} />
 	{/snippet}
 </SearchBar>

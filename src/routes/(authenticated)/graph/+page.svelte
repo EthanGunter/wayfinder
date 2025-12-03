@@ -151,6 +151,7 @@
 		bind:this={searchBar}
 		class="my-2 mr-4 ml-auto max-w-md justify-self-end"
 		onTaskSelected={(t) => onSelectNode(t.id)}
+		onLocateTask={(t) => centerAndHighlightNode(t.id)}
 	/>
 </AppHeader>
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

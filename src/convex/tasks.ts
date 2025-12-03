@@ -2,8 +2,8 @@ import { ArgumentError, InvalidStateError } from "$domain/errors";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
-import { applyRelationshipOperations, calculateRelationshipUpdates } from "$domain/models/task";
-import type { CreateNodeParams, CreateTaskParams, ExportedData, Task, TaskData, UpdateTaskParams } from "$domain/models/task";
+import { applyRelationshipOperations, calculateRelationshipUpdates, EXPORT_VERSIONS, TaskStatus } from "$domain/models/task";
+import type { CreateTaskParams, ExportedData, TaskData, UpdateTaskParams } from "$domain/models/task";
 
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { AppData as AppData, IAppNode } from "$domain/models/node";
@@ -14,7 +14,7 @@ import type { ProjectData } from "$domain/models/project";
 //#region Types
 
 type DBNode = Doc<'nodes'>;
-type ClientNode<T extends AppData<number>> = IAppNode<T, number>;
+type ClientNode<T extends AppData<number> = AppData<number>> = IAppNode<T, number>;
 type ClientTaskData = TaskData<number>;
 type ClientTaskNode = IAppNode<ClientTaskData, number>;
 type CreateTaskArgs = CreateTaskParams<number> & { id?: string };
@@ -85,7 +85,7 @@ export const createTasks = mutation({
 		}
 		const userAuthId = identity.subject;
 		const created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>[] = [];
-		let affected: ClientTaskNode[] = [];
+		let affected: ClientNode[] = [];
 		for (const createDetail of createDetails) {
 			const { created: createdTask, affected: affectedTasks } = await _createTask(ctx, {
 				...createDetail,
@@ -105,7 +105,7 @@ export const createTasks = mutation({
 	},
 });
 
-async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientTaskNode[] }> {
+async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientNode[] }> {
 	const now = Date.now();
 
 	// Normalize parents (attach to root if empty)
@@ -186,8 +186,8 @@ export const updateTasks = mutation({
 		if (!identity) {
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
-		const updated: ClientTaskNode[] = [];
-		let affected: ClientTaskNode[] = [];
+		const updated: ClientNode[] = [];
+		let affected: ClientNode[] = [];
 		for (const update of updates) {
 			const { updated: updatedTask, affected: affectedTasks } = await _updateTask(ctx, update as UpdateTaskParams<number>);
 			updated.push(updatedTask);
@@ -201,7 +201,7 @@ export const updateTasks = mutation({
 	},
 });
 
-async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): Promise<{ updated: ClientTaskNode, affected: ClientTaskNode[] }> {
+async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): Promise<{ updated: ClientNode, affected: ClientNode[] }> {
 	const nodeId = update.id as Id<"nodes">;
 
 	// Get old node state
@@ -247,14 +247,14 @@ async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): 
 	parents = await normalizeTaskParents(ctx, oldNode, parents, nodeId);
 
 	// Build patch object with proper nested structure
-	const patchData: any = {
+	const patchData: Partial<DBNode> = {
 		parents,
 		children,
 		lastEdit: update.lastEdit ?? now,
 	};
 
 	// Handle nested data updates
-	const dataUpdates: any = {};
+	const dataUpdates: Partial<TaskData<number>> = {};
 	if (update.title !== undefined) dataUpdates.title = update.title;
 	if (update.content !== undefined) dataUpdates.content = update.content;
 	if (update.status !== undefined) dataUpdates.status = update.status;
@@ -276,10 +276,44 @@ async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): 
 	const updated = await ctx.db.get(nodeId);
 	if (!updated) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve updated node", ctx: nodeId });
 
+	// Reorder completed tasks to the end of their parents' lists
+	const extraAffected: DBNode[] = [];
+	// Check for completion status change (incomplete -> complete)
+	if (
+		oldNode.data.type === 'task' &&
+		update.status === TaskStatus.complete &&
+		oldNode.data.status !== TaskStatus.complete
+	) {
+		for (const pid of parents) {
+			const parentId = pid as Id<"nodes">;
+			const parent = await ctx.db.get(parentId);
+			if (parent && parent.children) {
+				const idx = parent.children.indexOf(String(nodeId));
+				// Only move if not already at the end
+				if (idx !== -1 && idx !== parent.children.length - 1) {
+					const newChildren = [...parent.children];
+					newChildren.splice(idx, 1);
+					newChildren.push(String(nodeId));
+
+					await ctx.db.patch(parentId, { children: newChildren });
+
+					const patched = await ctx.db.get(parentId);
+					if (patched) extraAffected.push(patched);
+				}
+			}
+		}
+	}
+
 	// Propagate relationship changes
 	let affected = await propagateRelationshipChanges(ctx, [
 		{ oldTask: oldNode, newTask: updated }
 	]);
+
+	// Merge affected lists (deduplicating by ID)
+	const affectedMap = new Map<string, DBNode>();
+	for (const node of extraAffected) affectedMap.set(node._id, node);
+	for (const node of affected) affectedMap.set(node._id, node);
+	affected = Array.from(affectedMap.values());
 
 	return {
 		updated: cleanNodeForClient(updated),
@@ -307,7 +341,7 @@ export const deleteTasks = mutation({
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
 
-		let affected: ClientTaskNode[] = [];
+		let affected: ClientNode[] = [];
 		for (const id of ids) {
 			const { affected: affectedTasks } = await _deleteTask(ctx, id as Id<"nodes">);
 			affected.push(...affectedTasks);
@@ -319,8 +353,8 @@ export const deleteTasks = mutation({
 	},
 });
 
-async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affected: ClientTaskNode[] }> {
-	
+async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affected: ClientNode[] }> {
+
 	// Get node
 	const node = await ctx.db.get(id);
 	if (!node) throw new ConvexError({ type: "NotFoundError", msg: "Node not found", ctx: id });
@@ -340,13 +374,13 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affecte
 	let affected = await propagateRelationshipChanges(ctx, [
 		{ oldTask: node, newTask: null }
 	]);
-	
+
 
 
 	// Attach orphaned nodes (those with no parents) to root
 	const orphanedNodes: DBNode[] = affected.filter(n => n.data.type !== "project" && (n.parents?.length ?? 0) === 0);
 	if (orphanedNodes.length > 0) {
-		
+
 		const rootProject = await getOrCreateProject(ctx, node.userAuthId);
 		const rootId = String(rootProject._id);
 
@@ -367,7 +401,7 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affecte
 
 		// Propagate these changes (this will automatically update root's children)
 		const orphanAffected = await propagateRelationshipChanges(ctx, orphanChanges);
-		
+
 
 		// Merge affected nodes, deduplicating
 		const affectedMap = new Map<string, DBNode>();
@@ -386,11 +420,12 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affecte
 
 	// Delete node
 	await ctx.db.delete(id);
-	
+
 
 	return { affected: affected.map(cleanNodeForClient) };
 }
 
+const CURRENT_EXPORT_VERSION = "0.0.0";
 export const importData = mutation({
 	args: { data: v.string(), mode: v.optional(v.union(v.literal("replace"), v.literal("add"), v.literal("attemptMerge"))) },
 	handler: async (ctx, { data, mode = "add" }) => {
@@ -408,78 +443,27 @@ export const importData = mutation({
 			throw new ArgumentError("Invalid JSON format", data, { cause: error });
 		}
 
-		if (!parsed.version) {
+		if (!parsed.version || !EXPORT_VERSIONS.includes(parsed.version) && parsed.version !== "0.0.1") {
 			throw new ArgumentError("Invalid export format: missing version or tasks", parsed);
 		}
 
-		let dataToImport: IAppNode<any, number>[] = [];
+		let dataToImport: IAppNode<AppData<number>, number>[] = [];
+
 		switch (parsed.version) {
-			case "0.0.0": if ((parsed as any).tasks.length == 0) return 0;
-				// Convert ISO strings to timestamps (numbers) for Convex
-				dataToImport = (parsed as any).tasks.map((node: { // Static type to persist historical data shape
-					id: string;
-					userAuthId: string;
-					type: "task" | "root";
-					title: string;
-					content: string;
-					status: number;
-					parents: string[];
-					children: string[];
-					todaysTask: number | undefined;
-					dueDate: number | undefined;
-					created: number;
-					lastEdit: number;
-				}) => {
-					if (node.type === "task") {
-						return {
-							id: node.id,
-							userAuthId, // Override with current user
-							parents: node.parents,
-							children: node.children,
-							created: new Date(node.created).getTime(),
-							lastEdit: new Date(node.lastEdit).getTime(),
-							data: {
-								type: "task",
-								title: node.title,
-								content: node.content,
-								status: node.status,
-								todaysTask: node.todaysTask ? new Date(node.todaysTask).getTime() : undefined,
-								dueDate: node.dueDate ? new Date(node.dueDate).getTime() : undefined,
-							},
-						} satisfies Task<number>
-					} else if (node.type === "root") {
-						return {
-							id: node.id,
-							userAuthId, // Override with current user
-							parents: node.parents,
-							children: node.children,
-							created: new Date(node.created).getTime(),
-							lastEdit: new Date(node.lastEdit).getTime(),
-							data: {
-								type: "project",
-								title: node.title,
-								content: node.content,
-								status: node.status,
-								dueDate: node.dueDate ? new Date(node.dueDate).getTime() : undefined,
-							},
-						} satisfies IAppNode<ProjectData<number>, number>
-					} else {
-						throw new ConvexError({ type: "InvalidState", msg: "Failed to parse node type", ctx: { version: '0.0.0', data: node } });
-					}
-				});
-				break;
-			case "0.0.1":
-				if ((parsed as any).nodes.length == 0) return 0;
-				// v0.0.1 uses nodes array with nested data structure (already in INode format)
-				dataToImport = (parsed as any).nodes.map((node: IAppNode<TaskData<number> | ProjectData<number>, number>) => {
+			case CURRENT_EXPORT_VERSION:
+				if (parsed.data.length == 0) return 0;
+				dataToImport = parsed.data.map((node: IAppNode<AppData<number>, number>) => {
+					const created = typeof node.created === 'string' ? new Date(node.created).getTime() : node.created;
+					const lastEdit = typeof node.lastEdit === 'string' ? new Date(node.lastEdit).getTime() : node.lastEdit;
+
 					// Extract id for mapping, override userAuthId
 					return {
 						id: node.id,
 						userAuthId, // Override with current user
 						parents: node.parents ?? [],
 						children: node.children ?? [],
-						created: node.created,
-						lastEdit: node.lastEdit,
+						created,
+						lastEdit,
 						data: node.data,
 					} satisfies IAppNode<TaskData<number> | ProjectData<number>, number>;
 				});
@@ -519,10 +503,12 @@ export const importData = mutation({
 
 		for (const createDetail of dataToImport) {
 			const oldId = createDetail.id!;
+			// Create new ids for every imported node so we don't import bad references
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			delete (createDetail as any).id;
 
 			// Create node with original relationships (old IDs)
 			// Don't normalize parents - we'll handle that after remapping
-			delete (createDetail as any).id;
 			let newId: Id<'nodes'>;
 			if (createDetail.data.type === 'project') {
 				newId = rootProject._id;
@@ -607,11 +593,32 @@ export const importData = mutation({
 		}
 
 		return createdNodes.length;
-
-
-
 	},
 });
+
+export const exportData = query({
+	args: { subtreeId: v.optional(v.string()) },
+	handler: async (ctx, { subtreeId }) => {
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
+		}
+		const userAuthId = identity.subject;
+
+
+		const nodesResult = await ctx.db.query('nodes').withIndex('by_user', q => q.eq('userAuthId', userAuthId)).collect();
+
+		const tasks = nodesResult.map(n => cleanNodeForClient(n));
+
+		const exportedData: ExportedData = {
+			version: CURRENT_EXPORT_VERSION,
+			exportedAt: new Date().getTime(),
+			data: tasks,
+		};
+
+		return exportedData;
+	}
+})
 
 //#endregion
 
@@ -694,10 +701,10 @@ export const getSiblingsOf = query({
 		}
 
 		// Utility: stable sort siblings according to parent.children order
-		function sortSiblingsByParentChildren<T extends { _id: unknown }>(
-			parent: Doc<"nodes">,
-			siblings: T[]
-		): T[] {
+		function sortSiblingsByParentChildren(
+			parent: DBNode,
+			siblings: DBNode[]
+		): DBNode[] {
 			const childIds = Array.isArray(parent.children) ? parent.children : [];
 			if (childIds.length === 0) return siblings.slice();
 
@@ -709,7 +716,7 @@ export const getSiblingsOf = query({
 
 			return siblings
 				.map((t, idx) => {
-					const nodeId = (t as any)._id as Id<"nodes">;
+					const nodeId = t._id;
 					const order = pos.has(nodeId) ? pos.get(nodeId)! : Infinity;
 					return { t, order, idx };
 				})
@@ -869,35 +876,11 @@ export const getPrioritizedTasks = query({
 
 export const searchTasks = query({
 	args: { searchTerm: v.string() },
-	handler: async (_ctx, _args) => {
+	handler: async () => {
 		throw new ConvexError({ type: "NotImplementedError", msg: "Convex.tasks.searchTasks" });
 	},
 });
 
-export const exportData = query({
-	args: { subtreeId: v.optional(v.string()) },
-	handler: async (ctx, { subtreeId }) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) {
-			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
-		}
-		const userAuthId = identity.subject;
-
-
-		const nodesResult = await ctx.db.query('nodes').withIndex('by_user', q => q.eq('userAuthId', userAuthId)).collect();
-
-		const tasks = nodesResult.map(n => cleanNodeForClient(n));
-
-		const exportedData: ExportedData = {
-			version: "0.0.1",
-			exportedAt: new Date().toISOString(),
-			nodes: tasks,
-		};
-
-		return exportedData;
-
-	}
-})
 
 //#endregion
 
@@ -1027,7 +1010,6 @@ async function propagateRelationshipChanges(
 	const updates = calculateRelationshipUpdates(taskChanges);
 
 	const affectedNodes: DBNode[] = [];
-	const now = Date.now();
 
 	// Apply each update
 	for (const { taskId, operations } of updates) {
@@ -1066,13 +1048,12 @@ async function propagateRelationshipChanges(
 }
 
 function cleanNodeForClient(node: DBNode) {
-	const t: ClientNode<any> = {
-		...node,
-		id: node._id,
-		created: node.created ?? node._creationTime,
+	const { _id, _creationTime, ...rest } = node;
+	const t: ClientNode<AppData<number>> = {
+		...rest,
+		id: _id,
+		created: node.created ?? _creationTime,
 	};
-	delete (t as any)._id;
-	delete (t as any)._creationTime;
 
 	return t;
 }

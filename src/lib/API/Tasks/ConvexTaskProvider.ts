@@ -1,4 +1,4 @@
-import { Err, NotImplementedError, NotAuthorizedError, ArgumentError, NotFoundError, InvalidStateError } from "$domain/errors";
+import { Err, NotImplementedError, NotAuthorizedError, NotFoundError, InvalidStateError } from "$domain/errors";
 import { err, ok } from "$domain/result";
 import type { CreateTaskParams, UpdateTaskParams, TaskData, Task } from "$domain/models/task";
 import type { ProjectData } from "$domain/models/project";
@@ -17,8 +17,8 @@ type ServerNode<T extends AppData<number>> = IAppNode<T & { givenId?: string }, 
 
 function reconstructError(error: unknown): Err {
 	if (error instanceof ConvexError) {
-		const data = error.data;
-		const messageForUser = data.msgForUser ?? data.msg;
+		const data = JSON.parse(error.data);
+		const messageForUser = data.msg;
 
 		switch (data.type) {
 			case "NotAuthorizedError":
@@ -350,7 +350,7 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	searchTasks: async (_searchTerm: string) => {
+	searchTasks: async () => {
 		// const res = await client.query(api.tasks.searchTasks, { searchTerm });
 		// return res; // Promise<Task[]>
 		Err.throw(new NotImplementedError("api.searchTasks"));
@@ -383,14 +383,14 @@ export const localApi: ITasksLocal = {
 
 	updateTask: async (params: UpdateTaskParams) => api.updateTask(params),
 	updateTasks: async (params) => api.updateTasks(params),
-	handleUpdateTasksResponse: async (_response) => { /* no-op */ },
+	handleUpdateTasksResponse: async () => { /* no-op */ },
 
 	deleteTask: async (params) => api.deleteTask(params),
 	deleteTasks: async (params) => api.deleteTasks(params),
-	handleDeleteTasksResponse: async (_response) => { /* no-op */ },
+	handleDeleteTasksResponse: async () => { /* no-op */ },
 
-	handleCreateTasksResponse: async (_response) => { /* no-op */ },
-	handleMigrateResponse: async (_response) => { /* no-op */ },
+	handleCreateTasksResponse: async () => { /* no-op */ },
+	handleMigrateResponse: async () => { /* no-op */ },
 
 	getChildrenOf: (params) => api.getChildrenOf(params),
 	getParentsOf: (params) => api.getParentsOf(params),
@@ -466,8 +466,8 @@ function convertFromServerNode<T extends AppNode>(node: ServerNode<AppData<numbe
  * Converts client update params to Convex format
  * UpdateTaskParams is flat, so we just need to convert Date timestamps to numbers
  */
-function convexifyTaskUpdate(update: UpdateTaskParams): any {
-	const result: any = {
+function convexifyTaskUpdate(update: UpdateTaskParams): UpdateTaskParams<number> {
+	const result: UpdateTaskParams<number> = {
 		id: update.id as Id<'nodes'>,
 	};
 
