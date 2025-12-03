@@ -9,9 +9,10 @@
 	interface Props {
 		task: Task;
 		onSelect?: () => void;
+		onLocateTask?: (task: Task) => void;
 	}
 
-	let { task, onSelect }: Props = $props();
+	let { task, onSelect, onLocateTask }: Props = $props();
 	let completed = $derived(isTaskCompleted(task));
 
 	function handleItemClick(e: MouseEvent) {
@@ -36,9 +37,9 @@
 </script>
 
 <div class="flex items-center gap-2">
-	{#if onSelect}
-		<Checkbox checked={completed} onCheckedChange={handleCheckboxChange} />
-		<Separator orientation="vertical" />
+	<Checkbox checked={completed} onCheckedChange={handleCheckboxChange} />
+	<Separator orientation="vertical" />
+	{#if onSelect !== undefined}
 		<button
 			type="button"
 			class="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left transition-colors hover:bg-white"
@@ -47,8 +48,25 @@
 			{task.data.title}
 		</button>
 	{:else}
-		<Checkbox checked={completed} onCheckedChange={handleCheckboxChange} />
-		<Separator orientation="vertical" />
 		{task.data.title}
+	{/if}
+	{#if onLocateTask !== undefined}
+		<button
+			class="
+		flex
+		size-6
+		shrink-0
+		items-center
+		justify-center
+		rounded-full
+		text-gray-400
+		hover:cursor-pointer
+		hover:bg-blue-50
+		hover:text-blue-600
+		"
+			onclick={() => onLocateTask?.(task)}
+		>
+			<Icon icon="lucide:locate" />
+		</button>
 	{/if}
 </div>

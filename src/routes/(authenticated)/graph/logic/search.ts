@@ -5,7 +5,7 @@ import type { Task } from '$domain/models/task';
 import { parseQuery } from '$lib/query/parser';
 import { QueryEvaluator } from '$lib/query/evaluator';
 import { taskQueryFieldRegistry } from '$lib/API/Tasks/taskQueryHandlers';
-import { allTasks, taskById } from './shared-state';
+import { appData } from './shared-state';
 
 export const searchQuery: Writable<string> = writable('');
 export const activeSearchResults: Writable<Task[]> = writable([]);
@@ -57,7 +57,7 @@ function computeRelatedTasks(
 	const walkUp = (id: string, depth: number) => {
 		if (visited.has(id)) return;
 		visited.add(id);
-		const t = taskById.get(id);
+		const t = appData.get(id);
 		if (!t) return;
 		for (const p of t.parents) {
 			if (!matchingIds.has(p)) related.add(p);
@@ -68,7 +68,7 @@ function computeRelatedTasks(
 	const walkDown = (id: string, depth: number) => {
 		if (visited.has(id)) return;
 		visited.add(id);
-		const t = taskById.get(id);
+		const t = appData.get(id);
 		if (!t) return;
 		for (const c of t.children) {
 			if (!matchingIds.has(c)) related.add(c);
@@ -88,13 +88,14 @@ function computeRelatedTasks(
 //#endregion
 
 //#region ACTIONS
+
 export async function handleSearch(query: string): Promise<Task[]> {
 	searchQuery.set(query);
-	const { results, isStructured } = searchTasks(get(allTasks), query);
+	const tasks = Array.from(appData.values()).filter((n) => n.data.type === 'task') as Task[];
+	const { results, isStructured } = searchTasks(tasks, query);
 	activeSearchResults.set(results);
 	isValidQuery.set(isStructured);
 
-	const tasks = get(allTasks);
 	const showRel = get(showRelatedNodes);
 	const depth = get(relatedDepth);
 	const filter =
@@ -107,7 +108,7 @@ export async function handleSearch(query: string): Promise<Task[]> {
 }
 
 export function recomputeFilters() {
-	const tasks = get(allTasks);
+	const tasks = Array.from(appData.values()).filter((n) => n.data.type === 'task') as Task[];
 	const results = get(activeSearchResults);
 	const validQuery = get(isValidQuery);
 	const showRel = get(showRelatedNodes);
@@ -128,4 +129,5 @@ export function resetSearchState() {
 	relatedDepth.set(-1);
 	filteredIds.set(null);
 }
+
 //#endregion

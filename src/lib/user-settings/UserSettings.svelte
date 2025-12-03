@@ -17,7 +17,9 @@
 		type SettingsSection,
 		type SettingsTab
 	} from './types';
+	import { KeybindSetting } from './keybind';
 	import RangeEditor from './RangeEditor.svelte';
+	import KeybindEditor from './KeybindEditor.svelte';
 	import SettingRow from './SettingRow.svelte';
 	import { type UserFeature } from '$domain/models/user';
 	import { hasFeature } from '$lib/API/Auth';
@@ -49,7 +51,8 @@
 			// Disable unauthorized tabs
 			.filter(([label, tab]) => {
 				if (label.startsWith('$')) return false;
-				return checkFeature(tab.$userFeature as UserFeature | undefined);
+				if ('$userFeature' in tab) return checkFeature(tab.$userFeature as UserFeature | undefined);
+				else return true;
 			})
 			// Parse sections
 			.map(([_, tab]) => ({
@@ -107,6 +110,8 @@
 										<EnumEditor store={setting as any} />
 									{:else if setting instanceof DictSetting}
 										<DictionaryEditor store={setting} />
+									{:else if setting instanceof KeybindSetting}
+										<KeybindEditor store={setting} />
 									{/if}
 								</SettingRow>
 							{/each}

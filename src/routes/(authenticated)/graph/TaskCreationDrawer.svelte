@@ -8,11 +8,13 @@
 	import { TaskStatus, type CreateTaskParams, type Task } from '$domain/models/task';
 	import tasksAPI from '$lib/API/Tasks';
 	import { pendingNodeParams } from './logic/ui-state';
-	import type { GraphNode } from '$domain/models/node';
+	import type { AppNode } from '$domain/models/node';
+	import { svelteFlowInstance } from './logic/shared-state';
+	import { centerAndHighlightNode } from './logic/navigation';
 
 	type Props = {
 		open: boolean;
-		relation?: GraphNode;
+		relation?: AppNode;
 		relationMode?: 'child' | 'parent';
 	};
 
@@ -61,11 +63,15 @@
 			}
 		}
 
-		const [newId, error] = await tasksAPI.createTask({ createDetail });
+		const [result, error] = await tasksAPI.createTask({ createDetail });
 		if (error) error.UNHANDLED('[TaskCreationDrawer.handleSubmit] Error creating task');
-		if (newId) {
+		if (result) {
+			const { newId } = result;
 			$pendingNodeParams = { ...$pendingNodeParams, id: newId };
 			open = false;
+			setTimeout(() => {
+				centerAndHighlightNode(newId);
+			}, 200);
 		}
 	}
 

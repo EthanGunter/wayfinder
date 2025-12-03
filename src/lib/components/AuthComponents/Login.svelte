@@ -3,8 +3,8 @@
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
-	import { authAPI, cachedUsers as authUsers } from '$lib/API/Auth';
-	import type { Err } from '$domain/errors';
+	import { authAPI } from '$lib/API/Auth';
+	import { type Err, NotFoundError } from '$domain/errors';
 	import Register from './Register.svelte';
 	import Icon from '@iconify/svelte';
 	import ForgotPasswordDialogContent from './ResetPasswordButton.svelte';
@@ -17,7 +17,6 @@
 
 	const {}: Props = $props();
 
-	let multipleAccounts = $state(false);
 	let showRegister = $state(false);
 	let redir = page.url.searchParams.get('redirect') || '/planner';
 
@@ -26,20 +25,13 @@
 	let errorMessage = $state('');
 	let isLoading = $state(false);
 
-	onMount(() => {
-		const unsubscribeUsers = authUsers.subscribe((userList) => {
-			multipleAccounts = userList.length > 1;
-		});
-		return () => unsubscribeUsers();
-	});
-
 	async function handleOAuthLogin() {
 		isLoading = true;
 		errorMessage = '';
 		try {
 			const [_, error] = await authAPI.login({ type: 'external' });
 			if (error) {
-				errorMessage = error.messageForUser || 'Login failed';
+				errorMessage = error.message || 'Login failed';
 			}
 			// OAuth flow will handle redirect via provider/callback
 		} catch (e: any) {
@@ -59,35 +51,46 @@
 		try {
 			const [_, error] = await authAPI.login({ type: 'email_password', email, password });
 			if (error) {
-				errorMessage = error.messageForUser || 'Login failed';
+				if (error instanceof NotFoundError) {
+					openRegister();
+					return;
+				}
+				// TODO:security This blindly trusts the error message from the backend.
+				// Safe for alpha with trusted users, but should be sanitized for release.
+				errorMessage = error.message || 'Login failed';
+				console.log(error.context);
 				return;
 			}
 			goto(redir || '/planner');
 		} catch (e: any) {
-			errorMessage = 'An unexpected error occurred';
+			// TODO:security This blindly trusts the error message from the backend.
+			errorMessage = e.message || 'An unexpected error occurred';
 		} finally {
 			isLoading = false;
 		}
 	}
 
 	function openRegister() {
+		errorMessage = '';
 		showRegister = true;
 	}
 
 	function closeRegister() {
+		errorMessage = '';
 		showRegister = false;
 	}
 </script>
 
-{#if errorMessage}
-	<Alert.Root variant="destructive">
-		<Icon icon="lucide:alert-circle" />
-		<Alert.Title>Uh oh!</Alert.Title>
-		<Alert.Description>
-			{errorMessage}
-		</Alert.Description>
-	</Alert.Root>
-{/if}
+{#snippet errorAlert()}
+	{#if errorMessage}
+		<Alert.Root variant="destructive">
+			<Icon icon="lucide:alert-circle" />
+			<Alert.Description>
+				{errorMessage}
+			</Alert.Description>
+		</Alert.Root>
+	{/if}
+{/snippet}
 
 <div class="flex items-center justify-center">
 	{#if showRegister}
@@ -99,8 +102,10 @@
 				<span class="text-xl transition-transform duration-200 group-hover:-translate-x-1">←</span>
 				<span>Back to login</span>
 			</button>
+			{@render errorAlert()}
 			<Register
 				onBack={closeRegister}
+				onError={(msg) => (errorMessage = msg)}
 				initialDisplayName={email.split('@')[0]}
 				initialEmail={email}
 				initialPassword={password}
@@ -108,6 +113,7 @@
 		</div>
 	{:else}
 		<div class="w-full max-w-md p-4 sm:p-6">
+			{@render errorAlert()}
 			<div class="mb-4 text-center">
 				<h2 class="mb-1 text-2xl font-semibold text-zinc-900 sm:text-3xl dark:text-zinc-100">
 					Welcome back

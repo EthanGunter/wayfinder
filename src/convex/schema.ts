@@ -60,7 +60,8 @@ export const TaskNodeDef_DEPRECATED = {
 export default defineSchema({
   users: defineTable(
     UserDef
-  ).index("by_authId", ["authId"]),
+  ).index("by_authId", ["authId"])
+   .index("by_status", ["status"]),
   nodes: defineTable(NodeDef)
     .index("by_user", ["userAuthId"])
     .index("by_user_type", ["userAuthId", "data.type"])

@@ -35,7 +35,16 @@
 	let showResults = $state(false);
 	let isLoading = $state(false);
 	let resultsElement: HTMLUListElement | null = $state(null);
+	let inputElement: HTMLInputElement | undefined = $state();
 	let blurTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	export function select() {
+		inputElement?.select();
+	}
+
+	export function blur() {
+		inputElement?.blur();
+	}
 
 	async function handleInput(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -146,6 +155,7 @@
 <div class="relative flex-1 rounded border-1 border-black/10 {className}">
 	{#if !inverted}
 		<input
+			bind:this={inputElement}
 			name={htmlName}
 			type="text"
 			bind:value={query}
@@ -162,7 +172,7 @@
 
 	{#if isLoading}
 		<div
-			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max min-w-full max-w-[90vw] -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
+			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max max-w-[90vw] min-w-full -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
 		>
 			Searching...
 		</div>
@@ -172,7 +182,7 @@
 			bind:this={resultsElement}
 			onmousedown={handleResultsMouseDown}
 			role="listbox"
-			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max min-w-full max-w-[90vw] -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
+			class="absolute top-full left-1/2 z-[1000] m-0 flex max-h-[50vh] w-max max-w-[90vw] min-w-full -translate-x-1/2 list-none flex-col gap-1 overflow-y-auto rounded-b-md bg-gray-50 p-2"
 			class:bottom-full={inverted}
 		>
 			{#each sortedDisplayResults as result (getKey(result))}
@@ -197,6 +207,7 @@
 
 	{#if inverted}
 		<input
+			bind:this={inputElement}
 			name={htmlName}
 			type="text"
 			bind:value={query}

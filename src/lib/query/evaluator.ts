@@ -109,7 +109,7 @@ export class QueryEvaluator<TEntity> {
 					} catch (error) {
 						if (error instanceof ValueTransformError) {
 							throw new ParseError(
-								error.messageForUser,
+								error.msg,
 								'search expression',
 								node.start,
 								node.end
@@ -210,7 +210,7 @@ export class QueryEvaluator<TEntity> {
 		} catch (error) {
 			if (error instanceof ValueTransformError) {
 				throw new ParseError(
-					error.messageForUser,
+					error.msg,
 					'search expression',
 					node.start,
 					node.end

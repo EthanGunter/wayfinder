@@ -1,4 +1,4 @@
-import { Err, NotImplementedError, NotAuthorizedError, ArgumentError, NotFoundError, InvalidStateError } from "$domain/errors";
+import { Err, NotImplementedError, NotAuthorizedError, NotFoundError, InvalidStateError } from "$domain/errors";
 import { err, ok } from "$domain/result";
 import type { CreateTaskParams, UpdateTaskParams, TaskData, Task } from "$domain/models/task";
 import type { ProjectData } from "$domain/models/project";
@@ -8,17 +8,17 @@ import { sharedConvexClient as client } from "$lib/API/ConvexClient";
 import { createFetchableReadable as createFetchable, createQueryable } from "$lib/API/fetchableStore";
 import type { ITasksRemote, ITasksLocal } from "./seam-interfaces";
 import { ConvexError } from "convex/values";
-import type { IGraphNode, GraphData, GraphNode } from "$domain/models/node";
+import type { IAppNode, AppData, AppNode } from "$domain/models/node";
 import debounce from "$lib/debounce";
 
 // Type alias for server-side nodes with number timestamps
-type ServerNode<T extends GraphData<number>> = IGraphNode<T & { givenId?: string }, number>;
+type ServerNode<T extends AppData<number>> = IAppNode<T & { givenId?: string }, number>;
 
 
 function reconstructError(error: unknown): Err {
 	if (error instanceof ConvexError) {
-		const data = error.data;
-		const messageForUser = data.msgForUser ?? data.msg;
+		const data = JSON.parse(error.data);
+		const messageForUser = data.msg;
 
 		switch (data.type) {
 			case "NotAuthorizedError":
@@ -43,7 +43,7 @@ function reconstructError(error: unknown): Err {
 }
 
 // Internal update functions (non-debounced)
-async function _updateTask(update: UpdateTaskParams) {	
+async function _updateTask(update: UpdateTaskParams) {
 	try {
 		const res = await client.mutation(convexApi.tasks.updateTask, convexifyTaskUpdate(update));
 		return ok({
@@ -287,6 +287,8 @@ export const api: ITasksRemote = {
 					set({ status: "resolved", value: siblings });
 				},
 				(error: Error) => {
+					console.log(error);
+
 					set({ status: "error", error: reconstructError(error) });
 				}
 			);
@@ -348,7 +350,7 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	searchTasks: async (_searchTerm: string) => {
+	searchTasks: async () => {
 		// const res = await client.query(api.tasks.searchTasks, { searchTerm });
 		// return res; // Promise<Task[]>
 		Err.throw(new NotImplementedError("api.searchTasks"));
@@ -366,13 +368,13 @@ export const localApi: ITasksLocal = {
 	createTask: async ({ createDetail }) => {
 		const [res, e] = await api.createTask({ createDetail });
 		if (e) return err(e);
-		return ok(res.created.data.givenId!); // id is required from client, so it will be returned from server
+		return ok({ newId: res.created.id!, oldId: res.created.data.givenId! }); // id is required from client, so it will be returned from server
 	},
 	createTasks: async ({ createDetails }) => {
 		const [res, e] = await api.createTasks({ createDetails });
 		if (e) return err(e);
 		// Prefer authoritative ids from affectedTasks if mapping is empty
-		return ok(res.created.map(t => t.data.givenId!));
+		return ok(res.created.map(t => ({ newId: t.id, oldId: t.data.givenId! })));
 	},
 
 	getTask: (params) => api.getTask(params),
@@ -381,14 +383,14 @@ export const localApi: ITasksLocal = {
 
 	updateTask: async (params: UpdateTaskParams) => api.updateTask(params),
 	updateTasks: async (params) => api.updateTasks(params),
-	handleUpdateTasksResponse: async (_response) => { /* no-op */ },
+	handleUpdateTasksResponse: async () => { /* no-op */ },
 
 	deleteTask: async (params) => api.deleteTask(params),
 	deleteTasks: async (params) => api.deleteTasks(params),
-	handleDeleteTasksResponse: async (_response) => { /* no-op */ },
+	handleDeleteTasksResponse: async () => { /* no-op */ },
 
-	handleCreateTasksResponse: async (_response) => { /* no-op */ },
-	handleMigrateResponse: async (_response) => { /* no-op */ },
+	handleCreateTasksResponse: async () => { /* no-op */ },
+	handleMigrateResponse: async () => { /* no-op */ },
 
 	getChildrenOf: (params) => api.getChildrenOf(params),
 	getParentsOf: (params) => api.getParentsOf(params),
@@ -425,15 +427,15 @@ export function convexifyCreateTaskDetails(params: CreateTaskParams): CreateTask
  * Converts server node with numeric timestamps to client node with Date timestamps
  * Preserves the nested data structure - no flattening
  */
-function convertFromServerNode<T extends GraphNode>(node: ServerNode<GraphData<number>>): T {
+function convertFromServerNode<T extends AppNode>(node: ServerNode<AppData<number>>): T {
 	const { data, ...graphFields } = node;
 
-	const clientNodeFields: Omit<GraphNode, "data"> = {
+	const clientNodeFields: Omit<AppNode, "data"> = {
 		...graphFields,
 		created: new Date(graphFields.created),
 		lastEdit: new Date(graphFields.lastEdit),
 	}
-	let clientDataFields: GraphData<Date>;
+	let clientDataFields: AppData<Date>;
 
 	switch (data.type) {
 		case "task":
@@ -464,8 +466,8 @@ function convertFromServerNode<T extends GraphNode>(node: ServerNode<GraphData<n
  * Converts client update params to Convex format
  * UpdateTaskParams is flat, so we just need to convert Date timestamps to numbers
  */
-function convexifyTaskUpdate(update: UpdateTaskParams): any {
-	const result: any = {
+function convexifyTaskUpdate(update: UpdateTaskParams): UpdateTaskParams<number> {
+	const result: UpdateTaskParams<number> = {
 		id: update.id as Id<'nodes'>,
 	};
 

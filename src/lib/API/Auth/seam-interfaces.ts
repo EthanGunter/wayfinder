@@ -1,6 +1,5 @@
 import type {
 	ArgumentError,
-	Err,
 	InputRequiredError,
 	InvalidStateError,
 	NotAuthorizedError,
@@ -15,7 +14,6 @@ import type {
 	User,
 } from "$domain/models/user";
 import type { Result } from "$domain/result";
-import type { Session } from "better-auth";
 import type { Readable } from "svelte/store";
 
 export type LiveStore<T> = Readable<T>;
@@ -54,9 +52,7 @@ interface AuthCommon {
 		NotFoundError | ArgumentError | NotImplementedError
 	>>;
 
-	deleteUser(params: {
-		userId: string;
-	}): Promise<Result<void, NotFoundError>>;
+	deleteSelf(): Promise<Result<void, NotAuthorizedError>>;
 }
 
 export interface IAuthLocal extends AuthStateWatcher, AuthCommon {
@@ -72,9 +68,9 @@ export interface IAuthLocal extends AuthStateWatcher, AuthCommon {
 	}): Promise<Result<void, NotImplementedError | ArgumentError>>;
 
 	/** Sets the active user for this device */
-	switchUser(
-		newUser: string,
-	): Promise<Result<SessionUser, NotFoundError | InputRequiredError>>;
+	// switchUser(
+	// 	newUser: string,
+	// ): Promise<Result<SessionUser, NotFoundError | InputRequiredError>>;
 
 	/** Updates the active user, unless a specific id is provided */
 	updateUser(params: {
@@ -90,9 +86,9 @@ export interface IAuthLocal extends AuthStateWatcher, AuthCommon {
 	): Promise<void>;
 
 	/** Removes a cached user account from the local machine. It still be logged into remotely */
-	removeCachedUser(userId: string): Promise<void>;
+	// removeCachedUser(userId: string): Promise<void>;
 
-	logout(options?: { keepCached?: boolean }): Promise<void>;
+	logout(): Promise<void>;
 }
 
 export interface IAuthRemote extends AuthStateWatcher, AuthCommon {
@@ -141,47 +137,21 @@ export interface IAuthSessionCapable {
 	>;
 
 	/** Lists device sessions and associated users that can be switched to */
-	getUserSessions(): Promise<
-		Result<
-			{
-				session: {
-					token: string;
-					userId: string;
-					expiresAt: Date;
-				};
-				user: {
-					id: string;
-					displayName: string;
-					avatarUrl?: string;
-				};
-			}[],
-			InvalidStateError
-		>
-	>;
+	// getUserSessions(): Promise<
+	// 	Result<
+	// 		{
+	// 			session: {
+	// 				token: string;
+	// 				userId: string;
+	// 				expiresAt: Date;
+	// 			};
+	// 			user: {
+	// 				id: string;
+	// 				displayName: string;
+	// 				avatarUrl?: string;
+	// 			};
+	// 		}[],
+	// 		InvalidStateError
+	// 	>
+	// >;
 }
-
-
-//#region UTILITY FUNCTIONS
-
-export function isSessionCapable(
-	auth: IAuthRemote,
-): auth is IAuthRemote & IAuthSessionCapable {
-	return (
-		typeof (auth as any).getSessionMaterial === "function" &&
-		typeof (auth as any).restoreSession === "function"
-	);
-}
-
-export class NetworkError extends Error {
-	constructor(message: string, cause?: Error) {
-		super(message);
-		this.name = "NetworkError";
-		// optional: if you actually want to use cause later, keep it
-		// (ES2022 ErrorOptions['cause'] pattern)
-		if (cause) {
-			(this as any).cause = cause;
-		}
-	}
-}
-
-//#endregion

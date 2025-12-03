@@ -6,8 +6,20 @@
 		type EdgeProps,
 		Position
 	} from '@xyflow/svelte';
+	import { getEdgeKey, viewEdges } from './logic/shared-state';
+	import { untrack } from 'svelte';
 
-	let { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected, data }: EdgeProps = $props();
+	let {
+		id,
+		sourceX,
+		sourceY,
+		targetX,
+		targetY,
+		sourcePosition,
+		targetPosition,
+		selected,
+		data
+	}: EdgeProps = $props();
 
 	const isDimmed = $derived(data?.dimmed ?? false);
 

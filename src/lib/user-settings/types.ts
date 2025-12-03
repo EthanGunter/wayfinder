@@ -1,13 +1,13 @@
 import { Err, InvalidStateError } from '$domain/errors';
 import { writable, derived, get, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
-import { dbPromise, APP_TABLE_NAME } from '$lib/API/localDB';
 import type { SvelteComponent } from 'svelte';
 import type { UserFeature } from '$domain/models/user';
 import { authAPI, authState } from '$lib/API/Auth';
+import type { KeybindSetting } from './keybind';
 
 export type SettingScope = 'user' | 'device';
 
-interface BaseSettingArgs<T> {
+export interface BaseSettingArgs<T> {
   label: string;
   defaultValue: T;
   desc?: string;
@@ -71,7 +71,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
     this.store.set(value);
   }
 
-  private async persistToUser(key: string, value: any): Promise<void> {
+  private async persistToUser(key: string, value: unknown): Promise<void> {
     try {
       // Get current auth state from store
       const state = get(authState);
@@ -92,7 +92,7 @@ export abstract class BaseSetting<T> implements Writable<T> {
         if (!current[part] || typeof current[part] !== 'object') {
           current[part] = {};
         }
-        current = current[part];
+        current = current[part] as Record<string, unknown>;
       }
 
       // Set the final value
@@ -160,27 +160,45 @@ export class RangeSetting extends BaseSetting<[number, number]> {
 export class EnumSetting<T extends string | number> extends BaseSetting<T> {
   readonly options: { value: T; label: string }[];
 
-  constructor(args: BaseSettingArgs<T> & { options?: readonly T[] | Record<string, string | number>; }) {
+  private constructor(
+    args: BaseSettingArgs<T> & { options: { value: T; label: string }[] }
+  ) {
     const { options, ...rest } = args;
-
     super({ ...rest, defaultValue: args.defaultValue });
-    if (Array.isArray(options)) {
-      this.options = (options as readonly T[]).map((v) => ({ value: v as T, label: String(v) }));
-    } else if (options && typeof options === 'object') {
-      const vals = Object.values(options);
-      const hasNumber = vals.some((v) => typeof v === 'number');
-      if (hasNumber) {
-        // numeric enum: keys are names, values are numbers; Object.values includes reverse map strings too
-        const pairs = Object.entries(options).filter(([, v]) => typeof v === 'number') as [string, number][];
-        this.options = pairs.map(([k, v]) => ({ value: v as T, label: k }));
-      } else {
-        // string enum: keys are names, values are strings
-        const pairs = Object.entries(options).filter(([, v]) => typeof v === 'string') as [string, string][];
-        this.options = pairs.map(([k, v]) => ({ value: v as T, label: k }));
-      }
-    } else {
-      this.options = [] as const;
+    this.options = options;
+  }
+
+  // Factory for array of values
+  static fromValues<const V extends string | number>(
+    args: Omit<BaseSettingArgs<V>, 'defaultValue'> & {
+      defaultValue: NoInfer<V>;
+      options: readonly V[];
     }
+  ): EnumSetting<V> {
+    return new EnumSetting({
+      ...args,
+      options: args.options.map((v) => ({ value: v, label: String(v) })),
+    });
+  }
+
+  // Factory for TS enum
+  static fromEnum<E extends Record<string, string | number>>(
+    args: Omit<BaseSettingArgs<E[keyof E]>, 'defaultValue'> & {
+      defaultValue: E[keyof E];
+      options: E;
+    }
+  ): EnumSetting<E[keyof E]> {
+    const { options, ...rest } = args;
+    const vals = Object.values(options);
+    const hasNumber = vals.some((v) => typeof v === 'number');
+
+    const mapped = hasNumber
+      ? (Object.entries(options).filter(([, v]) => typeof v === 'number') as [string, number][])
+        .map(([k, v]) => ({ value: v as E[keyof E], label: k }))
+      : (Object.entries(options).filter(([, v]) => typeof v === 'string') as [string, string][])
+        .map(([k, v]) => ({ value: v as E[keyof E], label: k }));
+
+    return new EnumSetting({ ...rest, options: mapped });
   }
 }
 
@@ -219,7 +237,8 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
   asMap(): Readable<Map<string, string>> { return derived(this, obj => new Map(Object.entries(obj))) }
 }
 
-export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting;
+
+export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting | KeybindSetting;
 
 // New shape using $label and direct nesting: tab -> sections -> settings
 export type SettingsSection = {

@@ -175,8 +175,8 @@ importers:
         specifier: ^8.34.1
         version: 8.46.0(eslint@9.37.0(jiti@2.6.1))(typescript@5.9.3)
       '@xyflow/svelte':
-        specifier: ^1.2.4
-        version: 1.3.1(svelte@5.39.11)
+        specifier: ^1.4.2
+        version: 1.4.2(svelte@5.39.11)
       bits-ui:
         specifier: ^2.11.4
         version: 2.11.4(@internationalized/date@3.10.0)(svelte@5.39.11)
@@ -1662,13 +1662,13 @@ packages:
     resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
     engines: {node: '>=10.0.0'}
 
-  '@xyflow/svelte@1.3.1':
-    resolution: {integrity: sha512-aLr2v0/nr+zER5+dCzEmR5qCu9l7FCKZwYiRvCX15U2FVIdO2M522pyPEr7Siwq6EEx0QjECACeN+rLZCDSzeA==}
+  '@xyflow/svelte@1.4.2':
+    resolution: {integrity: sha512-E6mw8wt3NXS5imGJLWKrdOEOGHAkbFhsVwzb9MPG8ohkPjQ8lMeDM9o3fBSoDNp7xr16s7Q3AOVS2JzVyoY2og==}
     peerDependencies:
       svelte: ^5.25.0
 
-  '@xyflow/system@0.0.70':
-    resolution: {integrity: sha512-PpC//u9zxdjj0tfTSmZrg3+sRbTz6kop/Amky44U2Dl51sxzDTIUfXMwETOYpmr2dqICWXBIJwXL2a9QWtX2XA==}
+  '@xyflow/system@0.0.73':
+    resolution: {integrity: sha512-C2ymH2V4mYDkdVSiRx0D7R0s3dvfXiupVBcko6tXP5K4tVdSBMo22/e3V9yRNdn+2HQFv44RFKzwOyCcUUDAVQ==}
 
   abbrev@3.0.1:
     resolution: {integrity: sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg==}
@@ -5348,13 +5348,13 @@ snapshots:
 
   '@xmldom/xmldom@0.8.11': {}
 
-  '@xyflow/svelte@1.3.1(svelte@5.39.11)':
+  '@xyflow/svelte@1.4.2(svelte@5.39.11)':
     dependencies:
       '@svelte-put/shortcut': 4.1.0(svelte@5.39.11)
-      '@xyflow/system': 0.0.70
+      '@xyflow/system': 0.0.73
       svelte: 5.39.11
 
-  '@xyflow/system@0.0.70':
+  '@xyflow/system@0.0.73':
     dependencies:
       '@types/d3-drag': 3.0.7
       '@types/d3-interpolate': 3.0.4

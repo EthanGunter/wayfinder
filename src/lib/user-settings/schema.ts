@@ -1,15 +1,51 @@
 import {
 	BoolSetting,
-	StringSetting,
 	EnumSetting,
-	NumberSetting,
 	assignPaths,
-	RangeSetting,
 	type SettingsTree,
 } from './types';
+import { KeybindSetting } from './keybind';
 import { dev as devEnv } from '$app/environment';
 
 export const settings = {
+	graph: {
+		$label: "Graph",
+		core: {
+			$label: "Visibility",
+			showCompleted: new BoolSetting({
+				label: "Show completed",
+				desc: "Should completed tasks be shown in the graph",
+				defaultValue: true,
+			}),
+		},
+		layout: {
+			$label: "Layout",
+			algorithm: EnumSetting.fromValues({
+				label: "Algorithm",
+				desc: "Which algorithm should be used to layout the graph?",
+				defaultValue: "Layered",
+				options: ["Layered", "Stress"],
+			}),
+			autoLayout: new BoolSetting({
+				label: "Auto layout",
+				desc: "Should the graph layout automatically update when tasks are added or completed?",
+				defaultValue: true,
+			}),
+		},
+		keybinds: {
+			$label: "Keybinds",
+			fitView: new KeybindSetting({
+				label: "Fit view",
+				desc: "Fit all nodes in view",
+				defaultValue: { primary: false, shift: false, alt: false, key: 'F' },
+			}),
+			search: new KeybindSetting({ // TODO: This is likely a bad category for a keybing that will likely be used in multiple contexts
+				label: "Search",
+				desc: "Search for a task",
+				defaultValue: { primary: true, shift: false, alt: false, key: 'F' },
+			}),
+		}
+	},
 	dev: {
 		$label: "Dev",
 		$userFeature: "dev",
@@ -25,11 +61,8 @@ export const settings = {
 				defaultValue: devEnv,
 			})
 		},
-		overrides: {
-			$label: 'Overrides',
-		},
 	}
 } satisfies SettingsTree;
 
-export type AppSettings = typeof settings;
+export type AppSettings = Partial<typeof settings>;
 assignPaths(settings);

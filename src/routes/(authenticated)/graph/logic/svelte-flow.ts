@@ -1,35 +1,66 @@
-// flow/index.ts
-//#region IMPORTS
-import type { Connection } from '@xyflow/svelte';
-import { get } from 'svelte/store';
+import { useSvelteFlow, type Connection, type EdgeEvents, type IsValidConnection, type NodeEvents, type NodeSelectionEvents, type NodeTargetEventWithPointer, type OnBeforeConnect, type OnBeforeDelete, type OnBeforeReconnect, type OnConnect, type OnConnectEnd, type OnConnectStart, type OnDelete, type OnError, type OnMove, type OnMoveEnd, type OnMoveStart, type OnReconnect, type OnReconnectEnd, type OnReconnectStart, type OnSelectionChange, type OnSelectionDrag, type PaneEvents } from '@xyflow/svelte';
+import { get, writable, type Writable } from 'svelte/store';
 import tasksAPI from '$lib/API/Tasks';
-import { nodes, edges, taskById, screenToFlowPosition } from './shared-state';
-import { drawerOpen, drawerParams, pendingNodeParams } from './ui-state';
-import type { FlowEdge, FlowNode } from '../types';
-import type { UpdateTaskParams } from '$domain/models/task';
-//#endregion
+import { viewNodes, viewEdges, appData, getEdgeKey, svelteFlowInstance } from './shared-state';
+import { drawerOpen, drawerParams, pendingNodeParams, selectedNode } from './ui-state';
+import type { Task, UpdateTaskParams } from '$domain/models/task';
+import type { ViewEdge, ViewNode } from './layout/LayoutEngine';
+import { layoutEngine } from './layout';
+import type { AppNode } from '$domain/models/node';
+import { ArgumentError, InvalidStateError } from '$domain/errors';
 
-//#region LOCAL STATE
-let connectionSuccessful = false;
-let connectionSourceNodeId: string | null = null;
-let connectionHandleType: string | null = null;
 
-let reconnectionSuccessful = false;
-let reconnectionDetachEnd: 'source' | 'target' | null = null;
-let reconnectionOldEdge: FlowEdge | null = null;
-let reconnectionInProgress = false;
-//#endregion
+//#region SvelteFlow Event Handlers
 
-//#region CONSTRAINTS
-export function wouldCreateCycle(sourceId: string, targetId: string, list: FlowEdge[]): boolean {
+function oninit() {
+	const instance = useSvelteFlow();
+	svelteFlowInstance.set(instance);
+}
+
+function onnodeclick({ node, event }: { node: ViewNode, event: MouseEvent | TouchEvent }) {
+	if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
+	selectedNode.set(node.data.appNode
+		? (viewNodes.get(node.id)?.data.appNode ?? null)
+		: null)
+}
+
+let lastSelectedNodes = new Set<string>();
+let lastSelectedEdges = new Set<string>();
+
+function setEquals(a: Set<string>, b: Set<string>) {
+	if (a.size !== b.size) return false;
+	for (const x of a) if (!b.has(x)) return false;
+	return true;
+}
+
+function onselectionchange({ nodes, edges }: { nodes: ViewNode[], edges: ViewEdge[] }) {
+	const nextNodes = new Set(nodes.map(n => n.id));
+	const nextEdges = new Set(edges.map(e => e.id));
+
+	if (setEquals(nextNodes, lastSelectedNodes) && setEquals(nextEdges, lastSelectedEdges)) {
+		return; // no-op → prevents loop
+	}
+	lastSelectedNodes = nextNodes;
+	lastSelectedEdges = nextEdges;
+
+	// Optional: if you mirror selected into viewNodes, do it surgically and idempotently
+	for (const [id, vn] of viewNodes) {
+		const sel = nextNodes.has(id);
+		if (vn.selected !== sel) {
+			viewNodes.set(id, { ...vn, selected: sel });
+		}
+	}
+}
+
+function wouldCreateCycle(sourceId: string, targetId: string, map: Map<string, ViewEdge>): boolean {
 	if (!sourceId || !targetId) return false;
 	if (sourceId === targetId) return true;
 
 	const adj: Map<string, Set<string>> = new Map();
-	for (const e of list) {
+	map.forEach((e, key) => {
 		if (!adj.has(e.source)) adj.set(e.source, new Set());
 		adj.get(e.source)!.add(e.target);
-	}
+	});
 
 	if (!adj.has(sourceId)) adj.set(sourceId, new Set());
 	adj.get(sourceId)!.add(targetId);
@@ -47,19 +78,7 @@ export function wouldCreateCycle(sourceId: string, targetId: string, list: FlowE
 	return false;
 }
 
-export function connectionExists(list: FlowEdge[], sourceId: string, targetId: string): boolean {
-	return list.some((e) => e.source === sourceId && e.target === targetId);
-}
-
-export function removeDuplicateEdges(list: FlowEdge[]): FlowEdge[] {
-	return list.filter(
-		(e, idx, arr) => arr.findIndex((f) => f.source === e.source && f.target === e.target) === idx
-	);
-}
-//#endregion
-
-//#region GEOMETRY
-export function getFlowPointFromEvent(
+function getFlowPointFromEvent(
 	event: MouseEvent | TouchEvent,
 	screenToFlow: ((point: { x: number; y: number }) => { x: number; y: number }) | null
 ): { x: number; y: number } | null {
@@ -85,41 +104,33 @@ export function getFlowPointFromEvent(
 		return null;
 	}
 }
-//#endregion
 
-//#region INTERNAL HELPERS
-function refreshNodesDataFor(ids: string[]) {
-	const set = new Set(ids);
-	nodes.set(
-		get(nodes).map((n) => {
-			if (!set.has(n.id)) return n;
-			const t = taskById.get(n.id);
-			return t ? { ...n, task: t } : n;
-		})
-	);
-}
-//#endregion
-
-//#region VALIDATION
-export function isValidConnection(connection: { source?: string; target?: string }): boolean {
+function isValidConnection(connection: { source?: string; target?: string }): boolean {
 	const parentId = connection?.source ?? '';
 	const childId = connection?.target ?? '';
 	if (!parentId || !childId) return false;
 	if (parentId === childId) return false;
 
 	if (!reconnectionInProgress) {
-		const sourceTask = taskById.get(parentId);
+		const sourceTask = appData.get(parentId);
 		if (sourceTask?.children.includes(childId)) return false;
 
-		const childTask = taskById.get(childId);
+		const childTask = appData.get(childId);
 		if (childTask?.parents.includes(parentId)) return false;
 	}
-	return !wouldCreateCycle(parentId, childId, get(edges));
+	return !wouldCreateCycle(parentId, childId, viewEdges);
 }
-//#endregion
 
-//#region CONNECT HANDLERS
-export function handleConnectStart(
+//#region Edge Connection Handlers
+
+let connectionSuccessful = false;
+let connectionSourceNodeId: string | null = null;
+let connectionHandleType: string | null = null;
+
+let reconnectionSuccessful = false;
+let reconnectionInProgress = false;
+
+function onconnectstart(
 	_event: MouseEvent | TouchEvent,
 	params: { nodeId: string | null; handleId: string | null; handleType: any }
 ) {
@@ -129,7 +140,7 @@ export function handleConnectStart(
 	connectionSuccessful = false;
 }
 
-export async function handleConnect(connection: Connection) {
+async function onconnect(connection: Connection) {
 	connectionSuccessful = true;
 	const parentId: string | undefined = connection?.source;
 	const childId: string | undefined = connection?.target;
@@ -141,10 +152,10 @@ export async function handleConnect(connection: Connection) {
 	})
 	error?.UNHANDLED();
 
-	refreshNodesDataFor([parentId, childId]);
+	// refreshNodesDataFor([parentId, childId]);
 }
 
-export const handleConnectEnd = (event: MouseEvent | TouchEvent, connectState: any) => {
+const onconnectend = (event: MouseEvent | TouchEvent, connectState: any) => {
 	if (reconnectionInProgress) {
 		connectionSourceNodeId = null;
 		connectionHandleType = null;
@@ -158,14 +169,14 @@ export const handleConnectEnd = (event: MouseEvent | TouchEvent, connectState: a
 		} else {
 
 			const srcId = connectionSourceNodeId;
-			const triggerTask = srcId ? taskById.get(srcId) || null : null;
-			if (triggerTask) {
+			const triggerTask = srcId ? appData.get(srcId) || null : null;
+			if (triggerTask && triggerTask.data.type === 'task') {
 				drawerParams.set({
-					relation: triggerTask,
+					relation: triggerTask as Task,
 					mode: connectionHandleType === 'source' ? 'parent' : 'child',
 				});
 
-				const pos = getFlowPointFromEvent(event, get(screenToFlowPosition)) || null;
+				const pos = getFlowPointFromEvent(event, get(svelteFlowInstance)!.screenToFlowPosition) || null;
 				if (pos) {
 					// we know relation and mode before API call
 					pendingNodeParams.set({
@@ -183,30 +194,26 @@ export const handleConnectEnd = (event: MouseEvent | TouchEvent, connectState: a
 	connectionHandleType = null;
 	connectionSuccessful = false;
 };
-//#endregion
 
-//#region RECONNECT HANDLERS
-export function handleReconnectStart(
+function onreconnectstart(
 	_event: MouseEvent | TouchEvent,
-	edge: FlowEdge,
+	edge: ViewEdge,
 	handleType: 'source' | 'target'
 ) {
 	reconnectionSuccessful = false;
-	reconnectionDetachEnd = handleType;
-	reconnectionOldEdge = edge;
 	reconnectionInProgress = true;
 }
 
-export function handleBeforeReconnect(reconnectedEdge: FlowEdge, oldEdge: FlowEdge): FlowEdge | false {
+function onbeforereconnect(reconnectedEdge: ViewEdge, oldEdge: ViewEdge): ViewEdge | false {
 	const newSource = String(reconnectedEdge.source ?? oldEdge.source ?? '');
 	const newTarget = String(reconnectedEdge.target ?? oldEdge.target ?? '');
 	if (!newSource || !newTarget) return false;
 	if (newSource === newTarget) return false;
-	return { ...reconnectedEdge, type: (oldEdge).type ?? 'task' };
+	return reconnectedEdge;
 }
 
-export async function handleReconnect(
-	oldEdge: FlowEdge,
+async function onreconnect(
+	oldEdge: ViewEdge,
 	newConnection: { source?: string; target?: string }
 ) {
 	reconnectionSuccessful = true;
@@ -224,22 +231,20 @@ export async function handleReconnect(
 	})
 	error?.UNHANDLED();
 
-	if (!connectionExists(get(edges), newSource, newTarget)) {
+	if (!viewEdges.has(getEdgeKey(newSource, newTarget))) {
 		const [_, error] = await tasksAPI.updateTask({
 			id: newSource,
 			addChildren: [newTarget],
 		})
 		error?.UNHANDLED();
-	} else {
-		edges.set(removeDuplicateEdges(get(edges)));
 	}
 
-	refreshNodesDataFor([oldSource, oldTarget, newSource, newTarget]);
+	// refreshNodesDataFor([oldSource, oldTarget, newSource, newTarget]);
 }
 
-export const handleReconnectEnd = async (
+const onreconnectend = async (
 	event: MouseEvent | TouchEvent,
-	edge: FlowEdge,
+	edge: ViewEdge,
 	_handleType: 'source' | 'target',
 	connectState: any
 ) => {
@@ -258,21 +263,48 @@ export const handleReconnectEnd = async (
 			})
 			error?.UNHANDLED();
 
-			edges.set(get(edges).filter((e) => e.id !== edge.id));
-			refreshNodesDataFor([src, tgt]);
+			viewEdges.delete(getEdgeKey(src, tgt));
+			// refreshNodesDataFor([src, tgt]);
 		}
 	}
 
 	reconnectionSuccessful = false;
-	reconnectionDetachEnd = null;
-	reconnectionOldEdge = null;
 	reconnectionInProgress = false;
 };
+
 //#endregion
 
-//#region DELETE
 
-export async function handleDelete(params: { nodes: FlowNode[]; edges: FlowEdge[] }) {
+function onpaneclick() {
+	selectedNode.set(null);
+}
+
+const onnodedragstart: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
+	if (!targetNode) return;
+	layoutEngine.onNodeDragged(targetNode.id, targetNode.position);
+}
+
+const onnodedrag: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
+	if (!targetNode) return;
+	layoutEngine.onNodeDragged(targetNode.id, targetNode.position);
+}
+
+const onnodedragstop: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
+	if (!targetNode) return;
+	layoutEngine.onNodeDragEnd(targetNode.id, targetNode.position);
+}
+
+async function ondelete(params: { nodes: ViewNode[]; edges: ViewEdge[] }) {
+	if (params.nodes.length === 1) {
+		const task = params.nodes[0].data.appNode;
+		const parent = appData.get(task.parents[0]);
+		selectedNode.set(parent ?? null);
+	} else {
+		selectedNode.set(null);
+	}
+	// Track which nodes are being deleted
+	const deletedNodeIds = new Set(params.nodes.map((n) => n.id));
+
 	// If node deleted
 	if (params.nodes.length > 0) {
 		const ids = params.nodes.map((n) => n.id);
@@ -288,34 +320,199 @@ export async function handleDelete(params: { nodes: FlowNode[]; edges: FlowEdge[
 		const parentsToRemove = new Map<string, string[]>();
 
 		for (const edge of params.edges) {
+			// Normalize edge ID - strip SvelteFlow's xy-edge__ prefix if present
+			const normalizedEdgeId = edge.id.startsWith('xy-edge__') ? edge.id.slice(9) : edge.id;
 			const sourceId = edge.source;
 			const targetId = edge.target;
 
-			if (!childrenToRemove.has(sourceId)) childrenToRemove.set(sourceId, []);
-			childrenToRemove.get(sourceId)!.push(targetId);
+			// Skip updates for nodes that are being deleted
+			if (!deletedNodeIds.has(sourceId)) {
+				if (!childrenToRemove.has(sourceId)) childrenToRemove.set(sourceId, []);
+				childrenToRemove.get(sourceId)!.push(targetId);
+			}
 
-			if (!parentsToRemove.has(targetId)) parentsToRemove.set(targetId, []);
-			parentsToRemove.get(targetId)!.push(sourceId);
+			if (!deletedNodeIds.has(targetId)) {
+				if (!parentsToRemove.has(targetId)) parentsToRemove.set(targetId, []);
+				parentsToRemove.get(targetId)!.push(sourceId);
+			}
 		}
 
 		const updates: UpdateTaskParams[] = [];
 
 		for (const [taskId, childIds] of childrenToRemove.entries()) {
-			updates.push({
-				id: taskId,
-				removeChildren: childIds,
-			});
+			// Double-check node still exists before updating
+			if (!deletedNodeIds.has(taskId) && appData.has(taskId)) {
+				updates.push({
+					id: taskId,
+					removeChildren: childIds,
+				});
+			}
 		}
 
 		for (const [taskId, parentIds] of parentsToRemove.entries()) {
-			updates.push({
-				id: taskId,
-				removeParents: parentIds,
-			});
+			// Double-check node still exists before updating
+			if (!deletedNodeIds.has(taskId) && appData.has(taskId)) {
+				updates.push({
+					id: taskId,
+					removeParents: parentIds,
+				});
+			}
 		}
 
-		const [_, error] = await tasksAPI.updateTasks({ updates })
-		error?.UNHANDLED();
+		if (updates.length > 0) {
+			const [_, error] = await tasksAPI.updateTasks({ updates })
+			error?.UNHANDLED();
+		}
 	}
 }
+
+export const SvelteFlowEventHandlers = {
+	oninit,
+	ondelete,
+	onnodeclick,
+	onpaneclick,
+	onnodedragstart,
+	onnodedrag,
+	onnodedragstop,
+	onselectionchange,
+	isValidConnection,
+	onconnectstart,
+	onconnect,
+	onconnectend,
+	onreconnectstart,
+	onbeforereconnect,
+	onreconnect,
+	onreconnectend,
+} satisfies NodeEvents<ViewNode> & NodeSelectionEvents<ViewNode> & EdgeEvents<ViewEdge> & PaneEvents & {
+	isValidConnection?: IsValidConnection;
+	onmovestart?: OnMoveStart;
+	onmove?: OnMove;
+	onmoveend?: OnMoveEnd;
+	onflowerror?: OnError;
+	ondelete?: OnDelete<ViewNode, ViewEdge> | undefined;
+	onbeforedelete?: OnBeforeDelete<ViewNode, ViewEdge> | undefined;
+	onbeforeconnect?: OnBeforeConnect<ViewEdge> | undefined;
+	onconnect?: OnConnect;
+	onconnectstart?: OnConnectStart;
+	onconnectend?: OnConnectEnd;
+	onreconnect?: OnReconnect<ViewEdge> | undefined;
+	onreconnectstart?: OnReconnectStart<ViewEdge> | undefined;
+	onreconnectend?: OnReconnectEnd<ViewEdge> | undefined;
+	onbeforereconnect?: OnBeforeReconnect<ViewEdge> | undefined;
+	onclickconnectstart?: OnConnectStart;
+	onclickconnectend?: OnConnectEnd;
+	oninit?: () => void;
+	onselectionchange?: OnSelectionChange<ViewNode, ViewEdge> | undefined;
+}
+
+//#endregion
+
+
+//#region SvelteFlow Domain Adapter
+
+type NodeId = string;
+type EdgeId = string;
+
+export class SvelteFlowAdapter {
+	public readonly nodes: Writable<ViewNode[]> = writable([]);
+	public readonly edges: Writable<ViewEdge[]> = writable([]);
+
+	private nodeIndex = new Map<NodeId, number>();
+	private edgeIndex = new Map<EdgeId, number>();
+	private unsubViewNodes: (() => void) | null = null;
+	private unsubViewEdges: (() => void) | null = null;
+
+	// call once at mount
+	constructor() {
+		// Initialize from existing state (handles navigation back to page)
+		const currentNodes = Array.from(viewNodes.values());
+		this.nodes.set(currentNodes);
+		currentNodes.forEach((node, idx) => this.nodeIndex.set(node.id, idx));
+
+		const currentEdges = Array.from(viewEdges.values());
+		this.edges.set(currentEdges);
+		currentEdges.forEach((edge, idx) => this.edgeIndex.set(edge.id, idx));
+
+		// Subscribe to viewNodes - mirror changes to SvelteFlow nodes array
+		this.unsubViewNodes = viewNodes.subscribe(({ key, value, op }) => {
+			if (op === 'add') {
+				this.nodes.update(arr => {
+					this.nodeIndex.set(key, arr.length);
+					arr.push(value!);
+					return arr;
+				});
+			} else if (op === 'set') {
+				const idx = this.nodeIndex.get(key);
+				if (idx === undefined) return;
+
+				// Create new array to trigger Svelte reactivity
+				this.nodes.update(arr => {
+					arr[idx] = value!;
+					return [...arr];
+				});
+			} else if (op === 'delete') {
+				// delete node
+				const idx = this.nodeIndex.get(key);
+				if (idx == null) return;
+				this.nodes.update(arr => {
+					this.nodeIndex.delete(key);
+					// fix indices after idx
+					for (let i = idx; i < arr.length - 1; i++) {
+						this.nodeIndex.set(arr[i + 1].id, i);
+					}
+					return [...arr.slice(0, idx), ...arr.slice(idx + 1)];
+				});
+			}
+		});
+
+		// Subscribe to viewEdges - mirror changes to SvelteFlow edges array
+		this.unsubViewEdges = viewEdges.subscribe(({ key, value, op }) => {
+			if (op === 'add') {
+				// add edge
+				this.edges.update(arr => {
+					this.edgeIndex.set(key, arr.length);
+					return [...arr, value!];
+				});
+			} else if (op === 'set') {
+				// update edge
+				const idx = this.edgeIndex.get(key);
+				if (idx == null) {
+					// Edge doesn't exist yet, add it
+					this.edges.update(arr => {
+						this.edgeIndex.set(key, arr.length);
+						return [...arr, value!];
+					});
+				} else {
+					this.edges.update(arr => [...arr.slice(0, idx), value!, ...arr.slice(idx + 1)]);
+				}
+			} else if (op === 'delete') {
+				// delete edge
+				const idx = this.edgeIndex.get(key);
+				if (idx == null) return;
+				this.edges.update(arr => {
+					this.edgeIndex.delete(key);
+					// fix indices after idx
+					for (let i = idx; i < arr.length - 1; i++) {
+						this.edgeIndex.set(arr[i + 1].id, i);
+					}
+					return [...arr.slice(0, idx), ...arr.slice(idx + 1)];
+				});
+			}
+		});
+	}
+
+	public setAppearance(nodes: AppNode[], appearance: 'hidden' | 'dimmed' | 'normal') {
+
+	}
+
+	public destroy() {
+		this.unsubViewNodes?.();
+		this.unsubViewEdges?.();
+		this.unsubViewNodes = null;
+		this.unsubViewEdges = null;
+		this.nodeIndex.clear();
+		this.edgeIndex.clear();
+	}
+}
+
 //#endregion

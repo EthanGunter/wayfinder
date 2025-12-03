@@ -24,9 +24,10 @@
 	import { drawerOpen, drawerParams } from './logic/ui-state';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	import MarkdownEditor from '$lib/components/ui/markdown-editor';
-	import type { GraphNode } from '$domain/models/node';
+	import type { AppNode } from '$domain/models/node';
+	import { centerAndHighlightNode } from './logic/navigation';
 
-	export interface TaskEditorLayoutState {
+	export interface NodeEditorLayoutState {
 		accordionValues: ('tasks' | 'parent-order')[];
 		showCompletedTasks: boolean;
 		showCompletedSiblings: boolean;
@@ -36,7 +37,7 @@
 		onTaskChange: (original: Task, update: Omit<UpdateTaskParams, 'id'>) => void;
 		onDelete: (task: Task) => void;
 		onSelectNode?: (taskId: string, options?: { select?: boolean }) => void;
-		layoutState?: TaskEditorLayoutState;
+		layoutState?: NodeEditorLayoutState;
 	}
 
 	// Props
@@ -112,7 +113,7 @@
 		if (siblingsMap.status !== 'resolved') return;
 
 		// Find parent task by ID (Map keys are object references)
-		let parent: GraphNode | undefined;
+		let parent: AppNode | undefined;
 		for (const [p] of siblingsMap.value.entries()) {
 			if (p.id === parentId) {
 				parent = p;
@@ -169,7 +170,7 @@
 	}
 
 	function handleAddChildTask(parentId: string) {
-		let parent: GraphNode | undefined;
+		let parent: AppNode | undefined;
 
 		// For children list, parent is the current task
 		if (parentId === task.id) {
@@ -249,7 +250,7 @@
 	class="relative flex h-full w-full flex-col bg-white {checked ? 'bg-[#efe]' : ''}"
 >
 	{#snippet header()}
-		<div class="flex items-start gap-2 px-2 py-2">
+		<div class="flex items-start gap-2 p-2 h-10">
 			<Checkbox
 				class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
 				aria-label="Toggle complete"
@@ -264,9 +265,26 @@
 				placeholder="Task title"
 				oninput={handleInput}
 			/>
+			<button
+				class="
+				flex
+				size-6
+				shrink-0
+				items-center
+				justify-center
+				rounded-full
+				text-gray-400
+				hover:cursor-pointer
+				hover:bg-blue-50
+				hover:text-blue-600
+				"
+				onclick={() => centerAndHighlightNode(task.id)}
+			>
+				<Icon icon="lucide:locate" />
+			</button>
 			<Separator orientation="vertical" />
 			<button
-				class="flex size-6 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
+				class="flex size-6 shrink-0 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:bg-red-50 hover:text-red-600"
 				title="Delete task"
 				onclick={confirmDelete}
 			>

@@ -1,11 +1,14 @@
 // ui/state.ts
 //#region STORES
 import { writable, type Writable } from 'svelte/store';
-import type { Task } from '$domain/models/task';
-import type { TaskEditorLayoutState } from '../TaskEditor.svelte';
-import type { GraphNode } from '$domain/models/node';
+import type { NodeEditorLayoutState } from '../TaskEditor.svelte';
+import type { AppNode } from '$domain/models/node';
+import { appData, viewNodes, viewEdges, getEdgeKey, recalculateHiddenByCollapse, shouldShowNode } from './shared-state';
+import { appToView } from './layout/LayoutEngine';
+import { getCollapsedNodeIds } from './data-persistence';
+import { settings } from '$lib/user-settings';
 
-export type DrawerParams = { relation: GraphNode; mode: 'parent' | 'child' } | null;
+export type DrawerParams = { relation: AppNode; mode: 'parent' | 'child' } | null;
 
 export type PendingNodeIntent = {
 	// one of these will be present at different phases
@@ -16,14 +19,81 @@ export type PendingNodeIntent = {
 	ts?: number;
 };
 
-export const hideCompleted: Writable<boolean> = writable(true);
+export const autoLayout = settings.graph.layout.autoLayout;
+export const showCompletedNodes = settings.graph.core.showCompleted;
+showCompletedNodes.subscribe(() => {
+	const persistedCollapsed = getCollapsedNodeIds();
+
+	for (const [id, appNode] of appData.entries()) {
+		const shouldShow = shouldShowNode(appNode);
+		const existsInView = viewNodes.has(id);
+
+		if (shouldShow && !existsInView) {
+			// Add to view with restored collapse state
+			const viewNode = appToView(appNode);
+			if (persistedCollapsed.has(id)) {
+				viewNode.data.collapsedChildren = true;
+			}
+			viewNodes.set(id, viewNode);
+
+			// Re-add edges to visible nodes
+			for (const childId of appNode.children) {
+				const childNode = appData.get(childId);
+				if (childNode && shouldShowNode(childNode)) {
+					viewEdges.set(getEdgeKey(id, childId), {
+						id: getEdgeKey(id, childId),
+						source: id,
+						target: childId,
+						type: appNode.data.type,
+					});
+				}
+			}
+			for (const parentId of appNode.parents) {
+				const parentNode = appData.get(parentId);
+				if (parentNode && shouldShowNode(parentNode)) {
+					viewEdges.set(getEdgeKey(parentId, id), {
+						id: getEdgeKey(parentId, id),
+						source: parentId,
+						target: id,
+						type: parentNode.data.type,
+					});
+				}
+			}
+		} else if (!shouldShow && existsInView) {
+			// Remove from view
+			for (const childId of appNode.children) {
+				viewEdges.delete(getEdgeKey(id, childId));
+			}
+			for (const parentId of appNode.parents) {
+				viewEdges.delete(getEdgeKey(parentId, id));
+			}
+			viewNodes.delete(id);
+		}
+	}
+
+	// Re-added nodes may have restored collapse state - recalculate and hide their descendants
+	recalculateHiddenByCollapse();
+
+	for (const [id, appNode] of appData.entries()) {
+		if (!shouldShowNode(appNode) && viewNodes.has(id)) {
+			for (const childId of appNode.children) {
+				viewEdges.delete(getEdgeKey(id, childId));
+			}
+			for (const parentId of appNode.parents) {
+				viewEdges.delete(getEdgeKey(parentId, id));
+			}
+			viewNodes.delete(id);
+		}
+	}
+});
 
 export const pendingNodeParams = writable<PendingNodeIntent>({});
-export const selectedTask: Writable<Task | null> = writable(null);
-export const drawerOpen: Writable<boolean> = writable(false);
-export const drawerParams: Writable<DrawerParams> = writable(null);
+export const selectedNode = writable<AppNode<unknown> | null>(null);
+export const drawerOpen = writable<boolean>(false);
+export const drawerParams = writable<DrawerParams>(null);
+export const layoutPaused = writable<boolean>(true);
 
-export const editorLayoutState: Writable<TaskEditorLayoutState> = writable({
+export const editorLayoutState = writable<NodeEditorLayoutState>({
 	accordionValues: ['tasks'],
 	showCompletedTasks: false,
 	showCompletedSiblings: false,
@@ -32,7 +102,7 @@ export const editorLayoutState: Writable<TaskEditorLayoutState> = writable({
 
 //#region ACTIONS
 export function resetUIState() {
-	selectedTask.set(null);
+	selectedNode.set(null);
 	drawerOpen.set(false);
 	drawerParams.set(null);
 	editorLayoutState.set({

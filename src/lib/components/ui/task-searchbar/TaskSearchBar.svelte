@@ -8,11 +8,21 @@
 
 	type Props = {
 		onTaskSelected?: (task: Task) => void;
+		onLocateTask?: (task: Task) => void;
 		class?: string;
 	};
 
-	let { class: className, onTaskSelected }: Props = $props();
+	let { class: className, onTaskSelected, onLocateTask }: Props = $props();
 	let num = $state(0);
+	let searchBar: SearchBar<Task> | undefined = $state();
+
+	export function select() {
+		searchBar?.select();
+	}
+
+	export function blur() {
+		searchBar?.blur();
+	}
 
 	const searchService = new TaskSearchService();
 	let unsubscribeTasks: (() => void) | null = null;
@@ -46,12 +56,13 @@
 </script>
 
 <SearchBar
+	bind:this={searchBar}
 	class={className}
 	onItemSelected={onTaskSelected}
 	handleQuery={handleSearch}
 	{refreshTrigger}
 >
 	{#snippet searchItems(task: Task, onSelect)}
-		<SearchTaskListItem {task} {onSelect} />
+		<SearchTaskListItem {task} {onSelect} {onLocateTask} />
 	{/snippet}
 </SearchBar>

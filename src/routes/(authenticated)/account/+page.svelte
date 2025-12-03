@@ -24,31 +24,12 @@
 	async function handleDeleteUser() {
 		if ($authState.status !== 'signed-in' || isDeleting) return;
 
-		isDeleting = true;
 		try {
-			tasksAPI.getAllUserTasks().subscribe(async (allTasks) => {
-				if (allTasks.status === 'error') {
-					Err.UNHANDLED(allTasks.error);
-				} else if (allTasks.status === 'resolved') {
-					await tasksAPI.deleteTasks({
-						ids: allTasks.value.map((r) => r.id)
-					});
-
-					// Delete the user account
-					const [_, deleteUserError] = await authAPI.deleteUser({ userId: $authState.user.id });
-					if (deleteUserError) Err.UNHANDLED(deleteUserError);
-				}
-			});
-
-			// TODO:Temp anonymous accounts disabled
-			/* const defaultUserResult = await auth.getDefaultUser();
-			if (defaultUserResult.isOk()) {
-				await auth.switchUser(defaultUserResult.value.id);
-			} */
+			await authAPI.deleteSelf();
 		} catch (error) {
-			isDeleting = false;
 			Err.UNHANDLED(error, 'Failed to delete user:');
 		}
+		
 	}
 
 	function goBack() {
@@ -126,7 +107,9 @@
 				<AlertDialog.Header>
 					<AlertDialog.Title>Delete Account</AlertDialog.Title>
 					<AlertDialog.Description>
-						Are you sure you want to delete your account? This action cannot be undone.
+						Are you sure you want to delete your account and all associated data? <em
+							>This action cannot be undone.</em
+						>
 						{#if taskCount > 0}
 							<br /><br />
 							<strong>Warning:</strong> This will also delete {taskCount} task{taskCount === 1
