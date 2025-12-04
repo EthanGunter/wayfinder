@@ -21,7 +21,7 @@ export enum ProjectStatus {
     // Future statuses can be added here
 }
 
-export function isProjectActive(data: ProjectData<any>): boolean {
+export function isProjectActive(data: ProjectData<Date | number>): boolean {
     return data.status === ProjectStatus.active;
 }
 

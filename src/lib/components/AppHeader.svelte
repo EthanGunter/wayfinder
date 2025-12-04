@@ -23,8 +23,8 @@
 			</NavigationMenu.Item>
 			<Separator orientation="vertical" />
 			<NavigationMenu.Item>
-				<NavigationMenu.Link active={page.url.pathname === '/graph'} href="/graph">
-					Graph
+				<NavigationMenu.Link active={page.url.pathname === '/projects'} href="/projects">
+					Projects
 				</NavigationMenu.Link>
 			</NavigationMenu.Item>
 		</NavigationMenu.List>

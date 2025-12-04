@@ -1,6 +1,6 @@
 import { ArgumentError, InvalidStateError } from "$domain/errors";
 import type { Doc, Id } from "./_generated/dataModel";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { applyRelationshipOperations, calculateRelationshipUpdates, EXPORT_VERSIONS, TaskStatus } from "$domain/models/task";
 import type { CreateTaskParams, ExportedData, TaskData, UpdateTaskParams } from "$domain/models/task";
@@ -105,7 +105,7 @@ export const createTasks = mutation({
 	},
 });
 
-async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientNode[] }> {
+export async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientNode[] }> {
 	const now = Date.now();
 
 	// Normalize parents (attach to root if empty)
@@ -166,6 +166,7 @@ async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { us
 	};
 }
 
+export const test = internalMutation({ args: {}, handler: () => { } })
 
 export const updateTask = mutation({
 	args: argsUpdateTask,
@@ -201,7 +202,7 @@ export const updateTasks = mutation({
 	},
 });
 
-async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): Promise<{ updated: ClientNode, affected: ClientNode[] }> {
+export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<number>): Promise<{ updated: ClientNode, affected: ClientNode[] }> {
 	const nodeId = update.id as Id<"nodes">;
 
 	// Get old node state
@@ -353,7 +354,7 @@ export const deleteTasks = mutation({
 	},
 });
 
-async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affected: ClientNode[] }> {
+export async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affected: ClientNode[] }> {
 
 	// Get node
 	const node = await ctx.db.get(id);
@@ -365,10 +366,6 @@ async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affecte
 		throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of node", ctx: String(id) });
 	}
 
-	// Prevent root deletion
-	if (node.data.type === "project") {
-		throw new ConvexError({ type: "InvalidState", msg: "Root project cannot be deleted", ctx: String(id) });
-	}
 
 	// Propagate relationship changes before deletion
 	let affected = await propagateRelationshipChanges(ctx, [
@@ -598,7 +595,7 @@ export const importData = mutation({
 
 export const exportData = query({
 	args: { subtreeId: v.optional(v.string()) },
-	handler: async (ctx, { subtreeId }) => {
+	handler: async (ctx) => {
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity) {
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
@@ -805,6 +802,64 @@ export const getRootTasks = query({
 		const childDocs = await Promise.all(childIds.map((cid) => ctx.db.get(cid as Id<"nodes">)));
 
 		return childDocs.filter((n): n is NonNullable<typeof n> => !!n).map(cleanNodeForClient);
+	},
+});
+
+export const getProjects = query({
+	args: {},
+	handler: async (ctx) => {
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) return []; // TODO:UX/DX Log and error
+		const projects = await ctx.db.query("nodes").withIndex("by_user_type", (q) => q.eq("userAuthId", identity.subject).eq("data.type", "project")).collect();
+		return projects.map(cleanNodeForClient);
+	},
+});
+
+export const getProjectSubtree = query({
+	args: { id: v.string() },
+	handler: async (ctx, { id }) => {
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
+
+		const rootId = id as Id<"nodes">;
+		const root = await ctx.db.get(rootId);
+		if (!root) throw new ConvexError({ type: "NotFoundError", msg: "Project not found", ctx: id });
+		if (root.userAuthId !== identity.subject) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of node", ctx: id });
+		}
+
+		// Brute force: fetch all nodes for user, then traverse children to collect subtree
+		const nodes = await ctx.db.query("nodes").withIndex("by_user", (q) => q.eq("userAuthId", identity.subject)).collect();
+		const nodeMap = new Map<string, DBNode>(nodes.map((n) => [String(n._id), n]));
+
+		const visited = new Set<string>();
+		const queue: string[] = [String(root._id)];
+		const subtree: DBNode[] = [];
+
+		while (queue.length > 0) {
+			const currentId = queue.shift()!;
+			if (visited.has(currentId)) continue;
+			visited.add(currentId);
+
+			const node = nodeMap.get(currentId);
+			if (!node) continue;
+
+			subtree.push(node);
+			for (const childId of node.children ?? []) {
+				if (!visited.has(childId)) queue.push(childId);
+			}
+		}
+
+		return subtree.map(cleanNodeForClient);
+	},
+});
+
+export const getSubtree = query({
+	args: { id: v.string() },
+	handler: async (ctx, { id }) => {
+		const project = await ctx.db.get(id as Id<"nodes">);
+		if (!project) throw new ConvexError({ type: "NotFoundError", msg: "Project not found", ctx: id });
+		return project.children ?? [];
 	},
 });
 

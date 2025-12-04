@@ -37,14 +37,18 @@ export interface ITasksBase {
 	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<AppNode, AppNode[]>>;
 	/**
 	 * Gets all GraphNodes that nothing depends on
-	*/
-	// TODO * @deprecated use getProjects instead
+	 * @deprecated use getProjects instead
+	 */
 	getRootTasks(): FetchableStore<Task[]>;
 
-	// /**
-	//  * Gets all GraphNodes that are projects
-	//  */
-	// TODO getProjects(): FetchableStore<IGraphNode<ProjectData>[]>;
+	/**
+	 * Gets all GraphNodes that are projects
+	 */
+	getProjects(): FetchableStore<IAppNode<ProjectData>[]>;
+	/**
+	 * Gets all GraphNodes that are children of the project with the given ID
+	 */
+	getProjectSubtree(id: string): FetchableStore<IAppNode<TaskData>[]>;
 
 	/**
 	 * Gets all GraphNodes that are on the "Today's List"

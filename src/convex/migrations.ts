@@ -1,13 +1,66 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Migrations } from "@convex-dev/migrations";
 import { components } from "./_generated/api";
 import { type Id, type DataModel, type Doc } from "./_generated/dataModel";
 import { TaskStatus } from "$domain/models/task";
+import { ProjectStatus, type ProjectData } from "$domain/models/project";
+import type { MutationCtx } from "./_generated/server";
+import { _updateTask, _deleteTask } from "./tasks";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 export const run = migrations.runner();
 
 
+// TODO:migration Dev
+// TODO:migration Preview
+// TODO:migration Prod
+export const promoteRootChildrenToProjects = migrations.define({
+	table: "nodes",
+	migrateOne: async (ctx, node) => {
+		// Target only the hidden root project (untitled, no parents)
+		const title = typeof node.data.title === "string" ? node.data.title.trim() : "";
+		if (node.data.type !== "project" || title !== "" || (node.parents?.length ?? 0) > 0) { return; }
+
+		const rootId = node._id;
+		const children = node.children ?? [];
+
+		const makeCtx = (userAuthId: string): MutationCtx =>
+			({
+				...ctx,
+				auth: {
+					getUserIdentity: async () => ({ subject: userAuthId }),
+				},
+			} as unknown as MutationCtx);
+
+		for (const childId of children) {
+			const child = await ctx.db.get(childId as Id<"nodes">);
+			if (!child) continue;
+			const parents = (child.parents ?? []).filter((p) => p !== rootId);
+			
+			// Normalize relationships using existing update logic
+			await _updateTask(makeCtx(child.userAuthId), {
+				id: String(child._id),
+				parents,
+			});
+
+			// Promote to project if needed
+			if (child.data.type !== "project") {
+				const promoted: ProjectData<number> = {
+					type: "project",
+					title: child.data.title ?? "",
+					content: (child.data as { content?: string }).content,
+					status: ProjectStatus.active,
+					dueDate: (child.data as { dueDate?: number }).dueDate,
+				};
+				await ctx.db.patch(child._id, { data: promoted as Doc<"nodes">["data"] });
+			}
+		}
+
+		// Remove the root node itself (uses shared deletion logic)
+		await _deleteTask(makeCtx(node.userAuthId), rootId as Id<"nodes">);
+	},
+});
+
+// migrated Dev
 // TODO:migration Preview
 // TODO:migration Prod
 export const reorderCompletedChildren = migrations.define({

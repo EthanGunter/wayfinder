@@ -1677,14 +1677,14 @@ describe("importData", () => {
 			}),
 		});
 
-		const gc1 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({
 				title: "RT Grandchild",
 				parents: [c1.created.id],
 			}),
 		});
 
-		const p2 = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 			createDetail: buildTaskCreate({ title: "RT Orphan" }),
 		});
 
@@ -1748,6 +1748,208 @@ describe.todo("getParentsOf");
 describe.todo("getSiblingsOf");
 describe.todo("getRootTasks");
 describe.todo("getTodaysTasks");
+describe("getProjects", () => {
+	test("returns all projects for the authenticated user", async () => {
+		const t = createTestCtx();
+		let projA: Id<"nodes">;
+		let projB: Id<"nodes">;
+		let otherUserProj: Id<"nodes">;
+
+		await t.withIdentity(mockAuth("user1")).run(async (ctx) => {
+			const now = Date.now();
+			projA = await ctx.db.insert("nodes", {
+				userAuthId: "user1",
+				parents: [],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "project" as const,
+					title: "Project A",
+					status: 0,
+					content: undefined,
+					dueDate: undefined,
+				},
+			});
+			projB = await ctx.db.insert("nodes", {
+				userAuthId: "user1",
+				parents: [],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "project" as const,
+					title: "Project B",
+					status: 0,
+					content: undefined,
+					dueDate: undefined,
+				},
+			});
+
+			// Non-project should be excluded
+			await ctx.db.insert("nodes", {
+				userAuthId: "user1",
+				parents: [],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "task" as const,
+					title: "Task not project",
+					status: 0,
+					content: undefined,
+					todaysTask: undefined,
+					dueDate: undefined,
+				},
+			});
+		});
+
+		await t.withIdentity(mockAuth("user2")).run(async (ctx) => {
+			const now = Date.now();
+			otherUserProj = await ctx.db.insert("nodes", {
+				userAuthId: "user2",
+				parents: [],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "project" as const,
+					title: "Other User Project",
+					status: 0,
+					content: undefined,
+					dueDate: undefined,
+				},
+			});
+		});
+
+		const projects = await t.withIdentity(mockAuth("user1")).query(api.tasks.getProjects, {});
+		const ids = projects.map((p) => p.id);
+
+		expect(projects).toHaveLength(2);
+		expect(ids).toContain(String(projA!));
+		expect(ids).toContain(String(projB!));
+		expect(ids).not.toContain(String(otherUserProj!));
+		expect(projects.every((p) => p.data.type === "project")).toBe(true);
+	});
+});
+
+describe("getProjectSubtree", () => {
+	test("returns project node plus descendants for the user", async () => {
+		const t = createTestCtx();
+		let projectId: Id<"nodes">;
+		let childA: Id<"nodes">;
+		let childB: Id<"nodes">;
+		let grandchild: Id<"nodes">;
+		let otherUserNode: Id<"nodes">;
+
+		await t.withIdentity(mockAuth("user1")).run(async (ctx) => {
+			const now = Date.now();
+			projectId = await ctx.db.insert("nodes", {
+				userAuthId: "user1",
+				parents: [],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "project" as const,
+					title: "Project One",
+					status: 0,
+					content: undefined,
+					dueDate: undefined,
+				},
+			});
+
+			childA = await ctx.db.insert("nodes", {
+				userAuthId: "user1",
+				parents: [String(projectId)],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "task" as const,
+					title: "Child A",
+					status: 0,
+					content: undefined,
+					todaysTask: undefined,
+					dueDate: undefined,
+				},
+			});
+
+			grandchild = await ctx.db.insert("nodes", {
+				userAuthId: "user1",
+				parents: [""],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "task" as const,
+					title: "Grandchild",
+					status: 0,
+					content: undefined,
+					todaysTask: undefined,
+					dueDate: undefined,
+				},
+			});
+
+			childB = await ctx.db.insert("nodes", {
+				userAuthId: "user1",
+				parents: [String(projectId)],
+				children: [String(grandchild)],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "task" as const,
+					title: "Child B",
+					status: 0,
+					content: undefined,
+					todaysTask: undefined,
+					dueDate: undefined,
+				},
+			});
+
+			// Fix grandchild parent to childB
+			await ctx.db.patch(grandchild, { parents: [String(childB)] });
+
+			// Attach children to project
+			await ctx.db.patch(projectId, { children: [String(childA), String(childB)] });
+		});
+
+		await t.withIdentity(mockAuth("user2")).run(async (ctx) => {
+			const now = Date.now();
+			otherUserNode = await ctx.db.insert("nodes", {
+				userAuthId: "user2",
+				parents: [],
+				children: [],
+				lastEdit: now,
+				created: now,
+				data: {
+					type: "project" as const,
+					title: "Other User",
+					status: 0,
+					content: undefined,
+					dueDate: undefined,
+				},
+			});
+		});
+
+		const result = await t.withIdentity(mockAuth("user1")).query(api.tasks.getProjectSubtree, {
+			id: String(projectId!),
+		});
+
+		const ids = new Set(result.map((n) => n.id));
+		expect(ids.has(String(projectId!))).toBe(true);
+		expect(ids.has(String(childA!))).toBe(true);
+		expect(ids.has(String(childB!))).toBe(true);
+		expect(ids.has(String(grandchild!))).toBe(true);
+		expect(ids.has(String(otherUserNode!))).toBe(false);
+		expect(result).toHaveLength(4);
+
+		await expect(
+			t.withIdentity(mockAuth("user2")).query(api.tasks.getProjectSubtree, { id: String(projectId!) })
+		).rejects.toThrow();
+	});
+});
+
 describe("getPrioritizedTasks", () => {
 	test("handles cycles gracefully without infinite loops", async () => {
 		const t = createTestCtx();

@@ -314,6 +314,37 @@ export const api: ITasksRemote = {
 				unsubscribe();
 			};
 		}),
+	getProjects: () => createFetchable((set) => {
+		const unsubscribe = client.onUpdate(
+			convexApi.tasks.getProjects,
+			{},
+			(result) => {
+				set({ status: "resolved", value: result.map(convertFromServerNode<IAppNode<ProjectData>>) });
+			},
+			(error: Error) => {
+				set({ status: "error", error: reconstructError(error) });
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}),
+	getProjectSubtree: (id) => createFetchable((set) => {
+		set({ status: "loading" });
+		const unsubscribe = client.onUpdate(
+			convexApi.tasks.getProjectSubtree,
+			{ id: id as Id<'nodes'> },
+			(result) => {
+				set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
+			},
+			(error: Error) => {
+				set({ status: "error", error: reconstructError(error) });
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}),
 
 	getTodaysTasks: () =>
 		createFetchable((set) => {
@@ -396,6 +427,8 @@ export const localApi: ITasksLocal = {
 	getParentsOf: (params) => api.getParentsOf(params),
 	getSiblingsOf: (params) => api.getSiblingsOf(params),
 	getRootTasks: () => api.getRootTasks(),
+	getProjects: () => api.getProjects(),
+	getProjectSubtree: (id: string) => api.getProjectSubtree(id),
 	getTodaysTasks: () => api.getTodaysTasks(),
 	getPrioritizedTasks: (limit: number) => api.getPrioritizedTasks(limit),
 
