@@ -1,32 +1,20 @@
 <script lang="ts">
-	import { Handle, Position } from '@xyflow/svelte';
+	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import { isTaskCompleted } from '$domain/models/task';
 	import { devEnabled } from '$lib/user-settings';
-	import type { ViewNode, ViewNodeData } from './logic/layout/LayoutEngine';
+	import type { ViewNodeData } from './logic/layout/LayoutEngine';
 	import Icon from '@iconify/svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
 	import { viewNodes, toggleCollapseChildren } from './logic/shared-state';
 	import { layoutEngine } from './logic/layout';
 	import { autoLayout } from './logic/ui-state';
 
-	let { id, data: flowData, ...rest }: ViewNode = $props();
+	let { id, data: flowData, ...rest }: NodeProps & { data: ViewNodeData } = $props();
 
 	const isDimmed = $derived(flowData.dimmed ?? false);
 	const isPinned = $derived(!!flowData.pinned);
 	const isCollapsed = $derived(!!flowData.collapsedChildren);
 	const hasChildren = $derived(flowData.appNode.children.length > 0);
-
-	function togglePinned(pin: boolean) {
-		const node = viewNodes.get(id);
-		if (!node) return;
-
-		// TODO: sync pinned state to DB
-		// Create new data object to trigger reactivity in SvelteFlow
-		viewNodes.set(id, {
-			...node,
-			data: { ...node.data, pinned: pin || undefined }
-		});
-	}
 
 	function handleCollapseToggle(recursive: boolean = false) {
 		toggleCollapseChildren(id, recursive);

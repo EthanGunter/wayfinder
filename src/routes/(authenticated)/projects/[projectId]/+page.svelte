@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { SvelteFlow, SvelteFlowProvider, Background } from '@xyflow/svelte';
+	import { SvelteFlow, SvelteFlowProvider, Background, type NodeTypes } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
 	import TaskNode from './TaskNode.svelte';
+	import FallbackNode from './FallbackNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
@@ -30,7 +31,6 @@
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	import { layoutEngine } from './logic/layout';
 	import { Switch } from '$lib/components/ui/switch';
-	import * as Select from '$lib/components/ui/select';
 	import * as ButtonGroup from '$lib/components/ui/button-group';
 	import { settings } from '$lib/user-settings';
 	import { keybind } from '$lib/keybind-action';
@@ -46,6 +46,7 @@
 	const sfAdapter: SvelteFlowAdapter = new SvelteFlowAdapter();
 	const nodes = sfAdapter.nodes;
 	const edges = sfAdapter.edges;
+	const nodeTypes = { task: TaskNode, fallback: FallbackNode } as NodeTypes;
 
 	let searchBar = $state<TaskSearchBar>();
 
@@ -192,7 +193,7 @@
 							class="h-full w-full"
 							minZoom={0.1}
 							maxZoom={2}
-							nodeTypes={{ task: TaskNode as any }}
+							{nodeTypes}
 							nodeOrigin={[0.5, 0.5]}
 							edgeTypes={{ task: TaskEdge }}
 							defaultEdgeOptions={{ type: 'task' }}

@@ -69,6 +69,13 @@ appData.subscribe(({ key, value, op }) => {
 	} else {
 		const existingNode = viewNodes.get(key);
 
+		// Project nodes should never render; drop them (and any lingering view state)
+		if (value?.data.type === 'project') {
+			return;
+		}
+
+		const normalizedType = value?.data.type === 'task' ? 'task' : 'fallback';
+
 		// Convert to arrays to handle Proxy objects from Svelte reactivity
 		const oldChildren = existingNode ? Array.from(existingNode.data.appNode.children) : [];
 		const oldParents = existingNode ? Array.from(existingNode.data.appNode.parents) : [];
@@ -92,7 +99,7 @@ appData.subscribe(({ key, value, op }) => {
 			node = {
 				id: key,
 				position: { x: 0, y: 0 },
-				type: value!.data.type,
+				type: normalizedType,
 				data: {
 					appNode: value!,
 				}
@@ -118,7 +125,7 @@ appData.subscribe(({ key, value, op }) => {
 						id: getEdgeKey(key, relation),
 						source: key,
 						target: relation,
-						type: value!.data.type,
+						type: 'task',
 					}
 					viewEdges.set(getEdgeKey(key, relation), edge);
 				}
@@ -152,7 +159,7 @@ appData.subscribe(({ key, value, op }) => {
 						id: getEdgeKey(parentId, key),
 						source: parentId,
 						target: key,
-						type: parentAppNode.data.type,
+						type: 'task',
 					}
 					viewEdges.set(getEdgeKey(parentId, key), edge);
 				}
@@ -365,7 +372,7 @@ export function toggleCollapseChildren(nodeId: string, recursive: boolean = fals
 	// Re-added nodes may have restored collapse state - recalculate and hide their descendants
 	recalculateHiddenByCollapse();
 	const newHidden = get(hiddenByCollapse);
-	
+
 	for (const [id, appNode] of appData.entries()) {
 		if (newHidden.has(id) && viewNodes.has(id)) {
 			for (const childId of appNode.children) {

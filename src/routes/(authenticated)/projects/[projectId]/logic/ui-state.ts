@@ -44,7 +44,7 @@ showCompletedNodes.subscribe(() => {
 						id: getEdgeKey(id, childId),
 						source: id,
 						target: childId,
-						type: appNode.data.type,
+						type: 'task',
 					});
 				}
 			}
@@ -55,7 +55,7 @@ showCompletedNodes.subscribe(() => {
 						id: getEdgeKey(parentId, id),
 						source: parentId,
 						target: id,
-						type: parentNode.data.type,
+						type: 'task',
 					});
 				}
 			}
