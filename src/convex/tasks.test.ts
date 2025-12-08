@@ -410,27 +410,7 @@ describe("updateTask", () => {
 		expect(refreshedChild!.parents).toEqual([project!._id]);
 	});
 
-	test("rejects removing the last parent without replacement", async () => {
-		const t = createTestCtx();
-
-		const project = await createProject(t, "user1");
-		const parent = await createTaskWithProject(t, "user1", { title: "Parent", parents: [project!._id] });
-
-		const child = await createTaskWithProject(t, "user1", {
-			title: "Child",
-			parents: [parent.created.id],
-		});
-
-		await expect(
-			t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-				id: child.created.id,
-				removeParents: [parent.created.id],
-			})
-		).rejects.toThrow();
-
-		const refreshedChild = await getTaskById(t, child.created.id);
-		expect(refreshedChild!.parents).toEqual([parent.created.id]);
-	});
+	test.todo("Attaches tasks to project when last parent is removed");
 
 	test("rejects update that sets parents to empty array", async () => {
 		const t = createTestCtx();
@@ -444,26 +424,6 @@ describe("updateTask", () => {
 				parents: [],
 			})
 		).rejects.toThrow();
-	});
-
-	test("keeps project parent when adding non-project parent", async () => {
-		const t = createTestCtx();
-
-		const project = await createProject(t, "user1");
-		const p1 = await createTaskWithProject(t, "user1", { title: "P1", parents: [project!._id] });
-
-		// Create task attached only to project
-		const task = await createTaskWithProject(t, "user1", { title: "Task", parents: [project!._id] });
-
-		// Add non-project parent -> project should be dropped
-		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: task.created.id,
-			addParents: [p1.created.id],
-		});
-
-		const updated = await getTaskById(t, task.created.id);
-
-		expect(updated!.parents).toEqual([project!._id, p1.created.id]);
 	});
 
 	test("removes child's parent reference when parent removes child", async () => {
@@ -1077,8 +1037,8 @@ describe("Relationship integrity & propagation", () => {
 		// C1 should no longer have GC1 as child
 		expect(updatedC1!.children).not.toContain(gc1.created.id);
 
-		// GC1 should have P1 (primary) and project anchor
-		expect(updatedGC1!.parents).toEqual([p1.created.id, project!._id]);
+		// GC1 should have P1 (primary)
+		expect(updatedGC1!.parents).toEqual([p1.created.id]);
 	});
 
 	test("propagates changes when adding child via parent", async () => {
@@ -1130,7 +1090,7 @@ describe("Relationship integrity & propagation", () => {
 
 //#region Cycle prevention
 
-describe.skip("Cycle prevention", () => {
+describe("Cycle prevention", () => {
 	test("detects and fails on simple cycle (A -> B -> A)", async () => {
 		const t = createTestCtx();
 

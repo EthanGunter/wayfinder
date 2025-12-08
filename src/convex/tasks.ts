@@ -197,7 +197,7 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 		throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of node", ctx: update.id });
 	}
 
-	// Enforce root constraints
+	// Enforce project constraints
 	if (oldNode.data.type === "project" && (update.parents || update.addParents || update.removeParents)) {
 		throw new ConvexError({ type: "InvalidState", msg: "Root project cannot have parents modified", ctx: update.id });
 	}
@@ -215,6 +215,10 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 	}
 
 	if (update.removeParents) {
+		if (parents.length === 1 && oldNode.data.type !== "project") {
+			const project = await resolveProjectAncestor(ctx, parents[0], oldNode.userAuthId);
+			parents = [project._id];
+		}
 		parents = parents.filter(id => !update.removeParents!.includes(id));
 	}
 
@@ -225,6 +229,7 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 	if (update.removeChildren) {
 		children = children.filter(id => !update.removeChildren!.includes(id));
 	}
+
 
 	// Validate parents using shared function (must remain non-empty and share project ancestor)
 	const { parents: normalizedParents } = await validateParentsAndProject(ctx, parents, oldNode.userAuthId);
@@ -272,12 +277,12 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 			const parentId = pid as Id<"nodes">;
 			const parent = await ctx.db.get(parentId);
 			if (parent && parent.children) {
-				const idx = parent.children.indexOf(String(nodeId));
+				const idx = parent.children.indexOf(nodeId);
 				// Only move if not already at the end
 				if (idx !== -1 && idx !== parent.children.length - 1) {
 					const newChildren = [...parent.children];
 					newChildren.splice(idx, 1);
-					newChildren.push(String(nodeId));
+					newChildren.push(nodeId);
 
 					await ctx.db.patch(parentId, { children: newChildren });
 
@@ -346,7 +351,7 @@ export async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ 
 	// Authorize ownership
 	const identity = await ctx.auth.getUserIdentity();
 	if (!identity || identity.subject !== node.userAuthId) {
-		throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of node", ctx: String(id) });
+		throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of node", ctx: id });
 	}
 
 
@@ -471,10 +476,10 @@ export const importData = mutation({
 			// Normalize parents (attach to root if empty, remove root if multiple parents)
 			let normalizedParents: string[];
 			if (remappedParents.length === 0) {
-				normalizedParents = [String(rootProject._id)];
+				normalizedParents = [rootProject._id];
 			} else if (remappedParents.length > 1) {
 				// Multiple parents - remove root if present
-				normalizedParents = remappedParents.filter(id => id !== String(rootProject._id));
+				normalizedParents = remappedParents.filter(id => id !== rootProject._id);
 			} else {
 				normalizedParents = remappedParents;
 			}
@@ -486,12 +491,12 @@ export const importData = mutation({
 			});
 
 			// Update root.children if attached to root
-			if (normalizedParents.length === 1 && normalizedParents[0] === String(rootProject._id)) {
+			if (normalizedParents.length === 1 && normalizedParents[0] === rootProject._id) {
 				const currentRoot = await ctx.db.get(rootProject._id);
 				if (currentRoot) {
 					const rootChildren = [...(currentRoot.children ?? [])];
-					if (!rootChildren.includes(String(newId))) {
-						rootChildren.push(String(newId));
+					if (!rootChildren.includes(newId)) {
+						rootChildren.push(newId);
 						await ctx.db.patch(rootProject._id, {
 							children: rootChildren,
 							lastEdit: now,
@@ -506,9 +511,9 @@ export const importData = mutation({
 				const child = await ctx.db.get(childId);
 				if (child) {
 					const childParents = child.parents ?? [];
-					if (!childParents.includes(String(newId))) {
+					if (!childParents.includes(newId)) {
 						await ctx.db.patch(childId, {
-							parents: [...childParents, String(newId)],
+							parents: [...childParents, newId],
 						});
 					}
 				}
@@ -516,14 +521,14 @@ export const importData = mutation({
 
 			// Establish bidirectional relationships: update parents to have this as child
 			for (const parentIdStr of normalizedParents) {
-				if (parentIdStr === String(rootProject._id)) continue; // Root handled separately above
+				if (parentIdStr === rootProject._id) continue; // Root handled separately above
 				const parentId = parentIdStr as Id<"nodes">;
 				const parent = await ctx.db.get(parentId);
 				if (parent) {
 					const parentChildren = parent.children ?? [];
-					if (!parentChildren.includes(String(newId))) {
+					if (!parentChildren.includes(newId)) {
 						await ctx.db.patch(parentId, {
-							children: [...parentChildren, String(newId)],
+							children: [...parentChildren, newId],
 						});
 					}
 				}
@@ -771,10 +776,10 @@ export const getProjectSubtree = query({
 
 		// Brute force: fetch all nodes for user, then traverse children to collect subtree
 		const nodes = await ctx.db.query("nodes").withIndex("by_user", (q) => q.eq("userAuthId", identity.subject)).collect();
-		const nodeMap = new Map<string, DBNode>(nodes.map((n) => [String(n._id), n]));
+		const nodeMap = new Map<string, DBNode>(nodes.map((n) => [n._id, n]));
 
 		const visited = new Set<string>();
-		const queue: string[] = [String(root._id)];
+		const queue: string[] = [root._id];
 		const subtree: DBNode[] = [];
 
 		while (queue.length > 0) {
@@ -965,7 +970,7 @@ async function resolveProjectAncestor(
 	cache?: NodeCache
 ): Promise<DBNode> {
 	const visited = new Set<string>();
-	let currentId = String(startId);
+	let currentId = startId;
 
 	while (true) {
 		if (visited.has(currentId)) {
@@ -1016,12 +1021,23 @@ async function validateParentsAndProject(
 
 	for (let i = 1; i < normalizedParents.length; i++) {
 		const parentProject = await resolveProjectAncestor(ctx, normalizedParents[i], userAuthId, cache);
-		if (String(parentProject._id) !== String(projectAncestor._id)) {
+		if (parentProject._id !== projectAncestor._id) {
 			throw new ConvexError({ type: "InvalidState", msg: "All parents must share the same project ancestor", ctx: normalizedParents[i] });
 		}
 	}
 
-	return { parents: normalizedParents, project: projectAncestor };
+	// If multiple parents were provided and one of them is the project ancestor itself,
+	// drop the project parent to avoid duplicating the anchor alongside concrete parents.
+	let finalParents = normalizedParents;
+	if (finalParents.length > 1) {
+		const ancestorId = projectAncestor._id;
+		finalParents = finalParents.filter(p => p !== ancestorId);
+		if (finalParents.length === 0) {
+			finalParents = [ancestorId];
+		}
+	}
+
+	return { parents: finalParents, project: projectAncestor };
 }
 
 async function propagateRelationshipChanges(
@@ -1060,8 +1076,8 @@ async function propagateRelationshipChanges(
 			}
 			if (!isProjectNode) {
 				const ancestor = await resolveProjectAncestor(ctx, previousParents[0], relatedNode.userAuthId, ancestorCache);
-				normalizedParents = [String(ancestor._id)];
-				adoptedProjectId = String(ancestor._id);
+				normalizedParents = [ancestor._id];
+				adoptedProjectId = ancestor._id;
 			}
 		} else {
 			({ parents: normalizedParents } = await validateParentsAndProject(ctx, normalizedParents, relatedNode.userAuthId, ancestorCache));
@@ -1078,9 +1094,9 @@ async function propagateRelationshipChanges(
 			const projectNode = await getNodeCached(ctx, adoptedProjectId, ancestorCache);
 			if (projectNode) {
 				const projectChildren = projectNode.children ?? [];
-				if (!projectChildren.includes(String(relatedNode._id))) {
-					await ctx.db.patch(projectNode._id, { children: [...projectChildren, String(relatedNode._id)] });
-					ancestorCache.set(adoptedProjectId, { ...projectNode, children: [...projectChildren, String(relatedNode._id)] });
+				if (!projectChildren.includes(relatedNode._id)) {
+					await ctx.db.patch(projectNode._id, { children: [...projectChildren, relatedNode._id] });
+					ancestorCache.set(adoptedProjectId, { ...projectNode, children: [...projectChildren, relatedNode._id] });
 				}
 			}
 		}
@@ -1092,7 +1108,7 @@ async function propagateRelationshipChanges(
 	// Deduplicate
 	const seen = new Set<string>();
 	return affectedNodes.filter(t => {
-		const key = String(t._id);
+		const key = t._id;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;
