@@ -108,12 +108,7 @@ export const createTasks = mutation({
 export async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientNode[] }> {
 	const now = Date.now();
 
-	// Normalize parents (attach to root if empty)
-	let finalParents = createDetail.parents ?? [];
-	if (finalParents.length === 0) {
-		const rootProject = await getOrCreateProject(ctx, createDetail.userAuthId);
-		finalParents = [rootProject._id];
-	}
+	const { parents: finalParents } = await validateParentsAndProject(ctx, createDetail.parents ?? [], createDetail.userAuthId);
 
 	// Insert node with nested data structure
 	const newId = await ctx.db.insert("nodes", {
@@ -131,19 +126,6 @@ export async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs
 			dueDate: createDetail.dueDate,
 		},
 	});
-
-	// Update root.children if attached to root
-	const rootProject = await getOrCreateProject(ctx, createDetail.userAuthId);
-	if (finalParents.length === 1 && finalParents[0] === rootProject._id) {
-		const rootChildren = [...(rootProject.children ?? [])];
-		if (!rootChildren.includes(String(newId))) {
-			rootChildren.push(String(newId));
-			await ctx.db.patch(rootProject._id, {
-				children: rootChildren,
-				lastEdit: now,
-			});
-		}
-	}
 
 	// Get created node
 	const createdNode = await ctx.db.get(newId);
@@ -244,8 +226,9 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 		children = children.filter(id => !update.removeChildren!.includes(id));
 	}
 
-	// Normalize parents using shared function
-	parents = await normalizeTaskParents(ctx, oldNode, parents, nodeId);
+	// Validate parents using shared function (must remain non-empty and share project ancestor)
+	const { parents: normalizedParents } = await validateParentsAndProject(ctx, parents, oldNode.userAuthId);
+	parents = normalizedParents;
 
 	// Build patch object with proper nested structure
 	const patchData: Partial<DBNode> = {
@@ -368,52 +351,10 @@ export async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ 
 
 
 	// Propagate relationship changes before deletion
-	let affected = await propagateRelationshipChanges(ctx, [
+	const affected = await propagateRelationshipChanges(ctx, [
 		{ oldTask: node, newTask: null }
 	]);
 
-
-
-	// Attach orphaned nodes (those with no parents) to root
-	const orphanedNodes: DBNode[] = affected.filter(n => n.data.type !== "project" && (n.parents?.length ?? 0) === 0);
-	if (orphanedNodes.length > 0) {
-
-		const rootProject = await getOrCreateProject(ctx, node.userAuthId);
-		const rootId = String(rootProject._id);
-
-		// Propagate attachment of orphans to root
-		const now = Date.now();
-		const orphanChanges = orphanedNodes.map(orphan => {
-			// Create updated version with root as parent
-			const updatedOrphan = {
-				...orphan,
-				parents: [rootId],
-				lastEdit: now,
-			};
-			return { oldTask: orphan, newTask: updatedOrphan };
-		});
-		orphanChanges.forEach(change => {
-			ctx.db.patch(change.oldTask._id, change.newTask);
-		});
-
-		// Propagate these changes (this will automatically update root's children)
-		const orphanAffected = await propagateRelationshipChanges(ctx, orphanChanges);
-
-
-		// Merge affected nodes, deduplicating
-		const affectedMap = new Map<string, DBNode>();
-		for (const n of affected) {
-			affectedMap.set(String(n._id), n);
-		}
-		for (const n of orphanAffected) {
-			affectedMap.set(String(n._id), n);
-		}
-		for (const c of orphanChanges) {
-			affectedMap.set(String(c.newTask._id), c.newTask);
-		}
-
-		affected = Array.from(affectedMap.values());
-	}
 
 	// Delete node
 	await ctx.db.delete(id);
@@ -992,63 +933,95 @@ export async function getOrCreateProject(ctx: QueryCtx | MutationCtx, userAuthId
 	else throw new InvalidStateError("Invalid context for getRootProject");
 }
 
-/**
- * Normalizes a node's parents array according to root rules:
- * - If empty, attaches to root
- * - If multiple parents, removes root if present
- * Also updates root.children when node attaches/detaches from root.
- * @returns Normalized parents array
- */
-async function normalizeTaskParents(
-	ctx: MutationCtx,
-	oldNode: DBNode,
-	newParents: string[],
-	nodeId: Id<"nodes">
-): Promise<string[]> {
-	// Root projects cannot have parents modified
-	if (oldNode.data.type === "project") {
-		return newParents;
+type NodeCache = Map<string, DBNode | null>;
+
+async function getNodeCached(ctx: QueryCtx | MutationCtx, id: string, cache?: NodeCache): Promise<DBNode | null> {
+	if (cache && cache.has(id)) {
+		return cache.get(id) ?? null;
 	}
-
-	const rootProject = await getOrCreateProject(ctx, oldNode.userAuthId);
-	const rootId = String(rootProject._id);
-	const wasAttachedToRoot = oldNode.parents?.includes(rootId);
-
-	let normalizedParents: string[];
-
-	// Normalize parents array
-	if (newParents.length === 0) {
-		// No parents - attach to root
-		normalizedParents = [rootId];
-	} else if (newParents.length > 1) {
-		// Multiple parents - remove root if present
-		normalizedParents = newParents.filter(id => id !== rootId);
-	} else {
-		// Single parent - keep as is
-		normalizedParents = [...newParents];
+	const node = await ctx.db.get(id as Id<"nodes">);
+	if (cache) {
+		cache.set(id, node ?? null);
 	}
+	return node ?? null;
+}
 
-	const isAttachedToRoot = normalizedParents.includes(rootId);
-
-	// Update root.children when attachment state changes
-	if (!wasAttachedToRoot && isAttachedToRoot) {
-		// Newly attached to root
-		const rootChildren = [...(rootProject.children ?? [])];
-		if (!rootChildren.includes(String(nodeId))) {
-			rootChildren.push(String(nodeId));
-			await ctx.db.patch(rootProject._id, {
-				children: rootChildren,
-			});
+function dedupePreserveOrder(ids: string[]): string[] {
+	const seen = new Set<string>();
+	const ordered: string[] = [];
+	for (const id of ids) {
+		if (!seen.has(id)) {
+			seen.add(id);
+			ordered.push(id);
 		}
-	} else if (wasAttachedToRoot && !isAttachedToRoot) {
-		// Detached from root
-		const rootChildren = (rootProject.children ?? []).filter(id => id !== String(nodeId));
-		await ctx.db.patch(rootProject._id, {
-			children: rootChildren,
-		});
+	}
+	return ordered;
+}
+
+async function resolveProjectAncestor(
+	ctx: QueryCtx | MutationCtx,
+	startId: string,
+	userAuthId: string,
+	cache?: NodeCache
+): Promise<DBNode> {
+	const visited = new Set<string>();
+	let currentId = String(startId);
+
+	while (true) {
+		if (visited.has(currentId)) {
+			throw new ConvexError({ type: "InvalidState", msg: "Cycle while resolving project ancestor", ctx: currentId });
+		}
+		visited.add(currentId);
+
+		const node = await getNodeCached(ctx, currentId, cache);
+		if (!node) {
+			throw new ConvexError({ type: "NotFoundError", msg: "Parent not found for project resolution", ctx: currentId });
+		}
+		if (node.userAuthId !== userAuthId) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Parent belongs to another user", ctx: currentId });
+		}
+		if (node.data.type === "project") {
+			return node;
+		}
+		const nextParent = node.parents?.[0];
+		if (!nextParent) {
+			throw new ConvexError({ type: "InvalidState", msg: "No project ancestor found in parent chain", ctx: currentId });
+		}
+		currentId = nextParent;
+	}
+}
+
+async function validateParentsAndProject(
+	ctx: QueryCtx | MutationCtx,
+	parents: string[],
+	userAuthId: string,
+	cache?: NodeCache
+): Promise<{ parents: string[]; project: DBNode }> {
+	const normalizedParents = dedupePreserveOrder(parents.map(String));
+	if (normalizedParents.length === 0) {
+		throw new ConvexError({ type: "InvalidState", msg: "Task must have at least one parent" });
 	}
 
-	return normalizedParents;
+	for (const parentId of normalizedParents) {
+		const parentNode = await getNodeCached(ctx, parentId, cache);
+		if (!parentNode) {
+			throw new ConvexError({ type: "NotFoundError", msg: "Parent not found", ctx: parentId });
+		}
+		if (parentNode.userAuthId !== userAuthId) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Parent belongs to another user", ctx: parentId });
+		}
+	}
+
+	const projectAncestor = await resolveProjectAncestor(ctx, normalizedParents[0], userAuthId, cache);
+
+	for (let i = 1; i < normalizedParents.length; i++) {
+		const parentProject = await resolveProjectAncestor(ctx, normalizedParents[i], userAuthId, cache);
+		if (String(parentProject._id) !== String(projectAncestor._id)) {
+			throw new ConvexError({ type: "InvalidState", msg: "All parents must share the same project ancestor", ctx: normalizedParents[i] });
+		}
+	}
+
+	return { parents: normalizedParents, project: projectAncestor };
 }
 
 async function propagateRelationshipChanges(
@@ -1065,28 +1038,52 @@ async function propagateRelationshipChanges(
 	const updates = calculateRelationshipUpdates(taskChanges);
 
 	const affectedNodes: DBNode[] = [];
+	const ancestorCache: NodeCache = new Map();
 
 	// Apply each update
 	for (const { taskId, operations } of updates) {
 		const relatedNode = await ctx.db.get(taskId as Id<"nodes">);
 		if (!relatedNode) throw new ConvexError({ type: "NotFoundError", msg: "Node not found", ctx: taskId });
+		const isProjectNode = relatedNode.data.type === "project";
 
 		// Apply operations using shared logic
 		const updated = applyRelationshipOperations(cleanNodeForClient(relatedNode), operations);
+		const previousParents = relatedNode.parents ?? [];
 
-		// Normalize parents for affected nodes
-		const normalizedParents = await normalizeTaskParents(
-			ctx,
-			relatedNode,
-			updated.parents ?? [],
-			taskId as Id<"nodes">
-		);
+		let normalizedParents = updated.parents ?? [];
+		let adoptedProjectId: string | null = null;
+		if (normalizedParents.length === 0) {
+			if (isProjectNode) {
+				normalizedParents = previousParents;
+			} else if (previousParents.length === 0) {
+				throw new ConvexError({ type: "InvalidState", msg: "Cannot orphan node with no project ancestor", ctx: taskId });
+			}
+			if (!isProjectNode) {
+				const ancestor = await resolveProjectAncestor(ctx, previousParents[0], relatedNode.userAuthId, ancestorCache);
+				normalizedParents = [String(ancestor._id)];
+				adoptedProjectId = String(ancestor._id);
+			}
+		} else {
+			({ parents: normalizedParents } = await validateParentsAndProject(ctx, normalizedParents, relatedNode.userAuthId, ancestorCache));
+		}
 
 		// Patch the DB with normalized parents
 		await ctx.db.patch(relatedNode._id, {
 			parents: normalizedParents,
 			children: updated.children,
 		});
+
+		// If we adopted the project ancestor, ensure the ancestor lists this node as a child
+		if (adoptedProjectId) {
+			const projectNode = await getNodeCached(ctx, adoptedProjectId, ancestorCache);
+			if (projectNode) {
+				const projectChildren = projectNode.children ?? [];
+				if (!projectChildren.includes(String(relatedNode._id))) {
+					await ctx.db.patch(projectNode._id, { children: [...projectChildren, String(relatedNode._id)] });
+					ancestorCache.set(adoptedProjectId, { ...projectNode, children: [...projectChildren, String(relatedNode._id)] });
+				}
+			}
+		}
 
 		const refreshed = await ctx.db.get(relatedNode._id);
 		if (refreshed) affectedNodes.push(refreshed);

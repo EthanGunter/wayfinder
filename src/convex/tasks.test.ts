@@ -114,7 +114,7 @@ describe("createTask", () => {
 			t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
 				createDetail: buildTaskCreate({ title: "Orphan Task" }),
 			})
-		).rejects.toThrow("Argument");
+		).rejects.toThrow();
 	});
 
 	test("creates task with explicit parent and establishes bidirectional link", async () => {
@@ -174,6 +174,25 @@ describe("createTask", () => {
 
 		assertBidirectionalRelationship(parent1!, childTask!);
 		assertBidirectionalRelationship(parent2!, childTask!);
+	});
+
+	test("rejects parents that belong to different projects", async () => {
+		const t = createTestCtx();
+
+		const projectA = await createProject(t, "user1", { title: "Project A" });
+		const projectB = await createProject(t, "user1", { title: "Project B" });
+
+		const p1 = await createTaskWithProject(t, "user1", { title: "P1", parents: [projectA!._id] });
+		const p2 = await createTaskWithProject(t, "user1", { title: "P2", parents: [projectB!._id] });
+
+		await expect(
+			t.withIdentity(mockAuth("user1")).mutation(api.tasks.createTask, {
+				createDetail: buildTaskCreate({
+					title: "Cross Project Child",
+					parents: [p1.created.id, p2.created.id],
+				}),
+			})
+		).rejects.toThrow();
 	});
 
 	test("throws NotAuthorizedError when not authenticated", async () => {
@@ -391,7 +410,7 @@ describe("updateTask", () => {
 		expect(refreshedChild!.parents).toEqual([project!._id]);
 	});
 
-	test("reattaches orphaned task to project when parent is removed", async () => {
+	test("rejects removing the last parent without replacement", async () => {
 		const t = createTestCtx();
 
 		const project = await createProject(t, "user1");
@@ -402,23 +421,32 @@ describe("updateTask", () => {
 			parents: [parent.created.id],
 		});
 
-		// Remove parent relationship (makes child orphaned)
-		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
-			id: child.created.id,
-			removeParents: [parent.created.id],
-		});
+		await expect(
+			t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
+				id: child.created.id,
+				removeParents: [parent.created.id],
+			})
+		).rejects.toThrow();
 
 		const refreshedChild = await getTaskById(t, child.created.id);
-		const refreshedProject = await getTaskById(t, project!._id);
-
-		// Child should be attached to project
-		expect(refreshedChild!.parents).toEqual([project!._id]);
-
-		// Project should have child in its children list
-		expect(refreshedProject!.children).toContain(child.created.id);
+		expect(refreshedChild!.parents).toEqual([parent.created.id]);
 	});
 
-	test("drops project parent when adding non-project parent", async () => {
+	test("rejects update that sets parents to empty array", async () => {
+		const t = createTestCtx();
+
+		const project = await createProject(t, "user1");
+		const child = await createTaskWithProject(t, "user1", { title: "Child", parents: [project!._id] });
+
+		await expect(
+			t.withIdentity(mockAuth("user1")).mutation(api.tasks.updateTask, {
+				id: child.created.id,
+				parents: [],
+			})
+		).rejects.toThrow();
+	});
+
+	test("keeps project parent when adding non-project parent", async () => {
 		const t = createTestCtx();
 
 		const project = await createProject(t, "user1");
@@ -435,7 +463,7 @@ describe("updateTask", () => {
 
 		const updated = await getTaskById(t, task.created.id);
 
-		expect(updated!.parents).toEqual([p1.created.id]);
+		expect(updated!.parents).toEqual([project!._id, p1.created.id]);
 	});
 
 	test("removes child's parent reference when parent removes child", async () => {
@@ -863,6 +891,24 @@ describe("deleteTask", () => {
 		expect(refreshedChild!.parents).toEqual([project!._id]);
 		const proj = await getTaskById(t, project!._id as Id<"nodes">);
 		expect(proj!.children).toContain(child.created.id);
+	});
+
+	test("reattaches grandchildren to project ancestor using first-parent chain when deleting middle node", async () => {
+		const t = createTestCtx();
+
+		const project = await createProject(t, "user1");
+
+		const grandParent = await createTaskWithProject(t, "user1", { title: "GP", parents: [project!._id] });
+		const parent = await createTaskWithProject(t, "user1", { title: "P", parents: [grandParent.created.id] });
+		const child = await createTaskWithProject(t, "user1", { title: "C", parents: [parent.created.id] });
+
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.deleteTask, { id: parent.created.id });
+
+		const refreshedChild = await getTaskById(t, child.created.id);
+		const refreshedProject = await getTaskById(t, project!._id);
+
+		expect(refreshedChild!.parents).toEqual([project!._id]);
+		expect(refreshedProject!.children).toContain(child.created.id);
 	});
 
 	test.todo("throws NotFoundError for non-existent task", async () => {

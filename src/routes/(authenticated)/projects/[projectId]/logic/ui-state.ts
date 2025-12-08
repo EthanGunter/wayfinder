@@ -1,6 +1,6 @@
 // ui/state.ts
 //#region STORES
-import { writable, type Writable } from 'svelte/store';
+import { writable } from 'svelte/store';
 import type { NodeEditorLayoutState } from '../TaskEditor.svelte';
 import type { AppNode } from '$domain/models/node';
 import { appData, viewNodes, viewEdges, getEdgeKey, recalculateHiddenByCollapse, shouldShowNode } from './shared-state';
@@ -94,7 +94,7 @@ export const drawerParams = writable<DrawerParams>(null);
 export const layoutPaused = writable<boolean>(true);
 
 export const editorLayoutState = writable<NodeEditorLayoutState>({
-	accordionValues: ['tasks'],
+	accordionValues: ['blockers', 'priority'],
 	showCompletedTasks: false,
 	showCompletedSiblings: false,
 });
@@ -106,7 +106,7 @@ export function resetUIState() {
 	drawerOpen.set(false);
 	drawerParams.set(null);
 	editorLayoutState.set({
-		accordionValues: ['tasks'],
+		accordionValues: ['blockers', 'priority'],
 		showCompletedTasks: false,
 		showCompletedSiblings: false,
 	});

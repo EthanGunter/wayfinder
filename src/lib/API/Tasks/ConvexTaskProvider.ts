@@ -17,7 +17,7 @@ type ServerNode<T extends AppData<number>> = IAppNode<T & { givenId?: string }, 
 
 function reconstructError(error: unknown): Err {
 	if (error instanceof ConvexError) {
-		const data = JSON.parse(error.data);
+		const data = /* JSON.parse */(error.data);
 		const messageForUser = data.msg;
 
 		switch (data.type) {

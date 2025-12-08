@@ -28,7 +28,7 @@
 	import { centerAndHighlightNode } from './logic/navigation';
 
 	export interface NodeEditorLayoutState {
-		accordionValues: ('tasks' | 'parent-order')[];
+		accordionValues: ('blockers' | 'priority')[];
 		showCompletedTasks: boolean;
 		showCompletedSiblings: boolean;
 	}
@@ -44,7 +44,7 @@
 	let {
 		task = $bindable(),
 		layoutState = $bindable({
-			accordionValues: ['tasks'],
+			accordionValues: ['blockers', 'priority'],
 			showCompletedTasks: false,
 			showCompletedSiblings: false
 		}),
@@ -308,7 +308,7 @@
 				}}
 				class="mt-auto"
 			>
-				<Accordion.Item value="tasks">
+				<Accordion.Item value="blockers">
 					<Accordion.Trigger
 						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 					>
@@ -340,7 +340,7 @@
 					</Accordion.Content>
 				</Accordion.Item>
 				{#if $siblingsStore.status === 'resolved'}
-					<Accordion.Item value="parent-order">
+					<Accordion.Item value="priority">
 						<Accordion.Trigger
 							class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 						>
