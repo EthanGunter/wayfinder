@@ -155,10 +155,7 @@ Update [`src/lib/API/Tasks/seam-interfaces.ts`](src/lib/API/Tasks/seam-interface
 1. DONE Data model changes (ProjectData, schema, user settings)
 2. DONE ProjectCard component
 3. DONE CreateProjectModal component
-4. Projects page layout with sections and sorting
-	layout = DONE
-	sorting = PENDING...
-5. -- Verify UI before implementing API logic --
-6. Backend metrics calculations and createProject mutation
-7. Enhanced getProjects with metrics
-8. API layer updates
+4. DONE Projects page layout with sections and sorting
+5. Backend metrics calculations and createProject mutation
+6. Enhanced getProjects with metrics
+7. API layer updates

@@ -49,6 +49,22 @@ export interface ITasksBase {
 	 * Gets all GraphNodes that are children of the project with the given ID
 	 */
 	getProjectSubtree(id: string): FetchableStore<IAppNode<TaskData>[]>;
+	/**
+	 * Creates a new project
+	 */
+	createProject(params: {
+		title: string;
+		content?: string;
+		status?: number;
+		dueDate?: Date;
+		uiPrefs?: {
+			showStreak?: boolean;
+			showVelocity?: boolean;
+			showMomentumScore?: boolean;
+			showNextAction?: boolean;
+			showMicroWins?: boolean;
+		};
+	}): Promise<Result<IAppNode<ProjectData>, NotAuthorizedError | InvalidStateError>>;
 
 	/**
 	 * Gets all GraphNodes that are on the "Today's List"

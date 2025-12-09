@@ -751,13 +751,103 @@ export const getRootTasks = query({
 	},
 });
 
+export const createProject = mutation({
+	args: {
+		title: v.string(),
+		content: v.optional(v.string()),
+		status: v.optional(v.number()),
+		dueDate: v.optional(v.number()),
+		uiPrefs: v.optional(v.object({
+			showStreak: v.optional(v.boolean()),
+			showVelocity: v.optional(v.boolean()),
+			showMomentumScore: v.optional(v.boolean()),
+			showNextAction: v.optional(v.boolean()),
+			showMicroWins: v.optional(v.boolean()),
+		})),
+	},
+	handler: async (ctx, args) => {
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
+		}
+		const userAuthId = identity.subject;
+
+		// Get user settings to apply defaults
+		const user = await ctx.db.query("users").withIndex("by_authId", (q) => q.eq("authId", userAuthId)).unique();
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const settingOverrides = user?.settingOverrides as Record<string, any> | undefined;
+
+		// Extract default project settings from user settings
+		const defaults = settingOverrides?.projects?.defaults || {};
+		const defaultUiPrefs = {
+			showStreak: defaults.defaultProjectShowStreak ?? false,
+			showVelocity: defaults.defaultProjectShowVelocity ?? false,
+			showMomentumScore: defaults.defaultProjectShowMomentumScore ?? true,
+			showNextAction: defaults.defaultProjectShowNextAction ?? true,
+			showMicroWins: defaults.defaultProjectShowMicroWins ?? false,
+		};
+
+		// Merge provided uiPrefs with defaults
+		const uiPrefs = args.uiPrefs ? { ...defaultUiPrefs, ...args.uiPrefs } : defaultUiPrefs;
+
+		// Get root project to attach new project to
+		const root = await getOrCreateProject(ctx, userAuthId);
+
+		const now = Date.now();
+		const projectId = await ctx.db.insert("nodes", {
+			userAuthId,
+			parents: [root._id],
+			children: [],
+			lastEdit: now,
+			created: now,
+			data: {
+				type: "project" as const,
+				title: args.title,
+				content: args.content,
+				status: args.status ?? 0, // active by default
+				dueDate: args.dueDate,
+				uiPrefs,
+			},
+		});
+
+		// Update root's children to include new project
+		const rootChildren = root.children ?? [];
+		await ctx.db.patch(root._id, {
+			children: [...rootChildren, projectId],
+			lastEdit: now,
+		});
+
+		const created = await ctx.db.get(projectId);
+		if (!created) {
+			throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created project", ctx: projectId });
+		}
+
+		return cleanNodeForClient(created);
+	},
+});
+
 export const getProjects = query({
 	args: {},
 	handler: async (ctx) => {
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity) return []; // TODO:UX/DX Log and error
 		const projects = await ctx.db.query("nodes").withIndex("by_user_type", (q) => q.eq("userAuthId", identity.subject).eq("data.type", "project")).collect();
-		return projects.map(cleanNodeForClient);
+
+		// Filter out root projects (empty title)
+		const visibleProjects = projects.filter(p => p.data.title !== "");
+
+		// Calculate metrics for each project
+		const projectsWithMetrics = await Promise.all(
+			visibleProjects.map(async (project) => {
+				const metrics = await calculateProjectMetrics(ctx, project._id);
+				return {
+					...cleanNodeForClient(project),
+					metrics,
+				};
+			})
+		);
+
+		return projectsWithMetrics;
 	},
 });
 
@@ -882,6 +972,363 @@ export const searchTasks = query({
 	},
 });
 
+
+//#endregion
+
+
+//#region Project Metrics
+
+interface Activity {
+	timestamp: number;
+	type: "completion" | "creation" | "edit";
+}
+
+interface ProjectMetrics {
+	progress: {
+		total: number;
+		completed: number;
+		percentage: number;
+	};
+	streak?: {
+		days: number;
+		lastActive?: string;
+	};
+	velocity?: number; // tasks per week
+	momentumScore?: number; // 0-100
+	nextAction?: {
+		id: string;
+		title: string;
+	};
+	microWins?: number; // tasks completed in last 7 days
+	smartTimestamp?: string;
+}
+
+/**
+ * Get meaningful activity for a project (task completions, creations, significant edits)
+ */
+async function getProjectActivity(ctx: QueryCtx, projectId: Id<"nodes">): Promise<Activity[]> {
+	const activities: Activity[] = [];
+
+	// Get project to find user
+	const project = await ctx.db.get(projectId);
+	if (!project) return activities;
+
+	// Get all user nodes to build subtree
+	const allNodes = await ctx.db.query("nodes").withIndex("by_user", (q) => q.eq("userAuthId", project.userAuthId)).collect();
+	const nodeMap = new Map<string, DBNode>(allNodes.map((n) => [n._id, n]));
+
+	// Traverse subtree to collect all tasks
+	const visited = new Set<string>();
+	const queue: string[] = [projectId];
+
+	while (queue.length > 0) {
+		const currentId = queue.shift()!;
+		if (visited.has(currentId)) continue;
+		visited.add(currentId);
+
+		const node = nodeMap.get(currentId);
+		if (!node) continue;
+
+		// Only track tasks, not projects
+		if (node.data.type === "task") {
+			// Track creation
+			if (node.created) {
+				activities.push({
+					timestamp: node.created,
+					type: "creation",
+				});
+			}
+
+			// Track completion (if status changed to complete, use lastEdit as proxy)
+			if (node.data.status === TaskStatus.complete && node.lastEdit) {
+				activities.push({
+					timestamp: node.lastEdit,
+					type: "completion",
+				});
+			}
+
+			// Track significant edits (content changes, title changes)
+			// Use lastEdit as proxy for meaningful changes
+			if (node.lastEdit && node.lastEdit !== node.created) {
+				activities.push({
+					timestamp: node.lastEdit,
+					type: "edit",
+				});
+			}
+		}
+
+		// Continue traversal
+		for (const childId of node.children ?? []) {
+			if (!visited.has(childId)) queue.push(childId);
+		}
+	}
+
+	// Sort by timestamp descending
+	activities.sort((a, b) => b.timestamp - a.timestamp);
+
+	return activities;
+}
+
+/**
+ * Calculate streak - consecutive days with activity
+ */
+function calculateStreak(activities: Activity[]): { days: number; lastActive?: string } {
+	if (activities.length === 0) {
+		return { days: 0, lastActive: "Never" };
+	}
+
+	const now = Date.now();
+	const oneDay = 24 * 60 * 60 * 1000;
+
+	// Get unique days with activity
+	const activityDays = new Set<number>();
+	for (const activity of activities) {
+		const day = Math.floor(activity.timestamp / oneDay);
+		activityDays.add(day);
+	}
+
+	const sortedDays = Array.from(activityDays).sort((a, b) => b - a);
+	const today = Math.floor(now / oneDay);
+
+	// Check consecutive days starting from today or most recent
+	let streak = 0;
+	let expectedDay = sortedDays[0]; // Most recent day
+
+	for (const day of sortedDays) {
+		if (day === expectedDay) {
+			streak++;
+			expectedDay--;
+		} else {
+			break;
+		}
+	}
+
+	// If most recent activity is not today, calculate days ago
+	const lastActiveDay = sortedDays[0];
+	const daysAgo = today - lastActiveDay;
+
+	if (daysAgo > 0) {
+		return {
+			days: streak,
+			lastActive: daysAgo === 1 ? "1 day ago" : `${daysAgo} days ago`,
+		};
+	}
+
+	return { days: streak };
+}
+
+/**
+ * Calculate velocity - tasks completed per week over rolling 4-week window
+ */
+function calculateVelocity(activities: Activity[]): number {
+	const completions = activities.filter(a => a.type === "completion");
+	if (completions.length === 0) return 0;
+
+	const now = Date.now();
+	const fourWeeks = 4 * 7 * 24 * 60 * 60 * 1000;
+	const cutoff = now - fourWeeks;
+
+	// Count completions in last 4 weeks
+	const recentCompletions = completions.filter(c => c.timestamp >= cutoff);
+
+	// Calculate tasks per week
+	return (recentCompletions.length / 4);
+}
+
+/**
+ * Calculate momentum score - composite 0-100 score weighing recency, frequency, consistency
+ */
+function calculateMomentumScore(activities: Activity[]): number {
+	if (activities.length === 0) return 0;
+
+	const now = Date.now();
+	const oneDay = 24 * 60 * 60 * 1000;
+	const oneWeek = 7 * 24 * 60 * 60 * 1000;
+	const twoWeeks = 2 * oneWeek;
+	const fourWeeks = 4 * oneWeek;
+
+	// Recency score (0-40): How recent is the last activity?
+	const lastActivity = activities[0];
+	const daysSinceLastActivity = (now - lastActivity.timestamp) / oneDay;
+	const recencyScore = Math.max(0, 40 * (1 - daysSinceLastActivity / 7)); // Decay over 7 days
+
+	// Frequency score (0-30): How many activities in last 2 weeks?
+	const recentActivities = activities.filter(a => a.timestamp >= now - twoWeeks);
+	const frequencyScore = Math.min(30, recentActivities.length * 2); // 2 points per activity, max 30
+
+	// Consistency score (0-30): How consistent is activity over last 4 weeks?
+	const fourWeekActivities = activities.filter(a => a.timestamp >= now - fourWeeks);
+	const weeks = 4;
+	const activitiesPerWeek = fourWeekActivities.length / weeks;
+	const consistencyScore = Math.min(30, activitiesPerWeek * 5); // 5 points per activity per week, max 30
+
+	return Math.round(recencyScore + frequencyScore + consistencyScore);
+}
+
+/**
+ * Calculate progress - total tasks, completed tasks, percentage
+ */
+async function calculateProgress(ctx: QueryCtx, projectId: Id<"nodes">): Promise<{ total: number; completed: number; percentage: number }> {
+	const project = await ctx.db.get(projectId);
+	if (!project) return { total: 0, completed: 0, percentage: 0 };
+
+	const allUserNodes = await ctx.db.query("nodes").withIndex("by_user", (q) => q.eq("userAuthId", project.userAuthId)).collect();
+	const nodeMap = new Map<string, DBNode>(allUserNodes.map((n) => [n._id, n]));
+
+	// Traverse subtree
+	const visited = new Set<string>();
+	const queue: string[] = [projectId];
+	const tasks: DBNode[] = [];
+
+	while (queue.length > 0) {
+		const currentId = queue.shift()!;
+		if (visited.has(currentId)) continue;
+		visited.add(currentId);
+
+		const node = nodeMap.get(currentId);
+		if (!node) continue;
+
+		if (node.data.type === "task") {
+			tasks.push(node);
+		}
+
+		for (const childId of node.children ?? []) {
+			if (!visited.has(childId)) queue.push(childId);
+		}
+	}
+
+	const total = tasks.length;
+	const completed = tasks.filter(t => t.data.status === TaskStatus.complete).length;
+	const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+	return { total, completed, percentage };
+}
+
+/**
+ * Get next action - first incomplete task, depth-first
+ */
+async function getNextAction(ctx: QueryCtx, projectId: Id<"nodes">): Promise<{ id: string; title: string } | undefined> {
+	const project = await ctx.db.get(projectId);
+	if (!project) return undefined;
+
+	const allUserNodes = await ctx.db.query("nodes").withIndex("by_user", (q) => q.eq("userAuthId", project.userAuthId)).collect();
+	const nodeMap = new Map<string, DBNode>(allUserNodes.map((n) => [n._id, n]));
+
+	// Depth-first search for first incomplete task
+	const visited = new Set<string>();
+
+	function findFirstIncomplete(nodeId: string): DBNode | null {
+		if (visited.has(nodeId)) return null;
+		visited.add(nodeId);
+
+		const node = nodeMap.get(nodeId);
+		if (!node) return null;
+
+		// If it's a task and incomplete, return it
+		if (node.data.type === "task" && node.data.status !== TaskStatus.complete) {
+			return node;
+		}
+
+		// Otherwise, check children depth-first
+		for (const childId of node.children ?? []) {
+			const result = findFirstIncomplete(childId);
+			if (result) return result;
+		}
+
+		return null;
+	}
+
+	const next = findFirstIncomplete(projectId);
+	if (next) {
+		return {
+			id: next._id,
+			title: next.data.title,
+		};
+	}
+
+	return undefined;
+}
+
+/**
+ * Get micro wins - count tasks completed in last 7 days
+ */
+async function getMicroWins(ctx: QueryCtx, projectId: Id<"nodes">): Promise<number> {
+	const activities = await getProjectActivity(ctx, projectId);
+	const now = Date.now();
+	const sevenDays = 7 * 24 * 60 * 60 * 1000;
+	const cutoff = now - sevenDays;
+
+	const recentCompletions = activities.filter(a => a.type === "completion" && a.timestamp >= cutoff);
+	return recentCompletions.length;
+}
+
+/**
+ * Get smart timestamp - "2h ago - completed 2 tasks" format
+ */
+async function getSmartTimestamp(ctx: QueryCtx, projectId: Id<"nodes">): Promise<string> {
+	const project = await ctx.db.get(projectId);
+	if (!project) return "";
+
+	const lastEdit = project.lastEdit;
+	if (!lastEdit) return "";
+
+	const now = Date.now();
+	const diff = now - lastEdit;
+	const oneDay = 24 * 60 * 60 * 1000;
+
+	const minutes = Math.floor(diff / (60 * 1000));
+	const hours = Math.floor(diff / (60 * 60 * 1000));
+	const days = Math.floor(diff / oneDay);
+
+	let timeAgo: string;
+	if (minutes < 60) {
+		timeAgo = minutes <= 1 ? "just now" : `${minutes}m ago`;
+	} else if (hours < 24) {
+		timeAgo = hours === 1 ? "1h ago" : `${hours}h ago`;
+	} else {
+		timeAgo = days === 1 ? "1 day ago" : `${days} days ago`;
+	}
+
+	// Get recent completions for context
+	const activities = await getProjectActivity(ctx, projectId);
+	const recentCompletions = activities.filter(a => a.type === "completion" && a.timestamp >= now - oneDay);
+
+	if (recentCompletions.length > 0) {
+		return `${timeAgo} - completed ${recentCompletions.length} ${recentCompletions.length === 1 ? "task" : "tasks"}`;
+	}
+
+	return timeAgo;
+}
+
+/**
+ * Calculate all metrics for a project
+ */
+async function calculateProjectMetrics(ctx: QueryCtx, projectId: Id<"nodes">): Promise<ProjectMetrics> {
+	const activities = await getProjectActivity(ctx, projectId);
+	const progress = await calculateProgress(ctx, projectId);
+	const streak = calculateStreak(activities);
+	const velocity = calculateVelocity(activities);
+	const momentumScore = calculateMomentumScore(activities);
+	const nextAction = await getNextAction(ctx, projectId);
+	const microWins = await getMicroWins(ctx, projectId);
+	const smartTimestamp = await getSmartTimestamp(ctx, projectId);
+
+	return {
+		progress,
+		streak,
+		velocity,
+		momentumScore,
+		nextAction,
+		microWins,
+		smartTimestamp,
+	};
+}
+
+// TODO: Milestone support - allow users to mark tasks as milestones
+// and show milestone progress (e.g., "2/5 milestones completed")
+
+// TODO: Time estimate tracking - per-task time estimates that aggregate
+// up to project level for "estimated time remaining" calculations
 
 //#endregion
 

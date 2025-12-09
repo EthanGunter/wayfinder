@@ -7,20 +7,21 @@
 	import { goto } from '$app/navigation';
 
 	interface Props {
-		project: IAppNode<ProjectData>;
-		// TODO: Replace with actual metrics when backend is implemented
-		metrics?: {
-			progress?: { completed: number; total: number; percentage: number };
-			momentumScore?: number; // 0-100
-			streak?: string; // "🔥 5 days active" or "Last worked on 3 days ago"
-			velocity?: string; // "→ 3 tasks/week"
-			nextAction?: string; // "Next: [task title]"
-			microWins?: number; // tasks completed in last 7 days
-			smartTimestamp?: string; // "2h ago - completed 2 tasks"
+		project: IAppNode<ProjectData> & {
+			metrics?: {
+				progress?: { completed: number; total: number; percentage: number };
+				momentumScore?: number; // 0-100
+				streak?: { days: number; lastActive?: string };
+				velocity?: number; // tasks per week
+				nextAction?: { id: string; title: string };
+				microWins?: number; // tasks completed in last 7 days
+				smartTimestamp?: string; // "2h ago - completed 2 tasks"
+			};
 		};
 	}
 
-	let { project, metrics = {} }: Props = $props();
+	let { project }: Props = $props();
+	const metrics = project.metrics ?? {};
 
 	const uiPrefs = project.data.uiPrefs ?? {};
 	const progress = metrics.progress ?? { completed: 0, total: 0, percentage: 0 };
@@ -76,14 +77,20 @@
 			{#if uiPrefs.showStreak && metrics.streak}
 				<div class="flex items-center gap-1 text-muted-foreground">
 					<Icon icon="lucide:flame" class="h-3.5 w-3.5" />
-					<span>{metrics.streak}</span>
+					<span>
+						{#if metrics.streak.lastActive}
+							{metrics.streak.days > 0 ? `🔥 ${metrics.streak.days} days active` : metrics.streak.lastActive}
+						{:else}
+							🔥 {metrics.streak.days} days active
+						{/if}
+					</span>
 				</div>
 			{/if}
 
-			{#if uiPrefs.showVelocity && metrics.velocity}
+			{#if uiPrefs.showVelocity && metrics.velocity !== undefined}
 				<div class="flex items-center gap-1 text-muted-foreground">
 					<Icon icon="lucide:trending-up" class="h-3.5 w-3.5" />
-					<span>{metrics.velocity}</span>
+					<span>→ {metrics.velocity.toFixed(1)} tasks/week</span>
 				</div>
 			{/if}
 
@@ -111,7 +118,7 @@
 		{#if uiPrefs.showNextAction && metrics.nextAction}
 			<div class="rounded-md border border-muted bg-muted/30 p-2 text-xs">
 				<span class="text-muted-foreground">Next: </span>
-				<span class="truncate">{metrics.nextAction}</span>
+				<span class="truncate">{metrics.nextAction.title}</span>
 			</div>
 		{/if}
 	</Card.Content>

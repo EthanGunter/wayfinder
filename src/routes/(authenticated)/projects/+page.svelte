@@ -53,11 +53,28 @@
 				sorted.sort((a, b) => a.created.getTime() - b.created.getTime());
 				break;
 			case 'momentum':
+				sorted.sort((a, b) => {
+					const aMetrics = (a as any).metrics;
+					const bMetrics = (b as any).metrics;
+					const aScore = aMetrics?.momentumScore ?? 0;
+					const bScore = bMetrics?.momentumScore ?? 0;
+					return bScore - aScore; // Higher momentum first
+				});
+				break;
 			case 'velocity':
+				sorted.sort((a, b) => {
+					const aMetrics = (a as any).metrics;
+					const bMetrics = (b as any).metrics;
+					const aVel = aMetrics?.velocity ?? 0;
+					const bVel = bMetrics?.velocity ?? 0;
+					return bVel - aVel; // Higher velocity first
+				});
+				break;
 			case 'activity':
-				// TODO: Implement when metrics are available
-				// For now, sort by lastEdit (most recent first)
-				sorted.sort((a, b) => b.lastEdit.getTime() - a.lastEdit.getTime());
+				sorted.sort((a, b) => {
+					// Sort by lastEdit as proxy for activity (most recent first)
+					return b.lastEdit.getTime() - a.lastEdit.getTime();
+				});
 				break;
 		}
 		return sorted;
@@ -84,10 +101,13 @@
 			showMicroWins?: boolean;
 		};
 	}) {
-		// TODO: Implement createProject mutation when backend is ready
-		console.log('Creating project:', projectData);
-		// Placeholder - will be replaced with actual API call
-		// await tasksAPI.createProject(projectData);
+		const [result, error] = await tasksAPI.createProject(projectData);
+		if (error) {
+			console.error('Failed to create project:', error);
+			return;
+		}
+		// Project will be automatically added to the list via the reactive query
+		createModalOpen = false;
 	}
 </script>
 

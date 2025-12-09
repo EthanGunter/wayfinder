@@ -319,7 +319,17 @@ export const api: ITasksRemote = {
 			convexApi.tasks.getProjects,
 			{},
 			(result) => {
-				set({ status: "resolved", value: result.map(convertFromServerNode<IAppNode<ProjectData>>) });
+				// Backend returns projects with metrics attached
+				// Preserve metrics by mapping and attaching them
+				const projects = result.map((item) => {
+					const node = convertFromServerNode<IAppNode<ProjectData>>(item);
+					// Attach metrics if present (backend adds them at top level)
+					if ('metrics' in item) {
+						return { ...node, metrics: (item as any).metrics };
+					}
+					return node;
+				});
+				set({ status: "resolved", value: projects });
 			},
 			(error: Error) => {
 				set({ status: "error", error: reconstructError(error) });
@@ -329,6 +339,21 @@ export const api: ITasksRemote = {
 			unsubscribe();
 		};
 	}),
+	createProject: async (params) => {
+		try {
+			const res = await client.mutation(convexApi.tasks.createProject, {
+				title: params.title,
+				content: params.content,
+				status: params.status,
+				dueDate: params.dueDate?.getTime(),
+				uiPrefs: params.uiPrefs,
+			});
+			return ok(convertFromServerNode<IAppNode<ProjectData>>(res));
+		} catch (error) {
+			console.error(error);
+			return err(reconstructError(error));
+		}
+	},
 	getProjectSubtree: (id) => createFetchable((set) => {
 		set({ status: "loading" });
 		const unsubscribe = client.onUpdate(
@@ -429,6 +454,7 @@ export const localApi: ITasksLocal = {
 	getRootTasks: () => api.getRootTasks(),
 	getProjects: () => api.getProjects(),
 	getProjectSubtree: (id: string) => api.getProjectSubtree(id),
+	createProject: async (params) => api.createProject(params),
 	getTodaysTasks: () => api.getTodaysTasks(),
 	getPrioritizedTasks: (limit: number) => api.getPrioritizedTasks(limit),
 
