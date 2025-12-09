@@ -171,6 +171,7 @@
 		<span>Loading project…</span>
 	</div>
 {:else if $projectStore.status === 'resolved' && $projectStore.value.length === 0}
+	<!-- TODO:bug this makes the app literally unusable -->
 	<div class="flex min-h-0 flex-1 items-center justify-center gap-2 text-muted-foreground">
 		<Icon icon="lucide:folder-open" class="h-5 w-5" />
 		<span>This project has no tasks yet.</span>
@@ -204,8 +205,7 @@
 							<Background bgColor="var(--background)" />
 						</SvelteFlow>
 						<Button
-							variant="outline"
-							class="absolute right-6 bottom-6 h-9 w-10 rounded-full border-1 border-border bg-white"
+							class="fixed right-6 bottom-6 h-12 w-12 rounded-full shadow-lg"
 							onclick={() => {
 								drawerParams.set(null);
 								drawerOpen.set(true);

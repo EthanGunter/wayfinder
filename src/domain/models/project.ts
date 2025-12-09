@@ -13,6 +13,14 @@ export interface ProjectData<T = Date> {
     content?: string;
     status: ProjectStatus;
     dueDate?: T;
+    uiPrefs?: {
+        // Engagement feature flags
+        showStreak?: boolean;
+        showVelocity?: boolean;
+        showMomentumScore?: boolean;
+        showNextAction?: boolean;
+        showMicroWins?: boolean;
+    };
 }
 
 export enum ProjectStatus {
