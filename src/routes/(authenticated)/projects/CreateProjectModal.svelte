@@ -49,10 +49,18 @@
 		showMicroWins = get(settings.projects.defaults.defaultProjectShowMicroWins);
 	}
 
-	function handleClose() {
+	function close(){
 		resetForm();
 		open = false;
 		onClose?.();
+	}
+
+	function handleClose(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+		close();
 	}
 
 	async function handleSubmit() {
@@ -69,12 +77,12 @@
 					showVelocity: showVelocity || undefined,
 					showMomentumScore: showMomentumScore || undefined,
 					showNextAction: showNextAction || undefined,
-					showMicroWins: showMicroWins || undefined,
-				},
+					showMicroWins: showMicroWins || undefined
+				}
 			};
 
 			await onCreate?.(projectData);
-			handleClose();
+			close();
 		} catch (error) {
 			console.error('Failed to create project:', error);
 		} finally {
@@ -91,7 +99,7 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content showCloseButton onEscapeKey={handleClose} class="max-w-md">
+	<Dialog.Content showCloseButton onkeydown={handleClose} class="max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Create New Project</Dialog.Title>
 			<Dialog.Description>Add a new project to organize your tasks.</Dialog.Description>
@@ -115,18 +123,14 @@
 					id="project-content"
 					bind:value={content}
 					placeholder="Optional markdown description"
-					class="border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+					class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
 					rows="3"
 				></textarea>
 			</div>
 
 			<div class="space-y-2">
 				<label for="project-due-date" class="text-sm font-medium">Due Date</label>
-				<Input
-					id="project-due-date"
-					type="date"
-					bind:value={dueDate}
-				/>
+				<Input id="project-due-date" type="date" bind:value={dueDate} />
 			</div>
 
 			<div class="space-y-3 border-t pt-4">
@@ -157,13 +161,10 @@
 		</div>
 
 		<Dialog.Footer>
-			<Button variant="outline" onclick={handleClose} disabled={isSubmitting}>
-				Cancel
-			</Button>
+			<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
 			<Button onclick={handleSubmit} disabled={isSubmitting || !title.trim()}>
 				{isSubmitting ? 'Creating...' : 'Create Project'}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
-

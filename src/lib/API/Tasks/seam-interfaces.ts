@@ -35,11 +35,6 @@ export interface ITasksBase {
 	 * @note keyed by parent
 	 */
 	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<AppNode, AppNode[]>>;
-	/**
-	 * Gets all GraphNodes that nothing depends on
-	 * @deprecated use getProjects instead
-	 */
-	getRootTasks(): FetchableStore<Task[]>;
 
 	/**
 	 * Gets all GraphNodes that are projects
@@ -73,9 +68,9 @@ export interface ITasksBase {
 	/**
 	 * Gets the top N tasks based on priority
 	 */
-	getPrioritizedTasks(limit: number /* , weights: WeightParams = {
-      deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
-  } */): QueryableStore<{ limit: number }, Task[]>;
+	getPrioritizedTasks(projectId: string, limit: number /* , weights: WeightParams = {
+    deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
+} */): Promise<Task[]>;
 
 	searchTasks(searchTerm: string): Promise<Task[]>;
 

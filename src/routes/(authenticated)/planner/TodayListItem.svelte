@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { isTaskCompleted, TaskStatus, type Task, type TaskData } from '$domain/models/task';
 	import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 	import { Button } from '$lib/components/ui/button';
@@ -8,10 +7,12 @@
 
 	const {
 		task = $bindable(),
-		onTaskChange
+		onTaskChange,
+		onRemoveFromToday
 	}: {
 		task: Task;
 		onTaskChange?: (original: Task, changes: Partial<TaskData>) => void;
+		onRemoveFromToday?: (task: Task) => void;
 	} = $props();
 
 	// Create a reactive variable that's properly bound to the checkbox
@@ -21,7 +22,6 @@
 	$effect(() => {
 		const newStatus = checked ? TaskStatus.complete : TaskStatus.incomplete;
 		if (task.data.status !== newStatus) {
-			// task.data.status = newStatus; <- I don't think this does anything
 			onTaskChange?.(task, { status: newStatus });
 		}
 	});
@@ -31,8 +31,8 @@
 		checked = isTaskCompleted(task);
 	});
 
-	function navigateToTask() {
-		goto(`/graph/?select=${task.id}`);
+	function handleRemoveFromToday() {
+		onRemoveFromToday?.(task);
 	}
 
 	let itemEl: HTMLElement | undefined = $state();
@@ -66,8 +66,9 @@
 		{task.data.title}
 	</span>
 
-	<!-- Link to task editor -->
-	<Button class="rounded-none bg-gray-800" onclick={navigateToTask} aria-label="Edit task">
-		<Icon icon="majesticons:open" />
+	<!-- Remove from today button -->
+	<Button class="rounded-none bg-gray-800" onclick={handleRemoveFromToday} aria-label="Remove from today's list">
+		<Icon icon="lucide:x" />
 	</Button>
 </li>
+

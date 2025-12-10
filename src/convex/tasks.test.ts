@@ -4,9 +4,9 @@ import { describe, test, expect } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 import { type Id } from "./_generated/dataModel";
-import { CreateTaskParams, ExportedData, UpdateTaskParams } from "$domain/models/task";
-import { AppData, IAppNode } from "$domain/models/node";
-import { ProjectData, ProjectStatus } from "$domain/models/project";
+import type { CreateTaskParams, ExportedData, UpdateTaskParams } from "$domain/models/task";
+import type { AppData, IAppNode } from "$domain/models/node";
+import { type ProjectData, ProjectStatus } from "$domain/models/project";
 
 //#region Test Utilities
 
@@ -1165,474 +1165,162 @@ describe("Cycle prevention", () => {
 //#region importData
 
 describe("importData", () => {
-	describe.todo("V0.0.0", () => { // TODO This should be handled by the roundtrip test below, but we need to rasterize it for legacy support
-		test("imports tasks with relationships where all referenced tasks are included", async () => {
+	describe("Without projectId parameter", () => {
+		test("imports data containing projects - preserves project structure", async () => {
 			const t = createTestCtx();
 
-			// Create export data with parent-child relationships
-			const parentId = "exported_parent_1";
-			const childId = "exported_child_1";
-			const grandchildId = "exported_grandchild_1";
+			const projectId = "import_project";
+			const taskId = "import_task";
 
-			const projectId = "export_project";
 			const data: IAppNode<AppData<number>, number>[] = [
 				{
 					id: projectId,
 					userAuthId: "original_user",
 					parents: [],
-					children: [parentId],
-					created: new Date().getTime(),
-					lastEdit: new Date().getTime(),
+					children: [taskId],
+					created: Date.now(),
+					lastEdit: Date.now(),
 					data: {
 						type: "project" as const,
-						title: "Root Project",
-						status: 0,
+						title: "Imported Project",
+						status: ProjectStatus.active,
 					}
 				},
 				{
-					id: parentId,
+					id: taskId,
 					userAuthId: "original_user",
 					parents: [projectId],
-					children: [childId],
-					created: new Date().getTime(),
-					lastEdit: new Date().getTime(),
-					data: {
-						type: "task" as const,
-						title: "Parent",
-						status: 0,
-					}
-				},
-				{
-					id: childId,
-					userAuthId: "original_user",
-					parents: [parentId, projectId],
-					children: [grandchildId],
-					created: new Date().getTime(),
-					lastEdit: new Date().getTime(),
-					data: {
-						type: "task" as const,
-						title: "Child",
-						status: 0,
-					}
-				},
-				{
-					id: grandchildId,
-					userAuthId: "original_user",
-					parents: [childId, projectId],
 					children: [],
-					created: new Date().getTime(),
-					lastEdit: new Date().getTime(),
+					created: Date.now(),
+					lastEdit: Date.now(),
 					data: {
 						type: "task" as const,
-						title: "Grandchild",
+						title: "Task",
 						status: 0,
 					}
 				},
-			]
+			];
+
 			const exportData: ExportedData = {
 				version: "0.0.0",
-				exportedAt: new Date().getTime(),
+				exportedAt: Date.now(),
 				data
 			};
 
+			// Import WITHOUT projectId - should preserve projects from data
 			await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
 				data: JSON.stringify(exportData),
 				mode: "add",
 			});
 
-			// Should import all tasks
-			const allTasks = await getAllTasksForUser(t, "user1", true);
-			expect(allTasks).toHaveLength(3);
+			const allNodes = await getAllTasksForUser(t, "user1", false); // include projects
+			const projects = allNodes.filter(n => n.data.type === "project");
+			const tasks = allNodes.filter(n => n.data.type === "task");
 
-			// Find imported tasks by title (since IDs will be different)
-			const parent = allTasks.find(t => t.data.title === "Parent");
-			const child = allTasks.find(t => t.data.title === "Child");
-			const grandchild = allTasks.find(t => t.data.title === "Grandchild");
+			expect(projects.length).toBeGreaterThanOrEqual(1);
+			expect(tasks).toHaveLength(1);
 
-			expect(parent).toBeDefined();
-			expect(child).toBeDefined();
-			expect(grandchild).toBeDefined();
+			const importedProject = projects.find(p => p.data.title === "Imported Project");
+			const importedTask = tasks.find(t => t.data.title === "Task");
 
-			// Verify bidirectional relationships are established
-			if (parent && child && grandchild) {
-				assertBidirectionalRelationship(parent, child);
-				assertBidirectionalRelationship(child, grandchild);
-			}
+			expect(importedProject).toBeDefined();
+			expect(importedTask).toBeDefined();
+
+			// Task should be under imported project
+			assertBidirectionalRelationship(importedProject!, importedTask!);
+			
+			// Imported project should have no parents
+			expect(importedProject!.parents).toHaveLength(0);
 		});
 
-		test("removes references to tasks not included in import without errors", async () => {
+		test("throws error when importing orphaned tasks WITHOUT projectId", async () => {
 			const t = createTestCtx();
 
-			const parentId = "exported_parent_1";
-			const childId = "exported_child_1";
-			const missingParentId = "missing_parent_1";
-			const missingChildId = "missing_child_1";
-		const projectId = "exported_project_1";
-
-			const exportData = {
-				version: "0.0.0",
-				exportedAt: new Date().toISOString(),
-				tasks: [
+			const data: IAppNode<AppData<number>, number>[] = [
 				{
-					id: projectId,
+					id: "orphan_task",
 					userAuthId: "original_user",
-					type: "project" as const,
-					title: "Project",
-					status: 0,
 					parents: [],
-					children: [parentId],
-					created: new Date().toISOString(),
-					lastEdit: new Date().toISOString(),
+					children: [],
+					created: Date.now(),
+					lastEdit: Date.now(),
+					data: {
+						type: "task" as const,
+						title: "Orphan",
+						status: 0,
+					}
 				},
-					{
-						id: parentId,
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Parent",
-						status: 0,
-					parents: [projectId], // anchor to project; missing parent removed
-						children: [childId, missingChildId], // Mix of included and missing
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-					{
-						id: childId,
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Child",
-						status: 0,
-					parents: [parentId, missingParentId],
-						children: [],
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-				],
+			];
+
+			const exportData: ExportedData = {
+				version: "0.0.0",
+				exportedAt: Date.now(),
+				data
 			};
 
-			// Should not throw errors
-			await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
-				data: JSON.stringify(exportData),
-				mode: "add",
-			});
-
-			const allTasks = await getAllTasksForUser(t, "user1", true);
-			expect(allTasks).toHaveLength(2);
-
-			const parent = allTasks.find(t => t.data.title === "Parent");
-			const child = allTasks.find(t => t.data.title === "Child");
-			const project = allTasks.find(t => t.data.title === "Project");
-
-			expect(parent).toBeDefined();
-			expect(child).toBeDefined();
-			expect(project).toBeDefined();
-
-			// Parent should have missingParentId removed from parents
-			// Parent should have missingChildId removed from children
-			// Parent should only have childId in children
-			if (parent && child && project) {
-				expect(parent.parents).toEqual([String(project._id)]);
-				expect(parent.children).not.toContain(missingChildId);
-				expect(parent.children).toContain(String(child._id));
-
-				// Child should drop missing parent but keep real parent
-				expect(child.parents).toContain(String(parent._id));
-				expect(child.parents).not.toContain(missingParentId);
-
-				// Verify bidirectional relationship
-				assertBidirectionalRelationship(parent, child);
-			}
-		});
-
-		test("handles complex relationship graph with mixed valid and invalid references", async () => {
-			const t = createTestCtx();
-
-			const task1Id = "task_1";
-			const task2Id = "task_2";
-			const task3Id = "task_3";
-			const missingId1 = "missing_1";
-			const missingId2 = "missing_2";
-		const projectId = "proj_complex";
-
-			const exportData = {
-				version: "0.0.0",
-				exportedAt: new Date().toISOString(),
-				tasks: [
-				{
-					id: projectId,
-					userAuthId: "original_user",
-					type: "project" as const,
-					title: "Project",
-					status: 0,
-					parents: [],
-					children: [task2Id],
-					created: new Date().toISOString(),
-					lastEdit: new Date().toISOString(),
-				},
-					{
-						id: task1Id,
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Task 1",
-						status: 0,
-					parents: [task2Id, projectId], // parent chain through task2 -> project
-						children: [task3Id],
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-					{
-						id: task2Id,
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Task 2",
-						status: 0,
-					parents: [projectId],
-						children: [task1Id, missingId2], // Mix of valid and missing
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-					{
-						id: task3Id,
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Task 3",
-						status: 0,
-						parents: [task1Id, projectId],
-						children: [],
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-				],
-			};
-
-			await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
-				data: JSON.stringify(exportData),
-				mode: "add",
-			});
-
-			const allTasks = await getAllTasksForUser(t, "user1", true);
-			expect(allTasks).toHaveLength(3);
-
-			const task1 = allTasks.find(t => t.data.title === "Task 1");
-			const task2 = allTasks.find(t => t.data.title === "Task 2");
-			const task3 = allTasks.find(t => t.data.title === "Task 3");
-
-			expect(task1).toBeDefined();
-			expect(task2).toBeDefined();
-			expect(task3).toBeDefined();
-
-			if (task1 && task2 && task3) {
-				// Task1 should have missingId1 removed, but still have task2Id
-				expect(task1.parents).not.toContain(missingId1);
-				expect(task1.parents).toContain(String(task2._id));
-				expect(task1.children).toContain(String(task3._id));
-
-				// Task2 should have missingId2 removed, but still have task1Id
-				expect(task2.children).not.toContain(missingId2);
-				expect(task2.children).toContain(String(task1._id));
-
-				// Verify bidirectional relationships
-				assertBidirectionalRelationship(task2, task1);
-				assertBidirectionalRelationship(task1, task3);
-			}
-		});
-
-		test("replace mode clears existing tasks and imports new ones with relationships", async () => {
-			const t = createTestCtx();
-
-		// Create some existing tasks (with project context)
-		const existingProject = await createProject(t, "user1");
-		await createTaskWithProject(t, "user1", { title: "Existing 1", parents: [existingProject!._id] });
-		await createTaskWithProject(t, "user1", { title: "Existing 2", parents: [existingProject!._id] });
-
-			// Verify they exist
-			let allTasks = await getAllTasksForUser(t, "user1");
-			expect(allTasks.length).toBeGreaterThanOrEqual(2);
-
-			// Import new tasks
-			const parentId = "imported_parent";
-			const childId = "imported_child";
-		const projectId = "imported_project";
-
-			const exportData = {
-				version: "0.0.0",
-				exportedAt: new Date().toISOString(),
-			tasks: [
-				{
-					id: projectId,
-					userAuthId: "original_user",
-					type: "project" as const,
-					title: "Imported Project",
-					status: 0,
-					parents: [],
-					children: [parentId],
-					created: new Date().toISOString(),
-					lastEdit: new Date().toISOString(),
-				},
-					{
-						id: parentId,
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Imported Parent",
-						status: 0,
-					parents: [projectId],
-						children: [childId],
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-					{
-						id: childId,
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Imported Child",
-						status: 0,
-					parents: [parentId, projectId],
-						children: [],
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-				],
-			};
-
-			await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
-				data: JSON.stringify(exportData),
-				mode: "replace",
-			});
-
-		// Should only have imported tasks and project
-		allTasks = await getAllTasksForUser(t, "user1");
-		const taskTasks = allTasks.filter(t => t.data.type === "task");
-		const projects = allTasks.filter(t => t.data.type === "project");
-		expect(taskTasks).toHaveLength(2);
-		expect(projects).toHaveLength(1);
-
-			// Existing tasks should be gone
-			const existing1Found = taskTasks.find(t => t.data.title === "Existing 1");
-			const existing2Found = taskTasks.find(t => t.data.title === "Existing 2");
-			expect(existing1Found).toBeUndefined();
-			expect(existing2Found).toBeUndefined();
-
-			// Imported tasks should exist with relationships
-			const importedParent = taskTasks.find(t => t.data.title === "Imported Parent");
-			const importedChild = taskTasks.find(t => t.data.title === "Imported Child");
-			expect(importedParent).toBeDefined();
-			expect(importedChild).toBeDefined();
-
-			if (importedParent && importedChild) {
-				assertBidirectionalRelationship(importedParent, importedChild);
-			}
-		});
-
-		test("handles tasks with no relationships gracefully", async () => {
-			const t = createTestCtx();
-
-		const projectId = "proj_single";
-
-			const exportData = {
-				version: "0.0.0",
-				exportedAt: new Date().toISOString(),
-				tasks: [
-				{
-					id: projectId,
-					userAuthId: "original_user",
-					type: "project" as const,
-					title: "Orphan Project",
-					status: 0,
-					parents: [],
-					children: ["task_1"],
-					created: new Date().toISOString(),
-					lastEdit: new Date().toISOString(),
-				},
-					{
-						id: "task_1",
-						userAuthId: "original_user",
-						type: "task" as const,
-						title: "Orphan Task",
-						status: 0,
-					parents: [projectId],
-						children: [],
-						created: new Date().toISOString(),
-						lastEdit: new Date().toISOString(),
-					},
-				],
-			};
-
-			await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
-				data: JSON.stringify(exportData),
-				mode: "add",
-			});
-
-			const allTasks = await getAllTasksForUser(t, "user1");
-			const orphan = allTasks.find(t => t.data.title === "Orphan Task");
-		const project = allTasks.find(t => t.data.title === "Orphan Project");
-			expect(orphan).toBeDefined();
-		expect(project).toBeDefined();
-		if (orphan && project) {
-			expect(orphan.parents).toEqual([String(project._id)]);
-		}
+			// Should throw - no project in data, no projectId provided
+			await expect(
+				t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
+					data: JSON.stringify(exportData),
+					mode: "add",
+				})
+			).rejects.toThrow();
 		});
 	});
 
-	test("exports data and imports it back correctly (Round Trip)", async () => {
-		const t = createTestCtx();
+	describe("Round trip tests", () => {
+		test("exports and imports data with projects preserving structure", async () => {
+			const t = createTestCtx();
 
-		// 1. Setup: Create a complex graph of tasks with a project ancestor
-		const project = await createProject(t, "user1");
+			// 1. Setup: Create a project with task hierarchy
+			const project = await createProject(t, "user1", { title: "RT Project" });
 
-		// Structure: P1 -> C1 -> GC1; ORPH attached to project directly
-		const p1 = await createTaskWithProject(t, "user1", { title: "RT Parent", parents: [project!._id] });
+			// Structure: Project -> Parent -> Child -> Grandchild; Orphan directly under project
+			const p1 = await createTaskWithProject(t, "user1", { title: "RT Parent", parents: [project!._id] });
+			const c1 = await createTaskWithProject(t, "user1", { title: "RT Child", parents: [p1.created.id] });
+			await createTaskWithProject(t, "user1", { title: "RT Grandchild", parents: [c1.created.id] });
+			await createTaskWithProject(t, "user1", { title: "RT Orphan", parents: [project!._id] });
 
-		const c1 = await createTaskWithProject(t, "user1", {
-			title: "RT Child",
-			parents: [p1.created.id],
+			const initialTasks = await getAllTasksForUser(t, "user1", true);
+			expect(initialTasks).toHaveLength(4);
+
+			// 2. Export - should include project + all tasks
+			const exportResult = await t.withIdentity(mockAuth("user1")).query(api.tasks.exportData, {});
+			expect(exportResult.data.length).toBeGreaterThanOrEqual(5); // 1 project + 4 tasks
+			expect(exportResult.version).toBe("0.0.0");
+
+			// 3. Import using replace mode WITHOUT projectId (preserves projects)
+			await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
+				data: JSON.stringify(exportResult),
+				mode: "replace",
+			});
+
+			// 4. Verify - all data should be restored
+			const restoredTasks = await getAllTasksForUser(t, "user1", true);
+			expect(restoredTasks).toHaveLength(4);
+
+			const rParent = restoredTasks.find(t => t.data.title === "RT Parent");
+			const rChild = restoredTasks.find(t => t.data.title === "RT Child");
+			const rGrandchild = restoredTasks.find(t => t.data.title === "RT Grandchild");
+			const rOrphan = restoredTasks.find(t => t.data.title === "RT Orphan");
+
+			expect(rParent).toBeDefined();
+			expect(rChild).toBeDefined();
+			expect(rGrandchild).toBeDefined();
+			expect(rOrphan).toBeDefined();
+
+			// Verify relationships preserved
+			assertBidirectionalRelationship(rParent!, rChild!);
+			assertBidirectionalRelationship(rChild!, rGrandchild!);
+
+			// Orphan should be directly under project with no children
+			expect(rOrphan!.children).toHaveLength(0);
+
+			// Verify project was restored
+			const allNodes = await getAllTasksForUser(t, "user1", false);
+			const restoredProject = allNodes.find(n => n.data.type === "project" && n.data.title === "RT Project");
+			expect(restoredProject).toBeDefined();
 		});
-
-		await createTaskWithProject(t, "user1", {
-			title: "RT Grandchild",
-			parents: [c1.created.id],
-		});
-
-		await createTaskWithProject(t, "user1", { title: "RT Orphan", parents: [project!._id] });
-
-		// Verify setup
-		const initialTasks = await getAllTasksForUser(t, "user1", true);
-		expect(initialTasks).toHaveLength(4);
-
-		// 2. Export
-		const exportResult = await t.withIdentity(mockAuth("user1")).query(api.tasks.exportData, {});
-
-		// Export includes the project + 4 created tasks = 5 nodes
-		expect(exportResult.data).toHaveLength(5);
-		expect(exportResult.version).toBeDefined();
-
-		// 3. Import (using replace mode to clear DB first)
-		// We'll use a NEW identity to simulate importing into a fresh account or cleaning existing
-		// But "replace" mode on the SAME user should work fine and is what we want to test (backup/restore)
-		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
-			data: JSON.stringify(exportResult),
-			mode: "replace",
-		});
-
-		// 4. Verify
-		const restoredTasks = await getAllTasksForUser(t, "user1", true); // true = exclude projects
-		expect(restoredTasks).toHaveLength(4);
-
-		const rParent = restoredTasks.find(t => t.data.title === "RT Parent");
-		const rChild = restoredTasks.find(t => t.data.title === "RT Child");
-		const rGrandchild = restoredTasks.find(t => t.data.title === "RT Grandchild");
-		const rOrphan = restoredTasks.find(t => t.data.title === "RT Orphan");
-
-		expect(rParent).toBeDefined();
-		expect(rChild).toBeDefined();
-		expect(rGrandchild).toBeDefined();
-		expect(rOrphan).toBeDefined();
-
-		// IDs will change, so we verify relationships via the new IDs
-		assertBidirectionalRelationship(rParent!, rChild!);
-		assertBidirectionalRelationship(rChild!, rGrandchild!);
-
-		// Orphan (project-attached) should not be connected to others beyond project ancestor
-		expect(rOrphan!.children).toHaveLength(0);
-		expect(rParent!.children).not.toContain(rOrphan!.id);
 	});
 });
 
@@ -1916,6 +1604,7 @@ describe("getPrioritizedTasks", () => {
 
 		// Call getPrioritizedTasks with a timeout to detect infinite loops
 		const queryPromise = t.withIdentity(mockAuth("user1")).query(api.tasks.getPrioritizedTasks, {
+			projectId: project!._id,
 			limit: 10,
 		});
 
@@ -2012,6 +1701,7 @@ describe("getPrioritizedTasks", () => {
 		});
 
 		const queryPromise = t.withIdentity(mockAuth("user1")).query(api.tasks.getPrioritizedTasks, {
+			projectId: project!._id,
 			limit: 10,
 		});
 

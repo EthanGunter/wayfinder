@@ -297,23 +297,6 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	getRootTasks: () =>
-		createFetchable((set) => {
-			const unsubscribe = client.onUpdate(
-				convexApi.tasks.getRootTasks,
-				{},
-				(result) => {
-					set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
-
-				},
-				(error: Error) => {
-					set({ status: "error", error: reconstructError(error) });
-				}
-			);
-			return () => {
-				unsubscribe();
-			};
-		}),
 	getProjects: () => createFetchable((set) => {
 		const unsubscribe = client.onUpdate(
 			convexApi.tasks.getProjects,
@@ -325,7 +308,7 @@ export const api: ITasksRemote = {
 					const node = convertFromServerNode<IAppNode<ProjectData>>(item);
 					// Attach metrics if present (backend adds them at top level)
 					if ('metrics' in item) {
-						return { ...node, metrics: (item as any).metrics };
+						return { ...node, metrics: item.metrics };
 					}
 					return node;
 				});
@@ -389,22 +372,18 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	getPrioritizedTasks: (limit: number) =>
-		createQueryable({ limit }, (params, set) => {
-			const unsubscribe = client.onUpdate(
-				convexApi.tasks.getPrioritizedTasks,
-				{ limit: params.limit },
-				(result) => {
-					set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
-				},
-				(error: Error) => {
-					set({ status: "error", error: reconstructError(error) });
-				}
-			);
-			return () => {
-				unsubscribe();
-			};
-		}),
+	getPrioritizedTasks: async (projectId, limit) => {
+		try {
+			const result = await client.query(convexApi.tasks.getPrioritizedTasks, { 
+				projectId, 
+				limit 
+			});
+			return result.map(convertFromServerNode<Task>);
+		} catch (error) {
+			console.error(error);
+			throw reconstructError(error);
+		}
+	},
 
 	searchTasks: async () => {
 		// const res = await client.query(api.tasks.searchTasks, { searchTerm });
@@ -451,12 +430,11 @@ export const localApi: ITasksLocal = {
 	getChildrenOf: (params) => api.getChildrenOf(params),
 	getParentsOf: (params) => api.getParentsOf(params),
 	getSiblingsOf: (params) => api.getSiblingsOf(params),
-	getRootTasks: () => api.getRootTasks(),
 	getProjects: () => api.getProjects(),
 	getProjectSubtree: (id: string) => api.getProjectSubtree(id),
 	createProject: async (params) => api.createProject(params),
 	getTodaysTasks: () => api.getTodaysTasks(),
-	getPrioritizedTasks: (limit: number) => api.getPrioritizedTasks(limit),
+	getPrioritizedTasks: async (projectId: string, limit: number) => api.getPrioritizedTasks(projectId, limit),
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 

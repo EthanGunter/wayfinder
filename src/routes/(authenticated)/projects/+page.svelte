@@ -124,11 +124,11 @@
 							<span>{sortMethod.charAt(0).toUpperCase() + sortMethod.slice(1)}</span>
 						</Select.Trigger>
 						<Select.Content>
-							<Select.Item value="momentum" label="Momentum" />
+							<!-- <Select.Item value="momentum" label="Momentum" />
 							<Select.Item value="velocity" label="Velocity" />
-							<Select.Item value="activity" label="Activity" />
+							<Select.Item value="activity" label="Activity" /> -->
 							<Select.Item value="title" label="Title" />
-							<Select.Item value="dueDate" label="Due Date" />
+							<!-- <Select.Item value="dueDate" label="Due Date" /> -->
 							<Select.Item value="created" label="Created" />
 						</Select.Content>
 					</Select.Root>

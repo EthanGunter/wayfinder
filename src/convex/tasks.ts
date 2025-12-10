@@ -1,4 +1,4 @@
-import { ArgumentError, InvalidStateError } from "$domain/errors";
+import { ArgumentError } from "$domain/errors";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
@@ -199,7 +199,7 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 
 	// Enforce project constraints
 	if (oldNode.data.type === "project" && (update.parents || update.addParents || update.removeParents)) {
-		throw new ConvexError({ type: "InvalidState", msg: "Root project cannot have parents modified", ctx: update.id });
+		throw new ConvexError({ type: "InvalidState", msg: "Project cannot have parents modified", ctx: update.id });
 	}
 
 	const now = Date.now();
@@ -415,9 +415,28 @@ export const importData = mutation({
 				throw new ConvexError({ type: "NotImplementedError", msg: `Unsupported export version: ${parsed.version}` });
 		}
 
-		// Filter out references to tasks not in the import set
+		// Determine target project based on projectId parameter
+		let projectsInData: IAppNode<AppData<number>, number>[] = [];
+		let tasksToImport: IAppNode<AppData<number>, number>[] = [];
+		// Preserve projects from data OR throw error if orphaned tasks
+		projectsInData = dataToImport.filter(node => node.data.type === "project");
+		tasksToImport = dataToImport.filter(node => node.data.type === "task");
+
+		if (projectsInData.length === 0) {
+			// No projects in data - check if any tasks have no parents (orphaned)
+			const hasOrphanedTasks = tasksToImport.some(task => (task.parents ?? []).length === 0);
+			if (hasOrphanedTasks) {
+				throw new ConvexError({
+					type: "InvalidState",
+					msg: "Cannot import orphaned tasks without a project. Provide projectId parameter or include project in export data."
+				});
+			}
+		}
+
+
+		// Filter out references to nodes not in the import set
 		const allImportIds = new Set(dataToImport.map(t => t.id!));
-		for (const task of dataToImport) {
+		for (const task of tasksToImport) {
 			task.parents = task.parents?.filter(p => allImportIds.has(p)) ?? [];
 			task.children = task.children?.filter(c => allImportIds.has(c)) ?? [];
 		}
@@ -428,7 +447,6 @@ export const importData = mutation({
 				.query("nodes")
 				.withIndex("by_user_type", (q) => q.eq("userAuthId", userAuthId).eq("data.type", "task"))
 				.collect();
-			// Filter out root projects - they're hidden from clients
 			if (existingNodes.length > 0) {
 				const existingIds = existingNodes.map(n => n._id);
 				for (const id of existingIds) {
@@ -442,9 +460,23 @@ export const importData = mutation({
 		const idMapping = new Map<string, Id<"nodes">>();
 		const createdNodes: Array<{ oldId: string; newId: Id<"nodes">; node: DBNode }> = [];
 		const now = Date.now();
-		const rootProject = await getOrCreateProject(ctx, userAuthId);
 
-		for (const createDetail of dataToImport) {
+		// First, handle projects if not using projectId parameter
+		for (const projectNode of projectsInData) {
+			const oldId = projectNode.id!;
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			delete (projectNode as any).id;
+
+			const newId = await ctx.db.insert("nodes", projectNode);
+			const createdNode = await ctx.db.get(newId);
+			if (!createdNode) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created project", ctx: newId });
+
+			createdNodes.push({ oldId, newId, node: createdNode });
+			idMapping.set(oldId, newId);
+		}
+
+		// Then, handle tasks
+		for (const createDetail of tasksToImport) {
 			const oldId = createDetail.id!;
 			// Create new ids for every imported node so we don't import bad references
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -452,16 +484,10 @@ export const importData = mutation({
 
 			// Create node with original relationships (old IDs)
 			// Don't normalize parents - we'll handle that after remapping
-			let newId: Id<'nodes'>;
-			if (createDetail.data.type === 'project') {
-				newId = rootProject._id;
-				createdNodes.push({ oldId, newId, node: rootProject });
-			} else {
-				newId = await ctx.db.insert("nodes", createDetail);
-				const createdNode = await ctx.db.get(newId);
-				if (!createdNode) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created node", ctx: newId });
-				createdNodes.push({ oldId, newId, node: createdNode });
-			}
+			const newId = await ctx.db.insert("nodes", createDetail);
+			const createdNode = await ctx.db.get(newId);
+			if (!createdNode) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created node", ctx: newId });
+			createdNodes.push({ oldId, newId, node: createdNode });
 
 			idMapping.set(oldId, newId);
 		}
@@ -473,16 +499,22 @@ export const importData = mutation({
 			const remappedParents = (node.parents ?? []).map(oldId => idMapping.get(oldId)).filter((id): id is Id<"nodes"> => !!id).map(String);
 			const remappedChildren = (node.children ?? []).map(oldId => idMapping.get(oldId)).filter((id): id is Id<"nodes"> => !!id).map(String);
 
-			// Normalize parents (attach to root if empty, remove root if multiple parents)
+			// Normalize parents based on whether we're using projectId parameter
 			let normalizedParents: string[];
-			if (remappedParents.length === 0) {
-				normalizedParents = [rootProject._id];
-			} else if (remappedParents.length > 1) {
-				// Multiple parents - remove root if present
-				normalizedParents = remappedParents.filter(id => id !== rootProject._id);
+
+			// Projects should have no parents, tasks follow normal rules
+			if (node.data.type === "project") {
+				normalizedParents = [];
+			} else if (remappedParents.length === 0) {
+				throw new ConvexError({
+					type: "InvalidState",
+					msg: "Task has no valid parents after remapping",
+					ctx: newId
+				});
 			} else {
 				normalizedParents = remappedParents;
 			}
+
 
 			// Update this node with remapped relationships
 			await ctx.db.patch(newId, {
@@ -490,20 +522,6 @@ export const importData = mutation({
 				children: remappedChildren,
 			});
 
-			// Update root.children if attached to root
-			if (normalizedParents.length === 1 && normalizedParents[0] === rootProject._id) {
-				const currentRoot = await ctx.db.get(rootProject._id);
-				if (currentRoot) {
-					const rootChildren = [...(currentRoot.children ?? [])];
-					if (!rootChildren.includes(newId)) {
-						rootChildren.push(newId);
-						await ctx.db.patch(rootProject._id, {
-							children: rootChildren,
-							lastEdit: now,
-						});
-					}
-				}
-			}
 
 			// Establish bidirectional relationships: update children to have this as parent
 			for (const childIdStr of remappedChildren) {
@@ -521,7 +539,6 @@ export const importData = mutation({
 
 			// Establish bidirectional relationships: update parents to have this as child
 			for (const parentIdStr of normalizedParents) {
-				if (parentIdStr === rootProject._id) continue; // Root handled separately above
 				const parentId = parentIdStr as Id<"nodes">;
 				const parent = await ctx.db.get(parentId);
 				if (parent) {
@@ -598,7 +615,6 @@ export const getAllUserTasks = query({
 			.query("nodes")
 			.withIndex("by_user", (q) => q.eq("userAuthId", userId))
 			.collect();
-		// Filter out root projects - they're hidden from clients
 		const tasks = rows.filter(n => n.data.type === "task");
 		return tasks.map(cleanNodeForClient);
 	},
@@ -676,11 +692,14 @@ export const getSiblingsOf = query({
 			else siblings.set(parent, [sibling]);
 		};
 
-		// 2-a) Handle root nodes
-		let parentIds = self.parents ?? [];
+		// 2-a) Handle orphaned tasks
+		const parentIds = self.parents ?? [];
 		if (parentIds.length === 0) {
-			const root = await getOrCreateProject(ctx, self.userAuthId);
-			parentIds = [root._id];
+			throw new ConvexError({
+				type: "InvalidState",
+				msg: "Task has no parents - orphaned task detected",
+				ctx: id
+			});
 		}
 
 		// 2-b) Fetch only the parents we need
@@ -732,24 +751,6 @@ export const getSiblingsOf = query({
 	},
 });
 
-export const getRootTasks = query({
-	args: {},
-	handler: async (ctx) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) return []; // TODO:UX/DX Log and error
-
-		// Get root project for user
-		const root = await getOrCreateProject(ctx, identity.subject);
-
-		// Return root's children (parentless tasks)
-		const childIds = root.children ?? [];
-		if (childIds.length === 0) return [];
-
-		const childDocs = await Promise.all(childIds.map((cid) => ctx.db.get(cid as Id<"nodes">)));
-
-		return childDocs.filter((n): n is NonNullable<typeof n> => !!n).map(cleanNodeForClient);
-	},
-});
 
 export const createProject = mutation({
 	args: {
@@ -790,13 +791,10 @@ export const createProject = mutation({
 		// Merge provided uiPrefs with defaults
 		const uiPrefs = args.uiPrefs ? { ...defaultUiPrefs, ...args.uiPrefs } : defaultUiPrefs;
 
-		// Get root project to attach new project to
-		const root = await getOrCreateProject(ctx, userAuthId);
-
 		const now = Date.now();
 		const projectId = await ctx.db.insert("nodes", {
 			userAuthId,
-			parents: [root._id],
+			parents: [], // Projects are top-level with no parents
 			children: [],
 			lastEdit: now,
 			created: now,
@@ -808,13 +806,6 @@ export const createProject = mutation({
 				dueDate: args.dueDate,
 				uiPrefs,
 			},
-		});
-
-		// Update root's children to include new project
-		const rootChildren = root.children ?? [];
-		await ctx.db.patch(root._id, {
-			children: [...rootChildren, projectId],
-			lastEdit: now,
 		});
 
 		const created = await ctx.db.get(projectId);
@@ -833,12 +824,9 @@ export const getProjects = query({
 		if (!identity) return []; // TODO:UX/DX Log and error
 		const projects = await ctx.db.query("nodes").withIndex("by_user_type", (q) => q.eq("userAuthId", identity.subject).eq("data.type", "project")).collect();
 
-		// Filter out root projects (empty title)
-		const visibleProjects = projects.filter(p => p.data.title !== "");
-
 		// Calculate metrics for each project
 		const projectsWithMetrics = await Promise.all(
-			visibleProjects.map(async (project) => {
+			projects.map(async (project) => {
 				const metrics = await calculateProjectMetrics(ctx, project._id);
 				return {
 					...cleanNodeForClient(project),
@@ -916,20 +904,31 @@ export const getTodaysTasks = query({
 });
 
 export const getPrioritizedTasks = query({
-	args: { limit: v.number() },
-	handler: async (ctx, { limit }) => {
+	args: { projectId: v.string(), limit: v.number() },
+	handler: async (ctx, { projectId, limit }) => {
 		const identity = await ctx.auth.getUserIdentity();
 		if (!identity) throw new ConvexError({ type: "NotAuthorizedError", msg: "Auth Identity not found" });
 
+		// Get the specified project
+		const project = await ctx.db.get(projectId as Id<"nodes">);
+		if (!project) {
+			throw new ConvexError({ type: "NotFoundError", msg: "Project not found", ctx: projectId });
+		}
+		if (project.userAuthId !== identity.subject) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Project belongs to another user", ctx: projectId });
+		}
+		if (project.data.type !== "project") {
+			throw new ConvexError({ type: "InvalidState", msg: "Node is not a project", ctx: projectId });
+		}
+
+		// Get all user nodes to build the subtree
 		const nodes = await ctx.db
 			.query("nodes")
 			.withIndex("by_user", (q) => q.eq("userAuthId", identity.subject))
 			.collect();
 
-		// Filter out root projects - they're hidden from clients
-		const taskNodes = nodes.filter(n => n.data.type !== "project");
-		// Get root to start traversal from root's children
-		const root = await getOrCreateProject(ctx, identity.subject);
+		// Filter to only tasks
+		const taskNodes = nodes.filter(n => n.data.type === "task");
 		const nodesMap = new Map(taskNodes.map((n) => [n._id, n] as [string, DBNode]));
 		const sorter = (a?: DBNode, b?: DBNode) => {
 			// TODO This is going to need context from the parent to determine sibling priority...
@@ -958,9 +957,12 @@ export const getPrioritizedTasks = query({
 				if (children.every((c) => !c || c.data.status !== 0) && node.data.status === 0) todo.push(node);
 			}
 		};
-		// Start from root's children (parentless tasks)
-		const rootChildren = (root.children ?? []).map(id => nodesMap.get(id)).filter((n): n is DBNode => !!n).sort(sorter);
-		for (const r of rootChildren) { if (todo.length === limit) break; walk(r); }
+		// Start from the project's children
+		const projectChildren = (project.children ?? []).map(id => nodesMap.get(id)).filter((n): n is DBNode => !!n).sort(sorter);
+		for (const r of projectChildren) {
+			if (todo.length === limit) break;
+			walk(r);
+		}
 		return todo.map(cleanNodeForClient);
 	},
 });
@@ -1335,55 +1337,6 @@ async function calculateProjectMetrics(ctx: QueryCtx, projectId: Id<"nodes">): P
 
 //#region Utilities
 
-/**
- * Gets or creates the root project for a user. Ensures exactly one root per user.
- * Root projects are hidden from clients and serve as the parent for all parentless tasks.
- */
-// TODO:refactor This will eventually need to be removed,
-// and instead error if a task is created without a parent
-export async function getOrCreateProject(ctx: QueryCtx | MutationCtx, userAuthId: string): Promise<DBNode> {
-	// Look for existing root project
-	const existingRoots = await ctx.db
-		.query("nodes")
-		.withIndex("by_user_type", (q) => q.eq("userAuthId", userAuthId).eq("data.type", "project"))
-		.collect();
-
-	if (existingRoots.length === 1) {
-		return existingRoots[0];
-	} else if (existingRoots.length > 1) {
-		// TODO: Consider cleanup migration if multiple roots found
-		const root = existingRoots.find(r => r.data.title === "");
-		if (root) {
-			return root;
-		} else {
-			throw new ConvexError({ type: "NotImplementedError", msg: "Multiple root projects found for user" });
-		}
-	} else if ('insert' in ctx.db) {
-		// Create root project
-		const now = Date.now();
-		const rootId = await ctx.db.insert("nodes", {
-			userAuthId,
-			parents: [], // Root has no parents
-			children: [], // Will be populated as parentless tasks are attached
-			lastEdit: now,
-			created: now,
-			data: {
-				type: "project" as const,
-				title: "", // Empty title - root is hidden from clients
-				status: 0, // active
-				content: undefined,
-				dueDate: undefined,
-			},
-		});
-
-		const root = await ctx.db.get(rootId);
-		if (!root) {
-			throw new ConvexError({ type: "Error", msg: "Failed to create root project" });
-		}
-		return root;
-	}
-	else throw new InvalidStateError("Invalid context for getRootProject");
-}
 
 type NodeCache = Map<string, DBNode | null>;
 
