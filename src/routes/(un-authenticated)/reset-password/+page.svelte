@@ -10,8 +10,6 @@
 	import { toast } from 'svelte-sonner';
 	import { page } from '$app/state';
 
-	let data: PageData = $props();
-
 	const token = page.url.searchParams.get('token') ?? '';
 
 	let password = $state('');
@@ -84,7 +82,7 @@
 					</Alert.Root>
 				{/if}
 
-				<form class="flex flex-col gap-2" on:submit|preventDefault={handleSubmit}>
+				<form class="flex flex-col gap-2" onsubmit={handleSubmit}>
 					<input type="hidden" value={token} />
 
 					<div class="flex flex-col gap-1.5">
