@@ -104,7 +104,6 @@ function assertBidirectionalRelationship(
 
 //#endregion
 
-//#region createTask (single)
 
 describe("createTask", () => {
 	test("throws when creating task with no parents", async () => {
@@ -136,7 +135,7 @@ describe("createTask", () => {
 
 		assertBidirectionalRelationship(parent!, child!);
 	});
-	
+
 	test("respects client-provided created timestamp", async () => {
 		const t = createTestCtx();
 
@@ -226,10 +225,6 @@ describe("createTask", () => {
 		expect(result.created.data.givenId).toBe(id);
 	});
 });
-
-//#endregion
-
-//#region createTasks (batch)
 
 describe("createTasks", () => {
 	test("creates multiple tasks and returns all created + affected", async () => {
@@ -327,10 +322,6 @@ describe("createTasks", () => {
 		expect(parentAffectedCount).toBe(1);
 	});
 });
-
-//#endregion
-
-//#region updateTask (single)
 
 describe("updateTask", () => {
 	test("updates task fields and bumps lastEdit", async () => {
@@ -732,10 +723,6 @@ describe("updateTask", () => {
 	});
 });
 
-//#endregion
-
-//#region updateTasks (batch)
-
 describe("updateTasks", () => {
 	test("updates multiple tasks and returns updated + affected", async () => {
 		const t = createTestCtx();
@@ -791,10 +778,6 @@ describe("updateTasks", () => {
 		expect(parentAffectedCount).toBe(1);
 	});
 });
-
-//#endregion
-
-//#region deleteTask (single)
 
 describe("deleteTask", () => {
 	test("deletes task and removes from parent.children", async () => {
@@ -902,10 +885,6 @@ describe("deleteTask", () => {
 	});
 });
 
-//#endregion
-
-//#region deleteTasks (batch)
-
 describe("deleteTasks", () => {
 	test("deletes multiple tasks and returns all affected", async () => {
 		const t = createTestCtx();
@@ -966,40 +945,8 @@ describe("deleteTasks", () => {
 	});
 });
 
-//#endregion
 
-//#region Project invariants
-
-describe("Project invariants", () => {
-	test("allows multiple projects per user with no parents", async () => {
-		const t = createTestCtx();
-
-		const p1 = await createProject(t, "user1");
-		const p2 = await createProject(t, "user1", { title: "Second" });
-
-		expect(p1!._id).not.toBe(p2!._id);
-		expect(p1!.parents).toHaveLength(0);
-		expect(p2!.parents).toHaveLength(0);
-	});
-
-	test("getAllUserTasks does not return projects", async () => {
-		const t = createTestCtx();
-
-		const project = await createProject(t, "user1");
-
-		await createTaskWithProject(t, "user1", { title: "Task", parents: [project!._id] });
-
-		const result = await t.query(api.tasks.getAllUserTasks, {
-			userId: "user1",
-		});
-
-		expect(result.every((t) => t.data.type === "task")).toBe(true);
-	});
-});
-
-//#endregion
-
-//#region Relationship integrity & propagation
+//#region Node Invariants
 
 describe("Relationship integrity & propagation", () => {
 	test("maintains bidirectional integrity after complex update chain", async () => {
@@ -1086,10 +1033,6 @@ describe("Relationship integrity & propagation", () => {
 	});
 });
 
-//#endregion
-
-//#region Cycle prevention
-
 describe("Cycle prevention", () => {
 	test("detects and fails on simple cycle (A -> B -> A)", async () => {
 		const t = createTestCtx();
@@ -1160,10 +1103,6 @@ describe("Cycle prevention", () => {
 	}, 6000);
 });
 
-//#endregion
-
-//#region importData
-
 describe("importData", () => {
 	describe("Without projectId parameter", () => {
 		test("imports data containing projects - preserves project structure", async () => {
@@ -1228,7 +1167,7 @@ describe("importData", () => {
 
 			// Task should be under imported project
 			assertBidirectionalRelationship(importedProject!, importedTask!);
-			
+
 			// Imported project should have no parents
 			expect(importedProject!.parents).toHaveLength(0);
 		});
@@ -1327,16 +1266,32 @@ describe("importData", () => {
 //#endregion
 
 
-//#region Query test scaffolding (TODOs)
+describe("Project invariants", () => {
+	test("allows multiple projects per user with no parents", async () => {
+		const t = createTestCtx();
 
-describe.todo("getTask");
-describe.todo("getTasks");
-describe.todo("getAllUserTasks");
-describe.todo("getChildrenOf");
-describe.todo("getParentsOf");
-describe.todo("getSiblingsOf");
-describe.todo("getRootTasks");
-describe.todo("getTodaysTasks");
+		const p1 = await createProject(t, "user1");
+		const p2 = await createProject(t, "user1", { title: "Second" });
+
+		expect(p1!._id).not.toBe(p2!._id);
+		expect(p1!.parents).toHaveLength(0);
+		expect(p2!.parents).toHaveLength(0);
+	});
+
+	test("getAllUserTasks does not return projects", async () => {
+		const t = createTestCtx();
+
+		const project = await createProject(t, "user1");
+
+		await createTaskWithProject(t, "user1", { title: "Task", parents: [project!._id] });
+
+		const result = await t.query(api.tasks.getAllUserTasks, {
+			userId: "user1",
+		});
+
+		expect(result.every((t) => t.data.type === "task")).toBe(true);
+	});
+});
 describe("getProjects", () => {
 	test("returns all projects for the authenticated user", async () => {
 		const t = createTestCtx();
@@ -1714,6 +1669,15 @@ describe("getPrioritizedTasks", () => {
 		expect(Array.isArray(result)).toBe(true);
 	}, 3000);
 });
+
+describe.todo("getTask");
+describe.todo("getTasks");
+describe.todo("getAllUserTasks");
+describe.todo("getChildrenOf");
+describe.todo("getParentsOf");
+describe.todo("getSiblingsOf");
+describe.todo("getRootTasks");
+describe.todo("getTodaysTasks");
+
 describe.todo("searchTasks");
 
-//#endregion
