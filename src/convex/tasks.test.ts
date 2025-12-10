@@ -1228,7 +1228,7 @@ describe("importData", () => {
 			expect(exportResult.data.length).toBeGreaterThanOrEqual(5); // 1 project + 4 tasks
 			expect(exportResult.version).toBe("0.0.0");
 
-			// 3. Import using replace mode WITHOUT projectId (preserves projects)
+			// 3. Import using replace mode
 			await t.withIdentity(mockAuth("user1")).mutation(api.tasks.importData, {
 				data: JSON.stringify(exportResult),
 				mode: "replace",
@@ -1255,10 +1255,10 @@ describe("importData", () => {
 			// Orphan should be directly under project with no children
 			expect(rOrphan!.children).toHaveLength(0);
 
-			// Verify project was restored
-			const allNodes = await getAllTasksForUser(t, "user1", false);
-			const restoredProject = allNodes.find(n => n.data.type === "project" && n.data.title === "RT Project");
-			expect(restoredProject).toBeDefined();
+		// Verify project was restored
+		const allNodes = await getAllTasksForUser(t, "user1", false);
+		const restoredProject = allNodes.find(n => n.data.type === "project" && n.data.title === "RT Project");
+		expect(restoredProject).toBeDefined();
 		});
 	});
 });

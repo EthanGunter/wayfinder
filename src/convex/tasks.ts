@@ -211,7 +211,7 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 	let children = [...(update.children ?? oldNode.children ?? [])];
 
 	if (update.addParents) {
-		parents = [...parents, ...update.addParents];
+		parents = Array.from(new Set([...parents, ...update.addParents]));
 	}
 
 	if (update.removeParents) {
@@ -223,17 +223,20 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 	}
 
 	if (update.addChildren) {
-		children = [...children, ...update.addChildren];
+		children = Array.from(new Set([...children, ...update.addChildren]));
 	}
 
 	if (update.removeChildren) {
 		children = children.filter(id => !update.removeChildren!.includes(id));
 	}
 
-
-	// Validate parents using shared function (must remain non-empty and share project ancestor)
-	const { parents: normalizedParents } = await validateParentsAndProject(ctx, parents, oldNode.userAuthId);
-	parents = normalizedParents;
+	// Only validate tasks for now. Generic validation will be handled after the refactor
+	if (oldNode.data.type === "task") {
+		// Validate parents using shared function (must remain non-empty and share project ancestor)
+		console.log("Validating parents for task:", oldNode.data.title, "with parents:", parents, "and children:", children, "of node:", oldNode._id);
+		const { parents: normalizedParents } = await validateParentsAndProject(ctx, parents, oldNode.userAuthId);
+		parents = normalizedParents;
+	}
 
 	// Build patch object with proper nested structure
 	const patchData: Partial<DBNode> = {
@@ -434,32 +437,34 @@ export const importData = mutation({
 		}
 
 
-		// Filter out references to nodes not in the import set
-		const allImportIds = new Set(dataToImport.map(t => t.id!));
-		for (const task of tasksToImport) {
-			task.parents = task.parents?.filter(p => allImportIds.has(p)) ?? [];
-			task.children = task.children?.filter(c => allImportIds.has(c)) ?? [];
-		}
+	// Filter out references to nodes not in the import set
+	const allImportIds = new Set(dataToImport.map(t => t.id!));
+	for (const task of tasksToImport) {
+		task.parents = task.parents?.filter(p => allImportIds.has(p)) ?? [];
+		task.children = task.children?.filter(c => allImportIds.has(c)) ?? [];
+	}
+	for (const project of projectsInData) {
+		project.parents = []; // Projects should never have parents
+		project.children = project.children?.filter(c => allImportIds.has(c)) ?? [];
+	}
 
-		if (mode === "replace") {
-			// Get all existing nodes (tasks) and delete them
-			const existingNodes = await ctx.db
-				.query("nodes")
-				.withIndex("by_user_type", (q) => q.eq("userAuthId", userAuthId).eq("data.type", "task"))
-				.collect();
-			if (existingNodes.length > 0) {
-				const existingIds = existingNodes.map(n => n._id);
-				for (const id of existingIds) {
-					await _deleteTask(ctx, id);
-				}
-			}
+	if (mode === "replace") {
+		// Get all existing nodes and delete them directly (no propagation needed since we're replacing everything)
+		const existingNodes = await ctx.db
+			.query("nodes")
+			.withIndex("by_user", (q) => q.eq("userAuthId", userAuthId))
+			.collect();
+		
+		// Delete all at once - no need for propagation since we're recreating everything
+		for (const node of existingNodes) {
+			await ctx.db.delete(node._id);
 		}
+	}
 
 		// Create all nodes with their original relationships (old IDs)
 		// Build mapping: oldId -> newId
 		const idMapping = new Map<string, Id<"nodes">>();
 		const createdNodes: Array<{ oldId: string; newId: Id<"nodes">; node: DBNode }> = [];
-		const now = Date.now();
 
 		// First, handle projects if not using projectId parameter
 		for (const projectNode of projectsInData) {
@@ -1363,7 +1368,7 @@ function dedupePreserveOrder(ids: string[]): string[] {
 	return ordered;
 }
 
-async function resolveProjectAncestor(
+export async function resolveProjectAncestor(
 	ctx: QueryCtx | MutationCtx,
 	startId: string,
 	userAuthId: string,
@@ -1396,7 +1401,7 @@ async function resolveProjectAncestor(
 	}
 }
 
-async function validateParentsAndProject(
+export async function validateParentsAndProject(
 	ctx: QueryCtx | MutationCtx,
 	parents: string[],
 	userAuthId: string,
@@ -1440,7 +1445,7 @@ async function validateParentsAndProject(
 	return { parents: finalParents, project: projectAncestor };
 }
 
-async function propagateRelationshipChanges(
+export async function propagateRelationshipChanges(
 	ctx: MutationCtx,
 	changes: Array<{ oldTask: DBNode | null; newTask: DBNode | null }>
 ): Promise<DBNode[]> {
