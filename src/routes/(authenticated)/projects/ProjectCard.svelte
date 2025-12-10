@@ -2,9 +2,13 @@
 	import type { AppNode, IAppNode } from '$domain/models/node';
 	import type { ProjectData } from '$domain/models/project';
 	import * as Card from '$lib/components/ui/card';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { Button } from '$lib/components/ui/button';
 	import Icon from '@iconify/svelte';
 	import SvelteMarkdown from '@humanspeak/svelte-markdown';
 	import { goto } from '$app/navigation';
+	import tasksAPI from '$lib/API/Tasks';
+	import { confirm } from '$lib/components/ui/inline-modals';
 
 	interface Props {
 		project: IAppNode<ProjectData> & {
@@ -37,7 +41,33 @@
 			openProject();
 		}
 	}
+
+	async function handleDelete() {
+		const confirmed = await confirm({
+			title: `Confirm Delete`,
+			body: confirmDeleteBody,
+			confirmText: 'Delete',
+			destructive: true
+		});
+		if (confirmed) {
+			await tasksAPI.deleteTask({ id: project.id });
+		}
+	}
 </script>
+
+{#snippet confirmDeleteBody()}
+	<h2 class="text-lg font-normal">
+		<p>
+			Are you sure you want to <em class="text-destructive">
+				delete {project.data.title || 'Untitled project'}
+			</em>
+			and all associated tasks?
+			<br />
+			<br />
+			<em class="text-md text-destructive">This cannot be undone</em>
+		</p>
+	</h2>
+{/snippet}
 
 <Card.Root
 	onclick={openProject}
@@ -46,9 +76,25 @@
 	tabindex={0}
 	role="button"
 >
-	<Card.Header class="space-y-2">
-		<Card.Title class="text-base">
+	<Card.Header class="relative space-y-2">
+		<Card.Title class="flex w-full justify-between text-base">
 			{(project.data.title ?? '').trim() || 'Untitled project'}
+			<div role="none" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						<Button variant="ghost" size="icon" class="h-8 w-8">
+							<Icon icon="lucide:more-vertical" class="h-4 w-4" />
+							<span class="sr-only">Project menu</span>
+						</Button>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Item variant="destructive" onclick={handleDelete}>
+							<Icon icon="lucide:trash-2" />
+							Delete
+						</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</div>
 		</Card.Title>
 		{#if project.data.content}
 			<Card.Description class="line-clamp-2 text-xs text-muted-foreground">
@@ -79,7 +125,9 @@
 					<Icon icon="lucide:flame" class="h-3.5 w-3.5" />
 					<span>
 						{#if metrics.streak.lastActive}
-							{metrics.streak.days > 0 ? `🔥 ${metrics.streak.days} days active` : metrics.streak.lastActive}
+							{metrics.streak.days > 0
+								? `🔥 ${metrics.streak.days} days active`
+								: metrics.streak.lastActive}
 						{:else}
 							🔥 {metrics.streak.days} days active
 						{/if}
@@ -133,4 +181,3 @@
 		{/if}
 	</Card.Footer>
 </Card.Root>
-

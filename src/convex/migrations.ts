@@ -1,10 +1,10 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components } from "./_generated/api";
 import { type Id, type DataModel, type Doc } from "./_generated/dataModel";
-import { TaskData, TaskStatus } from "$domain/models/task";
-import { ProjectStatus, type ProjectData } from "$domain/models/project";
+import { TaskStatus } from "$domain/models/task";
+import { ProjectStatus } from "$domain/models/project";
 import type { MutationCtx } from "./_generated/server";
-import { _updateTask, _deleteTask, resolveProjectAncestor, validateParentsAndProject, propagateRelationshipChanges } from "./tasks";
+import { _updateTask, _deleteTask, resolveProjectAncestor, propagateRelationshipChanges } from "./tasks";
 import { ConvexError } from "convex/values";
 
 export const migrations = new Migrations<DataModel>(components.migrations);

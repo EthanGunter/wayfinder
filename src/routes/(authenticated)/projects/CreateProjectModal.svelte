@@ -49,7 +49,7 @@
 		showMicroWins = get(settings.projects.defaults.defaultProjectShowMicroWins);
 	}
 
-	function close(){
+	function close() {
 		resetForm();
 		open = false;
 		onClose?.();
@@ -59,8 +59,8 @@
 		if (event.key === 'Escape') {
 			event.preventDefault();
 			event.stopPropagation();
+			close();
 		}
-		close();
 	}
 
 	async function handleSubmit() {

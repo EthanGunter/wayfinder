@@ -26,6 +26,7 @@
 	import MarkdownEditor from '$lib/components/ui/markdown-editor';
 	import type { AppNode } from '$domain/models/node';
 	import { centerAndHighlightNode } from './logic/navigation';
+	import { confirm, selectTask } from '$lib/components/ui/inline-modals';
 
 	export interface NodeEditorLayoutState {
 		accordionValues: ('blockers' | 'priority')[];
@@ -53,9 +54,6 @@
 	}: Props = $props();
 
 	// Internals
-	let showDeleteDialog = $state(false);
-	let showLinkDialog = $state(false);
-	let linkParentId = $state<string | null>(null);
 	let accordionValues = $derived(layoutState.accordionValues);
 
 	// Derived live data from server as single sources of truth
@@ -91,13 +89,16 @@
 		tasksAPI.updateTask({ id: task.id, ...patch });
 	}
 
-	function confirmDelete() {
-		showDeleteDialog = true;
-	}
-
-	function performDelete() {
-		showDeleteDialog = false;
-		onDelete?.(task);
+	async function confirmDelete() {
+		const confirmed = await confirm({
+			title: 'Delete Task',
+			body: confirmDeleteBody,
+			confirmText: 'Delete',
+			destructive: true
+		});
+		if (confirmed) {
+			onDelete?.(task);
+		}
 	}
 
 	// --- Reorder operations (passed as callbacks to TaskList)
@@ -212,15 +213,14 @@
 		return [];
 	}
 
-	async function handleLinkTask(selectedTask: Task, parentId: string) {
+	async function handleLinkTask(parentId: string) {
+		const selectedTask = await selectTask({ title: 'Select Task to Link' });
 		if (!parentId || !selectedTask.id || parentId === selectedTask.id) return;
 
 		// Check if task is already a child
 		const existingChildren = getExistingChildren(parentId);
 		if (existingChildren.includes(selectedTask.id)) {
 			// Task is already linked, just close the dialog
-			showLinkDialog = false;
-			linkParentId = null;
 			return;
 		}
 
@@ -232,9 +232,6 @@
 		if (err1) {
 			Err.UNHANDLED(err1, 'Failed to link task');
 		}
-
-		showLinkDialog = false;
-		linkParentId = null;
 	}
 
 	async function handleDisconnectTask(child: string, parent: string) {
@@ -250,7 +247,7 @@
 	class="relative flex h-full w-full flex-col bg-white {checked ? 'bg-[#efe]' : ''}"
 >
 	{#snippet header()}
-		<div class="flex items-start gap-2 p-2 h-10">
+		<div class="flex h-10 items-start gap-2 p-2">
 			<Checkbox
 				class="mt-1 size-5 rounded-md border-gray-300 hover:cursor-pointer"
 				aria-label="Toggle complete"
@@ -331,10 +328,7 @@
 								onReorder={(taskId, startIndex, finishIndex) =>
 									reorderChildren(taskId, startIndex, finishIndex)}
 								onAddTask={handleAddChildTask}
-								onLink={(parentId) => {
-									linkParentId = task.id;
-									showLinkDialog = true;
-								}}
+								onLink={handleLinkTask}
 							/>
 						{/if}
 					</Accordion.Content>
@@ -372,41 +366,10 @@
 	{/snippet}
 </ScrollWithHeader>
 
-<Dialog.Root bind:open={showDeleteDialog}>
-	<Dialog.Content>
-		<Dialog.Header>
-			<Dialog.Title>Delete Task</Dialog.Title>
-		</Dialog.Header>
-		<div class="p-4">
-			<p class="mb-4">Are you sure you want to delete <strong>{task.data.title}</strong>?</p>
-		</div>
-		<Dialog.Footer class="flex gap-2">
-			<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Cancel</Button>
-			<Button variant="destructive" onclick={performDelete}>Delete Task</Button>
-		</Dialog.Footer>
-	</Dialog.Content>
-</Dialog.Root>
-
-<Dialog.Root bind:open={showLinkDialog}>
-	<Dialog.Content>
-		<Dialog.Header>
-			<Dialog.Title>Link Task</Dialog.Title>
-		</Dialog.Header>
-		<div class="p-4">
-			{#if linkParentId}
-				<TaskSearchBar
-					onTaskSelected={(selectedTask) => handleLinkTask(selectedTask, linkParentId!)}
-				/>
-			{/if}
-		</div>
-		<Dialog.Footer class="flex gap-2">
-			<Button
-				variant="outline"
-				onclick={() => {
-					showLinkDialog = false;
-					linkParentId = null;
-				}}>Cancel</Button
-			>
-		</Dialog.Footer>
-	</Dialog.Content>
-</Dialog.Root>
+{#snippet confirmDeleteBody()}
+	<h2 class="text-lg font-normal">
+		<p>Are you sure you want to delete <strong>{task.data.title}</strong>?</p>
+		<br />
+		<em class="text-md text-destructive">This cannot be undone</em>
+	</h2>
+{/snippet}
