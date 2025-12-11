@@ -58,9 +58,10 @@
 {#snippet confirmDeleteBody()}
 	<h2 class="text-lg font-normal">
 		<p>
-			Are you sure you want to <em class="text-destructive">
-				delete {project.data.title || 'Untitled project'}
-			</em>
+			Are you sure you want to <em class="text-destructive">delete</em>
+			<code>
+				{project.data.title || 'Untitled project'}
+			</code>
 			and all associated tasks?
 			<br />
 			<br />
