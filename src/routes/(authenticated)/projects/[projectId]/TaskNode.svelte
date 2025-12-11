@@ -8,6 +8,7 @@
 	import { viewNodes, toggleCollapseChildren } from './logic/shared-state';
 	import { layoutEngine } from './logic/layout';
 	import { autoLayout } from './logic/ui-state';
+	import { getDueDateStatus } from '$lib/utils';
 
 	let { id, data: flowData, ...rest }: NodeProps & { data: ViewNodeData } = $props();
 
@@ -15,6 +16,12 @@
 	const isPinned = $derived(!!flowData.pinned);
 	const isCollapsed = $derived(!!flowData.collapsedChildren);
 	const hasChildren = $derived(flowData.appNode.children.length > 0);
+	const isCompleted = $derived(isTaskCompleted(flowData.appNode));
+	const dueDateStatus = $derived(
+		flowData.appNode.data.type === 'task'
+			? getDueDateStatus(flowData.appNode.data.dueDate)
+			: { status: 'none' as const, text: '', className: '' }
+	);
 
 	function handleCollapseToggle(recursive: boolean = false) {
 		toggleCollapseChildren(id, recursive);
@@ -73,7 +80,7 @@
 			bind:this={nodeElement}
 			data-tasknodeid={flowData.appNode.id}
 			class="task-node relative rounded-md border-1 border-gray-300 shadow-sm transition-shadow duration-150 hover:shadow-md
-	{isTaskCompleted(flowData.appNode) ? 'bg-green-100' : 'bg-white'}"
+	{isCompleted ? 'bg-green-100' : 'bg-white'}"
 			class:highlighted={isAnimating}
 			class:dimmed={isDimmed}
 		>
@@ -95,6 +102,11 @@
 							<Icon icon="lucide:text" />
 						{/if}
 					</span>
+					{#if dueDateStatus.status !== 'none' && !isCompleted}
+						<span class="text-[10px] px-1 py-0.5 rounded whitespace-nowrap {dueDateStatus.className}">
+							{dueDateStatus.text}
+						</span>
+					{/if}
 					{#if $devEnabled}
 						<div class="text-[7px]">
 							<span>node-id: {id}</span>

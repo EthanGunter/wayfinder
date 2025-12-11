@@ -1031,8 +1031,19 @@ export const getPrioritizedTasks = query({
 		const taskNodes = nodes.filter(n => n.data.type === "task");
 		const nodesMap = new Map(taskNodes.map((n) => [n._id, n] as [string, DBNode]));
 		const sorter = (a?: DBNode, b?: DBNode) => {
-			// TODO This is going to need context from the parent to determine sibling priority...
-			if (!a) return -1; if (!b) return 1; return 0; // (b.priority ?? 0) - (a.priority ?? 0);
+			if (!a) return -1;
+			if (!b) return 1;
+
+			const aDue = a.data.type === 'task' ? a.data.dueDate : undefined;
+			const bDue = b.data.type === 'task' ? b.data.dueDate : undefined;
+
+			// Sort by due date (soonest first, including overdue)
+			if (aDue && bDue) return aDue - bDue;
+			if (aDue && !bDue) return -1;
+			if (!aDue && bDue) return 1;
+
+			// Maintain tree order for tasks without due dates
+			return 0;
 		};
 		const todo: DBNode[] = [];
 		const seen = new Set<string>();

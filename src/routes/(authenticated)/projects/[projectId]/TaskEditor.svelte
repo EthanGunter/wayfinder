@@ -24,9 +24,11 @@
 	import { drawerOpen, drawerParams } from './logic/ui-state';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	import MarkdownEditor from '$lib/components/ui/markdown-editor';
+	import DateTimePicker from '$lib/components/DateTimePicker.svelte';
 	import type { AppNode } from '$domain/models/node';
 	import { centerAndHighlightNode } from './logic/navigation';
 	import { confirm, selectTask } from '$lib/components/ui/inline-modals';
+	import { Label } from '$lib/components/ui/label';
 
 	export interface NodeEditorLayoutState {
 		accordionValues: ('blockers' | 'priority')[];
@@ -58,6 +60,7 @@
 
 	// Derived live data from server as single sources of truth
 	let checked = $derived(isTaskCompleted(task));
+	let dueDate = $derived(task.data.dueDate ? new Date(task.data.dueDate) : undefined);
 	const siblingsStore = tasksAPI.getSiblingsOf(task.id);
 	const childTasksStore = tasksAPI.getChildrenOf(task.id);
 
@@ -291,10 +294,20 @@
 	{/snippet}
 
 	{#snippet content()}
-		<div class="flex h-full min-h-0 flex-col p-3">
+		<div class="flex h-full min-h-0 flex-col p-3 gap-2">
 			<MarkdownEditor
 				value={task.data.content ?? ''}
 				onChange={(md) => tasksAPI.updateTask({ id: task.id, content: md })}
+			/>
+
+			<Label>Due date</Label>
+			<DateTimePicker
+				title="Select due date"
+				value={dueDate}
+				onchange={(timestamp) => {
+					task.data.dueDate = timestamp;
+					tasksAPI.updateTask({ id: task.id, dueDate: timestamp });
+				}}
 			/>
 
 			<Accordion.Root

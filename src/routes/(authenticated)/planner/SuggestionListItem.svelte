@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Icon from '@iconify/svelte';
+	import { getDueDateStatus } from '$lib/utils';
 
 	const {
 		task = $bindable(),
@@ -19,6 +20,7 @@
 
 	// Create a reactive variable that's properly bound to the checkbox
 	let checked = $state(isTaskCompleted(task));
+	const dueDateStatus = $derived(getDueDateStatus(task.data.dueDate));
 
 	// Watch for changes to isCompleted and update the task
 	$effect(() => {
@@ -63,9 +65,14 @@
 		tabindex="0"
 		onclick={handleClick}
 		onkeydown={handleKeydown}
-		class="h-full w-full cursor-pointer overflow-hidden bg-transparent p-1 text-start text-ellipsis whitespace-nowrap hover:underline"
+		class="flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden bg-transparent p-1 text-start hover:underline"
 	>
-		{task.data.title}
+		<span class="text-ellipsis whitespace-nowrap overflow-hidden">{task.data.title}</span>
+		{#if dueDateStatus.status !== 'none' && !checked}
+			<span class="text-xs px-1.5 py-0.5 rounded shrink-0 {dueDateStatus.className}">
+				{dueDateStatus.text}
+			</span>
+		{/if}
 	</span>
 
 	<!-- Add to today button -->

@@ -11,6 +11,7 @@
 		type Edge
 	} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 	import Button from '$lib/components/ui/button/button.svelte';
+	import { getDueDateStatus } from '$lib/utils';
 
 	type ItemData = { taskId: string; parentId: string; index: number; listId: string };
 
@@ -62,6 +63,7 @@
 	let closestEdge = $state<Edge | null>(null);
 
 	const isCompleted = $derived(isTaskCompleted(task));
+	const dueDateStatus = $derived(getDueDateStatus(task.data.dueDate));
 
 	// Self-managed DnD registration
 	$effect(() => {
@@ -184,7 +186,14 @@
 			title="Select task for editing"
 			onclick={() => onSelect?.(task.id)}
 		>
-			<span>{task.data.title}</span>
+			<span class="flex items-center gap-2">
+				{task.data.title}
+				{#if dueDateStatus.status !== 'none' && !isCompleted}
+					<span class="text-xs px-1.5 py-0.5 rounded {dueDateStatus.className}">
+						{dueDateStatus.text}
+					</span>
+				{/if}
+			</span>
 		</button>
 		{#if onDisconnect}
 			<button
