@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { TaskStatus, type Task } from '$domain/models/task';
 	import { TaskSearchService } from '$lib/API/Tasks/TaskSearchService';
 	import SearchBar from '$lib/components/SearchBar.svelte';
@@ -10,10 +9,10 @@
 		onTaskSelected?: (task: Task) => void;
 		onLocateTask?: (task: Task) => void;
 		class?: string;
+		subtreeId?: string;
 	};
 
-	let { class: className, onTaskSelected, onLocateTask }: Props = $props();
-	let num = $state(0);
+	let { class: className, onTaskSelected, onLocateTask, subtreeId }: Props = $props();
 	let searchBar: SearchBar<Task> | undefined = $state();
 
 	export function select() {
@@ -25,12 +24,15 @@
 	}
 
 	const searchService = new TaskSearchService();
-	let unsubscribeTasks: (() => void) | null = null;
 	let currentQuery = $state('');
 	let refreshTrigger = $state(0);
 
-	onMount(() => {
-		unsubscribeTasks = tasksAPI.getAllUserTasks().subscribe((taskSub) => {
+	$effect(() => {
+		const taskStore = subtreeId 
+			? tasksAPI.getProjectSubtree(subtreeId)
+			: tasksAPI.getAllUserTasks();
+			
+		const unsubscribe = taskStore.subscribe((taskSub) => {
 			if (taskSub.status === 'resolved') {
 				searchService.reindexTasks(taskSub.value);
 				// Trigger refresh if there's an active query
@@ -39,10 +41,8 @@
 				}
 			}
 		});
-	});
 
-	onDestroy(() => {
-		unsubscribeTasks?.();
+		return () => unsubscribe();
 	});
 
 	async function handleSearch(query: string): Promise<Task[]> {
