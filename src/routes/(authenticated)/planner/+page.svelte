@@ -10,6 +10,9 @@
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { MediaQuery } from 'svelte/reactivity';
 	import Icon from '@iconify/svelte';
+	import Separator from '$lib/components/ui/separator/separator.svelte';
+	import Button from '$lib/components/ui/button/button.svelte';
+	import { goto } from '$app/navigation';
 
 	let projects = tasksAPI.getProjects();
 	let todaysList = tasksAPI.getTodaysTasks();
@@ -229,9 +232,17 @@
 				class="rounded-md border border-gray-200 bg-gray-50"
 			>
 				<Collapsible.Trigger
-					class="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-100"
+					class="accordion-trigger flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-100"
 				>
 					<h2 class="font-semibold text-gray-800">{project.data.title}</h2>
+					<span class="flex-1"></span>
+					<Separator orientation="vertical" class="h-4 w-px bg-gray-200" />
+					<button
+						class="action-btn mr-2 flex size-8 shrink-0 items-center justify-center rounded-full text-gray-400 hover:cursor-pointer hover:border-1 hover:border-primary hover:bg-blue-50 hover:text-blue-600"
+						onclick={() => goto(`/projects/${project.id}`)}
+					>
+						<Icon icon="majesticons:open" class="size-5" />
+					</button>
 					<Icon
 						icon="lucide:chevron-down"
 						class="h-4 w-4 transition-transform {isExpanded ? '-rotate-180' : ''}"
@@ -307,3 +318,9 @@
 		</div>
 	{/if}
 {/if}
+
+<style lang="scss">
+	:global(.accordion-trigger:has(.action-btn:hover)) {
+		background-color: initial;
+	}
+</style>
