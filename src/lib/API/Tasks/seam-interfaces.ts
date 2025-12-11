@@ -1,6 +1,6 @@
 import type { InvalidStateError, ArgumentError, NotAuthorizedError, NotFoundError } from "$domain/errors";
 import type { AppNode, IAppNode } from "$domain/models/node";
-import type { ProjectData } from "$domain/models/project";
+import type { ProjectData, UpdateProjectParams } from "$domain/models/project";
 import type { CreateTaskParams, ExportedData, TaskData, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
 import type { FetchableStore, QueryableStore } from "../fetchableStore";
@@ -60,6 +60,11 @@ export interface ITasksBase {
 			showMicroWins?: boolean;
 		};
 	}): Promise<Result<IAppNode<ProjectData>, NotAuthorizedError | InvalidStateError>>;
+
+	/**
+	 * Updates a project
+	 */
+	updateProject(params: UpdateProjectParams): Promise<Result<{ updated: AppNode, affected: AppNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 
 	/**
 	 * Gets all GraphNodes that are on the "Today's List"

@@ -12,7 +12,7 @@ export const run = migrations.runner();
 
 
 // migrated Dev
-// TODO:migration Preview
+// migration Preview
 // TODO:migration Prod
 export const promoteRootChildrenToProjects = migrations.define({
 	table: "nodes",

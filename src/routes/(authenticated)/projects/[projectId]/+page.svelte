@@ -9,9 +9,11 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
 	import TaskEditor from './TaskEditor.svelte';
+	import ProjectEditor from './ProjectEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
-	import type { AppNode } from '$domain/models/node';
+	import type { AppNode, IAppNode } from '$domain/models/node';
 	import type { Task } from '$domain/models/task';
+	import type { ProjectData } from '$domain/models/project';
 	import { page } from '$app/state';
 	import Icon from '@iconify/svelte';
 
@@ -27,6 +29,7 @@
 		showCompletedNodes,
 		autoLayout
 	} from './logic/ui-state';
+	import type { ProjectEditorLayoutState } from './ProjectEditor.svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import TaskSearchBar from '$lib/components/ui/task-searchbar/TaskSearchBar.svelte';
 	import { layoutEngine } from './logic/layout';
@@ -52,6 +55,12 @@
 
 	const { data }: PageProps = $props();
 	const projectStore = data.projectStore;
+	const projectNodeStore = data.projectNodeStore;
+
+	let projectEditorLayoutState = $state<ProjectEditorLayoutState>({
+		accordionValues: ['children', 'settings'],
+		showCompletedTasks: false
+	});
 
 	onMount(() => {
 		unsubTasksStore = projectStore.subscribe(async (taskSub) => {
@@ -127,6 +136,12 @@
 		const parent = appData.get(task.parents[0]);
 		$selectedNode = parent ?? null;
 		await tasksAPI.deleteTask({ id: task.id });
+	}
+
+	async function onProjectDelete(project: IAppNode<ProjectData>) {
+		// Navigate back to projects list after deletion
+		await tasksAPI.deleteTask({ id: project.id });
+		window.location.href = '/projects';
 	}
 
 	function onSelectNode(taskId: string) {
@@ -209,26 +224,26 @@
 							class="width-max absolute top-6 right-6 grid grid-cols-[12rem] items-center gap-1 [&>*]:h-[3rem]"
 						>
 							<!-- 					<Select.Root
-							type="single"
-							value={$algorithmSetting}
-							onValueChange={(v) => {
-								if (v) {
-									algorithmSetting.set(v as typeof $algorithmSetting);
-									layoutEngine.start();
-								}
-							}}
+						type="single"
+						value={$algorithmSetting}
+						onValueChange={(v) => {
+							if (v) {
+								algorithmSetting.set(v as typeof $algorithmSetting);
+								layoutEngine.start();
+							}
+						}}
+					>
+						<Select.Trigger
+							class="h-9 w-full rounded-md border-1 border-border bg-white px-3 text-sm"
 						>
-							<Select.Trigger
-								class="h-9 w-full rounded-md border-1 border-border bg-white px-3 text-sm"
-							>
-								{$algorithmSetting}
-							</Select.Trigger>
-							<Select.Content>
-								{#each algorithmSetting.options as opt}
-									<Select.Item value={opt.value}>{opt.label}</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root> -->
+							{$algorithmSetting}
+						</Select.Trigger>
+						<Select.Content>
+							{#each algorithmSetting.options as opt}
+								<Select.Item value={opt.value}>{opt.label}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root> -->
 
 							<label
 								class="flex items-center gap-2 rounded-md border-1 border-border bg-white px-3 py-1.5 text-sm"
@@ -277,24 +292,29 @@
 					</div>
 				</SvelteFlowProvider>
 			</Resizable.Pane>
-			{#if $selectedNode}
-				<Resizable.Handle />
-				<Resizable.Pane
-					class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
-					defaultSize={30}
-					minSize={24}
-				>
-					{#if $selectedNode.data.type === 'task'}
-						<TaskEditor
-							bind:task={$selectedNode as Task}
-							bind:layoutState={$editorLayoutState}
-							{onTaskChange}
-							onDelete={onEditorDelete}
-							{onSelectNode}
-						/>
-					{/if}
-				</Resizable.Pane>
-			{/if}
+			<Resizable.Handle />
+			<Resizable.Pane
+				class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
+				defaultSize={30}
+				minSize={24}
+			>
+				{#if $selectedNode && $selectedNode.data.type === 'task'}
+					<TaskEditor
+						bind:task={$selectedNode as Task}
+						bind:layoutState={$editorLayoutState}
+						{onTaskChange}
+						onDelete={onEditorDelete}
+						{onSelectNode}
+					/>
+				{:else if $projectNodeStore.status === 'resolved' && $projectNodeStore.value.data.type === 'project'}
+					<ProjectEditor
+						bind:project={$projectNodeStore.value as IAppNode<ProjectData>}
+						bind:layoutState={projectEditorLayoutState}
+						onDelete={onProjectDelete}
+						{onSelectNode}
+					/>
+				{/if}
+			</Resizable.Pane>
 		</Resizable.PaneGroup>
 	</div>
 {/if}

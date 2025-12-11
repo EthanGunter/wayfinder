@@ -18,7 +18,7 @@
 	type SortMethod = 'momentum' | 'velocity' | 'activity' | 'title' | 'dueDate' | 'created';
 
 	let sortMethod = $state<SortMethod>(
-		(get(settings.projects.sorting.defaultProjectSort) as SortMethod) || 'momentum'
+		(get(settings.projects.sorting.defaultProjectSort) as SortMethod) || 'title'
 	);
 	let createModalOpen = $state(false);
 	let archivedSectionOpen = $state(false);

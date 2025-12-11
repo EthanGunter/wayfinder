@@ -14,10 +14,10 @@
 		project: IAppNode<ProjectData> & {
 			metrics?: {
 				progress?: { completed: number; total: number; percentage: number };
-				momentumScore?: number; // 0-100
+				// momentumScore?: number; // 0-100
 				streak?: { days: number; lastActive?: string };
 				velocity?: number; // tasks per week
-				nextAction?: { id: string; title: string };
+				// nextAction?: { id: string; title: string }; // TODO I like the idea, but the implementation is shit
 				microWins?: number; // tasks completed in last 7 days
 				smartTimestamp?: string; // "2h ago - completed 2 tasks"
 			};
@@ -118,67 +118,64 @@
 				></div>
 			</div>
 		</div>
-
-		<!-- Engagement Features (conditional) -->
-		<div class="flex flex-wrap items-center gap-2 text-xs">
-			{#if uiPrefs.showStreak && metrics.streak}
-				<div class="flex items-center gap-1 text-muted-foreground">
-					<Icon icon="lucide:flame" class="h-3.5 w-3.5" />
-					<span>
-						{#if metrics.streak.lastActive}
-							{metrics.streak.days > 0
-								? `🔥 ${metrics.streak.days} days active`
-								: metrics.streak.lastActive}
-						{:else}
-							🔥 {metrics.streak.days} days active
-						{/if}
-					</span>
-				</div>
-			{/if}
-
-			{#if uiPrefs.showVelocity && metrics.velocity !== undefined}
-				<div class="flex items-center gap-1 text-muted-foreground">
-					<Icon icon="lucide:trending-up" class="h-3.5 w-3.5" />
-					<span>→ {metrics.velocity.toFixed(1)} tasks/week</span>
-				</div>
-			{/if}
-
-			{#if uiPrefs.showMomentumScore !== false && metrics.momentumScore !== undefined}
-				<div class="flex items-center gap-1.5">
-					<Icon icon="lucide:battery" class="h-3.5 w-3.5" />
-					<div class="relative h-2 w-12 overflow-hidden rounded-full bg-muted">
-						<div
-							class="h-full rounded-full bg-primary transition-all"
-							style="width: {metrics.momentumScore}%"
-						></div>
-					</div>
-					<span class="text-xs text-muted-foreground">{metrics.momentumScore}%</span>
-				</div>
-			{/if}
-
-			{#if uiPrefs.showMicroWins && metrics.microWins !== undefined && metrics.microWins > 0}
-				<div class="flex items-center gap-1 text-muted-foreground">
-					<Icon icon="lucide:sparkles" class="h-3.5 w-3.5" />
-					<span>{metrics.microWins} {metrics.microWins === 1 ? 'win' : 'wins'} this week</span>
-				</div>
-			{/if}
-		</div>
-
-		{#if uiPrefs.showNextAction && metrics.nextAction}
-			<div class="rounded-md border border-muted bg-muted/30 p-2 text-xs">
-				<span class="text-muted-foreground">Next: </span>
-				<span class="truncate">{metrics.nextAction.title}</span>
-			</div>
-		{/if}
 	</Card.Content>
 
-	<Card.Footer class="pt-2">
+	<Card.Footer class="flex justify-between pt-2 text-xs text-muted-foreground">
 		{#if metrics.smartTimestamp}
-			<p class="text-xs text-muted-foreground">{metrics.smartTimestamp}</p>
+			<p title="Smart timestamp">{metrics.smartTimestamp}</p>
 		{:else}
-			<p class="text-xs text-muted-foreground">
+			<p title="Last edited">
 				Last edited {new Date(project.lastEdit).toLocaleDateString()}
 			</p>
 		{/if}
+		<!-- Engagement Features (conditional) -->
+		{#if uiPrefs.showStreak && metrics.streak}
+			<div title="Streak" class="flex items-center gap-1 text-muted-foreground">
+				<Icon icon="lucide:flame" class="h-3.5 w-3.5" />
+				<span>
+					{#if metrics.streak.lastActive}
+						{metrics.streak.days > 0
+							? `${metrics.streak.days} day streak`
+							: metrics.streak.lastActive}
+					{:else}
+						{metrics.streak.days} day streak
+					{/if}
+				</span>
+			</div>
+		{/if}
+
+		{#if uiPrefs.showVelocity && metrics.velocity !== undefined}
+			<div title="Velocity" class="flex items-center gap-1 text-muted-foreground">
+				<Icon icon="lucide:trending-up" class="h-3.5 w-3.5" />
+				<span>{metrics.velocity.toFixed(1)} tasks/week</span>
+			</div>
+		{/if}
+
+		<!-- {#if uiPrefs.showMomentumScore !== false && metrics.momentumScore !== undefined}
+						<div class="flex items-center gap-1.5">
+							<Icon icon="lucide:battery" class="h-3.5 w-3.5" />
+							<div class="relative h-2 w-12 overflow-hidden rounded-full bg-muted">
+								<div
+									class="h-full rounded-full bg-primary transition-all"
+									style="width: {metrics.momentumScore}%"
+								></div>
+							</div>
+							<span class="text-xs text-muted-foreground">{metrics.momentumScore}%</span>
+						</div>
+					{/if} -->
+
+		<!-- {#if uiPrefs.showMicroWins && metrics.microWins !== undefined && metrics.microWins > 0}
+						<div class="flex items-center gap-1 text-muted-foreground">
+							<Icon icon="lucide:sparkles" class="h-3.5 w-3.5" />
+							<span>{metrics.microWins} {metrics.microWins === 1 ? 'win' : 'wins'} this week</span>
+						</div>
+					{/if} -->
+
+		<!-- {#if uiPrefs.showNextAction && metrics.nextAction}
+					<div class="rounded-md border border-muted bg-muted/30 p-2 text-xs">
+						<span class="text-muted-foreground">Next: </span>
+						<span class="truncate">{metrics.nextAction.title}</span>
+					</div>
+				{/if} -->
 	</Card.Footer>
 </Card.Root>

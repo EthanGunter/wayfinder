@@ -7,7 +7,7 @@ import type { CreateTaskParams, ExportedData, TaskData, UpdateTaskParams } from 
 
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { AppData as AppData, IAppNode } from "$domain/models/node";
-import type { ProjectData } from "$domain/models/project";
+import type { ProjectData, UpdateProjectParams } from "$domain/models/project";
 
 // TODO:refactor Replace all errors with ConvexError<TaskServerErr>
 
@@ -819,6 +819,101 @@ export const createProject = mutation({
 		}
 
 		return cleanNodeForClient(created);
+	},
+});
+
+export const updateProject = mutation({
+	args: {
+		id: v.string(),
+		children: v.optional(v.array(v.string())),
+		addChildren: v.optional(v.array(v.string())),
+		removeChildren: v.optional(v.array(v.string())),
+		title: v.optional(v.string()),
+		content: v.optional(v.string()),
+		status: v.optional(v.number()),
+		dueDate: v.optional(v.number()),
+		uiPrefs: v.optional(v.object({
+			showStreak: v.optional(v.boolean()),
+			showVelocity: v.optional(v.boolean()),
+			showMomentumScore: v.optional(v.boolean()),
+			showNextAction: v.optional(v.boolean()),
+			showMicroWins: v.optional(v.boolean()),
+		})),
+		lastEdit: v.optional(v.number()),
+	},
+	handler: async (ctx, update) => {
+		const projectId = update.id as Id<"nodes">;
+
+		// Get old project state
+		const oldProject = await ctx.db.get(projectId);
+		if (!oldProject) throw new ConvexError({ type: "NotFoundError", msg: "Project not found", ctx: update.id });
+		if (oldProject.data.type !== "project") {
+			throw new ConvexError({ type: "InvalidState", msg: "Node is not a project", ctx: update.id });
+		}
+
+		// Authorize ownership
+		const identity = await ctx.auth.getUserIdentity();
+		if (!identity || identity.subject !== oldProject.userAuthId) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of project", ctx: update.id });
+		}
+
+		const now = Date.now();
+
+		// Resolve children operations into arrays
+		let children = [...(update.children ?? oldProject.children ?? [])];
+
+		if (update.addChildren) {
+			children = Array.from(new Set([...children, ...update.addChildren]));
+		}
+
+		if (update.removeChildren) {
+			children = children.filter(id => !update.removeChildren!.includes(id));
+		}
+
+		// Build patch object
+		const patchData: Partial<DBNode> = {
+			children,
+			lastEdit: update.lastEdit ?? now,
+		};
+
+		// Handle nested data updates for ProjectData fields
+		const dataUpdates: Partial<ProjectData<number>> = {};
+		if (update.title !== undefined) dataUpdates.title = update.title;
+		if (update.content !== undefined) dataUpdates.content = update.content;
+		if (update.status !== undefined) dataUpdates.status = update.status;
+		if (update.dueDate !== undefined) dataUpdates.dueDate = update.dueDate;
+		if (update.uiPrefs !== undefined) {
+			// Merge uiPrefs with existing values
+			dataUpdates.uiPrefs = {
+				...oldProject.data.uiPrefs,
+				...update.uiPrefs,
+			};
+		}
+
+		// Merge data updates with existing data
+		if (Object.keys(dataUpdates).length > 0) {
+			patchData.data = {
+				...oldProject.data,
+				...dataUpdates,
+			};
+		}
+
+		// Apply patch
+		await ctx.db.patch(projectId, patchData);
+
+		// Get updated node
+		const updated = await ctx.db.get(projectId);
+		if (!updated) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve updated project", ctx: projectId });
+
+		// Propagate relationship changes to affected children
+		const affected = await propagateRelationshipChanges(ctx, [
+			{ oldTask: oldProject, newTask: updated }
+		]);
+
+		return {
+			updated: cleanNodeForClient(updated),
+			affected: affected.map(cleanNodeForClient)
+		};
 	},
 });
 

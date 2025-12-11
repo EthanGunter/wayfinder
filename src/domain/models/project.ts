@@ -3,6 +3,8 @@
  * Projects are organizational containers that group related tasks
  */
 
+import type { IAppNode, AppData } from "./node";
+
 /**
  * System-agnostic project data type
  * @template T - Any type that can be converted to Date() for timestamps
@@ -32,4 +34,18 @@ export enum ProjectStatus {
 export function isProjectActive(data: ProjectData<Date | number>): boolean {
     return data.status === ProjectStatus.active;
 }
+
+//#region Project Update Types
+
+type StrippedNodeParams<DataType, TimeFormat = Date> = Partial<Omit<IAppNode<AppData<TimeFormat>, TimeFormat>, "data" | "id">> & Omit<DataType, "type">;
+
+type ProjectUpdate<TimeFormat = Date> = Partial<ProjectData<TimeFormat>>
+    & {
+        addChildren?: string[];
+        removeChildren?: string[];
+    }
+
+export type UpdateProjectParams<TimeFormat = Date> = { id: string; } & Partial<StrippedNodeParams<ProjectUpdate<TimeFormat>, TimeFormat>>;
+
+//#endregion
 

@@ -337,6 +337,29 @@ export const api: ITasksRemote = {
 			return err(reconstructError(error));
 		}
 	},
+	updateProject: async (params) => {
+		try {
+			const res = await client.mutation(convexApi.tasks.updateProject, {
+				id: params.id as Id<'nodes'>,
+				children: params.children,
+				addChildren: params.addChildren,
+				removeChildren: params.removeChildren,
+				title: params.title,
+				content: params.content,
+				status: params.status,
+				dueDate: params.dueDate instanceof Date ? params.dueDate.getTime() : params.dueDate,
+				uiPrefs: params.uiPrefs,
+				lastEdit: params.lastEdit instanceof Date ? params.lastEdit.getTime() : params.lastEdit,
+			});
+			return ok({
+				updated: convertFromServerNode(res.updated),
+				affected: res.affected.map(convertFromServerNode)
+			});
+		} catch (error) {
+			console.error(error);
+			return err(reconstructError(error));
+		}
+	},
 	getProjectSubtree: (id) => createFetchable((set) => {
 		set({ status: "loading" });
 		const unsubscribe = client.onUpdate(
@@ -433,6 +456,7 @@ export const localApi: ITasksLocal = {
 	getProjects: () => api.getProjects(),
 	getProjectSubtree: (id: string) => api.getProjectSubtree(id),
 	createProject: async (params) => api.createProject(params),
+	updateProject: async (params) => api.updateProject(params),
 	getTodaysTasks: () => api.getTodaysTasks(),
 	getPrioritizedTasks: async (projectId: string, limit: number) => api.getPrioritizedTasks(projectId, limit),
 

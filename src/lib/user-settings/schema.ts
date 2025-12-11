@@ -43,7 +43,7 @@ export const settings = {
 			defaultProjectSort: EnumSetting.fromValues({
 				label: "Default sort method",
 				desc: "How projects should be sorted by default",
-				defaultValue: "momentum",
+				defaultValue: "title",
 				options: ["momentum", "velocity", "activity", "title", "dueDate", "created"],
 			}),
 		},
