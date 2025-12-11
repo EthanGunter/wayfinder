@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as Sheet from '$lib/components/ui/sheet';
+	import * as ResponsiveDialog from '$lib/components/ui/responsive-dialog';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import Icon from '@iconify/svelte';
 	import { authState } from '$lib/API/Auth';
@@ -78,68 +78,57 @@
 	const isValid = $derived(formData.title.trim().length > 0);
 </script>
 
-<Sheet.Root bind:open>
-	<Sheet.Content
-		side="bottom"
-		id="drawer-task-creation"
-		class="mx-auto max-h-[85vh] max-w-2xl rounded-t-xl p-0"
-	>
-		<div class=" w-full">
-			<!-- Header -->
-			<div class="px-6 pt-4">
-				<p class="text-xs tracking-wide text-gray-500 uppercase">
-					{relation ? 'New Subtask' : 'New Project'}
-				</p>
-			</div>
+<ResponsiveDialog.Root bind:open>
+	<ResponsiveDialog.Content showCloseButton id="task-creation-dialog">
+		<ResponsiveDialog.Header sticky>
+			<ResponsiveDialog.Title>
+				{relation ? 'New Subtask' : 'New Task'}
+			</ResponsiveDialog.Title>
+		</ResponsiveDialog.Header>
 
-			<form onsubmit={handleSubmit} class="flex h-full flex-col">
-				<!-- Title row matching TaskEditor style -->
-				<div class="mb-3 flex items-start gap-4 border-b-1 border-gray-200 px-6 pt-2 pb-3">
-					<div class="flex-1">
-						<input
-							id="task-title"
-							name="title"
-							class="w-full border-0 bg-transparent text-2xl font-semibold text-gray-900 placeholder-gray-400 focus:ring-0 focus:outline-none"
-							placeholder={relation ? 'Subtask title' : 'Project title'}
-							bind:value={formData.title}
-							required
-							autofocus
-						/>
-					</div>
+		<div class="flex-1 overflow-y-auto">
+			<form onsubmit={handleSubmit} class="flex flex-col space-y-4">
+				<div class="space-y-2">
+					<label for="task-title" class="text-sm font-medium">Title *</label>
+					<input
+						id="task-title"
+						name="title"
+						class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+						placeholder={relation ? 'Subtask title' : 'Task title'}
+						bind:value={formData.title}
+						required
+						autofocus
+					/>
 				</div>
 
-				<!-- Description -->
-				<div class="flex-1 overflow-y-auto px-6">
+				<div class="space-y-2">
+					<label for="task-description" class="text-sm font-medium">Description</label>
 					<textarea
 						id="task-description"
 						placeholder="Add notes or description..."
 						bind:value={formData.content}
-						class="w-full resize-none border-0 bg-transparent text-gray-700 placeholder-gray-400 focus:ring-0 focus:outline-none"
-						rows="6"
+						class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+						rows="3"
 					></textarea>
 				</div>
 
-				<!-- Footer actions -->
-				<Sheet.Footer>
-					<div class="flex w-full gap-3 px-6 pb-6">
-						<Button
-							id="btn-task-drawer-cancel"
-							type="button"
-							variant="outline"
-							class="flex-1"
-							onclick={() => {
-								open = false;
-							}}
-						>
-							Cancel
-						</Button>
-						<Button id="btn-task-drawer-create" type="submit" class="flex-1" disabled={!isValid}>
-							<Icon icon="lucide:plus" class="mr-2" />
-							{relation ? 'Create Subtask' : 'Create Project'}
-						</Button>
-					</div>
-				</Sheet.Footer>
+				<ResponsiveDialog.Footer>
+					<Button
+						id="btn-task-cancel"
+						type="button"
+						variant="outline"
+						onclick={() => {
+							open = false;
+						}}
+					>
+						Cancel
+					</Button>
+					<Button id="btn-task-create" type="submit" disabled={!isValid}>
+						<Icon icon="lucide:plus" class="mr-2" />
+						{relation ? 'Create Subtask' : 'Create Project'}
+					</Button>
+				</ResponsiveDialog.Footer>
 			</form>
 		</div>
-	</Sheet.Content>
-</Sheet.Root>
+	</ResponsiveDialog.Content>
+</ResponsiveDialog.Root>

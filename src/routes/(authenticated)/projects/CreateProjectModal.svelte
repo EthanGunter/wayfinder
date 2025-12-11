@@ -1,5 +1,5 @@
 <script lang="ts">
-	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Dialog from '$lib/components/ui/responsive-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
@@ -100,13 +100,14 @@
 
 <Dialog.Root bind:open>
 	<Dialog.Content showCloseButton onkeydown={handleClose} class="max-w-md">
-		<Dialog.Header>
+		<Dialog.Header sticky>
 			<Dialog.Title>Create New Project</Dialog.Title>
 			<Dialog.Description>Add a new project to organize your tasks.</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-4 py-4" onkeydown={handleKeydown}>
-			<div class="space-y-2">
+		<div class="flex-1 overflow-y-auto">
+			<div class="space-y-4 py-4" role="group" onkeydown={handleKeydown}>
+				<div class="space-y-2">
 				<label for="project-title" class="text-sm font-medium">Title *</label>
 				<Input
 					id="project-title"
@@ -158,13 +159,14 @@
 					</label>
 				</div>
 			</div>
-		</div>
+			</div>
 
-		<Dialog.Footer>
-			<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
-			<Button onclick={handleSubmit} disabled={isSubmitting || !title.trim()}>
-				{isSubmitting ? 'Creating...' : 'Create Project'}
-			</Button>
-		</Dialog.Footer>
+			<Dialog.Footer>
+				<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
+				<Button onclick={handleSubmit} disabled={isSubmitting || !title.trim()}>
+					{isSubmitting ? 'Creating...' : 'Create Project'}
+				</Button>
+			</Dialog.Footer>
+		</div>
 	</Dialog.Content>
 </Dialog.Root>

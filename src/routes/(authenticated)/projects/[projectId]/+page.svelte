@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { SvelteFlow, SvelteFlowProvider, Background, type NodeTypes } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import TaskCreationDrawer from './TaskCreationDrawer.svelte';
+	import TaskCreationDrawer from './TaskCreationDialog.svelte';
 	import TaskNode from './TaskNode.svelte';
 	import FallbackNode from './FallbackNode.svelte';
 	import TaskEdge from './TaskEdge.svelte';
@@ -187,7 +187,7 @@
 		}}
 	>
 		<Resizable.PaneGroup direction="horizontal" class="flex min-h-0">
-			<Resizable.Pane class="flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
+			<Resizable.Pane class="relative flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
 				<SvelteFlowProvider>
 					<div class="relative flex h-full w-full">
 						<SvelteFlow
@@ -204,15 +204,6 @@
 						>
 							<Background bgColor="var(--background)" />
 						</SvelteFlow>
-						<Button
-							class="fixed right-6 bottom-6 h-12 w-12 rounded-full shadow-lg"
-							onclick={() => {
-								drawerParams.set(null);
-								drawerOpen.set(true);
-							}}
-						>
-							+
-						</Button>
 						<div
 							class="width-max absolute top-6 right-6 grid grid-cols-[12rem] items-center gap-1 [&>*]:h-[3rem]"
 						>
@@ -272,6 +263,16 @@
 								</Button>
 							</ButtonGroup.Root>
 						</div>
+
+						<Button
+							class="absolute right-6 bottom-6 h-12 w-12 rounded-full shadow-lg"
+							onclick={() => {
+								drawerParams.set(null);
+								drawerOpen.set(true);
+							}}
+						>
+							+
+						</Button>
 					</div>
 				</SvelteFlowProvider>
 			</Resizable.Pane>
