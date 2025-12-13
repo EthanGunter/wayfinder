@@ -21,8 +21,6 @@ export const promoteRootChildrenToProjects = migrations.define({
 		if (node.data.type !== "project" || (node.data.title !== "Projects" && node.data.title !== "") || (node.parents.length ?? 0) > 0) return;
 
 		const rootId = node._id;
-		console.log("Promoting root children to projects:", node);
-
 		const makeCtx = (userAuthId: string): MutationCtx =>
 		({
 			...ctx,
@@ -36,7 +34,6 @@ export const promoteRootChildrenToProjects = migrations.define({
 			if (!child) continue;
 			const parents = (child.parents).filter((p) => p !== rootId);
 
-			console.log("Normalizing relationships for child:", child.data.title, "with parents:", parents);
 			// Normalize relationships using existing update logic
 			// await _updateTask(makeCtx(child.userAuthId), {
 			// 	id: String(child._id),
@@ -105,7 +102,7 @@ export const fixSelfReferencingProjects = migrations.define({
 });
 
 // migrated Dev
-// TODO:migration Preview
+// migrated Preview
 // TODO:migration Prod
 export const reorderCompletedChildren = migrations.define({
 	table: "nodes",

@@ -148,8 +148,6 @@ export async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs
 	};
 }
 
-export const test = internalMutation({ args: {}, handler: () => { } })
-
 export const updateTask = mutation({
 	args: argsUpdateTask,
 	handler: async (ctx, update) => {
@@ -233,7 +231,6 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 	// Only validate tasks for now. Generic validation will be handled after the refactor
 	if (oldNode.data.type === "task") {
 		// Validate parents using shared function (must remain non-empty and share project ancestor)
-		console.log("Validating parents for task:", oldNode.data.title, "with parents:", parents, "and children:", children, "of node:", oldNode._id);
 		const { parents: normalizedParents } = await validateParentsAndProject(ctx, parents, oldNode.userAuthId);
 		parents = normalizedParents;
 	}
