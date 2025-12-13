@@ -5,10 +5,10 @@
 	import type { ViewNodeData } from './logic/layout/LayoutEngine';
 	import Icon from '@iconify/svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';
-	import { viewNodes, toggleCollapseChildren } from './logic/shared-state';
+	import { viewNodes, toggleCollapseChildren, appData } from './logic/shared-state';
 	import { layoutEngine } from './logic/layout';
 	import { autoLayout } from './logic/ui-state';
-	import { getDueDateStatus } from '$lib/utils';
+	import { getDueDateStatus, getEffectiveDueDate } from '$lib/utils';
 
 	let { id, data: flowData, ...rest }: NodeProps & { data: ViewNodeData } = $props();
 
@@ -17,10 +17,15 @@
 	const isCollapsed = $derived(!!flowData.collapsedChildren);
 	const hasChildren = $derived(flowData.appNode.children.length > 0);
 	const isCompleted = $derived(isTaskCompleted(flowData.appNode));
+	const effectiveDueDate = $derived(
+		flowData.appNode.data.type === 'task'
+			? getEffectiveDueDate(flowData.appNode/* , appData */)
+			: { dueDate: undefined/* , inherited: false */ }
+	);
 	const dueDateStatus = $derived(
 		flowData.appNode.data.type === 'task'
-			? getDueDateStatus(flowData.appNode.data.dueDate)
-			: { status: 'none' as const, text: '', className: '' }
+			? getDueDateStatus(effectiveDueDate.dueDate/* , effectiveDueDate.inherited */)
+			: { status: 'none' as const, text: '', className: ''/* , inherited: false */ }
 	);
 
 	function handleCollapseToggle(recursive: boolean = false) {

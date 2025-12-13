@@ -1,3 +1,4 @@
+import type { AppNode } from "$domain/models/node";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -14,13 +15,21 @@ export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?:
 
 export type DueDateStatus = 'overdue' | 'due-today' | 'due-soon' | 'upcoming' | 'none';
 
-export function getDueDateStatus(dueDate?: Date): {
+function getDueDateClassName(color: string/* , inherited: boolean */): string {
+	/* 	if (inherited) {
+			return `border border-dashed border-${color}-600 text-${color}-600 bg-transparent`;
+		} */
+	return `text-${color}-600 bg-${color}-50`;
+}
+
+export function getDueDateStatus(dueDate?: Date, /* inherited: boolean = false */): {
 	status: DueDateStatus;
 	text: string;
 	className: string;
+	// inherited: boolean;
 } {
 	if (!dueDate) {
-		return { status: 'none', text: '', className: '' };
+		return { status: 'none', text: '', className: ''/* , inherited: false */ };
 	}
 
 	const now = Date.now();
@@ -46,7 +55,7 @@ export function getDueDateStatus(dueDate?: Date): {
 		} else {
 			text = 'overdue';
 		}
-		return { status: 'overdue', text, className: 'text-red-600 bg-red-50' };
+		return { status: 'overdue', text, className: getDueDateClassName('red'/* , inherited */)/* , inherited */ };
 	}
 
 	if (isToday) {
@@ -56,19 +65,56 @@ export function getDueDateStatus(dueDate?: Date): {
 		} else {
 			text = `due in ${diffHours} hour${diffHours === 1 ? '' : 's'}`;
 		}
-		return { status: 'due-today', text, className: 'text-orange-600 bg-orange-50' };
+		return { status: 'due-today', text, className: getDueDateClassName('orange'/* , inherited */)/* , inherited */ };
 	}
 
 	else if (diffDays <= 1) {
-		return { status: 'due-soon', text: 'due tomorrow', className: 'text-amber-600 bg-amber-50' };
+		return { status: 'due-soon', text: 'due tomorrow', className: getDueDateClassName('amber'/* , inherited */)/* , inherited */ };
 	}
 	else if (diffDays <= 3) {
 		// Due soon (within 3 days)
 		const text = `due in ${diffDays} days`;
-		return { status: 'due-soon', text, className: 'text-yellow-600 bg-yellow-50' };
+		return { status: 'due-soon', text, className: getDueDateClassName('yellow'/* , inherited */)/* , inherited */ };
 	}
 
 	// Upcoming (more than 3 days)
 	const text = `due in ${diffDays} days`;
-	return { status: 'upcoming', text, className: 'text-blue-600 bg-blue-50' };
+	return { status: 'upcoming', text, className: getDueDateClassName('blue'/* , inherited */)/* , inherited */ };
+}
+
+export function getEffectiveDueDate(task: AppNode/* , allNodes: Map<string, AppNode> */): {
+	dueDate?: Date;
+	// inherited: boolean;
+} {
+	// If task has explicit due date, use it
+	if (task.data.type === 'task' && task.data.dueDate) {
+		return { dueDate: new Date(task.data.dueDate)/* , inherited: false */ };
+	} else return { dueDate: undefined }
+
+	// Otherwise traverse up parents to find first due date
+	/* 	const visited = new Set<string>();
+		const toCheck = [...task.parents];
+	
+		while (toCheck.length > 0) {
+			const parentId = toCheck.shift()!;
+			if (visited.has(parentId)) continue;
+			visited.add(parentId);
+	
+			const parent = allNodes.get(parentId);
+			if (!parent) continue;
+	
+			// Check if parent has a due date (only tasks, not projects)
+			const parentDueDate = parent.data.type === 'task'
+				? parent.data.dueDate
+				: undefined;
+	
+			if (parentDueDate) {
+				return { dueDate: new Date(parentDueDate), inherited: true };
+			}
+	
+			// Continue up the tree
+			toCheck.push(...parent.parents);
+		}
+	
+		return { dueDate: undefined, inherited: false }; */
 }

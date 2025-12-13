@@ -401,7 +401,7 @@ export const api: ITasksRemote = {
 				projectId, 
 				limit 
 			});
-			return result.map(convertFromServerNode<Task>);
+			return result.map(convertFromServerNode<Task & { dueDateInherited: boolean }>);
 		} catch (error) {
 			console.error(error);
 			throw reconstructError(error);

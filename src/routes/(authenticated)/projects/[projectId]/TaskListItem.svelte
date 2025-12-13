@@ -11,7 +11,8 @@
 		type Edge
 	} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 	import Button from '$lib/components/ui/button/button.svelte';
-	import { getDueDateStatus } from '$lib/utils';
+	import { getDueDateStatus, getEffectiveDueDate } from '$lib/utils';
+	import { appData } from './logic/shared-state';
 
 	type ItemData = { taskId: string; parentId: string; index: number; listId: string };
 
@@ -63,7 +64,10 @@
 	let closestEdge = $state<Edge | null>(null);
 
 	const isCompleted = $derived(isTaskCompleted(task));
-	const dueDateStatus = $derived(getDueDateStatus(task.data.dueDate));
+	const effectiveDueDate = $derived(getEffectiveDueDate(task/* , appData */));
+	const dueDateStatus = $derived(
+		getDueDateStatus(effectiveDueDate.dueDate/* , effectiveDueDate.inherited */)
+	);
 
 	// Self-managed DnD registration
 	$effect(() => {
@@ -189,7 +193,9 @@
 			<span class="flex items-center gap-2">
 				{task.data.title}
 				{#if dueDateStatus.status !== 'none' && !isCompleted}
-					<span class="text-xs px-1.5 py-0.5 rounded {dueDateStatus.className}">
+					<span
+						class="ml-auto shrink-0 rounded px-1.5 py-0.5 text-xs {dueDateStatus.className}"
+					>
 						{dueDateStatus.text}
 					</span>
 				{/if}

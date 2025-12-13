@@ -20,7 +20,9 @@
 
 	// Create a reactive variable that's properly bound to the checkbox
 	let checked = $state(isTaskCompleted(task));
-	const dueDateStatus = $derived(getDueDateStatus(task.data.dueDate));
+	// Check if task has dueDateInherited property from server
+	// const inherited = 'dueDateInherited' in task ? (task as any).dueDateInherited : false;
+	const dueDateStatus = $derived(getDueDateStatus(task.data.dueDate/* , inherited */));
 
 	// Watch for changes to isCompleted and update the task
 	$effect(() => {
@@ -67,9 +69,9 @@
 		onkeydown={handleKeydown}
 		class="flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden bg-transparent p-1 text-start hover:underline"
 	>
-		<span class="text-ellipsis whitespace-nowrap overflow-hidden">{task.data.title}</span>
+		<span class="overflow-hidden text-ellipsis whitespace-nowrap">{task.data.title}</span>
 		{#if dueDateStatus.status !== 'none' && !checked}
-			<span class="text-xs px-1.5 py-0.5 rounded shrink-0 {dueDateStatus.className}">
+			<span class="ml-auto shrink-0 rounded px-1.5 py-0.5 text-xs {dueDateStatus.className} border-none">
 				{dueDateStatus.text}
 			</span>
 		{/if}
@@ -84,4 +86,3 @@
 		<Icon icon="lucide:plus" />
 	</Button>
 </li>
-

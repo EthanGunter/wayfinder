@@ -6,7 +6,7 @@ import { applyRelationshipOperations, calculateRelationshipUpdates, EXPORT_VERSI
 import type { CreateTaskParams, ExportedData, TaskData, UpdateTaskParams } from "$domain/models/task";
 
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import type { AppData as AppData, IAppNode } from "$domain/models/node";
+import type { AppData as AppData, AppNode, IAppNode } from "$domain/models/node";
 import type { ProjectData, UpdateProjectParams } from "$domain/models/project";
 
 // TODO:refactor Replace all errors with ConvexError<TaskServerErr>
@@ -437,29 +437,29 @@ export const importData = mutation({
 		}
 
 
-	// Filter out references to nodes not in the import set
-	const allImportIds = new Set(dataToImport.map(t => t.id!));
-	for (const task of tasksToImport) {
-		task.parents = task.parents?.filter(p => allImportIds.has(p)) ?? [];
-		task.children = task.children?.filter(c => allImportIds.has(c)) ?? [];
-	}
-	for (const project of projectsInData) {
-		project.parents = []; // Projects should never have parents
-		project.children = project.children?.filter(c => allImportIds.has(c)) ?? [];
-	}
-
-	if (mode === "replace") {
-		// Get all existing nodes and delete them directly (no propagation needed since we're replacing everything)
-		const existingNodes = await ctx.db
-			.query("nodes")
-			.withIndex("by_user", (q) => q.eq("userAuthId", userAuthId))
-			.collect();
-		
-		// Delete all at once - no need for propagation since we're recreating everything
-		for (const node of existingNodes) {
-			await ctx.db.delete(node._id);
+		// Filter out references to nodes not in the import set
+		const allImportIds = new Set(dataToImport.map(t => t.id!));
+		for (const task of tasksToImport) {
+			task.parents = task.parents?.filter(p => allImportIds.has(p)) ?? [];
+			task.children = task.children?.filter(c => allImportIds.has(c)) ?? [];
 		}
-	}
+		for (const project of projectsInData) {
+			project.parents = []; // Projects should never have parents
+			project.children = project.children?.filter(c => allImportIds.has(c)) ?? [];
+		}
+
+		if (mode === "replace") {
+			// Get all existing nodes and delete them directly (no propagation needed since we're replacing everything)
+			const existingNodes = await ctx.db
+				.query("nodes")
+				.withIndex("by_user", (q) => q.eq("userAuthId", userAuthId))
+				.collect();
+
+			// Delete all at once - no need for propagation since we're recreating everything
+			for (const node of existingNodes) {
+				await ctx.db.delete(node._id);
+			}
+		}
 
 		// Create all nodes with their original relationships (old IDs)
 		// Build mapping: oldId -> newId
@@ -1045,19 +1045,34 @@ export const getPrioritizedTasks = query({
 			// Maintain tree order for tasks without due dates
 			return 0;
 		};
-		const todo: DBNode[] = [];
+		const todo: (DBNode & { dueDateInherited: boolean })[] = [];
 		const seen = new Set<string>();
-		const walk = (node: DBNode) => {
+
+		// Walk tree passing down inherited due date from ancestors
+		const walk = (node: DBNode, inheritedDueDate: number | undefined) => {
 			if (seen.has(node._id)) return;
 			else seen.add(node._id);
 
 			if (todo.length === limit) return;
 
+			// Check if this node has its own due date
+			const nodeDueDate = node.data.type === 'task' ? node.data.dueDate : undefined;
+			// Use this node's due date if it has one, otherwise use inherited
+			const effectiveDueDate = nodeDueDate ?? inheritedDueDate;
+			// Track if the due date being used is inherited
+			const dueDateInherited = !nodeDueDate && !!inheritedDueDate;
+			if (dueDateInherited) node.data.dueDate = effectiveDueDate;
+
 			if (node.children.length === 0) {
-				if (node.data.status === 0) todo.push(node);
+				if (node.data.status === 0) {
+					todo.push({ ...node, dueDateInherited });
+				}
 			} else {
 				const children = node.children.map((id) => nodesMap.get(id)).sort(sorter);
-				for (const c of children) { if (c && c.data.status === 0) walk(c); }
+				// Pass down the effective due date to children
+				for (const c of children) {
+					if (c && c.data.status === 0) walk(c, effectiveDueDate);
+				}
 
 				/* TODO:discuss This allows "tasks" that may be used for grouping
 				to show up in the planner's suggestions. This should probably have
@@ -1065,16 +1080,19 @@ export const getPrioritizedTasks = query({
 				"complete" a task that isn't really a task at all.
 				This will likely play into the node-type system if we ever get there...
 				*/
-				if (children.every((c) => !c || c.data.status !== 0) && node.data.status === 0) todo.push(node);
+				if (children.every((c) => !c || c.data.status !== 0) && node.data.status === 0) {
+					todo.push({ ...node, dueDateInherited });
+				}
 			}
 		};
-		// Start from the project's children
+		// Start from the project's children (project itself has no due date to inherit)
 		const projectChildren = (project.children ?? []).map(id => nodesMap.get(id)).filter((n): n is DBNode => !!n).sort(sorter);
 		for (const r of projectChildren) {
 			if (todo.length === limit) break;
-			walk(r);
+			walk(r, undefined);
 		}
-		return todo.map(cleanNodeForClient);
+		const mapped = todo.map(cleanNodeForClient);
+		return mapped as ClientNode<TaskData<number> & { dueDateInherited: boolean }>[];
 	},
 });
 
