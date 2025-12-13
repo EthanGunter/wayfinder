@@ -17,7 +17,7 @@ type ServerNode<T extends AppData<number>> = IAppNode<T & { givenId?: string }, 
 
 function reconstructError(error: unknown): Err {
 	if (error instanceof ConvexError) {
-		const data = JSON.parse(error.data);
+		const data = /* JSON.parse */(error.data);
 		const messageForUser = data.msg;
 
 		switch (data.type) {
@@ -297,23 +297,85 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	getRootTasks: () =>
-		createFetchable((set) => {
-			const unsubscribe = client.onUpdate(
-				convexApi.tasks.getRootTasks,
-				{},
-				(result) => {
-					set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
-
-				},
-				(error: Error) => {
-					set({ status: "error", error: reconstructError(error) });
-				}
-			);
-			return () => {
-				unsubscribe();
-			};
-		}),
+	getProjects: () => createFetchable((set) => {
+		const unsubscribe = client.onUpdate(
+			convexApi.tasks.getProjects,
+			{},
+			(result) => {
+				// Backend returns projects with metrics attached
+				// Preserve metrics by mapping and attaching them
+				const projects = result.map((item) => {
+					const node = convertFromServerNode<IAppNode<ProjectData>>(item);
+					// Attach metrics if present (backend adds them at top level)
+					if ('metrics' in item) {
+						return { ...node, metrics: item.metrics };
+					}
+					return node;
+				});
+				set({ status: "resolved", value: projects });
+			},
+			(error: Error) => {
+				set({ status: "error", error: reconstructError(error) });
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}),
+	createProject: async (params) => {
+		try {
+			const res = await client.mutation(convexApi.tasks.createProject, {
+				title: params.title,
+				content: params.content,
+				status: params.status,
+				dueDate: params.dueDate?.getTime(),
+				uiPrefs: params.uiPrefs,
+			});
+			return ok(convertFromServerNode<IAppNode<ProjectData>>(res));
+		} catch (error) {
+			console.error(error);
+			return err(reconstructError(error));
+		}
+	},
+	updateProject: async (params) => {
+		try {
+			const res = await client.mutation(convexApi.tasks.updateProject, {
+				id: params.id as Id<'nodes'>,
+				children: params.children,
+				addChildren: params.addChildren,
+				removeChildren: params.removeChildren,
+				title: params.title,
+				content: params.content,
+				status: params.status,
+				dueDate: params.dueDate instanceof Date ? params.dueDate.getTime() : params.dueDate,
+				uiPrefs: params.uiPrefs,
+				lastEdit: params.lastEdit instanceof Date ? params.lastEdit.getTime() : params.lastEdit,
+			});
+			return ok({
+				updated: convertFromServerNode(res.updated),
+				affected: res.affected.map(convertFromServerNode)
+			});
+		} catch (error) {
+			console.error(error);
+			return err(reconstructError(error));
+		}
+	},
+	getProjectSubtree: (id) => createFetchable((set) => {
+		set({ status: "loading" });
+		const unsubscribe = client.onUpdate(
+			convexApi.tasks.getProjectSubtree,
+			{ id: id as Id<'nodes'> },
+			(result) => {
+				set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
+			},
+			(error: Error) => {
+				set({ status: "error", error: reconstructError(error) });
+			}
+		);
+		return () => {
+			unsubscribe();
+		};
+	}),
 
 	getTodaysTasks: () =>
 		createFetchable((set) => {
@@ -333,22 +395,18 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	getPrioritizedTasks: (limit: number) =>
-		createQueryable({ limit }, (params, set) => {
-			const unsubscribe = client.onUpdate(
-				convexApi.tasks.getPrioritizedTasks,
-				{ limit: params.limit },
-				(result) => {
-					set({ status: "resolved", value: result.map(convertFromServerNode<Task>) });
-				},
-				(error: Error) => {
-					set({ status: "error", error: reconstructError(error) });
-				}
-			);
-			return () => {
-				unsubscribe();
-			};
-		}),
+	getPrioritizedTasks: async (projectId, limit) => {
+		try {
+			const result = await client.query(convexApi.tasks.getPrioritizedTasks, { 
+				projectId, 
+				limit 
+			});
+			return result.map(convertFromServerNode<Task & { dueDateInherited: boolean }>);
+		} catch (error) {
+			console.error(error);
+			throw reconstructError(error);
+		}
+	},
 
 	searchTasks: async () => {
 		// const res = await client.query(api.tasks.searchTasks, { searchTerm });
@@ -395,9 +453,12 @@ export const localApi: ITasksLocal = {
 	getChildrenOf: (params) => api.getChildrenOf(params),
 	getParentsOf: (params) => api.getParentsOf(params),
 	getSiblingsOf: (params) => api.getSiblingsOf(params),
-	getRootTasks: () => api.getRootTasks(),
+	getProjects: () => api.getProjects(),
+	getProjectSubtree: (id: string) => api.getProjectSubtree(id),
+	createProject: async (params) => api.createProject(params),
+	updateProject: async (params) => api.updateProject(params),
 	getTodaysTasks: () => api.getTodaysTasks(),
-	getPrioritizedTasks: (limit: number) => api.getPrioritizedTasks(limit),
+	getPrioritizedTasks: async (projectId: string, limit: number) => api.getPrioritizedTasks(projectId, limit),
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 

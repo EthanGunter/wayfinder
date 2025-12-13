@@ -1,6 +1,6 @@
 import type { InvalidStateError, ArgumentError, NotAuthorizedError, NotFoundError } from "$domain/errors";
 import type { AppNode, IAppNode } from "$domain/models/node";
-import type { ProjectData } from "$domain/models/project";
+import type { ProjectData, UpdateProjectParams } from "$domain/models/project";
 import type { CreateTaskParams, ExportedData, TaskData, Task, UpdateTaskParams } from "$domain/models/task";
 import type { Result } from "$domain/result";
 import type { FetchableStore, QueryableStore } from "../fetchableStore";
@@ -35,16 +35,36 @@ export interface ITasksBase {
 	 * @note keyed by parent
 	 */
 	getSiblingsOf(id: string): QueryableStore<{ id: string }, Map<AppNode, AppNode[]>>;
-	/**
-	 * Gets all GraphNodes that nothing depends on
-	*/
-	// TODO * @deprecated use getProjects instead
-	getRootTasks(): FetchableStore<Task[]>;
 
-	// /**
-	//  * Gets all GraphNodes that are projects
-	//  */
-	// TODO getProjects(): FetchableStore<IGraphNode<ProjectData>[]>;
+	/**
+	 * Gets all GraphNodes that are projects
+	 */
+	getProjects(): FetchableStore<IAppNode<ProjectData>[]>;
+	/**
+	 * Gets all GraphNodes that are children of the project with the given ID
+	 */
+	getProjectSubtree(id: string): FetchableStore<IAppNode<TaskData>[]>;
+	/**
+	 * Creates a new project
+	 */
+	createProject(params: {
+		title: string;
+		content?: string;
+		status?: number;
+		dueDate?: Date;
+		uiPrefs?: {
+			showStreak?: boolean;
+			showVelocity?: boolean;
+			showMomentumScore?: boolean;
+			showNextAction?: boolean;
+			showMicroWins?: boolean;
+		};
+	}): Promise<Result<IAppNode<ProjectData>, NotAuthorizedError | InvalidStateError>>;
+
+	/**
+	 * Updates a project
+	 */
+	updateProject(params: UpdateProjectParams): Promise<Result<{ updated: AppNode, affected: AppNode[] }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 
 	/**
 	 * Gets all GraphNodes that are on the "Today's List"
@@ -53,9 +73,9 @@ export interface ITasksBase {
 	/**
 	 * Gets the top N tasks based on priority
 	 */
-	getPrioritizedTasks(limit: number /* , weights: WeightParams = {
-      deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
-  } */): QueryableStore<{ limit: number }, Task[]>;
+	getPrioritizedTasks(projectId: string, limit: number /* , weights: WeightParams = {
+    deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
+} */): Promise<(Task & { dueDateInherited: boolean })[]>;
 
 	searchTasks(searchTerm: string): Promise<Task[]>;
 

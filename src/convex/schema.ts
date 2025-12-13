@@ -20,6 +20,13 @@ export const ProjectDataDef = v.object({
   content: v.optional(v.string()),
   status: v.number(), // keep your numeric enum as-is
   dueDate: v.optional(v.number()),
+  uiPrefs: v.optional(v.object({
+    showStreak: v.optional(v.boolean()),
+    showVelocity: v.optional(v.boolean()),
+    showMomentumScore: v.optional(v.boolean()),
+    showNextAction: v.optional(v.boolean()),
+    showMicroWins: v.optional(v.boolean()),
+  })),
 })
 export const TaskDataDef = v.object({
   type: v.literal('task'),

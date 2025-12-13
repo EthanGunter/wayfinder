@@ -8,8 +8,48 @@ import { KeybindSetting } from './keybind';
 import { dev as devEnv } from '$app/environment';
 
 export const settings = {
+	projects: {
+		$label: "Projects",
+		defaults: {
+			$label: "New-Project Defaults",
+			defaultProjectShowStreak: new BoolSetting({
+				label: "Show streak",
+				desc: "Default value for streak tracking on new projects",
+				defaultValue: false,
+			}),
+			defaultProjectShowVelocity: new BoolSetting({
+				label: "Show velocity",
+				desc: "Default value for completion velocity on new projects",
+				defaultValue: false,
+			}),
+			defaultProjectShowMomentumScore: new BoolSetting({
+				label: "Show momentum score",
+				desc: "Default value for momentum indicator on new projects",
+				defaultValue: true,
+			}),
+			defaultProjectShowNextAction: new BoolSetting({
+				label: "Show next action",
+				desc: "Default value for displaying first incomplete task on new projects",
+				defaultValue: true,
+			}),
+			defaultProjectShowMicroWins: new BoolSetting({
+				label: "Show micro wins",
+				desc: "Default value for weekly completions + celebration on new projects",
+				defaultValue: false,
+			}),
+		},
+		sorting: {
+			$label: "Sorting",
+			defaultProjectSort: EnumSetting.fromValues({
+				label: "Default sort method",
+				desc: "How projects should be sorted by default",
+				defaultValue: "title",
+				options: ["momentum", "velocity", "activity", "title", "dueDate", "created"],
+			}),
+		},
+	},
 	graph: {
-		$label: "Graph",
+		$label: "Project Graph",
 		core: {
 			$label: "Visibility",
 			showCompleted: new BoolSetting({
@@ -61,7 +101,7 @@ export const settings = {
 				defaultValue: devEnv,
 			})
 		},
-	}
+	},
 } satisfies SettingsTree;
 
 export type AppSettings = Partial<typeof settings>;

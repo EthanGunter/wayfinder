@@ -35,8 +35,9 @@
 	<Dialog.Trigger
 		type="button"
 		class="mx-auto max-w-max p-0 text-sm font-light text-foreground/50 hover:underline"
-		>reset password</Dialog.Trigger
 	>
+		reset password
+	</Dialog.Trigger>
 	<Dialog.Content>
 		<Dialog.Header>
 			<h2 class="text-2xl font-bold">Reset password</h2>
@@ -54,7 +55,11 @@
 		<Input type="email" placeholder="Email" bind:value={email} />
 
 		<Dialog.Footer>
-			<Button variant="secondary" class="text-foreground/50" onclick={() => (showForgotPassword = false)}>Cancel</Button>
+			<Button
+				variant="secondary"
+				class="text-foreground/50"
+				onclick={() => (showForgotPassword = false)}>Cancel</Button
+			>
 			<Button onclick={handleResetPassword}>Reset password</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

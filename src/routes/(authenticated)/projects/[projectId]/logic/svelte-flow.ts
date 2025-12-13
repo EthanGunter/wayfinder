@@ -1,4 +1,4 @@
-import { useSvelteFlow, type Connection, type EdgeEvents, type IsValidConnection, type NodeEvents, type NodeSelectionEvents, type NodeTargetEventWithPointer, type OnBeforeConnect, type OnBeforeDelete, type OnBeforeReconnect, type OnConnect, type OnConnectEnd, type OnConnectStart, type OnDelete, type OnError, type OnMove, type OnMoveEnd, type OnMoveStart, type OnReconnect, type OnReconnectEnd, type OnReconnectStart, type OnSelectionChange, type OnSelectionDrag, type PaneEvents } from '@xyflow/svelte';
+import { useSvelteFlow, type EdgeEvents, type IsValidConnection, type NodeEvents, type NodeSelectionEvents, type OnBeforeConnect, type OnBeforeDelete, type OnBeforeReconnect, type OnConnect, type OnConnectEnd, type OnConnectStart, type OnDelete, type OnError, type OnMove, type OnMoveEnd, type OnMoveStart, type OnReconnect, type OnReconnectEnd, type OnReconnectStart, type OnSelectionChange, type PaneEvents } from '@xyflow/svelte';
 import { get, writable, type Writable } from 'svelte/store';
 import tasksAPI from '$lib/API/Tasks';
 import { viewNodes, viewEdges, appData, getEdgeKey, svelteFlowInstance } from './shared-state';
@@ -6,8 +6,6 @@ import { drawerOpen, drawerParams, pendingNodeParams, selectedNode } from './ui-
 import type { Task, UpdateTaskParams } from '$domain/models/task';
 import type { ViewEdge, ViewNode } from './layout/LayoutEngine';
 import { layoutEngine } from './layout';
-import type { AppNode } from '$domain/models/node';
-import { ArgumentError, InvalidStateError } from '$domain/errors';
 
 
 //#region SvelteFlow Event Handlers
@@ -15,14 +13,14 @@ import { ArgumentError, InvalidStateError } from '$domain/errors';
 function oninit() {
 	const instance = useSvelteFlow();
 	svelteFlowInstance.set(instance);
-}
+};
 
-function onnodeclick({ node, event }: { node: ViewNode, event: MouseEvent | TouchEvent }) {
+const onnodeclick: NodeEvents<ViewNode>['onnodeclick'] = ({ node, event }) => {
 	if (event?.shiftKey || event?.metaKey || event?.ctrlKey) return;
 	selectedNode.set(node.data.appNode
 		? (viewNodes.get(node.id)?.data.appNode ?? null)
-		: null)
-}
+		: null);
+};
 
 let lastSelectedNodes = new Set<string>();
 let lastSelectedEdges = new Set<string>();
@@ -33,7 +31,7 @@ function setEquals(a: Set<string>, b: Set<string>) {
 	return true;
 }
 
-function onselectionchange({ nodes, edges }: { nodes: ViewNode[], edges: ViewEdge[] }) {
+const onselectionchange: OnSelectionChange<ViewNode, ViewEdge> = ({ nodes, edges }) => {
 	const nextNodes = new Set(nodes.map(n => n.id));
 	const nextEdges = new Set(edges.map(e => e.id));
 
@@ -50,14 +48,14 @@ function onselectionchange({ nodes, edges }: { nodes: ViewNode[], edges: ViewEdg
 			viewNodes.set(id, { ...vn, selected: sel });
 		}
 	}
-}
+};
 
 function wouldCreateCycle(sourceId: string, targetId: string, map: Map<string, ViewEdge>): boolean {
 	if (!sourceId || !targetId) return false;
 	if (sourceId === targetId) return true;
 
 	const adj: Map<string, Set<string>> = new Map();
-	map.forEach((e, key) => {
+	map.forEach((e) => {
 		if (!adj.has(e.source)) adj.set(e.source, new Set());
 		adj.get(e.source)!.add(e.target);
 	});
@@ -105,7 +103,7 @@ function getFlowPointFromEvent(
 	}
 }
 
-function isValidConnection(connection: { source?: string; target?: string }): boolean {
+const isValidConnection: IsValidConnection = (connection) => {
 	const parentId = connection?.source ?? '';
 	const childId = connection?.target ?? '';
 	if (!parentId || !childId) return false;
@@ -119,7 +117,7 @@ function isValidConnection(connection: { source?: string; target?: string }): bo
 		if (childTask?.parents.includes(parentId)) return false;
 	}
 	return !wouldCreateCycle(parentId, childId, viewEdges);
-}
+};
 
 //#region Edge Connection Handlers
 
@@ -130,32 +128,29 @@ let connectionHandleType: string | null = null;
 let reconnectionSuccessful = false;
 let reconnectionInProgress = false;
 
-function onconnectstart(
-	_event: MouseEvent | TouchEvent,
-	params: { nodeId: string | null; handleId: string | null; handleType: any }
-) {
+const onconnectstart: OnConnectStart = (_event, params) => {
 	if (reconnectionInProgress) return;
 	connectionSourceNodeId = params?.nodeId ?? null;
 	connectionHandleType = params?.handleType ?? null;
 	connectionSuccessful = false;
-}
+};
 
-async function onconnect(connection: Connection) {
+const onconnect: OnConnect = async (connection) => {
 	connectionSuccessful = true;
 	const parentId: string | undefined = connection?.source;
 	const childId: string | undefined = connection?.target;
 	if (!parentId || !childId || parentId === childId) return;
 
-	const [_, error] = await tasksAPI.updateTask({
+	const [, error] = await tasksAPI.updateTask({
 		id: parentId,
 		addChildren: [childId],
 	})
 	error?.UNHANDLED();
 
 	// refreshNodesDataFor([parentId, childId]);
-}
+};
 
-const onconnectend = (event: MouseEvent | TouchEvent, connectState: any) => {
+const onconnectend: OnConnectEnd = (event, connectState) => {
 	if (reconnectionInProgress) {
 		connectionSourceNodeId = null;
 		connectionHandleType = null;
@@ -195,27 +190,20 @@ const onconnectend = (event: MouseEvent | TouchEvent, connectState: any) => {
 	connectionSuccessful = false;
 };
 
-function onreconnectstart(
-	_event: MouseEvent | TouchEvent,
-	edge: ViewEdge,
-	handleType: 'source' | 'target'
-) {
+const onreconnectstart: OnReconnectStart<ViewEdge> = () => {
 	reconnectionSuccessful = false;
 	reconnectionInProgress = true;
-}
+};
 
-function onbeforereconnect(reconnectedEdge: ViewEdge, oldEdge: ViewEdge): ViewEdge | false {
+const onbeforereconnect: OnBeforeReconnect<ViewEdge> = (reconnectedEdge, oldEdge) => {
 	const newSource = String(reconnectedEdge.source ?? oldEdge.source ?? '');
 	const newTarget = String(reconnectedEdge.target ?? oldEdge.target ?? '');
 	if (!newSource || !newTarget) return false;
 	if (newSource === newTarget) return false;
 	return reconnectedEdge;
-}
+};
 
-async function onreconnect(
-	oldEdge: ViewEdge,
-	newConnection: { source?: string; target?: string }
-) {
+const onreconnect: OnReconnect<ViewEdge> = async (oldEdge, newConnection) => {
 	reconnectionSuccessful = true;
 	const oldSource = String(oldEdge.source);
 	const oldTarget = String(oldEdge.target);
@@ -225,14 +213,14 @@ async function onreconnect(
 	if (!newSource || !newTarget) return;
 	if (newSource === oldSource && newTarget === oldTarget) return;
 
-	const [_, error] = await tasksAPI.updateTask({
+	const [, error] = await tasksAPI.updateTask({
 		id: oldSource,
 		removeChildren: [oldTarget],
 	})
 	error?.UNHANDLED();
 
 	if (!viewEdges.has(getEdgeKey(newSource, newTarget))) {
-		const [_, error] = await tasksAPI.updateTask({
+		const [, error] = await tasksAPI.updateTask({
 			id: newSource,
 			addChildren: [newTarget],
 		})
@@ -240,13 +228,13 @@ async function onreconnect(
 	}
 
 	// refreshNodesDataFor([oldSource, oldTarget, newSource, newTarget]);
-}
+};
 
-const onreconnectend = async (
-	event: MouseEvent | TouchEvent,
-	edge: ViewEdge,
-	_handleType: 'source' | 'target',
-	connectState: any
+const onreconnectend: OnReconnectEnd<ViewEdge> = async (
+	event,
+	edge,
+	_handleType,
+	connectState,
 ) => {
 	if (!reconnectionSuccessful) {
 		const droppedOnHandle =
@@ -257,7 +245,7 @@ const onreconnectend = async (
 			const src = String(edge.source);
 			const tgt = String(edge.target);
 
-			const [_, error] = await tasksAPI.updateTask({
+			const [, error] = await tasksAPI.updateTask({
 				id: src,
 				removeChildren: [tgt],
 			})
@@ -275,26 +263,26 @@ const onreconnectend = async (
 //#endregion
 
 
-function onpaneclick() {
+const onpaneclick: PaneEvents['onpaneclick'] = () => {
 	selectedNode.set(null);
-}
+};
 
-const onnodedragstart: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
+const onnodedragstart: NodeEvents<ViewNode>['onnodedragstart'] = ({ targetNode }) => {
 	if (!targetNode) return;
 	layoutEngine.onNodeDragged(targetNode.id, targetNode.position);
-}
+};
 
-const onnodedrag: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
+const onnodedrag: NodeEvents<ViewNode>['onnodedrag'] = ({ targetNode }) => {
 	if (!targetNode) return;
 	layoutEngine.onNodeDragged(targetNode.id, targetNode.position);
-}
+};
 
-const onnodedragstop: NodeTargetEventWithPointer<MouseEvent | TouchEvent, ViewNode> = ({ targetNode }) => {
+const onnodedragstop: NodeEvents<ViewNode>['onnodedragstop'] = ({ targetNode }) => {
 	if (!targetNode) return;
 	layoutEngine.onNodeDragEnd(targetNode.id, targetNode.position);
-}
+};
 
-async function ondelete(params: { nodes: ViewNode[]; edges: ViewEdge[] }) {
+const ondelete: OnDelete<ViewNode, ViewEdge> = async (params) => {
 	if (params.nodes.length === 1) {
 		const task = params.nodes[0].data.appNode;
 		const parent = appData.get(task.parents[0]);
@@ -308,7 +296,7 @@ async function ondelete(params: { nodes: ViewNode[]; edges: ViewEdge[] }) {
 	// If node deleted
 	if (params.nodes.length > 0) {
 		const ids = params.nodes.map((n) => n.id);
-		const [_, error] = await tasksAPI.deleteTasks({ ids });
+		const [, error] = await tasksAPI.deleteTasks({ ids });
 		error?.UNHANDLED();
 	}
 
@@ -320,8 +308,6 @@ async function ondelete(params: { nodes: ViewNode[]; edges: ViewEdge[] }) {
 		const parentsToRemove = new Map<string, string[]>();
 
 		for (const edge of params.edges) {
-			// Normalize edge ID - strip SvelteFlow's xy-edge__ prefix if present
-			const normalizedEdgeId = edge.id.startsWith('xy-edge__') ? edge.id.slice(9) : edge.id;
 			const sourceId = edge.source;
 			const targetId = edge.target;
 
@@ -360,11 +346,11 @@ async function ondelete(params: { nodes: ViewNode[]; edges: ViewEdge[] }) {
 		}
 
 		if (updates.length > 0) {
-			const [_, error] = await tasksAPI.updateTasks({ updates })
+			const [, error] = await tasksAPI.updateTasks({ updates })
 			error?.UNHANDLED();
 		}
 	}
-}
+};
 
 export const SvelteFlowEventHandlers = {
 	oninit,
@@ -501,9 +487,9 @@ export class SvelteFlowAdapter {
 		});
 	}
 
-	public setAppearance(nodes: AppNode[], appearance: 'hidden' | 'dimmed' | 'normal') {
-
-	}
+	/* 	public setAppearance(nodes: AppNode[], appearance: 'hidden' | 'dimmed' | 'normal') {
+	
+		} */
 
 	public destroy() {
 		this.unsubViewNodes?.();
