@@ -43,7 +43,7 @@ export interface ITasksBase {
 	/**
 	 * Gets all GraphNodes that are children of the project with the given ID
 	 */
-	getProjectSubtree(id: string): FetchableStore<IAppNode<TaskData>[]>;
+	getProjectSubtree(id: string): FetchableStore<IAppNode<ProjectData | TaskData>[]>;
 	/**
 	 * Creates a new project
 	 */
