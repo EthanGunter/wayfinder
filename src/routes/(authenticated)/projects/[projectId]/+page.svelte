@@ -54,8 +54,12 @@
 	let searchBar = $state<TaskSearchBar>();
 
 	const { data }: PageProps = $props();
-	const projectStore = data.projectStore;
-	const projectNodeStore = data.projectNodeStore;
+	const projectStore = data.subtreeStore;
+	let project = $derived.by(() => {
+		return $projectStore.status === 'resolved'
+			? $projectStore.value.find((node) => node.id === page.params.projectId)
+			: null;
+	});
 
 	let projectEditorLayoutState = $state<ProjectEditorLayoutState>({
 		accordionValues: ['children', 'settings'],
@@ -280,15 +284,17 @@
 							</ButtonGroup.Root>
 						</div>
 
-						<Button
-							class="absolute right-6 bottom-6 h-12 w-12 rounded-full shadow-lg"
-							onclick={() => {
-								drawerParams.set(null);
-								drawerOpen.set(true);
-							}}
-						>
-							+
-						</Button>
+						{#if project}
+							<Button
+								class="absolute right-6 bottom-6 h-12 w-12 rounded-full shadow-lg"
+								onclick={() => {
+									drawerParams.set({ mode: 'parent', relation: project! });
+									drawerOpen.set(true);
+								}}
+							>
+								+
+							</Button>
+						{/if}
 					</div>
 				</SvelteFlowProvider>
 			</Resizable.Pane>
@@ -306,9 +312,9 @@
 						onDelete={onEditorDelete}
 						{onSelectNode}
 					/>
-				{:else if $projectNodeStore.status === 'resolved' && $projectNodeStore.value.data.type === 'project'}
+				{:else if project && project.data.type === 'project'}
 					<ProjectEditor
-						bind:project={$projectNodeStore.value as IAppNode<ProjectData>}
+						bind:project={project as IAppNode<ProjectData>}
 						bind:layoutState={projectEditorLayoutState}
 						onDelete={onProjectDelete}
 						{onSelectNode}
