@@ -82,7 +82,7 @@
 	<ResponsiveDialog.Content showCloseButton id="task-creation-dialog">
 		<ResponsiveDialog.Header sticky>
 			<ResponsiveDialog.Title>
-				{relation ? 'New Subtask' : 'New Task'}
+				{relation?.data.type === 'project' ? 'New Task' : 'New Subtask'}
 			</ResponsiveDialog.Title>
 		</ResponsiveDialog.Header>
 
@@ -94,7 +94,7 @@
 						id="task-title"
 						name="title"
 						class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs ring-offset-background transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
-						placeholder={relation ? 'Subtask title' : 'Task title'}
+						placeholder={relation?.data.type === 'project' ? 'Task title' : 'Subtask title'}
 						bind:value={formData.title}
 						required
 						autofocus
@@ -125,7 +125,7 @@
 					</Button>
 					<Button id="btn-task-create" type="submit" disabled={!isValid}>
 						<Icon icon="lucide:plus" class="mr-2" />
-						{relation ? 'Create Subtask' : 'Create Project'}
+						{relation ? 'Create Subtask' : 'Create Task'}
 					</Button>
 				</ResponsiveDialog.Footer>
 			</form>
