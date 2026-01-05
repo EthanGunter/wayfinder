@@ -1,7 +1,6 @@
 // capacitor.config.ts
 import { CapacitorConfig } from '@capacitor/cli';
-
-const isDev = true; //TODO I don't know where this is defined yet //process.env.NODE_ENV === 'development';;
+import { isDev } from './src/lib/config/host';
 
 const config: CapacitorConfig = {
   appId: 'com.wayfinder.app',

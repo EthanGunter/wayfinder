@@ -5,11 +5,11 @@
 	"type": "module",
 	"scripts": {
 		"prebuild": "npx convex deploy",
-		"dev": "concurrently \"pnpx convex dev --local\" \"vite dev\"",
+		"dev": "PUBLIC_DEPLOYMENT_ENV=development concurrently \"pnpx convex dev --local\" \"vite dev\"",
 		"deploy:preview": "pnpx convex deploy --env-file .env.preview",
 		"deploy:prod": "pnpx convex deploy --env-file .env.prod",
 		"host": "vite dev --host",
-		"build": "vite build --mode prod",
+		"build": "PUBLIC_DEPLOYMENT_ENV=${VERCEL_ENV:-production} vite build --mode prod",
 		"build:mobile": "vite build --mode mobile && npx cap sync",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",

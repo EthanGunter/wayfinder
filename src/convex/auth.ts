@@ -12,7 +12,9 @@ import { betterAuth } from "better-auth";
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
 export const authComponent = createClient<DataModel>(components.betterAuth);
-const resend = new Resend(components.resend);
+const resend = new Resend(components.resend, {
+  testMode: process.env.NODE_ENV !== 'production'
+});
 
 
 export const createAuth = (
@@ -24,6 +26,8 @@ export const createAuth = (
     logger: {
       disabled: false,
     },
+    // Note: Convex backend uses process.env directly (not our host config)
+    // This maps to host.SITE_URL on the frontend
     baseURL: process.env.PUBLIC_SITE_URL,
     trustedOrigins: [process.env.PUBLIC_SITE_URL!],
     database: authComponent.adapter(ctx),
@@ -32,11 +36,19 @@ export const createAuth = (
       enabled: true,
       requireEmailVerification: false,
       sendResetPassword: async ({ user, url }) => {
+        // Extract token from Better Auth's generated URL
+        // URL format: {baseURL}/api/auth/reset-password/{token}?callbackURL=...
+        const urlPath = new URL(url).pathname;
+        const token = urlPath.split('/').pop();
+        
+        // Build direct frontend URL
+        const resetUrl = `${process.env.PUBLIC_SITE_URL}/reset-password?token=${token}`;
+        
         await resend.sendEmail(requireActionCtx(ctx), {
-          from: "",
+          from: "Wayfinder Support <support@wayfinder.ethangunter.com>",
           to: user.email,
           subject: "Reset your password",
-          html: `Click here to reset your password: <a href="${url}">${url}</a>`,
+          html: `<a href="${resetUrl}">Click here to reset your password</a>`,
         });
       },
       onPasswordReset: async ({ user }) => {

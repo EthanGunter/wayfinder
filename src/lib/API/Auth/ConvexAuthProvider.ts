@@ -30,7 +30,7 @@ import { convexClient as convexPlugin } from "@convex-dev/better-auth/client/plu
 import { multiSessionClient } from "better-auth/client/plugins";
 import { page } from "$app/state";
 import { sharedConvexClient } from "../ConvexClient";
-import { PUBLIC_SITE_URL } from "$env/static/public";
+import { SITE_URL } from "$lib/config/host";
 import type { Fetchable } from "$domain/fetchable";
 import { ConvexError } from "convex/values";
 
@@ -57,7 +57,7 @@ const setupConvexAuth = () => {
 	sharedConvexClient.setAuth(async () => {
 		try {
 			// TODO will this result in a double slash and fail to fetch?
-			const resp = await fetch(`${PUBLIC_SITE_URL}/api/auth/convex/token`, {
+			const resp = await fetch(`${SITE_URL}/api/auth/convex/token`, {
 				credentials: "include",
 			});
 			if (!resp.ok) return null;
