@@ -17,7 +17,13 @@
 	import { page } from '$app/state';
 	import Icon from '@iconify/svelte';
 
-	import { appData, svelteFlowInstance, restoreCollapseState } from './logic/shared-state';
+	import {
+		appData,
+		viewNodes,
+		svelteFlowInstance,
+		restoreCollapseState,
+		resetGraphState
+	} from './logic/shared-state';
 	import { initializeFromUrl, centerAndHighlightNode } from './logic/navigation';
 	import { SvelteFlowAdapter, SvelteFlowEventHandlers } from './logic/svelte-flow';
 	import {
@@ -46,9 +52,9 @@
 	let unsubTasksStore: (() => void) | null = null;
 	let unsubShowNodes: (() => void) | null = null;
 	let initialLoadDone = false;
-	const sfAdapter: SvelteFlowAdapter = new SvelteFlowAdapter();
-	const nodes = sfAdapter.nodes;
-	const edges = sfAdapter.edges;
+	let sfAdapter = $state<SvelteFlowAdapter>();
+	let nodes = $derived(sfAdapter?.nodes);
+	let edges = $derived(sfAdapter?.edges);
 	const nodeTypes = { task: TaskNode, fallback: FallbackNode } as NodeTypes;
 
 	let searchBar = $state<TaskSearchBar>();
@@ -67,6 +73,9 @@
 	});
 
 	onMount(() => {
+		// Create a fresh adapter instance for this mount
+		sfAdapter = new SvelteFlowAdapter();
+
 		unsubTasksStore = projectStore.subscribe(async (taskSub) => {
 			if (taskSub.status !== 'resolved') return;
 
@@ -127,8 +136,10 @@
 
 	onDestroy(() => {
 		unsubTasksStore?.();
+		unsubShowNodes?.();
 		layoutEngine.destroy();
-		sfAdapter.destroy();
+		sfAdapter?.destroy();
+		resetGraphState();
 	});
 
 	async function onTaskChange(original: Task, update: Partial<Task>) {
@@ -208,22 +219,23 @@
 	>
 		<Resizable.PaneGroup direction="horizontal" class="flex min-h-0">
 			<Resizable.Pane class="relative flex min-h-0 min-w-0" defaultSize={70} minSize={40}>
-				<SvelteFlowProvider>
-					<div class="relative flex h-full w-full">
-						<SvelteFlow
-							class="h-full w-full"
-							minZoom={0.1}
-							maxZoom={2}
-							{nodeTypes}
-							nodeOrigin={[0.5, 0.5]}
-							edgeTypes={{ task: TaskEdge }}
-							defaultEdgeOptions={{ type: 'task' }}
-							bind:nodes={$nodes}
-							bind:edges={$edges}
-							{...SvelteFlowEventHandlers}
-						>
-							<Background bgColor="var(--background)" />
-						</SvelteFlow>
+				{#if sfAdapter && nodes && edges}
+					<SvelteFlowProvider>
+						<div class="relative flex h-full w-full">
+							<SvelteFlow
+								class="h-full w-full"
+								minZoom={0.1}
+								maxZoom={2}
+								{nodeTypes}
+								nodeOrigin={[0.5, 0.5]}
+								edgeTypes={{ task: TaskEdge }}
+								defaultEdgeOptions={{ type: 'task' }}
+								bind:nodes={$nodes}
+								bind:edges={$edges}
+								{...SvelteFlowEventHandlers}
+							>
+								<Background bgColor="var(--background)" />
+							</SvelteFlow>
 						<div
 							class="width-max absolute top-6 right-6 grid grid-cols-[12rem] items-center gap-1 [&>*]:h-[3rem]"
 						>
@@ -297,6 +309,7 @@
 						{/if}
 					</div>
 				</SvelteFlowProvider>
+				{/if}
 			</Resizable.Pane>
 			<Resizable.Handle />
 			<Resizable.Pane
