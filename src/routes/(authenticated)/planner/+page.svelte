@@ -156,8 +156,6 @@
 		if (isMobile.current) {
 			if (sortedTodaysTasks.length < 5) {
 				suggestionsOpen = true;
-				// Expand all project accordions when suggestions auto-open
-				expandedProjects = new Set(activeProjects.map((p) => p.id));
 			} else if (sortedTodaysTasks.length >= 5) {
 				suggestionsOpen = false;
 			}

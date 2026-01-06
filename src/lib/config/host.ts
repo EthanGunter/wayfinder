@@ -25,7 +25,3 @@ export const isProd = deploymentEnv === 'production';
 export const SITE_URL = PUBLIC_SITE_URL;
 export const CONVEX_URL = PUBLIC_CONVEX_URL;
 
-// Future: Add other host-specific config here as needed
-// export const CDN_URL = PUBLIC_CDN_URL;
-// export const API_TIMEOUT = isProd ? 30000 : 10000;
-
