@@ -1,13 +1,13 @@
 import { ArgumentError } from "$domain/errors";
 import type { Doc, Id } from "./_generated/dataModel";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { applyRelationshipOperations, calculateRelationshipUpdates, EXPORT_VERSIONS, TaskStatus } from "$domain/models/task";
 import type { CreateTaskParams, ExportedData, TaskData, UpdateTaskParams } from "$domain/models/task";
 
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import type { AppData as AppData, AppNode, IAppNode } from "$domain/models/node";
-import type { ProjectData, UpdateProjectParams } from "$domain/models/project";
+import type { AppData as AppData, IAppNode } from "$domain/models/node";
+import type { ProjectData } from "$domain/models/project";
 
 // TODO:refactor Replace all errors with ConvexError<TaskServerErr>
 
@@ -108,7 +108,7 @@ export const createTasks = mutation({
 export async function _createTask(ctx: MutationCtx, createDetail: CreateTaskArgs & { userAuthId: string }): Promise<{ created: IAppNode<ClientTaskData & { givenId: string | undefined }, number>, affected: ClientNode[] }> {
 	const now = Date.now();
 
-	const { parents: finalParents } = await validateParentsAndProject(ctx, createDetail.parents ?? [], createDetail.userAuthId);
+	const { parents: finalParents } = await cleanupTaskParentsAndProjectRelationships(ctx, createDetail.parents ?? [], createDetail.userAuthId);
 
 	// Insert node with nested data structure
 	const newId = await ctx.db.insert("nodes", {
@@ -213,11 +213,13 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 	}
 
 	if (update.removeParents) {
-		if (parents.length === 1 && oldNode.data.type !== "project") {
-			const project = await resolveProjectAncestor(ctx, parents[0], oldNode.userAuthId);
+		parents = parents.filter(id => !update.removeParents!.includes(id));
+
+		// Orphan protection: if removing parents would leave node orphaned, keep it attached to project
+		if (parents.length === 0 && oldNode.data.type !== "project") {
+			const project = await resolveProjectAncestor(ctx, oldNode.parents[0], oldNode.userAuthId);
 			parents = [project._id];
 		}
-		parents = parents.filter(id => !update.removeParents!.includes(id));
 	}
 
 	if (update.addChildren) {
@@ -230,8 +232,8 @@ export async function _updateTask(ctx: MutationCtx, update: UpdateTaskParams<num
 
 	// Only validate tasks for now. Generic validation will be handled after the refactor
 	if (oldNode.data.type === "task") {
-		// Validate parents using shared function (must remain non-empty and share project ancestor)
-		const { parents: normalizedParents } = await validateParentsAndProject(ctx, parents, oldNode.userAuthId);
+		// Validate parents (cleanup of removed parent references happens automatically)
+		const { parents: normalizedParents } = await cleanupTaskParentsAndProjectRelationships(ctx, parents, oldNode.userAuthId, undefined, nodeId);
 		parents = normalizedParents;
 	}
 
@@ -1522,11 +1524,12 @@ export async function resolveProjectAncestor(
 	}
 }
 
-export async function validateParentsAndProject(
+export async function cleanupTaskParentsAndProjectRelationships(
 	ctx: QueryCtx | MutationCtx,
 	parents: string[],
 	userAuthId: string,
-	cache?: NodeCache
+	cache?: NodeCache,
+	nodeId?: string // If provided, cleanup removed parent references automatically
 ): Promise<{ parents: string[]; project: DBNode }> {
 	const normalizedParents = dedupePreserveOrder(parents.map(String));
 	if (normalizedParents.length === 0) {
@@ -1538,13 +1541,14 @@ export async function validateParentsAndProject(
 		if (!parentNode) {
 			throw new ConvexError({ type: "NotFoundError", msg: "Parent not found", ctx: parentId });
 		}
+		// TODO:collaboration refactor validation
 		if (parentNode.userAuthId !== userAuthId) {
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Parent belongs to another user", ctx: parentId });
 		}
 	}
 
+	// TODO:optimize this seems inefficient and unecessary
 	const projectAncestor = await resolveProjectAncestor(ctx, normalizedParents[0], userAuthId, cache);
-
 	for (let i = 1; i < normalizedParents.length; i++) {
 		const parentProject = await resolveProjectAncestor(ctx, normalizedParents[i], userAuthId, cache);
 		if (parentProject._id !== projectAncestor._id) {
@@ -1555,11 +1559,21 @@ export async function validateParentsAndProject(
 	// If multiple parents were provided and one of them is the project ancestor itself,
 	// drop the project parent to avoid duplicating the anchor alongside concrete parents.
 	let finalParents = normalizedParents;
+
 	if (finalParents.length > 1) {
 		const ancestorId = projectAncestor._id;
+		const projectInParents = finalParents.includes(ancestorId);
+
+		// Filter out project parent
 		finalParents = finalParents.filter(p => p !== ancestorId);
-		if (finalParents.length === 0) {
-			finalParents = [ancestorId];
+		if (projectInParents && nodeId) {
+			// Cleanup: remove node from project's children list since we're removing this parent relationship
+			const projectNode = await getNodeCached(ctx, ancestorId, cache);
+			if (projectNode) {
+				const updatedChildren = (projectNode.children ?? []).filter(c => c !== nodeId);
+				// Safe to cast: nodeId is only provided from mutation contexts
+				await (ctx as MutationCtx).db.patch(ancestorId as Id<"nodes">, { children: updatedChildren });
+			}
 		}
 	}
 
@@ -1606,7 +1620,8 @@ export async function propagateRelationshipChanges(
 				adoptedProjectId = ancestor._id;
 			}
 		} else {
-			({ parents: normalizedParents } = await validateParentsAndProject(ctx, normalizedParents, relatedNode.userAuthId, ancestorCache));
+			const { parents: validatedParents } = await cleanupTaskParentsAndProjectRelationships(ctx, normalizedParents, relatedNode.userAuthId, ancestorCache, taskId);
+			normalizedParents = validatedParents;
 		}
 
 		// Patch the DB with normalized parents
