@@ -118,3 +118,10 @@ export function getEffectiveDueDate(task: AppNode/* , allNodes: Map<string, AppN
 	
 		return { dueDate: undefined, inherited: false }; */
 }
+
+
+export function setEquals(a: Set<string>, b: Set<string>) {
+	if (a.size !== b.size) return false;
+	for (const x of a) if (!b.has(x)) return false;
+	return true;
+}

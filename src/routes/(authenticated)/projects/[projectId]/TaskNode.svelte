@@ -94,7 +94,7 @@
 					<Icon icon="lucide:pin" class="size-3.5" />
 				</div>
 			{/if}
-			<div class="flex items-start gap-2 px-3 py-2">
+			<div class="flex flex-col items-start gap-2 px-3 py-2">
 				<div class="flex min-w-0 flex-1 items-center gap-2">
 					<div
 						class="line-clamp-2 max-w-[16rem] text-sm font-semibold text-wrap text-gray-900"
@@ -112,26 +112,26 @@
 							{dueDateStatus.text}
 						</span>
 					{/if}
-					{#if $devEnabled}
-						<div class="text-[7px]">
-							<span>node-id: {id}</span>
-							{#if flowData.appNode.parents.length > 0}
-								<h6>Parents</h6>
-							{/if}
-							{#each flowData.appNode.parents as parent}
-								<span>- {parent.substring(0, 5)}</span>
-								<br />
-							{/each}
-							{#if flowData.appNode.children.length > 0}
-								<h6>Children</h6>
-							{/if}
-							{#each flowData.appNode.children as child}
-								<span>- {child.substring(0, 5)}</span>
-								<br />
-							{/each}
-						</div>
-					{/if}
 				</div>
+				{#if $devEnabled}
+					<div class="text-[7px]">
+						<span>node-id: {id}</span>
+						{#if flowData.appNode.parents.length > 0}
+							<h6>Parents</h6>
+						{/if}
+						{#each flowData.appNode.parents as parent}
+							<span>- {parent.substring(0, 5)}</span>
+							<br />
+						{/each}
+						{#if flowData.appNode.children.length > 0}
+							<h6>Children</h6>
+						{/if}
+						{#each flowData.appNode.children as child}
+							<span>- {child.substring(0, 5)}</span>
+							<br />
+						{/each}
+					</div>
+				{/if}
 			</div>
 
 			<Handle type="target" position={Position.Left} />
