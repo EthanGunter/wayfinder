@@ -322,7 +322,7 @@
 					<Accordion.Trigger
 						class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 					>
-						Blocked By
+						Prerequisites
 					</Accordion.Trigger>
 					<Accordion.Content>
 						{#if $childTasksStore.status === 'resolved'}
@@ -351,7 +351,7 @@
 						<Accordion.Trigger
 							class="priority-trigger flex items-center justify-between py-2 text-sm text-gray-700 [&>svg]:!-rotate-180 [&[data-state=open]>svg]:!-rotate-0"
 						>
-							Priority
+							Siblings
 						</Accordion.Trigger>
 						<Accordion.Content>
 							<div class="flex flex-col gap-4">
