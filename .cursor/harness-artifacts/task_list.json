@@ -1,0 +1,140 @@
+[
+  {
+    "category": "functional",
+    "title": "Implement backend limit checking system",
+    "description": "Add complete infrastructure for checking task/project limits: constants, schema updates, helper functions, and quota query. Free users: 2 projects max, ~50 tasks max. Paid users with 'no-limits' feature: unlimited.",
+    "acceptance": [
+      "Constants file with FREE_TASK_LIMIT (50) and FREE_PROJECT_LIMIT (2)",
+      "Schema updated: 'no-limits' feature added, 'no-task-limit' removed",
+      "checkTaskLimit(ctx, userAuthId) returns { current: number, max: number }",
+      "checkProjectLimit(ctx, userAuthId) returns { current: number, max: number }",
+      "getUserQuota query returns { taskCurrent, taskMax, projectCurrent, projectMax }",
+      "max == -1 for unlimited users",
+      "Uses Convex aggregates for efficient counting",
+      "All functions respect 'no-limits' feature flag"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "This is the foundation for all limit enforcement. getUserQuota is only for account page display, not inline UI counters."
+  },
+  {
+    "category": "functional",
+    "title": "Enforce limits in create mutations",
+    "description": "Update createTask and createProject mutations to check limits before allowing creation and throw LimitReached errors when limits are hit.",
+    "acceptance": [
+      "createTask checks limit via checkTaskLimit before insert",
+      "createProject checks limit via checkProjectLimit before insert",
+      "Both throw ConvexError with type 'LimitReached' when current >= max",
+      "Error includes ctx: { current, max, resource } for UI consumption",
+      "Users with 'no-limits' feature (max = -1) bypass checks",
+      "Existing tests pass or are updated appropriately"
+    ],
+    "deps": [
+      "Implement backend limit checking system"
+    ],
+    "passes": false,
+    "notes": "Error format: { type: 'LimitReached', msg: '[Resource] limit reached', ctx: { current, max, resource: 'tasks'|'projects' } }. Frontend catches these to show upgrade prompts."
+  },
+  {
+    "category": "functional",
+    "title": "Implement Stripe webhook handler",
+    "description": "Create Convex HTTP endpoint to receive Stripe webhooks for payment events. Handle checkout completion (one-time and subscription) and subscription cancellation. Update user 'no-limits' feature based on payment status.",
+    "acceptance": [
+      "HTTP endpoint at /api/stripe/webhook receives POST requests",
+      "Webhook signature verification using Stripe secret",
+      "Handles checkout.session.completed event: grants 'no-limits' feature",
+      "Handles customer.subscription.deleted event: revokes 'no-limits' feature",
+      "Distinguishes between one-time payment and subscription via metadata or mode",
+      "Updates users table via internal mutation",
+      "Returns 200 for successful processing, 400 for invalid signature",
+      "Logs events for debugging (can use console for now)"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "Use Stripe SDK for signature verification. Webhook signing secret will be configured in Stripe dashboard. Consider storing Stripe customer ID on user record for future reference. For one-time payments, 'no-limits' is permanent; for subscriptions, it's active until cancelled."
+  },
+  {
+    "category": "ux",
+    "title": "Create upgrade/subscription page",
+    "description": "Build complete upgrade page at /account/upgrade showing current tier, quota, and pricing options with Stripe payment links. Users can choose between subscription or one-time early supporter payment.",
+    "acceptance": [
+      "Route exists at /account/upgrade (or /account/subscription)",
+      "Displays current tier (Free vs Supporter/Unlimited)",
+      "Shows quota via getUserQuota: 'X/Y tasks, X/Y projects'",
+      "Two pricing cards: Subscription and One-Time Early Supporter",
+      "Each card has button linking to Stripe payment link (URLs TBD/configurable)",
+      "Success state: shows confirmation when returning from Stripe (query param or state)",
+      "Upgrade page is accessible from authenticated routes",
+      "Good UX: clear benefits listed, mobile responsive"
+    ],
+    "deps": [
+      "Implement backend limit checking system"
+    ],
+    "passes": false,
+    "notes": "Stripe payment links will be created manually in Stripe dashboard. Store URLs in environment variables or config. Success handling can be simple (check for ?success=true param or poll user features). Prices TBD - leave placeholder text."
+  },
+  {
+    "category": "ux",
+    "title": "Add limit counters and upgrade navigation",
+    "description": "Add proactive UI elements showing remaining quota near create buttons with info icons that navigate to upgrade page. Users should always know how close they are to limits.",
+    "acceptance": [
+      "Counter near 'Create Project' button: 'X/Y free projects' (or 'Unlimited' for paid)",
+      "Counter near 'Create Task' button: 'X/Y free tasks' (or 'Unlimited' for paid)",
+      "Info icons next to counters that link to /account/upgrade",
+      "Counters use checkTaskLimit/checkProjectLimit (or local equivalent)",
+      "Counters hidden or show 'Unlimited' when user has 'no-limits' feature",
+      "Counters update reactively when projects/tasks created or deleted",
+      "Good visual hierarchy: non-intrusive but visible"
+    ],
+    "deps": [
+      "Implement backend limit checking system",
+      "Create upgrade/subscription page"
+    ],
+    "passes": false,
+    "notes": "Find 'Create Project' and 'Create Task' buttons in UI - likely in projects list page and task editor. May need to pass quota data down as props or use Convex query directly in components."
+  },
+  {
+    "category": "ux",
+    "title": "Add limit-reached error handling and support CTA",
+    "description": "Handle LimitReached errors from backend with upgrade prompts, and add 'Support Development' button to empty tasks state.",
+    "acceptance": [
+      "Catch LimitReached errors from createTask/createProject mutations",
+      "Show modal or toast with upgrade message when limit hit",
+      "Error UI includes current/max counts and CTA button to upgrade page",
+      "Good UX: clear, not annoying, easy to dismiss",
+      "'Support Development' button in empty 'today's tasks' block",
+      "Support button navigates to /account/upgrade",
+      "All navigation to upgrade page works correctly"
+    ],
+    "deps": [
+      "Enforce limits in create mutations",
+      "Create upgrade/subscription page"
+    ],
+    "passes": false,
+    "notes": "Empty tasks block likely in planner or home view. LimitReached error handling may need global error boundary or local try/catch in create actions. Consider using existing modal/toast components."
+  },
+  {
+    "category": "docs",
+    "title": "Stripe setup documentation and end-to-end testing",
+    "description": "Document Stripe payment link creation, webhook configuration, and verify complete monetization flow works end-to-end in test mode.",
+    "acceptance": [
+      "Documentation for creating Stripe payment links (subscription and one-time)",
+      "Documentation for webhook endpoint URL and secret configuration",
+      "Environment variables documented (webhook secret, payment link URLs)",
+      "Test: Free user hits task limit, sees upgrade prompt, clicks through to upgrade page",
+      "Test: Free user hits project limit (2), sees upgrade prompt",
+      "Test: Stripe test mode checkout completes, webhook grants 'no-limits' feature",
+      "Test: User with 'no-limits' can create unlimited tasks/projects",
+      "Test: Subscription cancellation webhook revokes 'no-limits' (if subscription)",
+      "All tests pass in development environment"
+    ],
+    "deps": [
+      "Implement Stripe webhook handler",
+      "Create upgrade/subscription page",
+      "Add limit counters and upgrade navigation",
+      "Add limit-reached error handling and support CTA"
+    ],
+    "passes": false,
+    "notes": "This is the final verification that everything works together. Use Stripe test mode and Stripe CLI for webhook testing. Document any gotchas or manual steps needed for production deployment."
+  }
+]
