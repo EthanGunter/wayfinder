@@ -1,48 +1,5 @@
 [
   {
-    "category": "planning",
-    "title": "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle",
-    "description": "Define schemas and lifecycle rules for the 3 artifacts that get passed to the model across messages: plan, feedback, progress. Keep data informational and non-redundant; derive UI booleans from stored data instead of duplicating.",
-    "acceptance": [
-      "Schemas defined for plan/feedback/progress with versioning strategy",
-      "Lifecycle defined (create/update/append rules, when feedback expands vs progress appends)",
-      "Artifacts are intentionally shaped for prompt context (compact, stable, user-auditable)"
-    ],
-    "deps": [],
-    "passes": false,
-    "notes": "Artifacts should be easy to export/copy for debugging and easy to migrate if the feature moves out of /dev."
-  },
-  {
-    "category": "planning",
-    "title": "Skill Sprint: persistence decision (local vs backend) + migration plan",
-    "description": "Decide where artifacts and chat state live during the experiment (client storage vs backend). Choose the simplest option that still supports multi-session continuity and future promotion into non-dev routes.",
-    "acceptance": [
-      "Persistence choice documented with rationale",
-      "Minimum retention guarantees decided (survives reloads; survives sign-out/sign-in optional but explicit)",
-      "Migration plan documented (what changes if we move to backend storage later)"
-    ],
-    "deps": [
-      "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle"
-    ],
-    "passes": false,
-    "notes": "Keep it reversible. Avoid coupling artifacts to experimental UI details."
-  },
-  {
-    "category": "planning",
-    "title": "Skill Sprint: LLM provider seam + prompt contract",
-    "description": "Introduce a small, testable boundary for LLM calls used by Skill Sprint, including a stable prompt contract that always includes the artifacts (plan/feedback/progress) plus any selected key files/context.",
-    "acceptance": [
-      "Provider seam defined (inputs/outputs, streaming vs non-streaming decision explicit)",
-      "Prompt contract defined (what artifacts are included and how they’re summarized)",
-      "Stub/fake implementation strategy defined for local iteration without real provider calls"
-    ],
-    "deps": [
-      "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle"
-    ],
-    "passes": false,
-    "notes": "No provider exists in repo yet; start with the smallest seam that won’t leak into the rest of the app."
-  },
-  {
     "category": "functional",
     "title": "Skill Sprint: scaffold dev-gated page (single textbox)",
     "description": "Create the thinnest possible Skill Sprint page under the existing /dev gate: one textbox and minimal local state. This is pure scaffolding to anchor future work; no chat system, artifacts UI, or provider wiring implied.",
@@ -51,10 +8,48 @@
       "Page includes a large textbox suitable for describing what the user wants to get good at",
       "Typed text is held in local state and survives basic UI interactions on the page (no persistence requirement yet)"
     ],
-    "deps": [
-    ],
+    "deps": [],
     "passes": true,
     "notes": "Keep it boring: a single page with a textbox. Any UX beyond that belongs in later tasks once the data model + provider seam are nailed down."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: add Convex schema (5 tables)",
+    "description": "Add skillSprints, skillSprintPlans, skillSprintAdjustments, skillSprintDailyChallenges, skillSprintJournalEntries tables to Convex schema with appropriate indexes.",
+    "acceptance": [
+      "Tables defined in src/convex/schema.ts with correct field types",
+      "Indexes support: sprints by user, plans/adjustments/challenges/entries by sprintId, challenges unique by sprintId+dayKey"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "Tables: skillSprints (userAuthId, title, goal, startsAt, endsAt, archivedAt, createdAt), skillSprintPlans (sprintId, md, version, updatedAt), skillSprintAdjustments (sprintId, createdAt, md), skillSprintDailyChallenges (sprintId, dayKey, generatedAt, planVersion, items[{id, title, detailsMd?, completedAt?}]), skillSprintJournalEntries (sprintId, dayKey?, createdAt, md). Plan: overwrite + version. Adjustments/journal: append-only."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: implement persistence layer (mutations + queries)",
+    "description": "Add Convex functions to create/read/update Skill Sprint data: createSprint, setPlan, addAdjustment, upsertDailyChallenge, addJournalEntry, plus basic queries.",
+    "acceptance": [
+      "Mutations enforce ownership (userAuthId check)",
+      "setPlan increments version on each call",
+      "upsertDailyChallenge enforces one challenge per sprint+dayKey",
+      "Queries return data for a single sprint"
+    ],
+    "deps": ["Skill Sprint: add Convex schema (5 tables)"],
+    "passes": false,
+    "notes": "Day-boundary logic: duplicate UTC window from planner for now (see 'Extract day-boundary utility' task in root tasks.json for future cleanup)."
+  },
+  {
+    "category": "planning",
+    "title": "Skill Sprint: LLM provider seam + prompt contract",
+    "description": "Introduce a small, testable boundary for LLM calls used by Skill Sprint, including a stable prompt contract that always includes the artifacts (plan/feedback/progress) plus any selected key files/context.",
+    "acceptance": [
+      "Provider seam defined (inputs/outputs, streaming vs non-streaming decision explicit)",
+      "Prompt contract defined (what artifacts are included and how they're summarized)",
+      "Stub/fake implementation strategy defined for local iteration without real provider calls"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "No provider exists in repo yet; start with the smallest seam that won't leak into the rest of the app. Output contract decision: mixed JSON for artifact updates + optional markdown explanation."
   },
   {
     "category": "functional",
@@ -62,7 +57,7 @@
     "description": "Add a minimal way to send text from the Skill Sprint page to an LLM provider and display the response, without committing to a single vendor. This is the first executable slice of the provider seam.",
     "acceptance": [
       "User can submit the textbox content and see a model response rendered on the page",
-      "Provider selection is explicit (even if it’s a simple dropdown or config switch)",
+      "Provider selection is explicit (even if it's a simple dropdown or config switch)",
       "At least one non-network stub/fake provider exists so the harness works without external keys",
       "Adding a new provider is a contained change (no edits required outside the Skill Sprint/provider boundary)"
     ],
@@ -71,7 +66,7 @@
       "Skill Sprint: scaffold dev-gated page (single textbox)"
     ],
     "passes": false,
-    "notes": "This is not the full Skill Sprint flow. It’s just a dev-only harness to exercise the provider boundary and response rendering."
+    "notes": "This is not the full Skill Sprint flow. It's just a dev-only harness to exercise the provider boundary and response rendering."
   },
   {
     "category": "planning",
@@ -85,7 +80,6 @@
       "Prompt contract inputs/outputs are specified for each model call (inputs include plan/feedback/progress; outputs are structured enough to update artifacts deterministically)"
     ],
     "deps": [
-      "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle",
       "Skill Sprint: LLM provider seam + prompt contract"
     ],
     "passes": false,

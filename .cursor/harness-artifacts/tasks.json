@@ -182,5 +182,18 @@
     "deps": [],
     "passes": false,
     "notes": "This is a general dev control surface. Use existing settings schema patterns (settings.dev.*) and keep it semantically scoped to debugging rather than feature flags."
+  },
+  {
+    "category": "infra",
+    "title": "Extract day-boundary utility (planner + future journals)",
+    "description": "Factor out UTC day-window logic from getTodaysTasks into a reusable helper. Skill Sprint experiment temporarily duplicates this; this task cleans it up.",
+    "acceptance": [
+      "Single function returns { startMs, endMs, dayKey } for a given timestamp",
+      "Used by planner getTodaysTasks query",
+      "Configurable by user timezone + day-start hour (design TBD)"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "Not blocking Skill Sprint; experiment duplicates UTC logic for now."
   }
 ]
