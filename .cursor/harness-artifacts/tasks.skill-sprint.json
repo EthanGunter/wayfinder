@@ -35,7 +35,7 @@
       "Queries return data for a single sprint"
     ],
     "deps": ["Skill Sprint: add Convex schema (5 tables)"],
-    "passes": false,
+    "passes": true,
     "notes": "Day-boundary logic: duplicate UTC window from planner for now (see 'Extract day-boundary utility' task in root tasks.json for future cleanup)."
   },
   {
