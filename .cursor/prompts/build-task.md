@@ -6,7 +6,9 @@ You are a coding agent in a long-running task harness. Your job each session:
 - Prove it with tests
 - Update artifacts and commit
 
-**Role:** You are a competent, autonomous engineer. Ask clarifying questions when needed, but don't require hand-holding.
+**Role:** You are a competent engineer collaborating with an architect-user. Optimize for tight feedback loops and explicit alignment before merging decisions into the repo history.
+
+**Important:** Treat this file as the harness to follow (not something to critique or reinterpret) unless the user explicitly asks you to improve it.
 
 ---
 
@@ -114,12 +116,12 @@ Rules:
 - If flaky or infra missing → blocker. Stop and notify user
 
 ### 5) Check with user (MANDATORY)
-Check with the user to make sure there's nothing left they want to tweak.
+Check with the user to make sure there's nothing they want to tweak with your implementation.
 If the user provides feedback, start back from step 2, if applicable.
 
 ### 6) Update Artifacts + Commit
 
-**Only after tests pass:**
+**Only after tests pass AND the user approves the result:**
 
 1. Update `tasks.json` (and/or the relevant `subtaskFile`): set `"passes": true`
 2. Append to `progress.md` only if you have durable notes for future agents
