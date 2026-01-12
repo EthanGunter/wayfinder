@@ -78,4 +78,52 @@ export default defineSchema({
     .index("by_user", ["userAuthId"])
     .index("by_user_type", ["userAuthId", "type"])
     .index("by_todays_task", ["userAuthId", "todaysTask"]),
+
+  // Skill Sprints (dev-gated experiment)
+  skillSprints: defineTable({
+    userAuthId: v.string(),
+    title: v.string(),
+    goal: v.string(),
+    startsAt: v.number(),
+    endsAt: v.number(),
+    archivedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_user", ["userAuthId"]),
+
+  skillSprintPlans: defineTable({
+    sprintId: v.id("skillSprints"),
+    md: v.string(),
+    version: v.number(),
+    updatedAt: v.number(),
+  }).index("by_sprintId", ["sprintId"]),
+
+  skillSprintAdjustments: defineTable({
+    sprintId: v.id("skillSprints"),
+    createdAt: v.number(),
+    md: v.string(),
+  }).index("by_sprintId", ["sprintId"]),
+
+  skillSprintDailyChallenges: defineTable({
+    sprintId: v.id("skillSprints"),
+    dayKey: v.string(),
+    generatedAt: v.number(),
+    planVersion: v.number(),
+    items: v.array(
+      v.object({
+        id: v.string(),
+        title: v.string(),
+        detailsMd: v.optional(v.string()),
+        completedAt: v.optional(v.number()),
+      })
+    ),
+  })
+    .index("by_sprintId", ["sprintId"])
+    .index("by_sprintId_dayKey", ["sprintId", "dayKey"]),
+
+  skillSprintJournalEntries: defineTable({
+    sprintId: v.id("skillSprints"),
+    dayKey: v.optional(v.string()),
+    createdAt: v.number(),
+    md: v.string(),
+  }).index("by_sprintId", ["sprintId"]),
 });

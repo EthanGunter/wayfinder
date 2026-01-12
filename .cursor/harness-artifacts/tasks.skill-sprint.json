@@ -21,7 +21,7 @@
       "Indexes support: sprints by user, plans/adjustments/challenges/entries by sprintId, challenges unique by sprintId+dayKey"
     ],
     "deps": [],
-    "passes": false,
+    "passes": true,
     "notes": "Tables: skillSprints (userAuthId, title, goal, startsAt, endsAt, archivedAt, createdAt), skillSprintPlans (sprintId, md, version, updatedAt), skillSprintAdjustments (sprintId, createdAt, md), skillSprintDailyChallenges (sprintId, dayKey, generatedAt, planVersion, items[{id, title, detailsMd?, completedAt?}]), skillSprintJournalEntries (sprintId, dayKey?, createdAt, md). Plan: overwrite + version. Adjustments/journal: append-only."
   },
   {

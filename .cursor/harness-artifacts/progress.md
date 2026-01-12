@@ -11,3 +11,4 @@
 ---
 
 2026-01-12: [func] Skill Sprint scaffold shipped — `/dev` gate fixed; `/dev` gate fixed; `/dev/skill-sprint` page added; dev links surfaced in header for dev-enabled users.
+2026-01-12: [func] Skill Sprint Convex schema shipped — adds 5 tables + indexes to unblock persistence layer.
