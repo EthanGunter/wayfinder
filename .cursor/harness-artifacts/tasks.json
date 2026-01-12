@@ -136,5 +136,51 @@
     ],
     "passes": false,
     "notes": "This is the final verification that everything works together. Use Stripe test mode and Stripe CLI for webhook testing. Document any gotchas or manual steps needed for production deployment."
+  },
+  {
+    "category": "infra",
+    "title": "Implement aggregate plugin for efficient counting",
+    "description": "Replace .collect().length patterns with Convex aggregate plugin for efficient counting. Optimize checkTaskLimit and checkProjectLimit, and identify/optimize other counting-only queries throughout the codebase.",
+    "acceptance": [
+      "@convex-dev/aggregate package installed and configured in convex.config.ts",
+      "checkTaskLimit uses aggregate.count() instead of .collect().length",
+      "checkProjectLimit uses aggregate.count() instead of .collect().length",
+      "Aggregate instances properly namespace by userAuthId and type",
+      "All existing tests pass with aggregate implementation",
+      "Other counting-only queries identified and optimized (if any exist)",
+      "No performance regressions - counts return same values as before"
+    ],
+    "deps": [
+      "Implement backend limit checking system"
+    ],
+    "passes": false,
+    "notes": "Focus on places that only need counts, not full document retrieval. Aggregate plugin requires namespace/sortKey configuration. May need to update aggregate state when nodes are created/deleted. Check tasks.ts for other candidates (e.g., calculateProgress if it can be optimized)."
+  },
+  {
+    "category": "planning",
+    "title": "Skill Sprint (dev-gated in-app experiment)",
+    "description": "Prototype a daily \"skill sprint\" flow as a normal in-app feature, but gated behind the existing dev feature/route so experimental UX never reaches end users. Encapsulate UI + storage + LLM boundary so it can later be promoted out of /dev with minimal refactor.",
+    "acceptance": [
+      "Skill Sprint route is accessible only behind existing dev gate (non-dev users see 404)",
+      "Encapsulation decisions documented (route location, data model, provider seam, migration path out of /dev)",
+      "A minimal end-to-end flow is defined via subtasks (goal -> plan -> daily -> feedback/progress)"
+    ],
+    "deps": [],
+    "passes": false,
+    "subtaskFile": "tasks.skill-sprint.json",
+    "notes": "Implementation should live under routes/(authenticated)/dev/* and rely on devEnabled gating already used by /dev. Treat as part of app (not a separate project), but keep module boundaries tight to support later promotion to non-dev routes."
+  },
+  {
+    "category": "ux",
+    "title": "Add dev settings: debug toggle",
+    "description": "Add a \"Debug\" toggle under the existing Dev settings umbrella so dev-only debug UI/behavior can be enabled/disabled without code changes.",
+    "acceptance": [
+      "A new boolean setting exists under the Dev settings tab for debug behavior",
+      "Setting is visible only to users with the 'dev' feature (consistent with existing Dev settings gating)",
+      "Setting default is safe (off unless explicitly enabled, or clearly documented if default-on in local dev)"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "This is a general dev control surface. Use existing settings schema patterns (settings.dev.*) and keep it semantically scoped to debugging rather than feature flags."
   }
 ]

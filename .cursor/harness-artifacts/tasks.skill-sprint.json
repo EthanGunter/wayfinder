@@ -1,0 +1,94 @@
+[
+  {
+    "category": "planning",
+    "title": "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle",
+    "description": "Define schemas and lifecycle rules for the 3 artifacts that get passed to the model across messages: plan, feedback, progress. Keep data informational and non-redundant; derive UI booleans from stored data instead of duplicating.",
+    "acceptance": [
+      "Schemas defined for plan/feedback/progress with versioning strategy",
+      "Lifecycle defined (create/update/append rules, when feedback expands vs progress appends)",
+      "Artifacts are intentionally shaped for prompt context (compact, stable, user-auditable)"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "Artifacts should be easy to export/copy for debugging and easy to migrate if the feature moves out of /dev."
+  },
+  {
+    "category": "planning",
+    "title": "Skill Sprint: persistence decision (local vs backend) + migration plan",
+    "description": "Decide where artifacts and chat state live during the experiment (client storage vs backend). Choose the simplest option that still supports multi-session continuity and future promotion into non-dev routes.",
+    "acceptance": [
+      "Persistence choice documented with rationale",
+      "Minimum retention guarantees decided (survives reloads; survives sign-out/sign-in optional but explicit)",
+      "Migration plan documented (what changes if we move to backend storage later)"
+    ],
+    "deps": [
+      "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle"
+    ],
+    "passes": false,
+    "notes": "Keep it reversible. Avoid coupling artifacts to experimental UI details."
+  },
+  {
+    "category": "planning",
+    "title": "Skill Sprint: LLM provider seam + prompt contract",
+    "description": "Introduce a small, testable boundary for LLM calls used by Skill Sprint, including a stable prompt contract that always includes the artifacts (plan/feedback/progress) plus any selected key files/context.",
+    "acceptance": [
+      "Provider seam defined (inputs/outputs, streaming vs non-streaming decision explicit)",
+      "Prompt contract defined (what artifacts are included and how they’re summarized)",
+      "Stub/fake implementation strategy defined for local iteration without real provider calls"
+    ],
+    "deps": [
+      "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle"
+    ],
+    "passes": false,
+    "notes": "No provider exists in repo yet; start with the smallest seam that won’t leak into the rest of the app."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: scaffold dev-gated page (single textbox)",
+    "description": "Create the thinnest possible Skill Sprint page under the existing /dev gate: one textbox and minimal local state. This is pure scaffolding to anchor future work; no chat system, artifacts UI, or provider wiring implied.",
+    "acceptance": [
+      "A dev-gated page exists for Skill Sprint and renders for dev-enabled users (non-dev users see 404 via existing /dev gate)",
+      "Page includes a large textbox suitable for describing what the user wants to get good at",
+      "Typed text is held in local state and survives basic UI interactions on the page (no persistence requirement yet)"
+    ],
+    "deps": [
+    ],
+    "passes": false,
+    "notes": "Keep it boring: a single page with a textbox. Any UX beyond that belongs in later tasks once the data model + provider seam are nailed down."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: dev LLM interaction harness (provider-agnostic)",
+    "description": "Add a minimal way to send text from the Skill Sprint page to an LLM provider and display the response, without committing to a single vendor. This is the first executable slice of the provider seam.",
+    "acceptance": [
+      "User can submit the textbox content and see a model response rendered on the page",
+      "Provider selection is explicit (even if it’s a simple dropdown or config switch)",
+      "At least one non-network stub/fake provider exists so the harness works without external keys",
+      "Adding a new provider is a contained change (no edits required outside the Skill Sprint/provider boundary)"
+    ],
+    "deps": [
+      "Skill Sprint: LLM provider seam + prompt contract",
+      "Skill Sprint: scaffold dev-gated page (single textbox)"
+    ],
+    "passes": false,
+    "notes": "This is not the full Skill Sprint flow. It’s just a dev-only harness to exercise the provider boundary and response rendering."
+  },
+  {
+    "category": "planning",
+    "title": "Skill Sprint: specify core interaction flow (states, events, artifact transitions)",
+    "description": "Precisely define the Skill Sprint loop as a small state machine + event contract so implementation is mechanical: initial goal -> plan draft -> user approval -> daily plan -> adjustments (feedback) -> reflection (feedback vs progress).",
+    "acceptance": [
+      "A state machine is defined with named states and allowed transitions (goal-entry, planning, approved, daily-active, reflecting)",
+      "An event contract is defined (user message types: goal, approve, adjust, reflect; and system actions: generatePlan, generateDailyPlan, summarizeFeedback, logProgress)",
+      "Artifact transition rules are explicit for each event (which artifact is created/updated/appended and what minimum fields change)",
+      "At least one concrete example transcript is provided showing: (a) plan approval, (b) an adjustment that expands feedback, (c) a reflection that appends to progress",
+      "Prompt contract inputs/outputs are specified for each model call (inputs include plan/feedback/progress; outputs are structured enough to update artifacts deterministically)"
+    ],
+    "deps": [
+      "Skill Sprint: artifact model (plan/feedback/progress) + lifecycle",
+      "Skill Sprint: LLM provider seam + prompt contract"
+    ],
+    "passes": false,
+    "notes": "Goal: eliminate nebulous implementation by forcing a deterministic contract. Keep outputs compact and auditable; no duplicated derived fields."
+  }
+]
