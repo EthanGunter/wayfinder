@@ -53,7 +53,7 @@
     ],
     "deps": [
     ],
-    "passes": false,
+    "passes": true,
     "notes": "Keep it boring: a single page with a textbox. Any UX beyond that belongs in later tasks once the data model + provider seam are nailed down."
   },
   {

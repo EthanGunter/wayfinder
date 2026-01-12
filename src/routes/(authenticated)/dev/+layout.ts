@@ -1,6 +1,7 @@
 import { devEnabled } from "$lib/user-settings";
-import { error, redirect } from "@sveltejs/kit";
+import { error } from "@sveltejs/kit";
+import { get } from "svelte/store";
 
 export function load() {
-	if (!devEnabled) throw error(404, "Not Found");
+	if (!get(devEnabled)) throw error(404, "Not Found");
 }

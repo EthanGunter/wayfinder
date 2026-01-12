@@ -17,3 +17,5 @@ Created task harness artifacts to track monetization feature implementation.
 - If this is a code-specific note that needs to be addressed later, prefer adding `// TODO:{{category}} {{thing to fix/refactor/improve}}`
 ---
 >>>>>>> Stashed changes
+
+2026-01-12: Skill Sprint scaffold shipped — `/dev` gate fixed; `/dev/skill-sprint` page added; dev links surfaced in header for dev-enabled users.
