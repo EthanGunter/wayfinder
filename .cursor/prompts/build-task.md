@@ -10,11 +10,12 @@ You are a coding agent in a long-running task harness. Your job each session:
 
 ---
 
-## Artifacts (Source of Truth, located in `../harness-artifacts/`)
+## Artifacts (Source of Truth, located in `.cursor/harness-artifacts/`)
+Do not edit `.cursor/harness-artifacts/*` unless it is **required** for the current task and **consistent with user-approved content**.
 
-- `task.json` — Canonical task list with pass/fail status
+- `tasks.json` — Canonical task list with pass/fail status (may link to `subtaskFile`s like `tasks.skill-sprint.json`)
 - `progress.md` — Brief agent-to-agent communication (append-only, <=10 lines/session)
-- `design-decisions.md` — High-impact architectural choices that affect all future work
+- `design-decisions.md` — Repo-specific: **gotchas / surprising constraints only** (NOT a general design doc)
 - `git` — Durable history; every completed task ends in a commit
 
 ---
@@ -31,10 +32,10 @@ Hard limits:
 - <= 10 lines per session
 - No command transcripts, stack traces, or narration
 
-**`design-decisions.md`** is for high-impact architectural choices:
-- Auth strategy, data model patterns, API contract philosophy
-- Trade-offs that constrain future implementation
-- Anything a future agent MUST know to work effectively
+**`design-decisions.md`** is for **unexpected/surprising “gotchas”** only:
+- Use it like: “X failed because Y; prefer Z; link to where/why”
+- Do **NOT** treat it as a place to dump planned schemas/architectures/flows
+- If a “design decision” is needed, **run it through the user in chat first**
 
 **If you need to note something or get direction:** Run it through the user. Do not use these files as a substitute for user communication.
 
@@ -47,7 +48,7 @@ Hard limits:
 2. Read:
    - `progress.md` (last 3 entries)
    - `design-decisions.md`
-   - `task_list.json`
+   - `tasks.json` (and any referenced `subtaskFile` for the chosen task)
 3. `git log --oneline -10`
 
 ### 1) Select Next Task
@@ -62,9 +63,9 @@ Selection heuristic — "least effort to useful":
 - Avoid yak-shaving
 
 **If you select a planning task:**
-- Switch to planning mode: follow `/add-task.md`
-- Do not write implementation code
-- Expected outcome: documented design decisions + follow-up tasks
+- Switch to the harness planning workflow: follow `/add-task.md` (this is unrelated to Cursor “Plan mode”)
+- Do not write implementation code or tests
+- Expected outcome: user-approved decisions in chat + follow-up tasks/artifacts updates only if explicitly requested/required
 - When complete, set `"passes": true` and commit
 
 **Before implementing:**
@@ -112,11 +113,15 @@ Rules:
 - No "seems to work"
 - If flaky or infra missing → blocker. Stop and notify user
 
-### 5) Update Artifacts + Commit
+### 5) Check with user (MANDATORY)
+Check with the user to make sure there's nothing left they want to tweak.
+If the user provides feedback, start back from step 2, if applicable.
+
+### 6) Update Artifacts + Commit
 
 **Only after tests pass:**
 
-1. Update `task_list.json`: set `"passes": true`
+1. Update `tasks.json` (and/or the relevant `subtaskFile`): set `"passes": true`
 2. Append to `progress.md` only if you have durable notes for future agents
 3. Commit:
    - Subject: `feat: <task title>` (or `fix:`, `chore:`)

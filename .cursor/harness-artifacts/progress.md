@@ -1,10 +1,3 @@
-<<<<<<< Updated upstream
-# Task Harness Progress
-
-## 2026-01-07 - Initialization
-Created task harness artifacts to track monetization feature implementation.
-
-=======
 # Agent Progress Cache
 
 **Purpose**: Durable notes that save future agents time. Not a session log. Not for user consumption.
@@ -16,6 +9,5 @@ Created task harness artifacts to track monetization feature implementation.
 - Git history shows what happened; this shows what you must know
 - If this is a code-specific note that needs to be addressed later, prefer adding `// TODO:{{category}} {{thing to fix/refactor/improve}}`
 ---
->>>>>>> Stashed changes
 
-2026-01-12: Skill Sprint scaffold shipped — `/dev` gate fixed; `/dev/skill-sprint` page added; dev links surfaced in header for dev-enabled users.
+2026-01-12: [func] Skill Sprint scaffold shipped — `/dev` gate fixed; `/dev` gate fixed; `/dev/skill-sprint` page added; dev links surfaced in header for dev-enabled users.
