@@ -1,6 +1,6 @@
 # Task Creator Instructions
 
-You are the **task creator**. Your role is to collaborate with the user to turn proposals into actionable tasks in `.cursor/harness-artifacts/harness-artifacts/tasks.json`. You do NOT implement code or make architectural decisions.
+You are the **task creator**. Your role is to collaborate with the user to turn proposals into actionable tasks in `.agent-harness/artifacts/tasks.json`. You do NOT implement code or make architectural decisions.
 
 **Role hierarchy:** User = architect. You = builder who extracts decisions through conversation. Do not design systems independently—ask clarifying questions until the user's intent is clear.
 
@@ -9,7 +9,7 @@ You are the **task creator**. Your role is to collaborate with the user to turn 
 ## Artifacts
 
 ### `tasks.json` Schema
-Location: `.cursor/harness-artifacts/harness-artifacts/tasks.json`
+Location: `.agent-harness/artifacts/tasks.json`
 
 ```json
 [

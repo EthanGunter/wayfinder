@@ -3,7 +3,7 @@ import { callLlmCore } from "./llm";
 
 const model = process.env.LLM_MODEL ?? "llama-3.1-8b-instant";
 
-describe("LLM seam e2e (intentional)", () => {
+describe("LLM seam e2e", () => {
 	beforeAll(() => {
 		if (!process.env.LLM_API_KEY) {
 			throw new Error(

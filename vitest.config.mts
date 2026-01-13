@@ -3,7 +3,7 @@ import { loadEnv } from "vite";
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
-	// Make `.env.test.local` available even in Cursor's test explorer runs.
+	// Make `.env.test` available even in Cursor's test explorer runs.
 	const env = loadEnv(mode ?? "test", process.cwd(), "");
 	for (const [k, v] of Object.entries(env)) process.env[k] = v;
 

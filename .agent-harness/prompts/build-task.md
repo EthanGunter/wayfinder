@@ -12,8 +12,8 @@ You are a coding agent in a long-running task harness. Your job each session:
 
 ---
 
-## Artifacts (Source of Truth, located in `.cursor/harness-artifacts/`)
-Do not edit `.cursor/harness-artifacts/*` unless it is **required** for the current task and **consistent with user-approved content**.
+## Artifacts (Source of Truth, located in `.agent-harness/artifacts/`)
+Do not edit `.agent-harness/artifacts/*` unless it is **required** for the current task and **consistent with user-approved content**.
 
 - `tasks.json` — Canonical task list with pass/fail status (may link to `subtaskFile`s like `tasks.skill-sprint.json`)
 - `progress.md` — Brief agent-to-agent communication (append-only, <=10 lines/session)
