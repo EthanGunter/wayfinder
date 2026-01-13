@@ -48,25 +48,8 @@
       "Stub/fake implementation strategy defined for local iteration without real provider calls"
     ],
     "deps": [],
-    "passes": false,
-    "notes": "No provider exists in repo yet; start with the smallest seam that won't leak into the rest of the app. Output contract decision: mixed JSON for artifact updates + optional markdown explanation."
-  },
-  {
-    "category": "functional",
-    "title": "Skill Sprint: dev LLM interaction harness (provider-agnostic)",
-    "description": "Add a minimal way to send text from the Skill Sprint page to an LLM provider and display the response, without committing to a single vendor. This is the first executable slice of the provider seam.",
-    "acceptance": [
-      "User can submit the textbox content and see a model response rendered on the page",
-      "Provider selection is explicit (even if it's a simple dropdown or config switch)",
-      "At least one non-network stub/fake provider exists so the harness works without external keys",
-      "Adding a new provider is a contained change (no edits required outside the Skill Sprint/provider boundary)"
-    ],
-    "deps": [
-      "Skill Sprint: LLM provider seam + prompt contract",
-      "Skill Sprint: scaffold dev-gated page (single textbox)"
-    ],
-    "passes": false,
-    "notes": "This is not the full Skill Sprint flow. It's just a dev-only harness to exercise the provider boundary and response rendering."
+    "passes": true,
+    "notes": "Decision: provider seam is a Convex action that takes a caller-formatted message string + provider/model selection + credential source (app env var vs user setting). Seam responsibility ends at returning provider text (no prompt formatting / artifact packaging inside seam). Non-streaming v1; add follow-up task for streaming. User/provider settings stored under users.settingOverrides.llm; plaintext for closed alpha (encryption needs its own planning task: support E2E vs TLE modes, switchable in settings)."
   },
   {
     "category": "planning",

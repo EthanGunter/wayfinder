@@ -171,6 +171,79 @@
     "notes": "Implementation should live under routes/(authenticated)/dev/* and rely on devEnabled gating already used by /dev. Treat as part of app (not a separate project), but keep module boundaries tight to support later promotion to non-dev routes."
   },
   {
+    "category": "functional",
+    "title": "LLM: implement provider seam (Convex action)",
+    "description": "Implement the provider seam as a Convex action that sends a caller-provided message to a selected provider/model and returns the provider response text. Support both app-owned API keys via env vars and user-supplied credentials via users.settingOverrides.llm (plaintext for closed alpha).",
+    "acceptance": [
+      "Convex action exists that accepts { message, provider, model, credentialSource } and returns { text } (plus optional metadata)",
+      "At least one non-network stub provider exists so the seam works without external keys",
+      "At least one network provider is implemented using an env var API key (provider key source is explicit)",
+      "User-supplied credential source is supported via users.settingOverrides.llm (plaintext for closed alpha)",
+      "Message formatting is outside the seam (seam does not build prompts or artifacts)"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "Credential sources: app env var keys (per-provider) vs user-provided keys stored in settingOverrides. Future: enforce entitlement rules for app-key usage (paid users) without blocking user-key usage."
+  },
+  {
+    "category": "ux",
+    "title": "Skills settings: configure LLM providers (per-user)",
+    "description": "Add per-user settings UI under the Skills tab for choosing a default LLM provider/model and (optionally) entering user-provided API keys. Store settings in users.settingOverrides.llm.",
+    "acceptance": [
+      "A Skills settings section exists for LLM configuration",
+      "User can select default provider and default model",
+      "User can enter/remove provider API keys (plaintext for closed alpha)",
+      "Settings persist via users.settingOverrides.llm and load reliably on refresh",
+      "User can choose whether to use app credentials vs user credentials when available (clear UX)"
+    ],
+    "deps": ["LLM: implement provider seam (Convex action)"],
+    "passes": false,
+    "notes": "Encryption is explicitly deferred to the 'Encryption for user-stored secrets (E2E vs TLE modes)' planning task."
+  },
+  {
+    "category": "functional",
+    "title": "LLM: dev interaction harness (provider-agnostic)",
+    "description": "Add a minimal way to send text to an LLM provider seam and render the response, without committing to a single vendor. This is the first executable slice of the provider seam and should be reusable by multiple dev-gated experiments.",
+    "acceptance": [
+      "User can submit input text and see model response rendered",
+      "Provider selection is explicit (dropdown or config switch)",
+      "At least one non-network stub/fake provider exists so the harness works without external keys",
+      "Adding a new provider is a contained change (no edits required outside the LLM/provider boundary)"
+    ],
+    "deps": ["LLM: implement provider seam (Convex action)"],
+    "passes": false,
+    "notes": "This is a dev-facing harness, not the full Skill Sprint flow. Seam returns provider text only; prompt formatting lives in the caller."
+  },
+  {
+    "category": "ux",
+    "title": "LLM: streaming responses",
+    "description": "Add streaming support so LLM responses can render progressively for better UX, while keeping the non-streaming path as fallback.",
+    "acceptance": [
+      "At least one UI surface can render streaming token/chunk updates",
+      "Provider seam supports streaming for at least one provider (stub streaming is acceptable)",
+      "Non-streaming path remains supported as a fallback",
+      "User can cancel an in-flight stream"
+    ],
+    "deps": ["LLM: dev interaction harness (provider-agnostic)"],
+    "passes": false,
+    "notes": "Valuable UX; implement after the non-streaming harness is stable."
+  },
+  {
+    "category": "planning",
+    "title": "Encryption for user-stored secrets (E2E vs TLE modes)",
+    "description": "Plan how Wayfinder stores user secrets (e.g. user-provided LLM API keys) with explicit support for both end-to-end encryption (E2E) and transport+at-rest encryption (TLE). This should be fully fleshed out before it becomes a requirement for feature access.",
+    "acceptance": [
+      "Encryption modes defined: E2E vs TLE, including what is protected against in each mode",
+      "Settings UX defined: users can choose E2E or TLE and can switch modes at any time",
+      "Key management defined for E2E (password/passkey lifecycle, recovery/rotation story, device changes)",
+      "Migration behavior defined when switching modes (what is re-encrypted, what is not, and how failures are handled)",
+      "Implementation follow-up tasks proposed (storage changes, UI, tests) without shipping code in this planning task"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "Closed alpha can store secrets in plaintext temporarily, but plan must cover production path. Make it explicit in UX that TLE is theoretically less secure but avoids user maintenance of a personal passkey; allow switching modes anytime."
+  },
+  {
     "category": "ux",
     "title": "Add dev settings: debug toggle",
     "description": "Add a \"Debug\" toggle under the existing Dev settings umbrella so dev-only debug UI/behavior can be enabled/disabled without code changes.",

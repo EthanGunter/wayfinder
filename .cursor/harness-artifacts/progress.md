@@ -13,3 +13,4 @@
 2026-01-12: [func] Skill Sprint scaffold shipped — `/dev` gate fixed; `/dev` gate fixed; `/dev/skill-sprint` page added; dev links surfaced in header for dev-enabled users.
 2026-01-12: [func] Skill Sprint Convex schema shipped — adds 5 tables + indexes to unblock persistence layer.
 2026-01-12: [func] Skill Sprint persistence layer next — unblock storing/reading plan, adjustments, daily challenges, journal.
+2026-01-12: [plan] Skill Sprint: LLM provider seam + prompt contract — unblock dev harness + deterministic artifact updates without vendor lock-in. LLM seam: Convex action; non-streaming v1; message formatting outside seam; per-user provider settings live in users.settingOverrides.llm; user secrets plaintext in closed alpha pending encryption planning (E2E vs TLE, switchable).
