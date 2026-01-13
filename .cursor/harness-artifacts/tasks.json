@@ -182,7 +182,7 @@
       "Message formatting is outside the seam (seam does not build prompts or artifacts)"
     ],
     "deps": [],
-    "passes": false,
+    "passes": true,
     "notes": "Credential sources: app env var keys (per-provider) vs user-provided keys stored in settingOverrides. Future: enforce entitlement rules for app-key usage (paid users) without blocking user-key usage."
   },
   {
