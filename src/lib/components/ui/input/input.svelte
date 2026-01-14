@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { HTMLInputAttributes, HTMLInputTypeAttribute } from "svelte/elements";
 	import { cn, type WithElementRef } from "$lib/utils.js";
+	import Icon from "@iconify/svelte";
 
 	type InputType = Exclude<HTMLInputTypeAttribute, "file">;
 
@@ -18,6 +19,8 @@
 		"data-slot": dataSlot = "input",
 		...restProps
 	}: Props = $props();
+
+	let revealPassword = $state(false);
 </script>
 
 {#if type === "file"}
@@ -36,18 +39,32 @@
 		{...restProps}
 	/>
 {:else}
-	<input
-		bind:this={ref}
-		data-slot={dataSlot}
-		class={cn(
-			"border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-base outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-			"focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-			"aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
-			"w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100",
-			className
-		)}
-		{type}
-		bind:value
-		{...restProps}
-	/>
+	<div class="relative w-full">
+		<input
+			bind:this={ref}
+			data-slot={dataSlot}
+			class={cn(
+				"border-input bg-background selection:bg-primary dark:bg-input/30 selection:text-primary-foreground ring-offset-background placeholder:text-muted-foreground shadow-xs flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-base outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+				"focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+				"aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+				"w-full rounded border border-zinc-300 bg-zinc-50 px-1.5 py-1 text-base text-zinc-900 placeholder:opacity-60 focus:ring-2 focus:ring-blue-500/20 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100",
+				type === "password" ? "pr-10" : "",
+				className
+			)}
+			type={type === "password" ? (revealPassword ? "text" : "password") : type}
+			bind:value
+			{...restProps}
+		/>
+
+		{#if type === "password"}
+			<button
+				type="button"
+				class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 opacity-70 hover:opacity-100"
+				aria-label={revealPassword ? "Hide secret" : "Reveal secret"}
+				onclick={() => (revealPassword = !revealPassword)}
+			>
+				<Icon icon={revealPassword ? "lucide:eye-off" : "lucide:eye"} />
+			</button>
+		{/if}
+	</div>
 {/if}

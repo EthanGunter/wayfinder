@@ -1,5 +1,5 @@
 export * from './schema'
-export { assignPaths, DictSetting, BoolSetting, StringSetting, NumberSetting, EnumSetting, type AnySetting, type SettingsTree } from './types';
+export { assignPaths, DictSetting, BoolSetting, StringSetting, NumberSetting, EnumSetting, MultiEnumSetting, type AnySetting, type SettingsTree } from './types';
 
 import { settings } from './schema';
 import { Err } from '$domain/errors';
@@ -28,6 +28,16 @@ function flattenSettings(obj: Record<string, any>, prefix: string = ''): Record<
 function applySettings(tree: Record<string, any>, overrides: Record<string, any>): void {
     // Flatten in case we receive nested structure from server
     const flatOverrides = flattenSettings(overrides);
+
+    // Alias persisted `llm/*` to UI path `skills/llm/*`
+    // (LLM seam reads users.settingOverrides.llm; UI lives under Skills tab.)
+    for (const [path, value] of Object.entries(flatOverrides)) {
+        if (!path.startsWith('llm/')) continue;
+        flatOverrides[`skills/llm/${path.slice('llm/'.length)}`] = value;
+        if (path === 'llm/connections') {
+            flatOverrides['skills/apiKeys/connections'] = value;
+        }
+    }
 
     for (const [path, value] of Object.entries(flatOverrides)) {
         const parts = path.split('/');

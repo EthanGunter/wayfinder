@@ -15,3 +15,4 @@
 2026-01-12: [func] Skill Sprint persistence layer next — unblock storing/reading plan, adjustments, daily challenges, journal.
 2026-01-12: [plan] Skill Sprint: LLM provider seam + prompt contract — unblock dev harness + deterministic artifact updates without vendor lock-in. LLM seam: Convex action; non-streaming v1; message formatting outside seam; per-user provider settings live in users.settingOverrides.llm; user secrets plaintext in closed alpha pending encryption planning (E2E vs TLE, switchable).
 2026-01-13: [func] LLM: implement provider seam (Convex action) — unblock provider-agnostic dev harness + Skill Sprint calls without vendor lock-in.
+2026-01-13: [ux] Skills settings: configure LLM providers — Add settings tab for provider/model selection + user API key management via settingOverrides.llm

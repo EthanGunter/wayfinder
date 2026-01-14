@@ -197,7 +197,7 @@
       "User can choose whether to use app credentials vs user credentials when available (clear UX)"
     ],
     "deps": ["LLM: implement provider seam (Convex action)"],
-    "passes": false,
+    "passes": true,
     "notes": "Encryption is explicitly deferred to the 'Encryption for user-stored secrets (E2E vs TLE modes)' planning task."
   },
   {

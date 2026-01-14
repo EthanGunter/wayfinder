@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { Input } from "$lib/components/ui/input";
+
 	let goal = $state("");
 </script>
 
@@ -18,6 +20,8 @@
 			bind:value={goal}
 			placeholder="E.g. “Get confident designing Convex schemas + SvelteKit UX for daily practice loops…”"
 		></textarea>
+		<Input type="password" value="test" />
+
 	</div>
 </div>
 

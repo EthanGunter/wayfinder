@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Slider } from '$lib/components/ui/slider';
-	import type { NumberSetting, RangeSetting } from './types';
+	import type { NumberSetting, RangeSetting } from '../types';
 
 	interface Props {
 		store: RangeSetting;
@@ -13,7 +13,7 @@
 	const { store }: Props = $props();
 </script>
 
-<div class="flex w-full items-center gap-3">
+<div style="grid-area: body" class="min-w-0 flex items-center gap-3">
 	<input
 		class="w-16 rounded border px-2 py-1"
 		type="number"

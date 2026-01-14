@@ -1,25 +1,29 @@
 <script lang="ts">
 	import { settings } from './schema';
 	import * as Tabs from '$lib/components/ui/tabs';
-	import DictionaryEditor from './DictionaryEditor.svelte';
-	import StringEditor from './StringEditor.svelte';
-	import BoolEditor from './BoolEditor.svelte';
-	import NumberEditor from './NumberEditor.svelte';
-	import EnumEditor from './EnumEditor.svelte';
+	import DictionaryEditor from './Editors/DictionaryEditor.svelte';
+	import StringEditor from './Editors/StringEditor.svelte';
+	import BoolEditor from './Editors/BoolEditor.svelte';
+	import NumberEditor from './Editors/NumberEditor.svelte';
+	import EnumEditor from './Editors/EnumEditor.svelte';
+	import MultiEnumEditor from './Editors/MultiEnumEditor.svelte';
+	import ArrayEditor from './Editors/ArrayEditor.svelte';
 	import {
 		BoolSetting,
 		DictSetting,
 		EnumSetting,
+		MultiEnumSetting,
 		NumberSetting,
 		RangeSetting,
 		StringSetting,
+		ArraySetting,
 		type AnySetting,
 		type SettingsSection,
 		type SettingsTab
 	} from './types';
 	import { KeybindSetting } from './keybind';
-	import RangeEditor from './RangeEditor.svelte';
-	import KeybindEditor from './KeybindEditor.svelte';
+	import RangeEditor from './Editors/RangeEditor.svelte';
+	import KeybindEditor from './Editors/KeybindEditor.svelte';
 	import SettingRow from './SettingRow.svelte';
 	import { type UserFeature } from '$domain/models/user';
 	import { hasFeature } from '$lib/API/Auth';
@@ -96,6 +100,7 @@
 									desc={setting.desc}
 									hint={setting.hint}
 									itemId={id}
+									hasActions={setting instanceof ArraySetting}
 									{expanded}
 								>
 									{#if setting instanceof StringSetting}
@@ -107,7 +112,11 @@
 									{:else if setting instanceof RangeSetting}
 										<RangeEditor store={setting} />
 									{:else if setting instanceof EnumSetting}
-										<EnumEditor store={setting as any} />
+										<EnumEditor store={setting} />
+									{:else if setting instanceof MultiEnumSetting}
+										<MultiEnumEditor store={setting} />
+									{:else if setting instanceof ArraySetting}
+										<ArrayEditor store={setting} />
 									{:else if setting instanceof DictSetting}
 										<DictionaryEditor store={setting} />
 									{:else if setting instanceof KeybindSetting}

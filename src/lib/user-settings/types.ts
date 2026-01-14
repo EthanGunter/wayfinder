@@ -1,26 +1,29 @@
 import { Err, InvalidStateError } from '$domain/errors';
 import { writable, derived, get, type Readable, type Subscriber, type Unsubscriber, type Writable } from 'svelte/store';
-import type { SvelteComponent } from 'svelte';
+import type { Component, SvelteComponent } from 'svelte';
 import type { UserFeature } from '$domain/models/user';
-import { authAPI, authState } from '$lib/API/Auth';
-import type { KeybindSetting } from './keybind';
+import type { AuthState, IAuthLocal } from '$lib/API/Auth/seam-interfaces';
 
 export type SettingScope = 'user' | 'device';
+
+type BivariantCallback<T> = {
+  bivarianceHack(oldVal: T, newVal: T): void;
+}['bivarianceHack'];
 
 export interface BaseSettingArgs<T> {
   label: string;
   defaultValue: T;
   desc?: string;
-  hint?: string | (new (...args: any) => SvelteComponent);
+  hint?: string | (new (...args: never[]) => SvelteComponent);
   scope?: SettingScope;
-  onChange?: (oldVal: T, newVal: T) => void;
+  onChange?: BivariantCallback<T>;
 }
 
 export abstract class BaseSetting<T> implements Writable<T> {
   readonly label: string;
   readonly desc?: string;
-  readonly hint?: string | (new (...args: any) => SvelteComponent);
-  readonly onChange?: (oldVal: T, newVal: T) => void;
+  readonly hint?: string | (new (...args: never[]) => SvelteComponent);
+  readonly onChange?: BivariantCallback<T>;
   protected readonly store: Writable<T>;
   private _id: string;
 
@@ -45,36 +48,47 @@ export abstract class BaseSetting<T> implements Writable<T> {
 
   subscribe: (this: void, run: Subscriber<T>, invalidate?: () => void) => Unsubscriber;
 
-  set = (value: T): void => {
+  set(value: T): void {
     this.store.set(value);
     if (this._id) {
       void this.persistToUser(this._id, value);
     } else {
       Err.throw(new InvalidStateError("Attempted to write setting value before it was assigned an id"));
     }
-  };
+  }
 
-  update = (updater: (value: T) => T): void => {
+  update(updater: (value: T) => T): void {
     this.store.update((prev) => {
       const next = updater(prev);
       if (this._id) {
-        void this.persistToUser(this._id, next as unknown);
+        void this.persistToUser(this._id, next);
       } else {
         Err.throw(new InvalidStateError("Attempted to write setting value before it was assigned an id"));
       }
       return next;
     });
-  };
+  }
 
   // Internal use only: set value without triggering persistence (for initialization)
   setSilently(value: T): void {
     this.store.set(value);
   }
 
+  private async getAuthDeps(): Promise<{
+    authState: Readable<AuthState>;
+    authAPI: IAuthLocal;
+  }> {
+    // Dynamic import keeps this module test-friendly (no SvelteKit $app/* at import time)
+    const mod = await import('$lib/API/Auth');
+    return { authState: mod.authState, authAPI: mod.authAPI };
+  }
+
   private async persistToUser(key: string, value: unknown): Promise<void> {
     try {
+      const { authState, authAPI } = await this.getAuthDeps();
+
       // Get current auth state from store
-      const state = get(authState);
+      const state: AuthState = get(authState);
       if (state.status !== 'signed-in')
         Err.throw(new InvalidStateError('Cannot persist setting: user not signed in'));
 
@@ -83,8 +97,18 @@ export abstract class BaseSetting<T> implements Writable<T> {
       // Get existing settings or initialize empty object
       const settingOverrides = structuredClone(user.settingOverrides ?? {});
 
+      // Persist key aliasing:
+      // - UI paths:  skills/llm/* and skills/apiKeys/*
+      // - Storage:   llm/*  (Convex seam reads users.settingOverrides.llm)
+      const persistKey =
+        key.startsWith("skills/llm/")
+          ? `llm/${key.slice("skills/llm/".length)}`
+          : key.startsWith("skills/apiKeys/")
+            ? `llm/${key.slice("skills/apiKeys/".length)}`
+            : key;
+
       // Parse path and set nested value (e.g., "dev/$enabled" -> { dev: { $enabled: true } })
-      const pathParts = key.split('/');
+      const pathParts = persistKey.split('/');
       let current = settingOverrides;
 
       for (let i = 0; i < pathParts.length - 1; i++) {
@@ -157,15 +181,40 @@ export class RangeSetting extends BaseSetting<[number, number]> {
   }
 }
 
+export type EnumOption<T extends string | number> = {
+  value: T;
+  label: string;
+  group?: string;
+  subgroup?: string;
+  subsubgroup?: string;
+};
+
 export class EnumSetting<T extends string | number> extends BaseSetting<T> {
-  readonly options: { value: T; label: string }[];
+  private _options: Writable<EnumOption<T>[]>;
+  readonly optionsStore: Readable<EnumOption<T>[]>;
 
   private constructor(
-    args: BaseSettingArgs<T> & { options: { value: T; label: string }[] }
+    args: BaseSettingArgs<T> & { options: EnumOption<T>[] }
   ) {
     const { options, ...rest } = args;
     super({ ...rest, defaultValue: args.defaultValue });
-    this.options = options;
+    this._options = writable(options);
+    this.optionsStore = derived(this._options, (opts) => opts);
+  }
+
+  get options(): EnumOption<T>[] {
+    return get(this._options);
+  }
+
+  setOptions(next: EnumOption<T>[]): void {
+    this._options.set(next);
+
+    // If the current value is no longer valid, move to first option.
+    const cur = get(this);
+    const stillValid = next.some((o) => o.value === cur);
+    if (!stillValid && next.length > 0) {
+      this.set(next[0].value);
+    }
   }
 
   // Factory for array of values
@@ -178,6 +227,19 @@ export class EnumSetting<T extends string | number> extends BaseSetting<T> {
     return new EnumSetting({
       ...args,
       options: args.options.map((v) => ({ value: v, label: String(v) })),
+    });
+  }
+
+  // Factory for pre-mapped option objects (labels, grouping)
+  static fromOptions<const V extends string | number>(
+    args: Omit<BaseSettingArgs<V>, 'defaultValue'> & {
+      defaultValue: NoInfer<V>;
+      options: EnumOption<V>[];
+    }
+  ): EnumSetting<V> {
+    return new EnumSetting({
+      ...args,
+      options: args.options,
     });
   }
 
@@ -221,15 +283,15 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
   /* 	keys(): Readable<string[]> {
       return derived(this, (obj) => Object.keys(obj));
     }
-  	
+	
     values(): Readable<string[]> {
       return derived(this, (obj) => Object.values(obj));
     }
-  	
+	
     entries(): Readable<[string, string][]> {
       return derived(this, (obj) => Object.entries(obj));
     }
-  	
+	
     size(): Readable<number> {
       return derived(this, (obj) => Object.keys(obj).length);
     } */
@@ -237,8 +299,94 @@ export class DictSetting extends BaseSetting<Record<string, string>> {
   asMap(): Readable<Map<string, string>> { return derived(this, obj => new Map(Object.entries(obj))) }
 }
 
+export class MultiEnumSetting<T extends string | number> extends BaseSetting<T[]> {
+  private _options: Writable<EnumOption<T>[]>;
+  readonly optionsStore: Readable<EnumOption<T>[]>;
 
-export type AnySetting = BoolSetting | StringSetting | NumberSetting | RangeSetting | EnumSetting<any> | DictSetting | KeybindSetting;
+  private constructor(
+    args: BaseSettingArgs<T[]> & { options: EnumOption<T>[] }
+  ) {
+    const { options, ...rest } = args;
+    super({ ...rest, defaultValue: args.defaultValue });
+    this._options = writable(options);
+    this.optionsStore = derived(this._options, (opts) => opts);
+  }
+
+  get options(): EnumOption<T>[] {
+    return get(this._options);
+  }
+
+  setOptions(next: EnumOption<T>[]): void {
+    this._options.set(next);
+
+    // Remove any currently selected values that are no longer valid
+    const validValues = new Set(next.map((o) => o.value));
+    const current = get(this);
+    const stillValid = current.filter((v) => validValues.has(v));
+    
+    if (stillValid.length !== current.length) {
+      this.set(stillValid);
+    }
+  }
+
+  // Check if a specific value is enabled
+  isEnabled(value: T): Readable<boolean> {
+    return derived(this, (arr) => arr.includes(value));
+  }
+
+  // Get all enabled options with their labels
+  getEnabledOptions(): Readable<EnumOption<T>[]> {
+    return derived(this._options, (opts) => {
+      const enabledSet = new Set(get(this));
+      return opts.filter((opt) => enabledSet.has(opt.value));
+    });
+  }
+
+  // Factory for pre-mapped option objects
+  static fromOptions<const V extends string | number>(
+    args: Omit<BaseSettingArgs<V[]>, 'defaultValue'> & {
+      defaultValue?: NoInfer<V>[];
+      options: EnumOption<V>[];
+    }
+  ): MultiEnumSetting<V> {
+    return new MultiEnumSetting({
+      ...args,
+      defaultValue: args.defaultValue ?? [],
+      options: args.options,
+    });
+  }
+}
+
+export type ArrayItemEditorProps<T> = {
+  item: T;
+  update: (next: T) => void;
+  remove: () => void;
+};
+
+export type ArrayItemEditorComponent<T> = Component<ArrayItemEditorProps<T>>;
+
+export class ArraySetting<T> extends BaseSetting<T[]> {
+  readonly newItem: () => T;
+  readonly itemEditor: ArrayItemEditorComponent<T>;
+  readonly getKey?: (item: T, index: number) => string;
+
+  constructor(
+    args: Omit<BaseSettingArgs<T[]>, "defaultValue"> & {
+      defaultValue?: T[];
+      newItem: () => T;
+      itemEditor: ArrayItemEditorComponent<T>;
+      getKey?: (item: T, index: number) => string;
+    }
+  ) {
+    super({ ...args, defaultValue: args.defaultValue ?? [] });
+    this.newItem = args.newItem;
+    this.itemEditor = args.itemEditor;
+    this.getKey = args.getKey;
+  }
+}
+
+
+export type AnySetting = BaseSetting<unknown>;
 
 // New shape using $label and direct nesting: tab -> sections -> settings
 export type SettingsSection = {
@@ -246,7 +394,7 @@ export type SettingsSection = {
   $userFeature?: UserFeature;
   $enabled?: BoolSetting;
 } & {
-  [key: string]: AnySetting | BoolSetting | string | UserFeature;
+  [key: string]: AnySetting | string | UserFeature;
 };
 
 export type SettingsTab = {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DictSetting } from './types';
+	import type { DictSetting } from '../types';
 	import { Button } from '$lib/components/ui/button';
 	import { onMount } from 'svelte';
 
@@ -74,7 +74,7 @@
 	}
 </script>
 
-<div class="flex w-full flex-col gap-2">
+<div style="grid-area: body" class="min-w-0 flex flex-col gap-2">
 	<div class="flex items-center justify-end">
 		<Button size="sm" onclick={addRow}>+</Button>
 	</div>

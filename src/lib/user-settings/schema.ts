@@ -1,11 +1,15 @@
 import {
 	BoolSetting,
 	EnumSetting,
+	MultiEnumSetting,
+	ArraySetting,
 	assignPaths,
 	type SettingsTree,
 } from './types';
 import { KeybindSetting } from './keybind';
 import { dev as devEnv } from '$app/environment';
+import { computeDefaultLlmOptions, type LlmConnection } from './llm-options';
+import LlmConnectionEditor from './Editors/LlmConnectionEditor.svelte';
 
 export const settings = {
 	projects: {
@@ -86,6 +90,40 @@ export const settings = {
 			}),
 		}
 	},
+	llmProviders: {
+		$label: "AI Providers",
+		llm: {
+			$label: "LLM Configuration",
+			enabledConnections: (() => {
+				const initialOptions = [
+					{ value: "app:stub:stub", label: "stub", group: "App", subgroup: "stub" },
+				];
+				return MultiEnumSetting.fromOptions({
+					label: "Enabled providers",
+					desc: "Select which LLMs should be available throughout the app",
+					defaultValue: [initialOptions[0].value],
+					options: initialOptions,
+				});
+			})(),
+		},
+		customConnections: {
+			$label: "Custom Connections",
+			connections: new ArraySetting<LlmConnection>({
+				label: "Connections",
+				desc: "Your custom providers + credentials",
+				defaultValue: [],
+				newItem: () => ({
+					id: crypto.randomUUID(),
+					label: '',
+					providerName: '',
+					baseUrl: '',
+					apiKey: '',
+				}),
+				itemEditor: LlmConnectionEditor,
+				getKey: (item) => item.id,
+			}),
+		},
+	},
 	dev: {
 		$label: "Dev",
 		$userFeature: "dev",
@@ -106,3 +144,10 @@ export const settings = {
 
 export type AppSettings = Partial<typeof settings>;
 assignPaths(settings);
+
+// Recompute select options when user connections change.
+settings.llmProviders.customConnections.connections.subscribe((connections) => {
+	settings.llmProviders.llm.enabledConnections.setOptions(
+		computeDefaultLlmOptions({ connections })
+	);
+});

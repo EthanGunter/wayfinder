@@ -4,7 +4,7 @@
 		type KeybindSetting,
 		chordPrimaryToDisplay,
 		chordFromKeyboardEventPrimary
-	} from './keybind';
+	} from '../keybind';
 
 	interface Props {
 		store: KeybindSetting;
@@ -41,12 +41,14 @@
 	}
 </script>
 
-<Button
-	variant="outline"
-	class="min-w-24 {listening ? 'border-2 border-blue-500 bg-blue-50' : ''}"
-	onclick={handleClick}
-	onkeydown={handleKeyDown}
-	onblur={handleBlur}
->
-	{listening ? 'Press a key...' : chordPrimaryToDisplay($store)}
-</Button>
+<div style="grid-area: actions" class="justify-self-center self-center min-w-0">
+	<Button
+		variant="outline"
+		class="min-w-24 {listening ? 'border-2 border-blue-500 bg-blue-50' : ''}"
+		onclick={handleClick}
+		onkeydown={handleKeyDown}
+		onblur={handleBlur}
+	>
+		{listening ? 'Press a key...' : chordPrimaryToDisplay($store)}
+	</Button>
+</div>
