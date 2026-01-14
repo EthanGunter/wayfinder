@@ -6,7 +6,7 @@
 
 	type DevLink = { href: string; label: string };
 
-	const links: DevLink[] = [{ href: '/dev/skill-sprint', label: 'Skill Sprint' }];
+	const links: DevLink[] = [{ href: '/skill-sprint', label: 'Skill Sprint' }];
 
 	const isActive = (href: string) =>
 		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);

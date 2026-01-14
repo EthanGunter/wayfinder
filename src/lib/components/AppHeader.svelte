@@ -6,7 +6,7 @@
 	import type { Snippet } from 'svelte';
 	import UserMenu from './ui/UserMenu.svelte';
 	import InfoMenu from './ui/InfoMenu.svelte';
-	import DevNav from '../../routes/(authenticated)/dev/DevNav.svelte';
+	import DevNav from '../../routes/(authenticated)/(dev)/DevNav.svelte';
 
 	type Props = { children?: Snippet };
 	const { children }: Props = $props();
