@@ -1,0 +1,132 @@
+[
+  {
+    "category": "functional",
+    "title": "Skill Sprint: scaffold dev-gated page (single textbox)",
+    "description": "Create the thinnest possible Skill Sprint page under the existing /dev gate: one textbox and minimal local state. This is pure scaffolding to anchor future work; no chat system, artifacts UI, or provider wiring implied.",
+    "acceptance": [
+      "A dev-gated page exists for Skill Sprint and renders for dev-enabled users (non-dev users see 404 via existing /dev gate)",
+      "Page includes a large textbox suitable for describing what the user wants to get good at",
+      "Typed text is held in local state and survives basic UI interactions on the page (no persistence requirement yet)"
+    ],
+    "deps": [],
+    "passes": true,
+    "notes": "Keep it boring: a single page with a textbox. Any UX beyond that belongs in later tasks once the data model + provider seam are nailed down."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: add Convex schema (5 tables)",
+    "description": "Add skillSprints, skillSprintPlans, skillSprintAdjustments, skillSprintDailyChallenges, skillSprintJournalEntries tables to Convex schema with appropriate indexes.",
+    "acceptance": [
+      "Tables defined in src/convex/schema.ts with correct field types",
+      "Indexes support: sprints by user, plans/adjustments/challenges/entries by sprintId, challenges unique by sprintId+dayKey"
+    ],
+    "deps": [],
+    "passes": true,
+    "notes": "Tables: skillSprints (userAuthId, title, goal, startsAt, endsAt, archivedAt, createdAt), skillSprintPlans (sprintId, md, version, updatedAt), skillSprintAdjustments (sprintId, createdAt, md), skillSprintDailyChallenges (sprintId, dayKey, generatedAt, planVersion, items[{id, title, detailsMd?, completedAt?}]), skillSprintJournalEntries (sprintId, dayKey?, createdAt, md). Plan: overwrite + version. Adjustments/journal: append-only."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: implement persistence layer (mutations + queries)",
+    "description": "Add Convex functions to create/read/update Skill Sprint data: createSprint, setPlan, addAdjustment, upsertDailyChallenge, addJournalEntry, plus basic queries.",
+    "acceptance": [
+      "Mutations enforce ownership (userAuthId check)",
+      "setPlan increments version on each call",
+      "upsertDailyChallenge enforces one challenge per sprint+dayKey",
+      "Queries return data for a single sprint"
+    ],
+    "deps": ["Skill Sprint: add Convex schema (5 tables)"],
+    "passes": true,
+    "notes": "Day-boundary logic: duplicate UTC window from planner for now (see 'Extract day-boundary utility' task in root tasks.json for future cleanup)."
+  },
+  {
+    "category": "planning",
+    "title": "Skill Sprint: LLM provider seam + prompt contract",
+    "description": "Introduce a small, testable boundary for LLM calls used by Skill Sprint, including a stable prompt contract that always includes the artifacts (plan/feedback/progress) plus any selected key files/context.",
+    "acceptance": [
+      "Provider seam defined (inputs/outputs, streaming vs non-streaming decision explicit)",
+      "Prompt contract defined (what artifacts are included and how they're summarized)",
+      "Stub/fake implementation strategy defined for local iteration without real provider calls"
+    ],
+    "deps": [],
+    "passes": true,
+    "notes": "Decision: provider seam is a Convex action that takes a caller-formatted message string + provider/model selection + credential source (app env var vs user setting). Seam responsibility ends at returning provider text (no prompt formatting / artifact packaging inside seam). Non-streaming v1; add follow-up task for streaming. User/provider settings stored under users.settingOverrides.llm; plaintext for closed alpha (encryption needs its own planning task: support E2E vs TLE modes, switchable in settings)."
+  },
+  {
+    "category": "ux",
+    "title": "Skill Sprint: goal conversation + sprint creation (dev-gated)",
+    "description": "Build the goal chat step with a portable chat component and a right-side goal statement. Create the sprint only when the user confirms the goal.",
+    "acceptance": [
+      "Dev-gated route only (non-dev users see 404)",
+      "Chat renders on left, goal statement on right",
+      "<goal>...</goal> updates goalStatement",
+      "Confirm goal creates sprint and persists goalStatement",
+      "Portable chat component exists and goal UI wraps it"
+    ],
+    "deps": [],
+    "passes": false,
+    "notes": "Use the existing /dev gate; keep the chat component reusable for later Skill Sprint steps and other features."
+  },
+  {
+    "category": "ux",
+    "title": "Skill Sprint: planning session with assessment questions",
+    "description": "Add planning step that starts with assessment questions and then a plan conversation. Confirm persists the plan artifact.",
+    "acceptance": [
+      "Planning step starts with assessment questions",
+      "Assessment answers are captured and stored as part of the plan artifact",
+      "Plan conversation uses the portable chat component",
+      "Confirm plan persists plan record"
+    ],
+    "deps": [
+      "Skill Sprint: goal conversation + sprint creation (dev-gated)"
+    ],
+    "passes": false,
+    "notes": "Assessment is temporary but should be stored as part of the plan artifact for now."
+  },
+  {
+    "category": "ux",
+    "title": "Skill Sprint: daily view (dev date selector)",
+    "description": "Show the current-day challenges, with a dev-only date selector for testing. Per-item feedback is conditional on LLM output.",
+    "acceptance": [
+      "Daily view shows current day by default",
+      "Dev-only date selector exists for testing",
+      "Checklist items render and persist completion",
+      "Per-item feedback UI only renders when LLM output includes it"
+    ],
+    "deps": [
+      "Skill Sprint: planning session with assessment questions"
+    ],
+    "passes": false,
+    "notes": "The date selector is development-only; production should only show the current day."
+  },
+  {
+    "category": "ux",
+    "title": "Skill Sprint: interactive markdown elements for LLM output",
+    "description": "Add LLM-injectable UI elements in markdown (e.g., <rating/>, <textbox/>) so the user can provide structured feedback.",
+    "acceptance": [
+      "Markdown renderer supports LLM-injectable elements",
+      "User input from elements is captured and stored",
+      "Rendered output remains readable when elements are absent"
+    ],
+    "deps": [
+      "Skill Sprint: daily view (dev date selector)"
+    ],
+    "passes": false,
+    "notes": "These elements should serialize into the daily feedback payload so future LLM calls can use them."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: data model + API updates (goalStatement + planning assessment)",
+    "description": "Extend Convex schema and API to support goalStatement, planning assessment answers in plan artifact, and daily feedback storage.",
+    "acceptance": [
+      "goalStatement stored on sprint",
+      "Assessment answers stored within the plan artifact",
+      "Daily feedback stored and queryable",
+      "Existing sprint data remains valid"
+    ],
+    "deps": [
+      "Skill Sprint: goal conversation + sprint creation (dev-gated)"
+    ],
+    "passes": false,
+    "notes": "Ensure goalStatement is added to the sprint record and is used by the skills preview later."
+  }
+]

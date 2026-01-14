@@ -48,22 +48,6 @@ export const NodeDef = {
   data: NodeDataDef,
 }
 
-// DEPRECATED: Old tasks table structure - kept temporarily for migration
-// TODO: Remove after migrateTasksToNodes migration completes in production
-export const TaskNodeDef_DEPRECATED = {
-  userAuthId: v.string(),
-  type: v.union(v.literal("task"), v.literal("root")),
-  parents: v.array(v.string()),
-  children: v.array(v.string()),
-  title: v.string(),
-  content: v.optional(v.string()),
-  status: v.number(),
-  todaysTask: v.optional(v.number()),
-  dueDate: v.optional(v.number()),
-  lastEdit: v.number(),
-  created: v.number(),
-}
-
 export default defineSchema({
   users: defineTable(
     UserDef
@@ -73,13 +57,11 @@ export default defineSchema({
     .index("by_user", ["userAuthId"])
     .index("by_user_type", ["userAuthId", "data.type"])
     .index("by_users_daily_tasks", ["userAuthId", "data.todaysTask"]),
-  // DEPRECATED: Remove after migration completes
-  tasks: defineTable(TaskNodeDef_DEPRECATED)
-    .index("by_user", ["userAuthId"])
-    .index("by_user_type", ["userAuthId", "type"])
-    .index("by_todays_task", ["userAuthId", "todaysTask"]),
 
-  // Skill Sprints (dev-gated experiment)
+
+
+  //#region Skill Sprints
+
   skillSprints: defineTable({
     userAuthId: v.string(),
     title: v.string(),
@@ -127,3 +109,5 @@ export default defineSchema({
     md: v.string(),
   }).index("by_sprintId", ["sprintId"]),
 });
+
+//#endregion
