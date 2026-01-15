@@ -1,10 +1,9 @@
 <script lang="ts">
 	import Button from "$lib/components/ui/button/button.svelte";
-	import LlmChat from "$lib/components/llm/LlmChat.svelte";
+	import LlmChat from "$lib/components/LlmChat.svelte";
 	import { extractGoalStatement } from "$lib/skill-sprint/goalParsing";
 	import { sharedConvexClient } from "$lib/API/ConvexClient";
 	import { api as convexApi } from "$convex/_generated/api";
-	import UserSettings from "$lib/config/user-settings/UserSettings.svelte";
 	import { settings } from "$lib/config/user-settings";
 	import { resolveLlm } from "$lib/config/user-settings/llm-options";
 

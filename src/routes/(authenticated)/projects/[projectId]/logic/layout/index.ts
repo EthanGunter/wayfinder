@@ -1,12 +1,21 @@
-import type { LayoutEngine } from "./LayoutEngine";
+/** Graph layout engine: auto-layout on structural changes, ELK algorithm integration */
+
+import type { LayoutEngine, ViewNode, ViewEdge, ViewNodeData } from "./LayoutEngine";
+import { appToView } from "./LayoutEngine";
 import { ElkLayoutEngine } from "./ELK";
 import { viewNodes, viewEdges } from "../shared-state";
 import { autoLayout } from "../ui-state";
 
 const LAYOUT_DEBOUNCE_MS = 150;
 
-// Create instance and initialize
+/** Layout engine instance: debounced auto-layout on node/edge changes */
 export const layoutEngine: LayoutEngine = new ElkLayoutEngine();
+
+/** Layout types and utilities */
+export type { LayoutEngine, ViewNode, ViewEdge, ViewNodeData };
+export { appToView };
+export { ElkLayoutEngine };
+export type { ElkAlgorithm } from "./ELK";
 
 let unsubNodes: (() => void) | null = null;
 let unsubEdges: (() => void) | null = null;

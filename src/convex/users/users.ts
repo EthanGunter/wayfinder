@@ -1,12 +1,12 @@
 // convex/auth.ts
 import { InvalidStateError } from "$domain/errors";
 import type { EnsureUserErr, UpdateErr, WatchUserErr, User } from "$domain/models/user";
-import type { Doc, TableNames, DataModel } from "./_generated/dataModel";
-import { query, mutation, internalMutation, internalQuery, action, type MutationCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
+import type { Doc, TableNames, DataModel } from "../_generated/dataModel";
+import { query, mutation, internalMutation, internalQuery, action, type MutationCtx } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
-import { UserFeatureDef, UserStatusDef } from "./schema";
-import { authComponent, createAuth } from "./auth";
+import { UserFeatureDef, UserStatusDef } from "../schema";
+import { authComponent, createAuth } from "../auth";
 import type { IndexNames, NamedTableInfo } from "convex/server";
 
 

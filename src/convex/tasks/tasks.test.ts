@@ -1,9 +1,9 @@
 // convex/tasks.test.ts
 import { convexTest } from "convex-test";
 import { describe, test, expect } from "vitest";
-import { api } from "./_generated/api";
-import schema from "./schema";
-import { type Id } from "./_generated/dataModel";
+import { api } from "../_generated/api";
+import schema from "../schema";
+import { type Id } from "../_generated/dataModel";
 import type { CreateTaskParams, ExportedData, UpdateTaskParams } from "$domain/models/task";
 import type { AppData, IAppNode } from "$domain/models/node";
 import { type ProjectData, ProjectStatus } from "$domain/models/project";

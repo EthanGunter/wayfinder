@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import schema from "./schema";
+import schema from "../schema";
 
 function createTestCtx() {
 	return convexTest(schema, import.meta.glob("./**/*.*s"));

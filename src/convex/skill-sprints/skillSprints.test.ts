@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import schema from "./schema";
-import { api } from "./_generated/api";
+import schema from "../schema";
+import { api } from "../_generated/api";
 
 type TestContext = Awaited<ReturnType<typeof convexTest>>;
 
