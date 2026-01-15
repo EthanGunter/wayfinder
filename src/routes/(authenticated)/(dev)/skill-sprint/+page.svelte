@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Button from "$lib/components/ui/button/button.svelte";
 	import LlmChat from "$lib/components/LlmChat.svelte";
-	import { extractGoalStatement } from "$lib/skill-sprint/goalParsing";
 	import { sharedConvexClient } from "$lib/API/ConvexClient";
 	import { api as convexApi } from "$convex/_generated/api";
 	import { settings } from "$lib/config/user-settings";
@@ -58,10 +57,18 @@
 			};
 			messages = [...messages, assistantMsg];
 
-			// Parse for goal statement
-			const extracted = extractGoalStatement(result.text);
-			if (extracted) {
-				goalStatement = extracted;
+			// Parse for goal statement (extract last <goal>...</goal> tag)
+			const pattern = /<goal>([\s\S]*?)<\/goal>/g;
+			let match: RegExpExecArray | null = null;
+			let last: string | null = null;
+			while ((match = pattern.exec(result.text)) !== null) {
+				last = match[1] ?? null;
+			}
+			if (last !== null) {
+				const trimmed = last.trim();
+				if (trimmed.length > 0) {
+					goalStatement = trimmed;
+				}
 			}
 		} catch (error) {
 			console.error(error);

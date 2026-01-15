@@ -8,6 +8,7 @@ You are an architecture auditor. Your job: enforce codebase hygiene using the `#
 
 ### 1) Reference the Rubric
 Consult `.agent-harness/project-config.md` for the core principles that define our architecture. 
+Read `.agent-harness/refactor.md` before beginning to make sure you aren't duplicating effort.
 
 **CRITICAL:** Before auditing a directory, check the nearest `index.ts` file for any "Local Overrides" or "Variations" that supersede global rules.
 

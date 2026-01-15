@@ -8,7 +8,7 @@
 	import { isProjectActive } from '$domain/models/project';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import * as Collapsible from '$lib/components/ui/collapsible';
-	import { MediaQuery } from 'svelte/reactivity';
+	import { IsMobile } from '$lib/hooks/is-mobile.svelte';
 	import Icon from '@iconify/svelte';
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
@@ -23,7 +23,7 @@
 	let expandedProjects = $state<Set<string>>(new Set()); // Track which accordions are open
 
 	// Mobile responsive state
-	const isMobile = new MediaQuery('(max-width: 768px)');
+	const isMobile = new IsMobile();
 	let suggestionsOpen = $state(false);
 
 	// Filter to active projects only
