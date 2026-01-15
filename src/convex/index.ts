@@ -39,7 +39,7 @@ export * from './tasks';
  * Supports creating sprints, setting/updating plans, adding daily challenges
  * and journal entries, and retrieving complete sprint state.
  */
-export * from './skill-sprints';
+export * from './skillSprints';
 
 /**
  * User management and profile operations. Provides queries to watch users by
@@ -66,9 +66,3 @@ export * from './llm';
  * testing, plus default HTTP router with registered BetterAuth routes.
  */
 export * from './http';
-
-/**
- * Database migration system. Provides migrations instance and runner function
- * for executing schema migrations.
- */
-export * from './migrations';

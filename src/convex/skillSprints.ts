@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import type { Doc, Id } from "../_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 
 type SprintDoc = Doc<"skillSprints">;
 type PlanDoc = Doc<"skillSprintPlans">;

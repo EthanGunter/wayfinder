@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { action } from "../_generated/server";
-import { internal } from "../_generated/api";
+import { action } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 type Provider = "stub" | "openai" | "groq" | "test";
 const ProviderDef = v.union(v.literal("stub"), v.literal("openai"), v.literal("groq"), v.literal("test"));

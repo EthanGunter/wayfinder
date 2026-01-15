@@ -1,11 +1,11 @@
 import { ArgumentError } from "$domain/errors";
-import type { Doc, Id } from "../_generated/dataModel";
-import { query, mutation } from "../_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { query, mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { applyRelationshipOperations, calculateRelationshipUpdates, EXPORT_VERSIONS, TaskStatus } from "$domain/models/task";
 import type { CreateTaskParams, ExportedData, TaskData, UpdateTaskParams } from "$domain/models/task";
 
-import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { AppData as AppData, IAppNode } from "$domain/models/node";
 import type { ProjectData } from "$domain/models/project";
 
