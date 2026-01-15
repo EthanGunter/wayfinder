@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Handle, Position, type NodeProps } from '@xyflow/svelte';
 	import { isTaskCompleted } from '$domain/models/task';
-	import { devEnabled } from '$lib/user-settings';
+	import { devEnabled } from '$lib/config/user-settings';
 	import type { ViewNodeData } from './logic/layout/LayoutEngine';
 	import Icon from '@iconify/svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu';

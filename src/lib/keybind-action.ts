@@ -4,7 +4,7 @@ import {
 	type KeyChordPrimary,
 	chordFromKeyboardEventPrimary,
 	chordPrimaryToCanonical
-} from '$lib/user-settings/keybind';
+} from '$lib/config/user-settings/keybind';
 
 function isEditableTarget(el: EventTarget | null): boolean {
 	if (!(el instanceof HTMLElement)) return false;

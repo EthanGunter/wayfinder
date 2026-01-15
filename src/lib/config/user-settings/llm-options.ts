@@ -58,6 +58,55 @@ export function computeDefaultLlmOptions(args: {
 	return [...user, ...app];
 }
 
+export type ResolvedLlm = {
+	provider: "stub" | "openai" | "groq" | "test";
+	model: string;
+	credentialSource: "app" | "user";
+};
+
+/**
+ * Resolves a selected LLM option (e.g. "app:openai:gpt-4o-mini") into 
+ * the components required by the Convex LLM action.
+ */
+export function resolveLlm(selectedId: string, connections: ReadonlyArray<LlmConnection> = []): ResolvedLlm {
+	const parts = selectedId.split(':');
+	const [source] = parts;
+
+	if (source === "app") {
+		const [, provider, model] = parts;
+		return {
+			provider: provider as ResolvedLlm["provider"],
+			model: model || provider,
+			credentialSource: "app",
+		};
+	}
+
+	if (source === "user") {
+		const [, connectionId] = parts;
+		const conn = connections.find(c => c.id === connectionId);
+		if (conn) {
+			// Map custom connection to the best-matching known provider
+			let provider: ResolvedLlm["provider"] = "openai";
+			const pName = conn.providerName.toLowerCase();
+			if (pName.includes("groq")) provider = "groq";
+			if (pName.includes("stub")) provider = "stub";
+
+			return {
+				provider,
+				model: conn.label || "default",
+				credentialSource: "user",
+			};
+		}
+	}
+
+	// Fallback to stub
+	return {
+		provider: "stub",
+		model: "stub",
+		credentialSource: "app",
+	};
+}
+
 /**
  * Filter LLM options to only those that are enabled.
  * Use this throughout the app to get the list of available providers.

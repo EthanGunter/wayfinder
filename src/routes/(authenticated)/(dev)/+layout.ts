@@ -1,4 +1,4 @@
-import { devEnabled } from "$lib/user-settings";
+import { devEnabled } from "$lib/config/user-settings";
 import { error } from "@sveltejs/kit";
 import { get } from "svelte/store";
 

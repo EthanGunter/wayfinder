@@ -4,7 +4,7 @@ import { isTaskCompleted, type Task } from '$domain/models/task';
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js';
 import type { LayoutEngine } from './LayoutEngine';
 import { viewNodes, getEdgeKey } from '../shared-state';
-import { settings } from '$lib/user-settings';
+import { settings } from '$lib/config/user-settings';
 import { get } from 'svelte/store';
 //#endregion
 

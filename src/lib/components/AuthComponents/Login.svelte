@@ -11,7 +11,7 @@
 	import { Dialog } from 'bits-ui';
 	import ResetPasswordButton from './ResetPasswordButton.svelte';
 	import * as Alert from '../ui/alert';
-	import { devEnabled } from '$lib/user-settings';
+	import { devEnabled } from '$lib/config/user-settings';
 
 	interface Props {}
 

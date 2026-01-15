@@ -8,7 +8,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { ProjectStatus, isProjectActive } from '$domain/models/project';
-	import { settings } from '$lib/user-settings';
+	import { settings } from '$lib/config/user-settings';
 	import { get } from 'svelte/store';
 	import type { AppNode, IAppNode } from '$domain/models/node';
 	import type { ProjectData } from '$domain/models/project';

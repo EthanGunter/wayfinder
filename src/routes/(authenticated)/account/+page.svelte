@@ -9,7 +9,7 @@
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import { Err } from '$domain/errors';
-	import UserSettings from '$lib/user-settings/UserSettings.svelte';
+	import UserSettings from '$lib/config/user-settings/UserSettings.svelte';
 	import { get } from 'svelte/store';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 

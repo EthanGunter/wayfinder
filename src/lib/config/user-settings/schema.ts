@@ -90,7 +90,7 @@ export const settings = {
 			}),
 		}
 	},
-	llmProviders: {
+	llm: {
 		$label: "AI Providers",
 		llm: {
 			$label: "LLM Configuration",
@@ -124,6 +124,18 @@ export const settings = {
 			}),
 		},
 	},
+	sprints: {
+		$label: "Skill Sprints",
+		core: {
+			$label: "Core",
+			llmModel: EnumSetting.fromOptions<string>({
+				label: "Chat Model",
+				desc: "Which model to use for the goal and planning conversation",
+				defaultValue: "app:stub:stub",
+				options: [{ value: "app:stub:stub", label: "stub" }],
+			}),
+		},
+	},
 	dev: {
 		$label: "Dev",
 		$userFeature: "dev",
@@ -146,8 +158,8 @@ export type AppSettings = Partial<typeof settings>;
 assignPaths(settings);
 
 // Recompute select options when user connections change.
-settings.llmProviders.customConnections.connections.subscribe((connections) => {
-	settings.llmProviders.llm.enabledConnections.setOptions(
-		computeDefaultLlmOptions({ connections })
-	);
+settings.llm.customConnections.connections.subscribe((connections) => {
+	const options = computeDefaultLlmOptions({ connections });
+	settings.llm.llm.enabledConnections.setOptions(options);
+	settings.sprints.core.llmModel.setOptions(options);
 });

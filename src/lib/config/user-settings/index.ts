@@ -29,13 +29,17 @@ function applySettings(tree: Record<string, any>, overrides: Record<string, any>
     // Flatten in case we receive nested structure from server
     const flatOverrides = flattenSettings(overrides);
 
-    // Alias persisted `llm/*` to UI path `skills/llm/*`
-    // (LLM seam reads users.settingOverrides.llm; UI lives under Skills tab.)
+    // Alias persisted `llm/*` to UI path `llm/llm/*`
+    // (LLM seam reads users.settingOverrides.llm; UI lives under AI Providers tab.)
     for (const [path, value] of Object.entries(flatOverrides)) {
         if (!path.startsWith('llm/')) continue;
-        flatOverrides[`skills/llm/${path.slice('llm/'.length)}`] = value;
-        if (path === 'llm/connections') {
-            flatOverrides['skills/apiKeys/connections'] = value;
+        const subPath = path.slice('llm/'.length);
+        
+        // Map back to schema structure
+        if (subPath === 'connections') {
+            flatOverrides['llm/customConnections/connections'] = value;
+        } else {
+            flatOverrides[`llm/llm/${subPath}`] = value;
         }
     }
 

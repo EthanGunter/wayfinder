@@ -98,13 +98,13 @@ export abstract class BaseSetting<T> implements Writable<T> {
       const settingOverrides = structuredClone(user.settingOverrides ?? {});
 
       // Persist key aliasing:
-      // - UI paths:  skills/llm/* and skills/apiKeys/*
+      // - UI paths:  llm/llm/* and llm/apiKeys/*
       // - Storage:   llm/*  (Convex seam reads users.settingOverrides.llm)
       const persistKey =
-        key.startsWith("skills/llm/")
-          ? `llm/${key.slice("skills/llm/".length)}`
-          : key.startsWith("skills/apiKeys/")
-            ? `llm/${key.slice("skills/apiKeys/".length)}`
+        key.startsWith("llm/llm/")
+          ? `llm/${key.slice("llm/llm/".length)}`
+          : key.startsWith("llm/customConnections/")
+            ? `llm/${key.slice("llm/customConnections/".length)}`
             : key;
 
       // Parse path and set nested value (e.g., "dev/$enabled" -> { dev: { $enabled: true } })

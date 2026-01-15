@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as NavigationMenu from '$lib/components/ui/navigation-menu';
 	import { page } from '$app/state';
-	import { devEnabled } from '$lib/user-settings';
+	import { devEnabled } from '$lib/config/user-settings';
 	import { Separator } from '$lib/components/ui/separator';
 
 	type DevLink = { href: string; label: string };

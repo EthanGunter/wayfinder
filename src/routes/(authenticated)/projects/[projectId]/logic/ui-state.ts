@@ -14,7 +14,7 @@ import {
 } from './shared-state';
 import { appToView } from './layout/LayoutEngine';
 import { getCollapsedNodeIds } from './data-persistence';
-import { settings } from '$lib/user-settings';
+import { settings } from '$lib/config/user-settings';
 
 export type DrawerParams = { relation: AppNode; mode: 'parent' | 'child' } | null;
 

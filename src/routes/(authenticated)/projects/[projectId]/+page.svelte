@@ -41,9 +41,9 @@
 	import { layoutEngine } from './logic/layout';
 	import { Switch } from '$lib/components/ui/switch';
 	import * as ButtonGroup from '$lib/components/ui/button-group';
-	import { settings } from '$lib/user-settings';
+	import { settings } from '$lib/config/user-settings';
 	import { keybind } from '$lib/keybind-action';
-	import { chordPrimaryToDisplay } from '$lib/user-settings/keybind';
+	import { chordPrimaryToDisplay } from '$lib/config/user-settings/keybind';
 	import type { PageProps } from './$types';
 
 	const fitViewKeybind = settings.graph.keybinds.fitView;

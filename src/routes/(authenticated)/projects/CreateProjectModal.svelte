@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
-	import { settings } from '$lib/user-settings';
+	import { settings } from '$lib/config/user-settings';
 	import { get } from 'svelte/store';
 	import type { ProjectStatus } from '$domain/models/project';
 	import { ProjectStatus as ProjectStatusEnum } from '$domain/models/project';
