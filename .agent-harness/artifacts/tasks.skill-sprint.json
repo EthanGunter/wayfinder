@@ -146,5 +146,22 @@
     ],
     "passes": true,
     "notes": "This moves from prototype (single route) to production structure. The /lib/API layer should provide: getSprintState store, listUserSprints store, and mutation wrappers. Phase logic (goal conversation, planning assessment, daily challenges) stays route-specific since it's UX workflow, not reusable data operations."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: persist conversation history per phase",
+    "description": "Add conversation persistence so users don't lose chat history on page reload. Store conversations by sprint + phase (goal/planning/daily).",
+    "acceptance": [
+      "New Convex table: skillSprintConversations with sprintId, phase, messages[], updatedAt",
+      "Messages persist on each send/receive",
+      "Conversations load on phase mount",
+      "Each phase has its own isolated conversation history",
+      "Old conversations remain accessible for context/debugging"
+    ],
+    "deps": [
+      "Skill Sprint: planning session with assessment questions"
+    ],
+    "passes": false,
+    "notes": "Phase field should be enum: 'goal' | 'planning' | 'daily'. Messages array format: [{role: 'user'|'assistant'|'system', content: string, timestamp: number}]. Consider adding index by_sprintId_phase for efficient lookups. May want to cap message history or implement cleanup for very old sprints."
   }
 ]
