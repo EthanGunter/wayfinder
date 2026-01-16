@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { tick } from "svelte";
 	import Button from "$lib/components/ui/button/button.svelte";
 	import * as Select from "$lib/components/ui/select";
 	import type { EnumOption } from "$lib/config/user-settings/types";
+	import Icon from "@iconify/svelte";
 
 	type ChatMessage = {
 		id: string;
@@ -31,6 +33,39 @@
 	}: Props = $props();
 
 	let draft = $state("");
+	let messagesContainer: HTMLDivElement | null = $state(null);
+	let isScrolledUp = $state(false);
+
+	function scrollToBottom() {
+		if (messagesContainer) {
+			messagesContainer.scrollTop = messagesContainer.scrollHeight;
+		}
+	}
+
+	function checkScrollPosition() {
+		if (!messagesContainer) return;
+		const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
+		const threshold = 50;
+		isScrolledUp = scrollTop + clientHeight < scrollHeight - threshold;
+	}
+
+	$effect(() => {
+		if (messages.length === 0) return;
+		if (!messagesContainer) return;
+		
+		tick().then(() => {
+			if (!isScrolledUp) {
+				scrollToBottom();
+			}
+			checkScrollPosition();
+		});
+	});
+
+	$effect(() => {
+		if (messagesContainer) {
+			checkScrollPosition();
+		}
+	});
 
 	function send() {
 		const content = draft.trim();
@@ -68,7 +103,11 @@
 		</div>
 	</div>
 
-	<div class="min-h-[300px] flex-1 overflow-auto rounded-md border bg-background p-3">
+	<div
+		class="flex-1 min-h-0 rounded-md border bg-background p-3 overflow-y-auto relative"
+		bind:this={messagesContainer}
+		onscroll={checkScrollPosition}
+	>
 		{#if messages.length === 0}
 			<div class="flex h-full items-center justify-center text-sm text-muted-foreground italic">
 				Start a conversation to define your goal...
@@ -91,6 +130,18 @@
 						<div class="whitespace-pre-wrap leading-relaxed">{message.content}</div>
 					</div>
 				{/each}
+			</div>
+		{/if}
+		{#if isScrolledUp}
+			<div class="absolute bottom-4 right-4">
+				<Button
+					class="h-9 w-9 rounded-full p-0 shadow-lg"
+					variant="secondary"
+					onclick={scrollToBottom}
+				>
+					<Icon icon="lucide:chevron-down" class="size-4" />
+					<span class="sr-only">Scroll to bottom</span>
+				</Button>
 			</div>
 		{/if}
 	</div>

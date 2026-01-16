@@ -63,7 +63,7 @@
       "Portable chat component exists and goal UI wraps it"
     ],
     "deps": [],
-    "passes": false,
+    "passes": true,
     "notes": "Use the existing /dev gate; keep the chat component reusable for later Skill Sprint steps and other features."
   },
   {
