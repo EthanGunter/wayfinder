@@ -15,14 +15,14 @@
   {
     "category": "functional",
     "title": "Skill Sprint: add Convex schema (5 tables)",
-    "description": "Add skillSprints, skillSprintPlans, skillSprintAdjustments, skillSprintDailyChallenges, skillSprintJournalEntries tables to Convex schema with appropriate indexes.",
+    "description": "Add skillSprints, skillSprintPlans, skillSprintAdjustments, skillSprintLessons, skillSprintJournalEntries tables to Convex schema with appropriate indexes.",
     "acceptance": [
       "Tables defined in src/convex/schema.ts with correct field types",
       "Indexes support: sprints by user, plans/adjustments/challenges/entries by sprintId, challenges unique by sprintId+dayKey"
     ],
     "deps": [],
     "passes": true,
-    "notes": "Tables: skillSprints (userAuthId, title, goal, startsAt, endsAt, archivedAt, createdAt), skillSprintPlans (sprintId, md, version, updatedAt), skillSprintAdjustments (sprintId, createdAt, md), skillSprintDailyChallenges (sprintId, dayKey, generatedAt, planVersion, items[{id, title, detailsMd?, completedAt?}]), skillSprintJournalEntries (sprintId, dayKey?, createdAt, md). Plan: overwrite + version. Adjustments/journal: append-only."
+    "notes": "Tables: skillSprints (userAuthId, title, goal, startsAt, endsAt, archivedAt, createdAt), skillSprintPlans (sprintId, md, version, updatedAt), skillSprintAdjustments (sprintId, createdAt, md), skillSprintLessons (sprintId, dayKey, generatedAt, planVersion, items[{id, title, detailsMd?, completedAt?}]), skillSprintJournalEntries (sprintId, dayKey?, createdAt, md). Plan: overwrite + version. Adjustments/journal: append-only."
   },
   {
     "category": "functional",
@@ -85,7 +85,7 @@
   {
     "category": "functional",
     "title": "Skill Sprint: refactor lessons schema (sequential, not daily)",
-    "description": "Restructure skillSprintDailyChallenges to be lesson-based rather than date-based. Rename dayKey to dateCreated, add status field, update all consuming code.",
+    "description": "Restructure skillSprintLessons to be lesson-based rather than date-based. Rename dayKey to dateCreated, add status field, update all consuming code.",
     "acceptance": [
       "dayKey renamed to dateCreated (timestamp) in schema and indexes",
       "status field added: 'pending' | 'complete' | 'replaced'",
@@ -96,7 +96,7 @@
     "deps": [
       "Skill Sprint: planning session with assessment questions"
     ],
-    "passes": false,
+    "passes": true,
     "notes": "This touches: schema.ts, skillSprints.ts, seam-interfaces.ts, ConvexSkillSprintProvider.ts. Lessons are sequential by creation time, not calendar-bound. Status tracks lifecycle: pending -> complete or pending -> replaced (when lesson regenerated after critique)."
   },
   {

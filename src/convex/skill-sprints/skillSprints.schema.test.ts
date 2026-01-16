@@ -45,11 +45,12 @@ describe("Convex schema — Skill Sprint tables + indexes", () => {
 				.withIndex("by_sprintId", (q) => q.eq("sprintId", sprintId))
 				.collect();
 
-			// challenges unique by sprintId + dayKey (index existence only; uniqueness enforced in mutations)
-			const dayKey = "2026-01-12";
+			// challenges queryable by sprintId + dateCreated (index existence only; uniqueness enforced in mutations)
+			const dateCreated = now;
 			await ctx.db.insert("skillSprintDailyChallenges", {
 				sprintId,
-				dayKey,
+				dateCreated,
+				status: "pending",
 				generatedAt: now,
 				planVersion: 1,
 				items: [{ id: "a", title: "Do 10 minutes of ear training", detailsMd: undefined, completedAt: undefined }],
@@ -57,11 +58,12 @@ describe("Convex schema — Skill Sprint tables + indexes", () => {
 
 			const fetched = await ctx.db
 				.query("skillSprintDailyChallenges")
-				.withIndex("by_sprintId_dayKey", (q) => q.eq("sprintId", sprintId).eq("dayKey", dayKey))
+				.withIndex("by_sprintId_dateCreated", (q) => q.eq("sprintId", sprintId).eq("dateCreated", dateCreated))
 				.unique();
 
 			expect(fetched?.sprintId).toBe(sprintId);
-			expect(fetched?.dayKey).toBe(dayKey);
+			expect(fetched?.dateCreated).toBe(dateCreated);
+			expect(fetched?.status).toBe("pending");
 		});
 	});
 });

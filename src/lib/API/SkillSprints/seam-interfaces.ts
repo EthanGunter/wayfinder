@@ -4,7 +4,7 @@ import type { FetchableStore, QueryableStore } from '../fetchableStore';
 export type Sprint = Doc<'skillSprints'>;
 export type SprintPlan = Doc<'skillSprintPlans'>;
 export type SprintAdjustment = Doc<'skillSprintAdjustments'>;
-export type SprintDailyChallenge = Doc<'skillSprintDailyChallenges'>;
+export type SprintDailyChallenge = Doc<'skillSprintLessons'>;
 export type SprintJournalEntry = Doc<'skillSprintJournalEntries'>;
 
 export interface SprintState {
@@ -43,7 +43,8 @@ export interface AddAdjustmentParams {
 
 export interface UpsertDailyChallengeParams {
 	sprintId: Id<'skillSprints'>;
-	dayKey: string;
+	dateCreated: number;
+	status?: 'pending' | 'complete' | 'replaced';
 	planVersion: number;
 	items: Array<{
 		id: string;
@@ -56,7 +57,7 @@ export interface UpsertDailyChallengeParams {
 export interface AddJournalEntryParams {
 	sprintId: Id<'skillSprints'>;
 	md: string;
-	dayKey?: string;
+	dateCreated?: number;
 }
 
 /**

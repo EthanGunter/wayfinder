@@ -61,7 +61,7 @@ describe("Skill Sprint persistence layer", () => {
 		await expect(
 			t.withIdentity(mockAuth("user2")).mutation(api.skillSprints.upsertDailyChallenge, {
 				sprintId: sprint._id,
-				dayKey: "2026-01-12",
+				dateCreated: Date.now(),
 				planVersion: 1,
 				items: [{ id: "a", title: "Do 10 minutes", detailsMd: undefined, completedAt: undefined }],
 			})
@@ -96,20 +96,21 @@ describe("Skill Sprint persistence layer", () => {
 		expect(planDocs).toHaveLength(1);
 	});
 
-	test("upsertDailyChallenge is unique by sprintId + dayKey", async () => {
+	test("upsertDailyChallenge can update by sprintId + dateCreated", async () => {
 		const t = createTestCtx();
 		const sprint = await seedSprint(t, "user1");
+		const dateCreated = Date.now();
 
 		const c1 = await t.withIdentity(mockAuth("user1")).mutation(api.skillSprints.upsertDailyChallenge, {
 			sprintId: sprint._id,
-			dayKey: "2026-01-12",
+			dateCreated,
 			planVersion: 1,
 			items: [{ id: "a", title: "A", detailsMd: undefined, completedAt: undefined }],
 		});
 
 		const c2 = await t.withIdentity(mockAuth("user1")).mutation(api.skillSprints.upsertDailyChallenge, {
 			sprintId: sprint._id,
-			dayKey: "2026-01-12",
+			dateCreated,
 			planVersion: 2,
 			items: [{ id: "b", title: "B", detailsMd: "details", completedAt: Date.now() }],
 		});
@@ -121,7 +122,7 @@ describe("Skill Sprint persistence layer", () => {
 		const challengeDocs = await t.run(async (ctx) => {
 			return await ctx.db
 				.query("skillSprintDailyChallenges")
-				.withIndex("by_sprintId_dayKey", (q) => q.eq("sprintId", sprint._id).eq("dayKey", "2026-01-12"))
+				.withIndex("by_sprintId_dateCreated", (q) => q.eq("sprintId", sprint._id).eq("dateCreated", dateCreated))
 				.collect();
 		});
 		expect(challengeDocs).toHaveLength(1);
@@ -136,7 +137,7 @@ describe("Skill Sprint persistence layer", () => {
 		await t.withIdentity(mockAuth("user1")).mutation(api.skillSprints.addJournalEntry, { sprintId: sprint._id, md: "journal 1" });
 		await t.withIdentity(mockAuth("user1")).mutation(api.skillSprints.upsertDailyChallenge, {
 			sprintId: sprint._id,
-			dayKey: "2026-01-12",
+			dateCreated: Date.now(),
 			planVersion: 1,
 			items: [{ id: "a", title: "A", detailsMd: undefined, completedAt: undefined }],
 		});

@@ -85,9 +85,10 @@ export default defineSchema({
     md: v.string(),
   }).index("by_sprintId", ["sprintId"]),
 
-  skillSprintDailyChallenges: defineTable({
+  skillSprintLessons: defineTable({
     sprintId: v.id("skillSprints"),
-    dayKey: v.string(),
+    dateCreated: v.number(),
+    status: v.union(v.literal("pending"), v.literal("complete"), v.literal("replaced")),
     generatedAt: v.number(),
     planVersion: v.number(),
     items: v.array(
@@ -100,11 +101,11 @@ export default defineSchema({
     ),
   })
     .index("by_sprintId", ["sprintId"])
-    .index("by_sprintId_dayKey", ["sprintId", "dayKey"]),
+    .index("by_sprintId_dateCreated", ["sprintId", "dateCreated"]),
 
   skillSprintJournalEntries: defineTable({
     sprintId: v.id("skillSprints"),
-    dayKey: v.optional(v.string()),
+    dateCreated: v.optional(v.number()),
     createdAt: v.number(),
     md: v.string(),
   }).index("by_sprintId", ["sprintId"]),

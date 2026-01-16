@@ -5,7 +5,7 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 type SprintDoc = Doc<"skillSprints">;
 type PlanDoc = Doc<"skillSprintPlans">;
 type AdjustmentDoc = Doc<"skillSprintAdjustments">;
-type DailyChallengeDoc = Doc<"skillSprintDailyChallenges">;
+type DailyChallengeDoc = Doc<"skillSprintLessons">;
 type JournalEntryDoc = Doc<"skillSprintJournalEntries">;
 
 async function getUserAuthIdOrThrow(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
@@ -129,7 +129,8 @@ export const addAdjustment = mutation({
 export const upsertDailyChallenge = mutation({
 	args: {
 		sprintId: v.id("skillSprints"),
-		dayKey: v.string(),
+		dateCreated: v.number(),
+		status: v.optional(v.union(v.literal("pending"), v.literal("complete"), v.literal("replaced"))),
 		planVersion: v.number(),
 		items: v.array(
 			v.object({
@@ -140,19 +141,20 @@ export const upsertDailyChallenge = mutation({
 			})
 		),
 	},
-	handler: async (ctx, { sprintId, dayKey, planVersion, items }) => {
+	handler: async (ctx, { sprintId, dateCreated, status, planVersion, items }) => {
 		await getOwnedSprintOrThrow(ctx, sprintId);
 		const now = Date.now();
 
 		const existing = await ctx.db
-			.query("skillSprintDailyChallenges")
-			.withIndex("by_sprintId_dayKey", (q) => q.eq("sprintId", sprintId).eq("dayKey", dayKey))
+			.query("skillSprintLessons")
+			.withIndex("by_sprintId_dateCreated", (q) => q.eq("sprintId", sprintId).eq("dateCreated", dateCreated))
 			.unique();
 
 		if (!existing) {
-			const id = await ctx.db.insert("skillSprintDailyChallenges", {
+			const id = await ctx.db.insert("skillSprintLessons", {
 				sprintId,
-				dayKey,
+				dateCreated,
+				status: status ?? "pending",
 				generatedAt: now,
 				planVersion,
 				items,
@@ -162,7 +164,11 @@ export const upsertDailyChallenge = mutation({
 			return created;
 		}
 
-		await ctx.db.patch(existing._id, { generatedAt: now, planVersion, items });
+		const updateData: Partial<DailyChallengeDoc> = { generatedAt: now, planVersion, items };
+		if (status !== undefined) {
+			updateData.status = status;
+		}
+		await ctx.db.patch(existing._id, updateData);
 		const updated = await ctx.db.get(existing._id);
 		if (!updated)
 			throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve updated daily challenge", ctx: { id: existing._id } });
@@ -174,12 +180,12 @@ export const addJournalEntry = mutation({
 	args: {
 		sprintId: v.id("skillSprints"),
 		md: v.string(),
-		dayKey: v.optional(v.string()),
+		dateCreated: v.optional(v.number()),
 	},
-	handler: async (ctx, { sprintId, md, dayKey }) => {
+	handler: async (ctx, { sprintId, md, dateCreated }) => {
 		await getOwnedSprintOrThrow(ctx, sprintId);
 		const now = Date.now();
-		const id = await ctx.db.insert("skillSprintJournalEntries", { sprintId, md, dayKey, createdAt: now });
+		const id = await ctx.db.insert("skillSprintJournalEntries", { sprintId, md, dateCreated, createdAt: now });
 		const created = await ctx.db.get(id);
 		if (!created) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created journal entry", ctx: { id } });
 		return created;
@@ -213,7 +219,7 @@ export const getSprintState = query({
 				.withIndex("by_sprintId", (q) => q.eq("sprintId", sprintId))
 				.collect() as Promise<AdjustmentDoc[]>,
 			ctx.db
-				.query("skillSprintDailyChallenges")
+				.query("skillSprintLessons")
 				.withIndex("by_sprintId", (q) => q.eq("sprintId", sprintId))
 				.collect() as Promise<DailyChallengeDoc[]>,
 			ctx.db
