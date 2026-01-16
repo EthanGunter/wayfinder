@@ -13,3 +13,6 @@ export * from './Auth';
 
 /** Task management API */
 export { default as tasksAPI } from './Tasks';
+
+/** Skill Sprint management API */
+export { default as skillSprintsAPI } from './SkillSprints';

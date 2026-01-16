@@ -1,189 +1,165 @@
 <script lang="ts">
-	import Button from '$lib/components/ui/button/button.svelte';
-	import LlmChat from '$lib/components/LlmChat.svelte';
-	import { sharedConvexClient } from '$lib/API/ConvexClient';
-	import { api as convexApi } from '$convex/_generated/api';
-	import { settings } from '$lib/config/user-settings';
-	import { resolveLlm } from '$lib/config/user-settings/llm-options';
-	import { goalSystemMessage } from './agentMessages';
+	import skillSprintsAPI from '$lib/API/SkillSprints';
+	import Icon from '@iconify/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { goto } from '$app/navigation';
 
-	type ChatMessage = {
-		id: string;
-		role: 'user' | 'assistant';
-		content: string;
-	};
+	const sprints = skillSprintsAPI.listUserSprints();
 
-	let messages = $state<ChatMessage[]>([]);
-	let titleStatement = $state('');
-	let goalStatement = $state('');
-	let createdSprintId = $state<string | null>(null);
-	let isSaving = $state(false);
-	let errorMessage = $state<string | null>(null);
-	let messageCounter = 0;
-	let canConfirm = $state(false);
-	let isWaitingForAi = $state(false);
-
-	const llmModel = settings.sprints.core.llmModel;
-	const connectionsStore = settings.llm.customConnections.connections;
-	const enabledOptionsStore = settings.llm.llm.enabledConnections.getEnabledOptions();
-
-	$effect(() => {
-		canConfirm =
-			titleStatement.trim().length > 0 &&
-			goalStatement.trim().length > 0 &&
-			!isSaving &&
-			!isWaitingForAi;
+	// Separate active and archived sprints
+	const activeSprints = $derived.by(() => {
+		if ($sprints.status !== 'resolved') return [];
+		return $sprints.value.filter((s) => !s.archivedAt);
 	});
 
-	async function handleSend(content: string) {
-		const userMsg: ChatMessage = {
-			id: `msg-${++messageCounter}`,
-			role: 'user',
-			content
-		};
-		messages = [...messages, userMsg];
+	const archivedSprints = $derived.by(() => {
+		if ($sprints.status !== 'resolved') return [];
+		return $sprints.value.filter((s) => s.archivedAt);
+	});
 
-		isWaitingForAi = true;
-		errorMessage = null;
-
-		try {
-			const conversationTranscript = messages.map((m) => `${m.role}: ${m.content}`).join('\n');
-			const transcript = `system: ${goalSystemMessage}\n\n${conversationTranscript}`;
-			const resolved = resolveLlm($llmModel, $connectionsStore);
-
-			// TODO:Refactor this is bad. We should be calling a TS middle-layer api similar to the task and auth systems.
-			const result = await sharedConvexClient.action(convexApi.llm.call, {
-				message: transcript,
-				...resolved
-			});
-
-			const assistantMsg: ChatMessage = {
-				id: `msg-${++messageCounter}`,
-				role: 'assistant',
-				content: result.text
-			};
-			messages = [...messages, assistantMsg];
-
-			// Parse for title (extract last <title>...</title> tag)
-			const titlePattern = /<title>([\s\S]*?)<\/title>/g;
-			let titleMatch: RegExpExecArray | null = null;
-			let lastTitle: string | null = null;
-			while ((titleMatch = titlePattern.exec(result.text)) !== null) {
-				lastTitle = titleMatch[1] ?? null;
-			}
-			if (lastTitle !== null) {
-				const trimmed = lastTitle.trim();
-				if (trimmed.length > 0) {
-					titleStatement = trimmed;
-				}
-			}
-
-			// Parse for goal statement (extract last <goal>...</goal> tag)
-			const goalPattern = /<goal>([\s\S]*?)<\/goal>/g;
-			let goalMatch: RegExpExecArray | null = null;
-			let lastGoal: string | null = null;
-			while ((goalMatch = goalPattern.exec(result.text)) !== null) {
-				lastGoal = goalMatch[1] ?? null;
-			}
-			if (lastGoal !== null) {
-				const trimmed = lastGoal.trim();
-				if (trimmed.length > 0) {
-					goalStatement = trimmed;
-				}
-			}
-		} catch (error) {
-			console.error(error);
-			errorMessage = 'AI failed to respond. Check your LLM settings/keys.';
-		} finally {
-			isWaitingForAi = false;
-		}
-	}
-
-	async function confirmGoal() {
-		const title = titleStatement.trim();
-		const goal = goalStatement.trim();
-		if (!title || !goal || isSaving) return;
-
-		isSaving = true;
-		errorMessage = null;
-		createdSprintId = null;
-
+	async function createNewSprint() {
 		try {
 			const now = Date.now();
-			const sprint = await sharedConvexClient.mutation(convexApi.skillSprints.createSprint, {
-				title,
-				goal,
+			const sprint = await skillSprintsAPI.createSprint({
+				title: 'New Skill Sprint',
+				goal: '',
 				startsAt: now,
 				endsAt: now + 7 * 24 * 60 * 60 * 1000
 			});
-			createdSprintId = sprint._id;
+			goto(`/skill-sprint/${sprint._id}`);
 		} catch (error) {
-			console.error(error);
-			errorMessage = 'Failed to create sprint.';
-		} finally {
-			isSaving = false;
+			console.error('Failed to create sprint:', error);
 		}
+	}
+
+	function formatDate(timestamp: number): string {
+		return new Date(timestamp).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	}
+
+	function getStatus(sprint: (typeof activeSprints)[0]): string {
+		const now = Date.now();
+		if (now < sprint.startsAt) return 'upcoming';
+		if (now > sprint.endsAt) return 'ended';
+		return 'active';
 	}
 </script>
 
 <div class="mx-auto w-full max-w-5xl p-4">
 	<div class="space-y-2">
-		<h1 class="text-xl font-semibold">Skill Sprint</h1>
+		<h1 class="text-xl font-semibold">Skill Sprints</h1>
 		<p class="text-sm text-muted-foreground">
-			Dev-only experiment. Chat on the left, confirm your goal on the right.
+			Dev-only experiment. Start a focused learning sprint to build a new skill.
 		</p>
 	</div>
 
-	<div class="mt-6 grid gap-6 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-		<section class="flex h-[calc(100vh-12rem)] min-h-[500px] flex-col">
-			<LlmChat
-				{messages}
-				onSend={handleSend}
-				disabled={isWaitingForAi}
-				selectedModel={$llmModel}
-				onModelChange={(v) => ($llmModel = v)}
-				modelOptions={$enabledOptionsStore}
-				placeholder="Share what you want to get good at."
-			/>
-		</section>
-
-		<aside class="space-y-4">
-			<div class="rounded-md border bg-background p-4">
-				<div class="text-sm font-medium">Title</div>
-				<div class="mt-2 text-sm text-muted-foreground">
-					{#if titleStatement.trim().length === 0}
-						<span
-							>Waiting for a <code class="text-xs">&lt;title&gt;...&lt;/title&gt;</code> tag.</span
-						>
-					{:else}
-						<div class="whitespace-pre-wrap text-foreground">{titleStatement}</div>
-					{/if}
+	<div class="mt-6 flex flex-col gap-6">
+		{#if $sprints.status === 'resolved'}
+			<!-- Empty State -->
+			{#if $sprints.value.length === 0}
+				<div
+					class="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-muted-foreground"
+				>
+					<Icon icon="lucide:target" class="h-10 w-10" />
+					<p class="text-sm">No skill sprints yet.</p>
+					<Button onclick={createNewSprint}>Create your first sprint</Button>
 				</div>
-			</div>
+			{:else}
+				<!-- Active Sprints -->
+				{#if activeSprints.length === 0}
+					<div
+						class="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-muted-foreground"
+					>
+						<Icon icon="lucide:target" class="h-10 w-10" />
+						<p class="text-sm">No active sprints</p>
+						<Button onclick={createNewSprint}>Create a sprint</Button>
+					</div>
+				{:else}
+					<div class="space-y-2">
+						<span class="text-sm font-medium">Active Sprints ({activeSprints.length})</span>
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+							{#each activeSprints as sprint (sprint._id)}
+								<button
+									type="button"
+									class="group flex flex-col gap-2 rounded-lg border bg-card p-4 text-left hover:bg-accent"
+									onclick={() => goto(`/skill-sprint/${sprint._id}`)}
+								>
+									<div class="flex items-start justify-between gap-2">
+										<h3 class="font-medium group-hover:text-accent-foreground">
+											{sprint.title}
+										</h3>
+										<span
+											class="rounded-full px-2 py-0.5 text-xs {getStatus(sprint) === 'active'
+												? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+												: 'bg-muted text-muted-foreground'}"
+										>
+											{getStatus(sprint)}
+										</span>
+									</div>
+									<p class="line-clamp-2 text-sm text-muted-foreground">
+										{sprint.goal || 'No goal set yet'}
+									</p>
+									<div class="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
+										<Icon icon="lucide:calendar" class="h-3 w-3" />
+										<span>{formatDate(sprint.startsAt)} - {formatDate(sprint.endsAt)}</span>
+									</div>
+								</button>
+							{/each}
+							<!-- Create New Button -->
+							<button
+								type="button"
+								class="flex min-h-[160px] items-center justify-center rounded-lg border border-dashed hover:border-solid hover:bg-accent"
+								onclick={createNewSprint}
+								title="Create new sprint"
+							>
+								<Icon icon="lucide:plus" class="h-8 w-8 text-muted-foreground" />
+							</button>
+						</div>
+					</div>
+				{/if}
 
-			<div class="rounded-md border bg-background p-4">
-				<div class="text-sm font-medium">Goal statement</div>
-				<div class="mt-2 text-sm text-muted-foreground">
-					{#if goalStatement.trim().length === 0}
-						<span>Waiting for a <code class="text-xs">&lt;goal&gt;...&lt;/goal&gt;</code> tag.</span
-						>
-					{:else}
-						<div class="whitespace-pre-wrap text-foreground">{goalStatement}</div>
-					{/if}
-				</div>
-			</div>
-
-			<Button class="w-full" disabled={!canConfirm} onclick={confirmGoal}>
-				{isSaving ? 'Creating sprint...' : 'Confirm goal'}
-			</Button>
-
-			{#if createdSprintId}
-				<div class="text-sm text-emerald-500">Sprint created: {createdSprintId}</div>
+				<!-- Archived Sprints -->
+				{#if archivedSprints.length > 0}
+					<div class="space-y-2">
+						<span class="text-sm font-medium">Archived Sprints ({archivedSprints.length})</span>
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+							{#each archivedSprints as sprint (sprint._id)}
+								<button
+									type="button"
+									class="group flex flex-col gap-2 rounded-lg border bg-card p-4 text-left opacity-60 hover:opacity-100 hover:bg-accent"
+									onclick={() => goto(`/skill-sprint/${sprint._id}`)}
+								>
+									<div class="flex items-start justify-between gap-2">
+										<h3 class="font-medium group-hover:text-accent-foreground">
+											{sprint.title}
+										</h3>
+										<Icon icon="lucide:archive" class="h-4 w-4 text-muted-foreground" />
+									</div>
+									<p class="line-clamp-2 text-sm text-muted-foreground">
+										{sprint.goal || 'No goal set yet'}
+									</p>
+									<div class="mt-auto flex items-center gap-2 text-xs text-muted-foreground">
+										<Icon icon="lucide:calendar" class="h-3 w-3" />
+										<span>{formatDate(sprint.startsAt)} - {formatDate(sprint.endsAt)}</span>
+									</div>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			{/if}
-
-			{#if errorMessage}
-				<div class="text-sm text-destructive">{errorMessage}</div>
-			{/if}
-		</aside>
+		{:else if $sprints.status === 'loading'}
+			<div class="flex flex-1 items-center justify-center py-12 text-muted-foreground">
+				<Icon icon="lucide:loader-circle" class="h-6 w-6 animate-spin" />
+			</div>
+		{:else if $sprints.status === 'error'}
+			<div class="flex flex-1 items-center justify-center gap-2 py-12 text-destructive">
+				<Icon icon="lucide:alert-circle" class="h-5 w-5" />
+				<span>Failed to load sprints.</span>
+			</div>
+		{/if}
 	</div>
 </div>

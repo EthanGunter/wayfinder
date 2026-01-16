@@ -55,6 +55,24 @@ export const createSprint = mutation({
 	},
 });
 
+export const updateSprint = mutation({
+	args: {
+		sprintId: v.id("skillSprints"),
+		title: v.optional(v.string()),
+		goal: v.optional(v.string()),
+		startsAt: v.optional(v.number()),
+		endsAt: v.optional(v.number()),
+		archivedAt: v.optional(v.number()),
+	},
+	handler: async (ctx, { sprintId, ...updates }) => {
+		await getOwnedSprintOrThrow(ctx, sprintId);
+		await ctx.db.patch(sprintId, updates);
+		const updated = await ctx.db.get(sprintId);
+		if (!updated) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve updated sprint", ctx: { sprintId } });
+		return updated;
+	},
+});
+
 export const getSprint = query({
 	args: { sprintId: v.id("skillSprints") },
 	handler: async (ctx, { sprintId }) => {
@@ -165,6 +183,18 @@ export const addJournalEntry = mutation({
 		const created = await ctx.db.get(id);
 		if (!created) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve created journal entry", ctx: { id } });
 		return created;
+	},
+});
+
+export const listUserSprints = query({
+	args: {},
+	handler: async (ctx) => {
+		const userAuthId = await getUserAuthIdOrThrow(ctx);
+		const sprints = await ctx.db
+			.query("skillSprints")
+			.withIndex("by_user", (q) => q.eq("userAuthId", userAuthId))
+			.collect();
+		return sprints;
 	},
 });
 

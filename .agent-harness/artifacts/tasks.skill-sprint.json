@@ -128,5 +128,23 @@
     ],
     "passes": false,
     "notes": "Ensure goalStatement is added to the sprint record and is used by the skills preview later."
+  },
+  {
+    "category": "refactor",
+    "title": "Skill Sprint: restructure routes (selector + [sprintId] slug)",
+    "description": "Refactor skill sprint routes to match projects pattern: base route shows sprint selector, [sprintId] slug shows specific sprint. Extract shared logic to /lib/API/SkillSprints/ for reusability.",
+    "acceptance": [
+      "/skill-sprint/ shows list/selector of user's sprints",
+      "/skill-sprint/[sprintId]/ shows specific sprint with phase-based views (goal/planning/daily)",
+      "Data operations extracted to /lib/API/SkillSprints/ with reactive stores",
+      "Phase-specific workflow logic remains in route files",
+      "All existing functionality preserved"
+    ],
+    "deps": [
+      "Skill Sprint: daily view (dev date selector)",
+      "Skill Sprint: interactive markdown elements for LLM output"
+    ],
+    "passes": true,
+    "notes": "This moves from prototype (single route) to production structure. The /lib/API layer should provide: getSprintState store, listUserSprints store, and mutation wrappers. Phase logic (goal conversation, planning assessment, daily challenges) stays route-specific since it's UX workflow, not reusable data operations."
   }
 ]
