@@ -83,35 +83,111 @@
     "notes": "Assessment is temporary but should be stored as part of the plan artifact for now."
   },
   {
-    "category": "ux",
-    "title": "Skill Sprint: daily view (dev date selector)",
-    "description": "Show the current-day challenges, with a dev-only date selector for testing. Per-item feedback is conditional on LLM output.",
+    "category": "functional",
+    "title": "Skill Sprint: refactor lessons schema (sequential, not daily)",
+    "description": "Restructure skillSprintDailyChallenges to be lesson-based rather than date-based. Rename dayKey to dateCreated, add status field, update all consuming code.",
     "acceptance": [
-      "Daily view shows current day by default",
-      "Dev-only date selector exists for testing",
-      "Checklist items render and persist completion",
-      "Per-item feedback UI only renders when LLM output includes it"
+      "dayKey renamed to dateCreated (timestamp) in schema and indexes",
+      "status field added: 'pending' | 'complete' | 'replaced'",
+      "Index updated to support queries by sprintId + dateCreated",
+      "Mutations and queries updated to use new field names",
+      "API layer types reflect new structure"
     ],
     "deps": [
       "Skill Sprint: planning session with assessment questions"
     ],
     "passes": false,
-    "notes": "The date selector is development-only; production should only show the current day."
+    "notes": "This touches: schema.ts, skillSprints.ts, seam-interfaces.ts, ConvexSkillSprintProvider.ts. Lessons are sequential by creation time, not calendar-bound. Status tracks lifecycle: pending -> complete or pending -> replaced (when lesson regenerated after critique)."
+  },
+  {
+    "category": "ux",
+    "title": "Skill Sprint: basic lesson view with checkboxes",
+    "description": "Display the current lesson with interactive checkboxes. Show lesson items, allow completion toggling, display progress indicator. No navigation or generation yet.",
+    "acceptance": [
+      "Lesson items render with checkboxes and titles",
+      "Checking/unchecking persists completedAt timestamp",
+      "Progress indicator shows X of Y complete",
+      "Completed items are visually dimmed but stay in place",
+      "If no lessons exist, show placeholder message"
+    ],
+    "deps": [
+      "Skill Sprint: refactor lessons schema (sequential, not daily)"
+    ],
+    "passes": false,
+    "notes": "Displays the most recent incomplete lesson, or the latest lesson if all complete. Lesson sequence is implied by dateCreated sort order. No lesson generation logic in this task - that comes later."
   },
   {
     "category": "ux",
     "title": "Skill Sprint: interactive markdown elements for LLM output",
-    "description": "Add LLM-injectable UI elements in markdown (e.g., <rating/>, <textbox/>) so the user can provide structured feedback.",
+    "description": "Add LLM-injectable UI elements in markdown (e.g., <rating type=\"star\">, <number type=\"time\">) so the user can provide structured feedback on lesson items.",
     "acceptance": [
-      "Markdown renderer supports LLM-injectable elements",
-      "User input from elements is captured and stored",
-      "Rendered output remains readable when elements are absent"
+      "Markdown renderer supports <rating> with configurable type (star, numeric, etc.)",
+      "Markdown renderer supports <number> with configurable type (time, distance, etc.)",
+      "User input from elements is captured in component state",
+      "Elements render with clear labels (from element content)",
+      "Graceful fallback when elements are absent or malformed"
     ],
     "deps": [
-      "Skill Sprint: daily view (dev date selector)"
+      "Skill Sprint: basic lesson view with checkboxes"
     ],
     "passes": false,
-    "notes": "These elements should serialize into the daily feedback payload so future LLM calls can use them."
+    "notes": "Example: '<rating type=\"star\">Difficulty</rating>' renders a 5-star picker labeled 'Difficulty'. '<number type=\"time\">Duration</number>' renders a time input labeled 'Duration'. These serialize into lesson journal entries as: '## Challenge Title\\nDifficulty: 4/5\\nDuration: 10s'. Values stored in markdown format, parsed by future LLM calls for context."
+  },
+  {
+    "category": "ux",
+    "title": "Skill Sprint: lesson navigation UI",
+    "description": "Add lesson selector to view past lessons and conditionally generate new ones. Users can navigate through completed lessons and trigger next lesson generation when current is complete.",
+    "acceptance": [
+      "Lesson selector shows all lessons sorted by dateCreated (oldest first)",
+      "Selector displays lesson sequence number (implied from sort order)",
+      "'+' button appears only when viewing the latest lesson AND it is complete",
+      "Clicking '+' generates next lesson (calls generation logic)",
+      "Navigation works via dropdown or prev/next buttons",
+      "Current lesson is visually indicated in selector"
+    ],
+    "deps": [
+      "Skill Sprint: basic lesson view with checkboxes"
+    ],
+    "passes": false,
+    "notes": "Lesson is 'complete' when all items have completedAt OR lesson status is 'complete'. The '+' button should be disabled/hidden if latest lesson is incomplete to prevent skipping ahead without engagement."
+  },
+  {
+    "category": "ux",
+    "title": "Skill Sprint: lesson journal & completion flow",
+    "description": "Add journal entry textbox for lesson reflection/feedback. On submit, determine if feedback is plan critique (requires conversation) or progress reflection (auto-complete). Support lesson dismissal/skipping with guardrails.",
+    "acceptance": [
+      "Journal textbox renders below lesson items",
+      "Submit sends journal content to LLM for classification (critique vs reflection)",
+      "If reflection: journal entry saved, lesson marked complete, next lesson can generate",
+      "If critique: conversation starts to understand plan adjustments (may result in lesson replacement)",
+      "'Skip to next lesson' button appears if at least 1 item completed OR user provides feedback",
+      "Skipping marks current lesson as 'replaced' and allows next generation",
+      "Feedback from interactive elements (<rating>, <number>) included in journal entry header"
+    ],
+    "deps": [
+      "Skill Sprint: interactive markdown elements for LLM output",
+      "Skill Sprint: lesson navigation UI"
+    ],
+    "passes": false,
+    "notes": "Journal format: '# Lesson Answers\\n## [Item Title]\\n[interactive element responses]\\n\\n# User Journal\\n[user text]'. Critique detection is LLM-based (simple prompt: does this indicate the lesson plan needs adjustment?). Replaced lessons stay in history for context but are visually marked as superseded."
+  },
+  {
+    "category": "functional",
+    "title": "Skill Sprint: auto-generate lessons",
+    "description": "Implement lesson generation logic that auto-creates next lesson when appropriate. Checks for incomplete lessons on mount, generates if all complete, handles lesson replacement after critique.",
+    "acceptance": [
+      "On daily phase mount, check for most recent lesson by dateCreated",
+      "If no lessons exist, auto-generate first lesson",
+      "If latest lesson is complete, do nothing (wait for user to click '+')",
+      "If latest lesson is 'replaced', auto-generate replacement",
+      "Generation creates new lesson record with status 'pending' and dateCreated timestamp",
+      "LLM prompt includes sprint goal, plan, and all journal entries for context"
+    ],
+    "deps": [
+      "Skill Sprint: refactor lessons schema (sequential, not daily)"
+    ],
+    "passes": false,
+    "notes": "Generation is NOT automatic on completion - user must explicitly request next lesson via '+' button. Only auto-generates on mount if no valid lesson exists. Replacement lessons (after critique) ARE auto-generated after conversation resolves. This prevents overwhelming users with new content before they're ready."
   },
   {
     "category": "functional",
@@ -141,11 +217,10 @@
       "All existing functionality preserved"
     ],
     "deps": [
-      "Skill Sprint: daily view (dev date selector)",
-      "Skill Sprint: interactive markdown elements for LLM output"
+      "Skill Sprint: planning session with assessment questions"
     ],
     "passes": true,
-    "notes": "This moves from prototype (single route) to production structure. The /lib/API layer should provide: getSprintState store, listUserSprints store, and mutation wrappers. Phase logic (goal conversation, planning assessment, daily challenges) stays route-specific since it's UX workflow, not reusable data operations."
+    "notes": "This task was completed. The daily lesson tasks are new additions that build on top of this restructured foundation. The /lib/API layer provides: getSprintState store, listUserSprints store, and mutation wrappers. Phase logic (goal conversation, planning assessment, daily challenges) stays route-specific since it's UX workflow, not reusable data operations."
   },
   {
     "category": "functional",
