@@ -60,6 +60,26 @@ export async function callLlmCore(
 	}
 
 	if (args.provider === "stub") {
+		// Check if this is a lesson generation request (contains "generate today's lesson")
+		if (args.message.includes("generate today's lesson") || args.message.includes("Please generate today's lesson")) {
+			return {
+				text: `<lesson>
+  <item>
+    <title>Practice task 1</title>
+    <details>Details for task 1</details>
+  </item>
+  <item>
+    <title>Practice task 2</title>
+  </item>
+  <item>
+    <title>Practice task 3</title>
+    <details>Details for task 3</details>
+  </item>
+</lesson>`,
+				metadata: { provider: args.provider, model: args.model, credentialSource: args.credentialSource },
+			};
+		}
+		
 		return {
 			text: `stub:${args.model}:${args.message}`,
 			metadata: { provider: args.provider, model: args.model, credentialSource: args.credentialSource },

@@ -60,9 +60,27 @@ export interface AddJournalEntryParams {
 	dateCreated?: number;
 }
 
+export interface GenerateLessonParams {
+	sprintId: Id<'skillSprints'>;
+	provider: 'stub' | 'openai' | 'groq' | 'test';
+	model: string;
+	credentialSource: 'app' | 'user';
+}
+
+export interface GenerateLessonResult {
+	lesson: SprintDailyChallenge;
+	rawResponse: string;
+}
+
 /**
  * Remote API for Skill Sprints (backend operations)
  */
+export interface ToggleLessonItemCompletionParams {
+	lessonId: Id<'skillSprintLessons'>;
+	itemId: string;
+	completed: boolean;
+}
+
 export interface ISkillSprintsRemote {
 	// Queries
 	listUserSprints: () => FetchableStore<Sprint[]>;
@@ -75,6 +93,10 @@ export interface ISkillSprintsRemote {
 	addAdjustment: (params: AddAdjustmentParams) => Promise<SprintAdjustment>;
 	upsertDailyChallenge: (params: UpsertDailyChallengeParams) => Promise<SprintDailyChallenge>;
 	addJournalEntry: (params: AddJournalEntryParams) => Promise<SprintJournalEntry>;
+	toggleLessonItemCompletion: (params: ToggleLessonItemCompletionParams) => Promise<SprintDailyChallenge>;
+
+	// Actions
+	generateLesson: (params: GenerateLessonParams) => Promise<GenerateLessonResult>;
 }
 
 /**

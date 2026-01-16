@@ -186,7 +186,7 @@
     "deps": [
       "Skill Sprint: refactor lessons schema (sequential, not daily)"
     ],
-    "passes": false,
+    "passes": true,
     "notes": "Generation is NOT automatic on completion - user must explicitly request next lesson via '+' button. Only auto-generates on mount if no valid lesson exists. Replacement lessons (after critique) ARE auto-generated after conversation resolves. This prevents overwhelming users with new content before they're ready."
   },
   {

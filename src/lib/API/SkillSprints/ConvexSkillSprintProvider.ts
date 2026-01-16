@@ -11,6 +11,8 @@ import type {
 	AddAdjustmentParams,
 	UpsertDailyChallengeParams,
 	AddJournalEntryParams,
+	ToggleLessonItemCompletionParams,
+	GenerateLessonParams,
 	Sprint,
 	SprintPlan,
 	SprintAdjustment,
@@ -83,6 +85,15 @@ export const api: ISkillSprintsRemote = {
 
 	addJournalEntry: async (params: AddJournalEntryParams): Promise<SprintJournalEntry> => {
 		return await client.mutation(convexApi.skillSprints.addJournalEntry, params);
+	},
+
+	toggleLessonItemCompletion: async (params) => {
+		return await client.mutation(convexApi.skillSprints.toggleLessonItemCompletion, params);
+	},
+
+	// Actions
+	generateLesson: async (params) => {
+		return await client.action(convexApi.skillSprints.generateLesson, params);
 	}
 };
 
@@ -94,7 +105,9 @@ const localApi: ISkillSprintsLocal = {
 	setPlan: async (params) => api.setPlan(params),
 	addAdjustment: async (params) => api.addAdjustment(params),
 	upsertDailyChallenge: async (params) => api.upsertDailyChallenge(params),
-	addJournalEntry: async (params) => api.addJournalEntry(params)
+	addJournalEntry: async (params) => api.addJournalEntry(params),
+	toggleLessonItemCompletion: async (params) => api.toggleLessonItemCompletion(params),
+	generateLesson: async (params) => api.generateLesson(params)
 };
 
 export default localApi;

@@ -5,6 +5,7 @@
 	import Icon from '@iconify/svelte';
 	import GoalPhase from './GoalPhase.svelte';
 	import PlanningPhase from './PlanningPhase.svelte';
+	import DailyPhase from './DailyPhase.svelte';
 
 	const sprintId = $derived($page.params.sprintId as Id<'skillSprints'>);
 	const sprintState = $derived.by(() => skillSprintsAPI.getSprintState(sprintId));
@@ -36,13 +37,7 @@
 	{:else if currentPhase === 'planning'}
 		<PlanningPhase {sprintId} sprintState={$sprintState.value} />
 	{:else if currentPhase === 'daily'}
-		<div class="mx-auto w-full max-w-5xl p-4">
-			<div class="flex flex-col items-center justify-center gap-4 py-12 text-muted-foreground">
-				<Icon icon="lucide:calendar-check" class="h-12 w-12" />
-				<p class="text-lg font-medium">Daily Phase</p>
-				<p class="text-sm">This phase is coming soon!</p>
-			</div>
-		</div>
+		<DailyPhase {sprintId} sprintState={$sprintState.value} />
 	{/if}
 {:else if $sprintState.status === 'loading'}
 	<div class="flex flex-1 items-center justify-center py-12 text-muted-foreground">

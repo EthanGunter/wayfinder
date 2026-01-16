@@ -1,6 +1,9 @@
 import { sharedConvexClient } from '$lib/API/ConvexClient';
 import { api as convexApi } from '$convex/_generated/api';
 import type { ChatMessage, TagExtractionResult } from './types';
+import type { SprintDailyChallenge } from '$lib/API/SkillSprints';
+import type { Id } from '$convex/_generated/dataModel';
+import skillSprintsAPI from '$lib/API/SkillSprints';
 
 type Provider = 'stub' | 'openai' | 'groq' | 'test';
 type CredentialSource = 'app' | 'user';
@@ -26,6 +29,48 @@ export async function callLlm(params: {
 	});
 
 	return result.text;
+}
+
+/**
+ * Extracts lesson items from LLM response
+ * Format: <lesson><item><title>...</title><details>...</details></item></lesson>
+ */
+export function extractLessonItems(text: string): Array<{ title: string; detailsMd?: string }> {
+	const lessonPattern = /<lesson>([\s\S]*?)<\/lesson>/g;
+	const lessonMatch = lessonPattern.exec(text);
+	
+	if (!lessonMatch || !lessonMatch[1]) {
+		return [];
+	}
+	
+	const lessonBlock = lessonMatch[1];
+	const items: Array<{ title: string; detailsMd?: string }> = [];
+	
+	// Extract each <item> block
+	const itemPattern = /<item>([\s\S]*?)<\/item>/g;
+	let itemMatch: RegExpExecArray | null = null;
+	
+	while ((itemMatch = itemPattern.exec(lessonBlock)) !== null) {
+		const itemContent = itemMatch[1];
+		if (!itemContent) continue;
+		
+		// Extract title (required)
+		const titleMatch = /<title>([\s\S]*?)<\/title>/.exec(itemContent);
+		const title = titleMatch?.[1]?.trim();
+		
+		if (!title) continue;
+		
+		// Extract details (optional)
+		const detailsMatch = /<details>([\s\S]*?)<\/details>/.exec(itemContent);
+		const details = detailsMatch?.[1]?.trim();
+		
+		items.push({
+			title,
+			detailsMd: details || undefined
+		});
+	}
+	
+	return items;
 }
 
 /**
@@ -123,4 +168,46 @@ export function extractTags(text: string): TagExtractionResult {
 let messageIdCounter = 0;
 export function generateMessageId(): string {
 	return `msg-${++messageIdCounter}`;
+}
+
+/**
+ * Determines if a lesson should be auto-generated based on current lessons state.
+ * Returns true if:
+ * - No lessons exist (first lesson)
+ * - Latest lesson status is 'replaced' (needs replacement after critique)
+ * Returns false if:
+ * - Latest lesson is 'pending' or 'complete' (wait for user to click '+')
+ */
+export function shouldAutoGenerateLesson(lessons: SprintDailyChallenge[]): boolean {
+	if (lessons.length === 0) {
+		return true; // No lessons exist → auto-generate first lesson
+	}
+
+	// Sort by dateCreated to find most recent
+	const sortedLessons = [...lessons].sort((a, b) => b.dateCreated - a.dateCreated);
+	const latestLesson = sortedLessons[0];
+
+	if (!latestLesson) {
+		return true;
+	}
+
+	// Only auto-generate if latest lesson was replaced
+	return latestLesson.status === 'replaced';
+}
+
+/**
+ * Generates a new lesson for the sprint using the LLM.
+ * Called automatically on mount if shouldAutoGenerateLesson returns true,
+ * or manually when user clicks '+' to request next lesson.
+ */
+export async function generateLesson(
+	sprintId: Id<'skillSprints'>,
+	llmConfig: { provider: Provider; model: string; credentialSource: CredentialSource }
+): Promise<void> {
+	await skillSprintsAPI.generateLesson({
+		sprintId,
+		provider: llmConfig.provider,
+		model: llmConfig.model,
+		credentialSource: llmConfig.credentialSource
+	});
 }

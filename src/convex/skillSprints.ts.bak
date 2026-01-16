@@ -192,41 +192,6 @@ export const addJournalEntry = mutation({
 		return created;
 	},
 });
-export const toggleLessonItemCompletion = mutation({
-	args: {
-		lessonId: v.id("skillSprintLessons"),
-		itemId: v.string(),
-		completed: v.boolean(),
-	},
-	handler: async (ctx, { lessonId, itemId, completed }) => {
-		const lesson = await ctx.db.get(lessonId);
-		if (!lesson) {
-			throw new ConvexError({ type: "NotFoundError", msg: "Lesson not found", ctx: { lessonId } });
-		}
-
-		// Verify ownership through sprint
-		await getOwnedSprintOrThrow(ctx, lesson.sprintId);
-
-		// Update the specific item
-		const now = Date.now();
-		const updatedItems = lesson.items.map((item) => {
-			if (item.id === itemId) {
-				return {
-					...item,
-					completedAt: completed ? now : undefined,
-				};
-			}
-			return item;
-		});
-
-		await ctx.db.patch(lessonId, { items: updatedItems });
-
-		const updated = await ctx.db.get(lessonId);
-		if (!updated) throw new ConvexError({ type: "NotFoundError", msg: "Failed to retrieve updated lesson", ctx: { lessonId } });
-		return updated;
-	},
-});
-
 
 export const listUserSprints = query({
 	args: {},
@@ -286,33 +251,27 @@ export const generateLesson = action({
 			});
 		}
 
-		// Build system message
-		const systemMessage = getLessonGenerationSystemMessage();
-
 		// Build context prompt
-		let userMessage = `# Sprint Goal\n${state.sprint.goal}\n\n`;
-		userMessage += `# Learning Plan\n${state.plan.md}\n\n`;
+		let contextPrompt = `# Sprint Goal\n${state.sprint.goal}\n\n`;
+		contextPrompt += `# Learning Plan\n${state.plan.md}\n\n`;
 
 		if (state.journalEntries.length > 0) {
-			userMessage += `# Journal History (Previous Lessons)\n\n`;
+			contextPrompt += `# Journal History (Previous Lessons)\n\n`;
 			// Sort by creation date, oldest first
 			const sortedEntries = [...state.journalEntries].sort((a, b) => a.createdAt - b.createdAt);
 			sortedEntries.forEach((entry, idx) => {
-				userMessage += `## Entry ${idx + 1} (${new Date(entry.createdAt).toISOString().split('T')[0]})\n`;
-				userMessage += `${entry.md}\n\n`;
+				contextPrompt += `## Entry ${idx + 1} (${new Date(entry.createdAt).toISOString().split('T')[0]})\n`;
+				contextPrompt += `${entry.md}\n\n`;
 			});
 		} else {
-			userMessage += `# Journal History\nThis is the first lesson - no previous entries.\n\n`;
+			contextPrompt += `# Journal History\nThis is the first lesson - no previous entries.\n\n`;
 		}
 
-		userMessage += `\nPlease generate today's lesson with 3-5 concrete tasks.`;
-
-		// Format message with system prompt (matching format from sprintLogic.ts)
-		const fullMessage = `system: ${systemMessage}\n\nuser: ${userMessage}`;
+		contextPrompt += `\nPlease generate today's lesson with 3-5 concrete tasks.`;
 
 		// Call LLM
 		const llmResponse = await ctx.runAction(api.llm.call, {
-			message: fullMessage,
+			message: contextPrompt,
 			provider: args.provider,
 			model: args.model,
 			credentialSource: args.credentialSource
@@ -349,66 +308,6 @@ export const generateLesson = action({
 });
 
 //#region Utilities
-
-/**
- * System message for lesson generation.
- * Instructs the LLM to output in the expected XML format.
- */
-function getLessonGenerationSystemMessage(): string {
-	const agentTone = `Be professional and direct. Ask only essential questions. Skip pleasantries and get straight to the point while remaining helpful.`;
-	const date = `Today's date: ${new Date().toISOString().split('T')[0]}`;
-	const agentContext = agentTone + "\n" + date + "\n";
-
-	return `You are an assistant that generates daily learning challenges for a skill sprint. ${agentContext}
-
-## Context
-You will be provided with:
-1. The user's skill sprint goal
-2. Their learning plan (with assessment information)
-3. Their journal history from previous lessons (if any)
-
-## Your Task
-Generate a focused daily lesson with 3-5 concrete tasks/challenges the user should complete today.
-
-## Guidelines
-- Each lesson should build on previous progress (use journal history)
-- Tasks should be specific, actionable, and completable in one session
-- Vary the task types: practice exercises, reading/research, projects, reflection
-- Consider the user's skill level and time commitment from the assessment
-- Each task should include a clear title and optional details for context
-
-## Output Format
-Wrap your lesson in <lesson>...</lesson> tags containing individual <item> elements:
-
-<lesson>
-  <item>
-    <title>Task title here</title>
-    <details>Optional details, instructions, or context (markdown supported)</details>
-  </item>
-  <item>
-    <title>Another task</title>
-    <details>More context here</details>
-  </item>
-</lesson>
-
-The <details> tag is optional - use it when the user needs more context or instructions.
-
-## Example
-<lesson>
-  <item>
-    <title>Complete React hooks tutorial</title>
-    <details>Work through the useState and useEffect sections. Focus on understanding when to use each.</details>
-  </item>
-  <item>
-    <title>Build a simple counter component</title>
-    <details>Use useState to manage the count. Add increment and decrement buttons.</details>
-  </item>
-  <item>
-    <title>Journal: What was confusing?</title>
-    <details>Write 2-3 sentences about what concepts were unclear and what clicked.</details>
-  </item>
-</lesson>`;
-}
 
 /**
  * Parses lesson items from LLM response text

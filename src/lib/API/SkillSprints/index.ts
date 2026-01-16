@@ -38,5 +38,7 @@ export type {
 	SetPlanParams,
 	AddAdjustmentParams,
 	UpsertDailyChallengeParams,
-	AddJournalEntryParams
+	AddJournalEntryParams,
+	GenerateLessonParams,
+	GenerateLessonResult
 } from './seam-interfaces';
