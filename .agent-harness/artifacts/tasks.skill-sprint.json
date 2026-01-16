@@ -79,7 +79,7 @@
     "deps": [
       "Skill Sprint: goal conversation + sprint creation (dev-gated)"
     ],
-    "passes": false,
+    "passes": true,
     "notes": "Assessment is temporary but should be stored as part of the plan artifact for now."
   },
   {
