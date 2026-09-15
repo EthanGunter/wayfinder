@@ -1,5 +1,5 @@
 // Centralized host configuration - abstracts deployment platform specifics
-// Currently using Vercel, but designed to be portable
+// Currently using Cloudflare Workers, but designed to be portable
 
 import { PUBLIC_SITE_URL, PUBLIC_CONVEX_URL } from '$env/static/public';
 import { env } from '$env/dynamic/public';
@@ -12,7 +12,7 @@ import { env } from '$env/dynamic/public';
  */
 export type DeploymentEnv = 'development' | 'preview' | 'production';
 
-// Raw deployment environment (maps to Vercel's VERCEL_ENV)
+// Raw deployment environment (set per environment in wrangler.jsonc vars)
 export const deploymentEnv: DeploymentEnv = 
   (env.PUBLIC_DEPLOYMENT_ENV as DeploymentEnv) || 'development';
 

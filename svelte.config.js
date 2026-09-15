@@ -1,14 +1,14 @@
 import staticAdapter from '@sveltejs/adapter-static';
-import vercelAdapter from '@sveltejs/adapter-vercel'
+import cloudflareAdapter from '@sveltejs/adapter-cloudflare'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
-const target = process.env.ADAPTER ?? 'vercel'; // default to vercel for CI
+const target = process.env.ADAPTER ?? 'cloudflare'; // default to cloudflare for CI
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: target === "vercel" ? vercelAdapter() :
+    adapter: target === "cloudflare" ? cloudflareAdapter() :
       staticAdapter({
         pages: 'build',
         assets: 'build',

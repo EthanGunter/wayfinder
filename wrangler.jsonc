@@ -1,0 +1,30 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Production — deployed from `main` with `npx wrangler deploy`
+	"name": "wayfinder",
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"compatibility_date": "2026-09-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"observability": { "enabled": true },
+	"routes": [{ "pattern": "wayfinder.ethangunter.com", "custom_domain": true }],
+	// Runtime vars ($env/dynamic). Build-time vars ($env/static) live in .env.cloudflare-*
+	"vars": {
+		"PUBLIC_DEPLOYMENT_ENV": "production"
+	},
+
+	"env": {
+		// Preview — deployed from `preview` with `npx wrangler deploy --env preview`
+		// vars and routes are not inherited, so they are repeated here
+		"preview": {
+			"name": "wayfinder-preview",
+			"routes": [{ "pattern": "wayfinder-preview.ethangunter.com", "custom_domain": true }],
+			"vars": {
+				"PUBLIC_DEPLOYMENT_ENV": "preview"
+			}
+		}
+	}
+}

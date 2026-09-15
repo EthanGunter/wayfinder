@@ -9,7 +9,9 @@
 		"deploy:preview": "pnpx convex deploy --env-file .env.preview",
 		"deploy:prod": "pnpx convex deploy --env-file .env.prod",
 		"host": "vite dev --host",
-		"build": "PUBLIC_DEPLOYMENT_ENV=${VERCEL_ENV:-production} vite build --mode prod",
+		"build": "vite build --mode cloudflare-prod",
+		"prebuild:preview": "npx convex deploy",
+		"build:preview": "vite build --mode cloudflare-preview",
 		"build:mobile": "vite build --mode mobile && npx cap sync",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
@@ -37,8 +39,8 @@
 		"@internationalized/date": "^3.8.2",
 		"@lucide/svelte": "^0.544.0",
 		"@sveltejs/adapter-auto": "^6.0.0",
+		"@sveltejs/adapter-cloudflare": "^7.2.9",
 		"@sveltejs/adapter-static": "^3.0.9",
-		"@sveltejs/adapter-vercel": "^5.10.2",
 		"@sveltejs/kit": "^2.16.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"@tailwindcss/vite": "^4.0.0",
@@ -74,7 +76,8 @@
 		"vite": "^6.2.6",
 		"vite-plugin-devtools-json": "^0.2.0",
 		"vitest": "^3.2.4",
-		"vitest-mock-extended": "^3.1.0"
+		"vitest-mock-extended": "^3.1.0",
+		"wrangler": "^4.131.2"
 	},
 	"dependencies": {
 		"@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
