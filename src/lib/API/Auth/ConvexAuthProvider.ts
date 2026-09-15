@@ -56,8 +56,8 @@ const resolveSignedOut = () => {
 const setupConvexAuth = () => {
 	sharedConvexClient.setAuth(async () => {
 		try {
-			// TODO will this result in a double slash and fail to fetch?
-			const resp = await fetch(`${SITE_URL}/api/auth/convex/token`, {
+			// Relative path resolves correctly whether or not SITE_URL has a trailing slash
+			const resp = await fetch(new URL("api/auth/convex/token", SITE_URL), {
 				credentials: "include",
 			});
 			if (!resp.ok) return null;
@@ -215,7 +215,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 					});
 					if (loginRes.error) {
 						// If login fails after "user already exists", it means the password was wrong
-						return err(new ArgumentError("Account already exists and password does not match", creds));
+						return err(new ArgumentError("Account already exists and password does not match", { email: creds.email }));
 					}
 				} else {
 					return err(new UnknownError(res.error.message || "Registration failed", { cause: res.error }));
@@ -295,7 +295,7 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 				if (res.error) {
 					console.log("res.error", res.error);
 					if (res.error.code === authClient.$ERROR_CODES.INVALID_EMAIL_OR_PASSWORD || res.error.code === authClient.$ERROR_CODES.INVALID_PASSWORD) {
-						return err(new ArgumentError("Invalid email or password", creds, { ctx: res.error }));
+						return err(new ArgumentError("Invalid email or password", { email: creds.email }, { ctx: res.error }));
 					}
 					if (res.error.code === authClient.$ERROR_CODES.USER_NOT_FOUND) {
 						return err(new NotFoundError("User not found", creds.email));
@@ -315,10 +315,10 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 
 					if (e instanceof ConvexError) {
 						if (e.data.type === "NotAuthorizedError") {
-							return err(new NotAuthorizedError("Not authenticated", { messageForDev: e.data.msg, ctx: creds }));
+							return err(new NotAuthorizedError("Not authenticated", { messageForDev: e.data.msg, ctx: { email: creds.email } }));
 						} else if (e.data.type === "InvalidStateError") {
 							if ((e.data as EnsureUserErr).msg === "No user session found") {
-								return err(new NotAuthorizedError("Not authenticated", { messageForDev: "No user session found in ensureCurrentUser", ctx: creds }));
+								return err(new NotAuthorizedError("Not authenticated", { messageForDev: "No user session found in ensureCurrentUser", ctx: { email: creds.email } }));
 							}
 						}
 					}
@@ -330,9 +330,9 @@ const convexApi: IAuthRemote & IAuthSessionCapable = {
 		} catch (e) {
 			if (e instanceof ConvexError) {
 				if (e.data.type === "NotAuthorizedError") {
-					return err(new NotAuthorizedError("Not authenticated", { messageForDev: e.data.msg, ctx: creds }));
+					return err(new NotAuthorizedError("Not authenticated", { messageForDev: e.data.msg, ctx: { email: creds.type === 'email_password' ? creds.email : undefined } }));
 				} else if (e.data.type === "InvalidStateError") {
-					return err(new InvalidStateError("Account pending deletion. Try again tomorrow", { messageForDev: "authClient registration succeeded, but ctx.auth.getUserIdentity() returned null... why?", ctx: { creds } }));
+					return err(new InvalidStateError("Account pending deletion. Try again tomorrow", { messageForDev: "authClient registration succeeded, but ctx.auth.getUserIdentity() returned null... why?", ctx: { email: creds.type === 'email_password' ? creds.email : undefined } }));
 				}
 			} else if (e instanceof Error) {
 				// TODO:security This error message contains the reason for the failure.

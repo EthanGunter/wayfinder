@@ -40,10 +40,11 @@ export const createAuth = (
         // URL format: {baseURL}/api/auth/reset-password/{token}?callbackURL=...
         const urlPath = new URL(url).pathname;
         const token = urlPath.split('/').pop();
-        
+
         // Build direct frontend URL
-        const resetUrl = `${process.env.PUBLIC_SITE_URL}/reset-password?token=${token}`;
-        
+        const resetUrl = new URL("reset-password", process.env.PUBLIC_SITE_URL!);
+        resetUrl.searchParams.set("token", token!);
+
         await resend.sendEmail(requireActionCtx(ctx), {
           from: "Wayfinder Support <support@wayfinder.ethangunter.com>",
           to: user.email,

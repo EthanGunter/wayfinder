@@ -4,7 +4,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 /* Reroute all /api/ calls to the convex server handler */
 export const fallback: RequestHandler = async ({ request, params }) => {
 	const path = params.path || '';
-	const url = new URL(`${CONVEX_SITE_URL}/api/${path}`);
+	const url = new URL(`/api/${path}`, CONVEX_SITE_URL);
 	url.search = new URL(request.url).search;
 
 	try {

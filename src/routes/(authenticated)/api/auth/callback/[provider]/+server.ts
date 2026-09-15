@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ params, url, cookies, request }) => 
 	const incomingCookies = request.headers.get('cookie');
 	console.log(`[OAuth] Incoming cookies: ${incomingCookies ? incomingCookies.substring(0, 200) : 'NONE'}`); // TODO:debug EG
 	
-	const convexCallbackUrl = new URL(`${CONVEX_SITE_URL}/api/auth/callback/${provider}`);
+	const convexCallbackUrl = new URL(`/api/auth/callback/${provider}`, CONVEX_SITE_URL);
 	convexCallbackUrl.search = url.search;
 	console.log(`[OAuth] Forwarding to Convex: ${convexCallbackUrl.toString()}`); // TODO:debug EG
 
