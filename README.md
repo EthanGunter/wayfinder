@@ -40,6 +40,4 @@ Wayfinder is experimental and rapidly evolving. We're building toward a paid pro
 
 ## Open Source
 
-Wayfinder is open source ([MIT License](LICENSE)). You can self-host or contribute. The phone app requires compilation, and self-hosted versions won't sync across devices—but if you're building something with us long-term, we make it worth your while.
-
-[GitHub](link) | [Docs](./docs) | [Discord](link)
+Wayfinder is open source ([MIT License](LICENSE)). You're welcome to study or fork it, but I'm not able to review pull requests at this time.
