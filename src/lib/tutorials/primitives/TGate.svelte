@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { queryOrWait, bringToViewIfNeeded } from '../dom';
+	import { queryOrWait, bringToViewIfNeeded, isElementHidden } from '../dom';
 
 	let {
 		selector,
@@ -25,6 +25,16 @@
 
 	function updateRect() {
 		if (!target) return;
+		// The target may have been re-rendered; follow the selector to its replacement.
+		if (!target.isConnected) {
+			const replacement = document.querySelector(selector);
+			if (replacement) target = replacement;
+		}
+		// Never gate around something the user can't see/click (that would dead-end them).
+		if (isElementHidden(target)) {
+			if (rect) rect = null;
+			return;
+		}
 		const newRect = target.getBoundingClientRect();
 		const rectKey = `${newRect.x}|${newRect.y}|${newRect.width}|${newRect.height}`;
 		const currentKey = rect ? `${rect.x}|${rect.y}|${rect.width}|${rect.height}` : '';

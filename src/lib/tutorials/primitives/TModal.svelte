@@ -1,8 +1,20 @@
+<script lang="ts" module>
+	/** Why an anchored TModal is showing centered instead of next to its anchor. */
+	export type TModalFallbackReason = 'missing' | 'hidden' | 'offscreen';
+</script>
+
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import type { Snippet } from 'svelte';
 	import { onMount, onDestroy } from 'svelte';
-	import { queryOrWait } from '../dom';
+	import {
+		queryOrWait,
+		bringToViewIfNeeded,
+		isElementHidden,
+		isElementOffscreen,
+		isElementFullyInView,
+		isNarrowViewport
+	} from '../dom';
 	import * as Popover from '$lib/components/ui/popover';
 	import TGate from './TGate.svelte';
 
@@ -14,12 +26,24 @@
 		secondaryLabel?: string;
 		onSecondary?: () => void;
 		open?: boolean;
+		/**
+		 * Anchor element. Without it the modal is centered. With it, the modal falls back to
+		 * centered when the anchor doesn't appear within `anchorTimeoutMs`, is hidden
+		 * (zero-size / display:none / visibility:hidden), or — below the sm breakpoint — is
+		 * offscreen. It re-anchors automatically if the anchor becomes usable again.
+		 */
 		selector?: string;
 		placement?: 'top' | 'right' | 'bottom' | 'left';
+		/** Dim + block the page (except the anchor). Ignored in fallback when there are no buttons. */
 		blockPage?: boolean;
+		/** Put a transparent shield over the anchor so it can't be clicked. */
 		disableTargetInteraction?: boolean;
 		onOutsideClick?: () => void;
 		onEscapeKey?: () => void;
+		/** How long to wait for `selector` before falling back to centered (ms). */
+		anchorTimeoutMs?: number;
+		/** Called whenever the modal switches to the centered fallback. */
+		onFallback?: (reason: TModalFallbackReason) => void;
 	};
 
 	let {
@@ -35,7 +59,9 @@
 		blockPage = true,
 		disableTargetInteraction = false,
 		onOutsideClick,
-		onEscapeKey
+		onEscapeKey,
+		anchorTimeoutMs = 3000,
+		onFallback
 	}: Props = $props();
 
 	function handlePrimary() {
@@ -48,73 +74,87 @@
 		open = false;
 	}
 
-	// Anchor handling only when selector provided
-	let customAnchor = $state<HTMLElement | null>(null);
+	// 'pending': waiting for the anchor; 'anchored': popover next to anchor; 'centered': panel.
+	let mode = $state<'pending' | 'anchored' | 'centered'>(selector ? 'pending' : 'centered');
+	let fallbackReason = $state<TModalFallbackReason | null>(null);
+	let anchor = $state<HTMLElement | null>(null);
 	let shieldRect = $state<DOMRect | null>(null);
 	let cleanupFunctions: (() => void)[] = [];
+	let destroyed = false;
 
-	function updateShieldRect() {
-		if (!customAnchor) return;
-		shieldRect = customAnchor.getBoundingClientRect();
+	const hasButtons = $derived(Boolean(primaryLabel || secondaryLabel));
+	const isFallback = $derived(Boolean(selector) && mode === 'centered');
+	// A fallback with no buttons must not block the page: the user has to be able to reach
+	// whatever the step is waiting for (or navigate away). Nothing may dead-end.
+	const showBackdrop = $derived(isFallback ? blockPage && hasButtons : blockPage);
+
+	function setCentered(reason: TModalFallbackReason) {
+		if (mode === 'centered' && fallbackReason === reason) return;
+		mode = 'centered';
+		fallbackReason = reason;
+		onFallback?.(reason);
 	}
 
-	function setupShieldTracking(element: HTMLElement) {
-		// Initial update
-		updateShieldRect();
+	function evaluateAnchor() {
+		if (!selector || destroyed) return;
+		let el = anchor;
+		if (!el || !el.isConnected) {
+			// The anchor may have been re-rendered or may appear late
+			el = document.querySelector<HTMLElement>(selector);
+			anchor = el;
+		}
+		if (!el) return setCentered('missing');
+		if (isElementHidden(el)) return setCentered('hidden');
+		if (isNarrowViewport() && isElementOffscreen(el)) return setCentered('offscreen');
+		if (mode !== 'anchored') {
+			mode = 'anchored';
+			fallbackReason = null;
+		}
+	}
 
-		// ResizeObserver for element size changes
-		const resizeObserver = new ResizeObserver(updateShieldRect);
-		resizeObserver.observe(element);
-		cleanupFunctions.push(() => resizeObserver.disconnect());
+	function updateShieldRect() {
+		shieldRect = anchor && mode === 'anchored' ? anchor.getBoundingClientRect() : null;
+	}
 
-		// MutationObserver for DOM changes that could affect positioning
-		const mutationObserver = new MutationObserver(updateShieldRect);
-		mutationObserver.observe(document.documentElement, {
-			childList: true,
-			subtree: true,
-			attributes: true,
-			attributeFilter: ['style', 'class']
-		});
-		cleanupFunctions.push(() => mutationObserver.disconnect());
-
-		// Event listeners for various changes that could affect positioning
-		const events = ['scroll', 'resize', 'orientationchange', 'load'];
-		const listeners: { event: string; listener: () => void }[] = [];
-
-		events.forEach((event) => {
-			const listener = updateShieldRect;
-			window.addEventListener(event, listener, true);
-			listeners.push({ event, listener });
-		});
-
+	function startMonitoring() {
+		const interval = window.setInterval(evaluateAnchor, 250);
+		window.addEventListener('resize', evaluateAnchor);
+		window.addEventListener('orientationchange', evaluateAnchor);
 		cleanupFunctions.push(() => {
-			listeners.forEach(({ event, listener }) => {
-				window.removeEventListener(event, listener, true);
-			});
+			window.clearInterval(interval);
+			window.removeEventListener('resize', evaluateAnchor);
+			window.removeEventListener('orientationchange', evaluateAnchor);
 		});
 
-		// Continuous monitoring with requestAnimationFrame for smooth updates
-		let rafId: number;
-		const rafUpdate = () => {
-			updateShieldRect();
+		if (disableTargetInteraction) {
+			// Track every frame so the shield follows the anchor while scrolling / animating
+			let rafId: number;
+			const rafUpdate = () => {
+				updateShieldRect();
+				rafId = requestAnimationFrame(rafUpdate);
+			};
 			rafId = requestAnimationFrame(rafUpdate);
-		};
-		rafId = requestAnimationFrame(rafUpdate);
-		cleanupFunctions.push(() => cancelAnimationFrame(rafId));
+			cleanupFunctions.push(() => cancelAnimationFrame(rafId));
+		}
 	}
 
 	onMount(async () => {
 		if (!selector) return;
-		const target = await queryOrWait(selector);
-		if (target instanceof HTMLElement) {
-			customAnchor = target;
-			if (disableTargetInteraction) {
-				setupShieldTracking(target);
-			}
+		const el = await queryOrWait<HTMLElement>(selector, { timeoutMs: anchorTimeoutMs });
+		if (destroyed) return;
+		anchor = el;
+		if (el && !isElementHidden(el) && !isElementFullyInView(el)) {
+			bringToViewIfNeeded(el);
+			// Let the smooth scroll settle before deciding whether the anchor is offscreen
+			await new Promise((resolve) => setTimeout(resolve, 400));
+			if (destroyed) return;
 		}
+		evaluateAnchor();
+		startMonitoring();
 	});
 
 	onDestroy(() => {
+		destroyed = true;
 		cleanupFunctions.forEach((cleanup) => cleanup());
 		cleanupFunctions = [];
 	});
@@ -124,7 +164,7 @@
 		if (!open) return;
 
 		function handleKeyDown(e: KeyboardEvent) {
-			if (e.key === 'Escape') {				
+			if (e.key === 'Escape') {
 				e.preventDefault();
 				e.stopPropagation();
 				onEscapeKey?.();
@@ -144,52 +184,62 @@
 	{#if children}
 		<div class="tmodal-body">{@render children()}</div>
 	{/if}
-	<div class="tmodal-footer">
-		{#if secondaryLabel}
-			<Button variant="outline" onclick={handleSecondary}>{secondaryLabel}</Button>
-		{/if}
-		{#if primaryLabel}
-			<Button onclick={handlePrimary}>{primaryLabel}</Button>
-		{/if}
-	</div>
+	{#if hasButtons}
+		<div class="tmodal-footer">
+			{#if secondaryLabel}
+				<Button variant="outline" onclick={handleSecondary}>{secondaryLabel}</Button>
+			{/if}
+			{#if primaryLabel}
+				<Button onclick={handlePrimary}>{primaryLabel}</Button>
+			{/if}
+		</div>
+	{/if}
 {/snippet}
 
-{#if selector}
-	<Popover.Root bind:open>
-		{#if blockPage || onOutsideClick}
-			<TGate bind:active={open} {selector} {onOutsideClick} backdropOpacity={blockPage ? 0.2 : 0} />
+{#if open}
+	{#if mode === 'anchored' && anchor && selector}
+		<Popover.Root bind:open>
+			{#if blockPage || onOutsideClick}
+				<TGate {selector} {onOutsideClick} backdropOpacity={blockPage ? 0.2 : 0} />
+			{/if}
+			<Popover.Trigger style="display:none;" />
+			<Popover.Content
+				customAnchor={anchor}
+				side={placement}
+				sideOffset={8}
+				class={`z-[10002] w-80 max-w-[min(90vw,28rem)]`}
+				align="center"
+				interactOutsideBehavior="ignore"
+				avoidCollisions={true}
+				collisionPadding={16}
+				trapFocus={false}
+			>
+				<Popover.Arrow width={26} height={18} style="color: white; top: 1px" />
+				{@render content()}
+			</Popover.Content>
+		</Popover.Root>
+		{#if disableTargetInteraction && shieldRect}
+			<div
+				class="tmodal-shield"
+				style={`left:${shieldRect.x}px; top:${shieldRect.y}px; width:${shieldRect.width}px; height:${shieldRect.height}px;`}
+			></div>
 		{/if}
-		<Popover.Trigger style="display:none;" />
-		<Popover.Content
-			{customAnchor}
-			side={placement}
-			sideOffset={8}
-			class={`z-[10002] w-80 max-w-[min(90vw,28rem)]`}
-			align="center"
-			interactOutsideBehavior="ignore"
-			avoidCollisions={true}
-			collisionPadding={16}
-			trapFocus={false}
+	{:else if mode === 'centered'}
+		{#if showBackdrop}
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="tmodal-backdrop" onclick={onOutsideClick}></div>
+		{/if}
+		<div
+			class="tmodal-center-wrap"
+			class:tmodal-docked={isFallback && !showBackdrop}
+			data-tmodal-fallback={fallbackReason ?? undefined}
 		>
-			<Popover.Arrow width={26} height={18} style="color: white; top: 1px" />
-			{@render content()}
-		</Popover.Content>
-	</Popover.Root>
-{:else}
-	{#if blockPage}
-		<div class="tmodal-backdrop"></div>
-	{/if}
-	<div class="tmodal-center-wrap">
-		<div class={`tmodal-center-panel`}>
-			{@render content()}
+			<div class="tmodal-center-panel" role="dialog" aria-modal={showBackdrop}>
+				{@render content()}
+			</div>
 		</div>
-	</div>
-{/if}
-{#if customAnchor && disableTargetInteraction && shieldRect}
-	<div
-		class="tmodal-shield"
-		style={`position:fixed; left:${shieldRect.x}px; top:${shieldRect.y}px; width:${shieldRect.width}px; height:${shieldRect.height}px; z-index:10002; background:rgba(0,0,0,0);`}
-	></div>
+	{/if}
 {/if}
 
 <style>
@@ -205,8 +255,15 @@
 		inset: 0;
 		display: grid;
 		place-items: center;
+		padding: 16px;
 		z-index: 10002;
 		pointer-events: none; /* allow buttons to be clickable only inside panel */
+	}
+	/* Non-blocking fallback on narrow screens: dock at the bottom so the page stays usable */
+	@media (max-width: 639.98px) {
+		.tmodal-center-wrap.tmodal-docked {
+			place-items: end center;
+		}
 	}
 	.tmodal-center-panel {
 		pointer-events: auto;
@@ -230,6 +287,7 @@
 	}
 	.tmodal-footer {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 8px;
 		justify-content: flex-end;
 		margin-top: 12px;
