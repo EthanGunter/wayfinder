@@ -10,6 +10,10 @@
 
 	interface Props {
 		open?: boolean;
+		/** Title to prefill each time the dialog opens (e.g. the walkthrough's example project). */
+		initialTitle?: string;
+		/** Close when clicking outside the dialog (default). Esc and Cancel always close it. */
+		closeOnOutsideClick?: boolean;
 		onClose?: () => void;
 		onCreate?: (project: {
 			title: string;
@@ -25,7 +29,13 @@
 		}) => void | Promise<void>;
 	}
 
-	let { open = $bindable(false), onClose, onCreate }: Props = $props();
+	let {
+		open = $bindable(false),
+		initialTitle,
+		closeOnOutsideClick = true,
+		onClose,
+		onCreate
+	}: Props = $props();
 
 	let title = $state('');
 	let content = $state('');
@@ -37,6 +47,10 @@
 	let showMicroWins = $state(get(settings.projects.defaults.defaultProjectShowMicroWins));
 
 	let isSubmitting = $state(false);
+
+	$effect(() => {
+		if (open && initialTitle) title = initialTitle;
+	});
 
 	function resetForm() {
 		title = '';
@@ -99,7 +113,12 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content showCloseButton onkeydown={handleClose} class="max-w-md">
+	<Dialog.Content
+		showCloseButton
+		onkeydown={handleClose}
+		interactOutsideBehavior={closeOnOutsideClick ? 'close' : 'ignore'}
+		class="max-w-md"
+	>
 		<Dialog.Header sticky>
 			<Dialog.Title>Create New Project</Dialog.Title>
 			<Dialog.Description>Add a new project to organize your tasks.</Dialog.Description>
@@ -161,7 +180,7 @@
 			</div>
 			</div>
 
-			<Dialog.Footer>
+			<Dialog.Footer id="create-project-actions">
 				<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
 				<Button onclick={handleSubmit} disabled={isSubmitting || !title.trim()}>
 					{isSubmitting ? 'Creating...' : 'Create Project'}
