@@ -3,6 +3,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
 	import Icon from '@iconify/svelte';
+	import { goto } from '$app/navigation';
+	import { replayOnboarding } from '$lib/tutorials';
 
 	type Props = {
 		onItemClick?: (item: string) => void;
@@ -21,6 +23,12 @@
 
 	function click(item: string) {
 		onItemClick?.(item);
+	}
+
+	function replayTutorial() {
+		// Resets onboarding progress and flags it so it starts even if the user has projects
+		replayOnboarding();
+		goto('/projects');
 	}
 </script>
 
@@ -54,6 +62,13 @@
 		<DropdownMenu.Item onselect={() => window.open(FORMS.feedback, '_blank')}>
 			<Icon icon="lucide:message-circle" />
 			<span id="item-feedback">Send Feedback</span>
+		</DropdownMenu.Item>
+
+		<DropdownMenu.Separator />
+
+		<DropdownMenu.Item onselect={replayTutorial}>
+			<Icon icon="lucide:graduation-cap" />
+			<span id="item-replay-tutorial">Replay tutorial</span>
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>

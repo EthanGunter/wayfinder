@@ -4,6 +4,10 @@
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import ProjectCard from './ProjectCard.svelte';
 	import CreateProjectModal from './CreateProjectModal.svelte';
+	import TutorialWelcome from './TutorialWelcome.svelte';
+	import { completeWelcome, DEMO_PROJECT_TITLE } from './tutorial-welcome';
+	import { tutorials, ONBOARDING_WELCOME } from '$lib/tutorials';
+	import { goto } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
 	import * as Collapsible from '$lib/components/ui/collapsible';
@@ -21,6 +25,8 @@
 		(get(settings.projects.sorting.defaultProjectSort) as SortMethod) || 'title'
 	);
 	let createModalOpen = $state(false);
+	// Set when the onboarding walkthrough opened the dialog to create its example project
+	let creatingDemoProject = $state(false);
 	let archivedSectionOpen = $state(false);
 
 	// Separate active and archived projects
@@ -80,6 +86,16 @@
 		return sorted;
 	}
 
+	function openCreateModal() {
+		creatingDemoProject = false;
+		createModalOpen = true;
+	}
+
+	function openDemoCreateModal() {
+		creatingDemoProject = true;
+		createModalOpen = true;
+	}
+
 	const sortedActiveProjects = $derived.by(() => {
 		sortMethod;
 		return sortProjects(activeProjects);
@@ -106,6 +122,12 @@
 			console.error('Failed to create project:', error);
 			return;
 		}
+		if (creatingDemoProject && !tutorials.isDone(ONBOARDING_WELCOME)) {
+			// Hand the example project to the next part of the walkthrough and open it
+			completeWelcome(result.id);
+			goto(`/projects/${result.id}`);
+		}
+		creatingDemoProject = false;
 		// Project will be automatically added to the list via the reactive query
 		createModalOpen = false;
 	}
@@ -142,7 +164,7 @@
 				>
 					<Icon icon="lucide:folder-search" class="h-10 w-10" />
 					<p class="text-sm">No projects yet.</p>
-					<Button id="btn-create-first-project" onclick={() => (createModalOpen = true)}
+					<Button id="btn-create-first-project" onclick={openCreateModal}
 						>Create your first project</Button
 					>
 				</div>
@@ -154,7 +176,7 @@
 					>
 						<Icon icon="lucide:folder-search" class="h-10 w-10" />
 						<p class="text-sm">No active projects</p>
-						<Button onclick={() => (createModalOpen = true)}>Create a project</Button>
+						<Button id="btn-create-project" onclick={openCreateModal}>Create a project</Button>
 					</div>
 				{:else}
 					<span>Active Projects ({activeProjects.length})</span>
@@ -164,8 +186,9 @@
 						{/each}
 						<div class="flex min-h-[200px] items-center justify-center">
 							<Button
+								id="btn-create-project"
 								class="h-12 w-12 rotate-45 rounded-lg shadow-lg"
-								onclick={() => (createModalOpen = true)}
+								onclick={openCreateModal}
 								title="Create new project"
 							>
 								<Icon icon="lucide:x" />
@@ -209,4 +232,15 @@
 	{/if}
 </div>
 
-<CreateProjectModal bind:open={createModalOpen} onCreate={handleCreateProject} />
+<CreateProjectModal
+	bind:open={createModalOpen}
+	initialTitle={creatingDemoProject ? DEMO_PROJECT_TITLE : undefined}
+	closeOnOutsideClick={!creatingDemoProject}
+	onCreate={handleCreateProject}
+/>
+
+<TutorialWelcome
+	projectCount={$projects.status === 'resolved' ? $projects.value.length : null}
+	createDialogOpen={createModalOpen}
+	onOpenCreateDialog={openDemoCreateModal}
+/>
