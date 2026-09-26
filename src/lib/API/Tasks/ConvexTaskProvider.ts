@@ -395,18 +395,24 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	getPrioritizedTasks: async (projectId, limit) => {
-		try {
-			const result = await client.query(convexApi.tasks.getPrioritizedTasks, { 
-				projectId, 
-				limit 
-			});
-			return result.map(convertFromServerNode<Task & { dueDateInherited: boolean }>);
-		} catch (error) {
-			console.error(error);
-			throw reconstructError(error);
-		}
-	},
+	getPrioritizedTasks: (projectId, limit) =>
+		createQueryable<{ projectId: string, limit: number }, (Task & { dueDateInherited: boolean })[]>(
+			{ projectId, limit },
+			(params, set) => {
+				const unsubscribe = client.onUpdate(
+					convexApi.tasks.getPrioritizedTasks,
+					{ projectId: params.projectId, limit: params.limit },
+					(result) => {
+						set({ status: "resolved", value: result.map(convertFromServerNode<Task & { dueDateInherited: boolean }>) });
+					},
+					(error: Error) => {
+						set({ status: "error", error: reconstructError(error) });
+					}
+				);
+				return () => {
+					unsubscribe();
+				};
+			}),
 
 	searchTasks: async () => {
 		// const res = await client.query(api.tasks.searchTasks, { searchTerm });
@@ -458,7 +464,7 @@ export const localApi: ITasksLocal = {
 	createProject: async (params) => api.createProject(params),
 	updateProject: async (params) => api.updateProject(params),
 	getTodaysTasks: () => api.getTodaysTasks(),
-	getPrioritizedTasks: async (projectId: string, limit: number) => api.getPrioritizedTasks(projectId, limit),
+	getPrioritizedTasks: (projectId: string, limit: number) => api.getPrioritizedTasks(projectId, limit),
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 

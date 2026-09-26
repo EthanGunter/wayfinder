@@ -75,7 +75,7 @@ export interface ITasksBase {
 	 */
 	getPrioritizedTasks(projectId: string, limit: number /* , weights: WeightParams = {
     deadlineWeight: 1, taskDepthWeight: 1, taskCountWeight: 1
-} */): Promise<(Task & { dueDateInherited: boolean })[]>;
+} */): QueryableStore<{ projectId: string, limit: number }, (Task & { dueDateInherited: boolean })[]>;
 
 	searchTasks(searchTerm: string): Promise<Task[]>;
 
