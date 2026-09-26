@@ -160,8 +160,8 @@
 		<TModal
 			primaryLabel="Ok"
 			onPrimary={() => advanceFrom(1)}
-			selector="#suggestions-panel"
-			placement={isMobile ? 'top' : 'right'}
+			selector={`#suggestions-panel [data-project-id="${demoProjectId}"]`}
+			placement="bottom"
 			disableTargetInteraction
 		>
 			{#snippet title()}

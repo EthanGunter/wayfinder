@@ -274,6 +274,7 @@
 				class="rounded-md border border-gray-200 bg-gray-50"
 			>
 				<Collapsible.Trigger
+					data-project-id={project.id}
 					class="accordion-trigger flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-100"
 				>
 					<h2 class="font-semibold text-gray-800">{project.data.title}</h2>
