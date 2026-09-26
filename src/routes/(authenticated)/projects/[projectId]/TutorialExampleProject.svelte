@@ -348,8 +348,8 @@
 	{:else if step === 2}
 		<TModal primaryLabel="because..." onPrimary={proceed}>
 			{#snippet title()}In order to get clothes, you need money, right?{/snippet}
-			Most task apps would force you to put your <em>money</em> subtask next to your
-			<em>clothes</em> subtask, but that doesn't make sense.
+			Most task apps would force you to put your "get money" task next to your "buy clothes" task,
+			but that doesn't make any sense.
 		</TModal>
 	{:else if step === 3}
 		<TModal primaryLabel="Neat!" onPrimary={proceed}>
@@ -405,8 +405,8 @@
 			onFallback={() => (fallbackStep = 8)}
 		>
 			{#snippet title()}Prioritize your subtasks{/snippet}
-			Drag and drop items within the Blocked By list to reorder. Higher items get higher priority and
-			will surface sooner in the planner.
+			Drag and drop items within the <span class="whitespace-nowrap">Blocked-by</span> list to reorder.
+			Higher items get higher priority and will surface sooner in the planner.
 		</TModal>
 	{:else if step >= 9}
 		<EventHandler selector="#nav-planner" onEvent={finish} />
