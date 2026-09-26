@@ -207,7 +207,7 @@
 				customAnchor={anchor}
 				side={placement}
 				sideOffset={8}
-				class={`z-[10002] w-80 max-w-[min(90vw,28rem)]`}
+				class={`z-[10002] w-80 max-w-[min(90vw,28rem,var(--bits-floating-available-width))]`}
 				align="center"
 				interactOutsideBehavior="ignore"
 				avoidCollisions={true}
