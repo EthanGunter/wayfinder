@@ -101,6 +101,20 @@ export const api: ITasksRemote = {
 		}
 	},
 
+	seedDemoProject: async ({ projectId, dressId, genieId }) => {
+		try {
+			const res = await client.mutation(convexApi.demo.seedDemoProject, { projectId, dressId, genieId });
+			return ok({
+				created: res.created.map((r) => convertFromServerNode<Task>(r)),
+				affected: res.affected.map((r) => convertFromServerNode(r)),
+				genieId: res.genieId
+			});
+		} catch (error) {
+			console.error(error)
+			return err(reconstructError(error));
+		}
+	},
+
 	updateTask: debouncedUpdateTask,
 
 	updateTasks: debouncedUpdateTasks,
@@ -434,6 +448,7 @@ export const localApi: ITasksLocal = {
 		// Prefer authoritative ids from affectedTasks if mapping is empty
 		return ok(res.created.map(t => ({ newId: t.id, oldId: t.data.givenId! })));
 	},
+	seedDemoProject: async (params) => api.seedDemoProject(params),
 
 	getTask: (params) => api.getTask(params),
 	getTasks: (params) => api.getTasks(params),
