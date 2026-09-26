@@ -16,6 +16,9 @@
 		isNarrowViewport
 	} from '../dom';
 	import * as Popover from '$lib/components/ui/popover';
+	import { Portal } from 'bits-ui';
+	import { cn } from '$lib/utils';
+	import { placeFloating, type Placement } from '../placement';
 	import TGate from './TGate.svelte';
 
 	type Props = {
@@ -31,6 +34,11 @@
 		 * centered when the anchor doesn't appear within `anchorTimeoutMs`, is hidden
 		 * (zero-size / display:none / visibility:hidden), or — below the sm breakpoint — is
 		 * offscreen. It re-anchors automatically if the anchor becomes usable again.
+		 *
+		 * An anchored modal without buttons is a passive card: it never takes focus, isn't a
+		 * dismissable layer and doesn't handle Escape, so it can sit over an open dialog (e.g.
+		 * anchored to the dialog itself) without breaking the dialog's focus, Escape or
+		 * outside-click behavior. It flips to another side of the anchor rather than cover it.
 		 */
 		selector?: string;
 		placement?: 'top' | 'right' | 'bottom' | 'left';
@@ -39,6 +47,7 @@
 		/** Put a transparent shield over the anchor so it can't be clicked. */
 		disableTargetInteraction?: boolean;
 		onOutsideClick?: () => void;
+		/** Intercept Escape page-wide while open. Without it, Escape is left to the page. */
 		onEscapeKey?: () => void;
 		/** How long to wait for `selector` before falling back to centered (ms). */
 		anchorTimeoutMs?: number;
@@ -159,9 +168,62 @@
 		cleanupFunctions = [];
 	});
 
-	// ESC key handling - prevent TModal from closing if onEscapeKey is provided
+	// Passive card (anchored, no buttons): positioned here instead of by a bits-ui Popover
+	// Same geometry as the Popover's arrow (which the global `svg` size rule renders at 16px)
+	const ARROW_SIZE = 16;
+	const PASSIVE_GAP = 8 + ARROW_SIZE; // sideOffset + arrow
+	let card = $state<HTMLElement | null>(null);
+	let placed = $state<Placement | null>(null);
+	const passive = $derived(open && mode === 'anchored' && !!anchor && !hasButtons);
+
+	function updatePlacement() {
+		if (!card || !anchor) return;
+		const next = placeFloating({
+			anchor: anchor.getBoundingClientRect(),
+			// offset* ignore the enter animation's scale transform
+			floating: { width: card.offsetWidth, height: card.offsetHeight },
+			viewport: { width: window.innerWidth, height: window.innerHeight },
+			side: placement,
+			gap: PASSIVE_GAP
+		});
+		const p = placed;
+		if (
+			!p ||
+			p.side !== next.side ||
+			p.left !== next.left ||
+			p.top !== next.top ||
+			p.arrow !== next.arrow
+		) {
+			placed = next;
+		}
+	}
+
 	$effect(() => {
-		if (!open) return;
+		if (!passive || !card) return;
+		const el = card;
+		// Follow the anchor every frame (dialogs animate in, pages scroll)
+		let rafId = requestAnimationFrame(function tick() {
+			updatePlacement();
+			rafId = requestAnimationFrame(tick);
+		});
+		// Clicking the card must not count as an outside click for a dialog underneath, nor
+		// move focus out of it.
+		const stop = (e: Event) => e.stopPropagation();
+		const keepFocus = (e: Event) => e.preventDefault();
+		el.addEventListener('pointerdown', stop);
+		el.addEventListener('mousedown', keepFocus);
+		return () => {
+			cancelAnimationFrame(rafId);
+			el.removeEventListener('pointerdown', stop);
+			el.removeEventListener('mousedown', keepFocus);
+			placed = null;
+		};
+	});
+
+	// Escape is only intercepted when the step asks for it (a page-wide swallow would stop
+	// dialogs and menus underneath from closing).
+	$effect(() => {
+		if (!open || !onEscapeKey) return;
 
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.key === 'Escape') {
@@ -197,7 +259,58 @@
 {/snippet}
 
 {#if open}
-	{#if mode === 'anchored' && anchor && selector}
+	{#if mode === 'anchored' && anchor && selector && !hasButtons}
+		{#if blockPage || onOutsideClick}
+			<TGate {selector} {onOutsideClick} backdropOpacity={blockPage ? 0.2 : 0} />
+		{/if}
+		<Portal>
+			<div
+				bind:this={card}
+				role="status"
+				data-slot="popover-content"
+				data-tmodal-passive=""
+				data-state="open"
+				data-side={placed?.side}
+				class={cn(
+					'rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+					// pointer-events: modal dialogs set `pointer-events: none` on <body>
+					'pointer-events-auto fixed z-[10002] w-80 max-w-[min(90vw,28rem)]'
+				)}
+				style={placed
+					? `left:${placed.left}px; top:${placed.top}px;`
+					: 'left:0; top:0; visibility:hidden;'}
+			>
+				{#if placed && placed.arrow !== null}
+					<svg
+						class="tmodal-arrow"
+						data-side={placed.side}
+						viewBox="0 0 16 16"
+						style={`width:${ARROW_SIZE}px; height:${ARROW_SIZE}px; ${
+							placed.side === 'top' || placed.side === 'bottom' ? 'left' : 'top'
+						}:${placed.arrow - ARROW_SIZE / 2}px;`}
+						aria-hidden="true"
+					>
+						<polygon
+							points={{
+								top: '0,0 16,0 8,16',
+								bottom: '0,16 16,16 8,0',
+								left: '0,0 16,8 0,16',
+								right: '16,0 0,8 16,16'
+							}[placed.side]}
+							fill="currentColor"
+						/>
+					</svg>
+				{/if}
+				{@render content()}
+			</div>
+		</Portal>
+		{#if disableTargetInteraction && shieldRect}
+			<div
+				class="tmodal-shield"
+				style={`left:${shieldRect.x}px; top:${shieldRect.y}px; width:${shieldRect.width}px; height:${shieldRect.height}px;`}
+			></div>
+		{/if}
+	{:else if mode === 'anchored' && anchor && selector}
 		<Popover.Root bind:open>
 			{#if blockPage || onOutsideClick}
 				<TGate {selector} {onOutsideClick} backdropOpacity={blockPage ? 0.2 : 0} />
@@ -209,7 +322,8 @@
 				sideOffset={8}
 				class={`z-[10002] w-80 max-w-[min(90vw,28rem,var(--bits-floating-available-width))]`}
 				align="center"
-				interactOutsideBehavior="ignore"
+				interactOutsideBehavior="defer-otherwise-ignore"
+				escapeKeydownBehavior="defer-otherwise-ignore"
 				avoidCollisions={true}
 				collisionPadding={16}
 				trapFocus={false}
@@ -291,6 +405,22 @@
 		gap: 8px;
 		justify-content: flex-end;
 		margin-top: 12px;
+	}
+	.tmodal-arrow {
+		position: absolute;
+		color: white;
+	}
+	.tmodal-arrow[data-side='top'] {
+		top: calc(100% - 1px);
+	}
+	.tmodal-arrow[data-side='bottom'] {
+		bottom: calc(100% - 1px);
+	}
+	.tmodal-arrow[data-side='left'] {
+		left: calc(100% - 1px);
+	}
+	.tmodal-arrow[data-side='right'] {
+		right: calc(100% - 1px);
 	}
 	.tmodal-shield {
 		position: fixed;
