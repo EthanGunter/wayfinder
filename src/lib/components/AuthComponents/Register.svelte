@@ -26,7 +26,8 @@
 		initialDisplayName = ''
 	}: Props = $props();
 
-	let redir = page.url.searchParams.get('redirect') || '/planner';
+	// New accounts have no projects yet: land on /projects, where the onboarding walkthrough starts
+	let redir = page.url.searchParams.get('redirect') || '/projects';
 
 	// Temporary user data for registration
 	let tempUser = $state<SessionUser>({
@@ -88,7 +89,7 @@
 				// Safe for alpha with trusted users, but should be sanitized for release.
 				reportError(registerError.message || 'Registration failed', registerError);
 			} else {
-				goto(redir || '/planner');
+				goto(redir || '/projects');
 			}
 		} catch (error: any) {
 			// TODO:security This blindly trusts the error message from the backend.
