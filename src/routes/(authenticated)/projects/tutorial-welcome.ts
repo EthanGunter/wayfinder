@@ -11,11 +11,11 @@ export const DEMO_PROJECT_TITLE = 'Go to the ball 💃🕺';
 
 /** Steps of ONBOARDING_WELCOME. */
 export const WelcomeStep = {
-	/** A0: "Welcome to Wayfinder alpha!" */
+	/** A0: "Welcome to Wayfinder!" with "Show me around" / "Skip intro" (the only skip point). */
 	Intro: 0,
 	/** A1: point at the create-project button. */
 	CreatePrompt: 1,
-	/** The (prefilled) create dialog is open, waiting for "Create Project". */
+	/** A2: the prefilled create dialog is open, waiting for "Create Project". */
 	CreateDialog: 2
 } as const;
 
@@ -39,7 +39,7 @@ export function completeWelcome(demoProjectId: string, api: TutorialsApi = tutor
 	api.complete(ONBOARDING_WELCOME);
 }
 
-/** "skip walkthrough": no onboarding anywhere afterwards. */
+/** "Skip intro" (A0): no onboarding anywhere afterwards. */
 export function skipWelcome(api: TutorialsApi = tutorials): void {
 	skipOnboarding(api);
 	setOnboardingData({ replay: undefined }, api);

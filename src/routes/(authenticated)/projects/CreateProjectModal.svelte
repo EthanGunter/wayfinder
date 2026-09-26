@@ -12,8 +12,13 @@
 		open?: boolean;
 		/** Title to prefill each time the dialog opens (e.g. the walkthrough's example project). */
 		initialTitle?: string;
-		/** Close when clicking outside the dialog (default). Esc and Cancel always close it. */
+		/** Close when clicking outside the dialog (default). */
 		closeOnOutsideClick?: boolean;
+		/**
+		 * Offer Cancel, the X and Escape (default). The walkthrough turns this off so the only
+		 * way on is "Create Project".
+		 */
+		cancellable?: boolean;
 		onClose?: () => void;
 		onCreate?: (project: {
 			title: string;
@@ -33,6 +38,7 @@
 		open = $bindable(false),
 		initialTitle,
 		closeOnOutsideClick = true,
+		cancellable = true,
 		onClose,
 		onCreate
 	}: Props = $props();
@@ -70,7 +76,7 @@
 	}
 
 	function handleClose(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
+		if (event.key === 'Escape' && cancellable) {
 			event.preventDefault();
 			event.stopPropagation();
 			close();
@@ -114,9 +120,11 @@
 
 <Dialog.Root bind:open>
 	<Dialog.Content
-		showCloseButton
+		id="create-project-dialog"
+		showCloseButton={cancellable}
 		onkeydown={handleClose}
 		interactOutsideBehavior={closeOnOutsideClick ? 'close' : 'ignore'}
+		escapeKeydownBehavior={cancellable ? 'close' : 'ignore'}
 		class="max-w-md"
 	>
 		<Dialog.Header sticky>
@@ -181,7 +189,9 @@
 			</div>
 
 			<Dialog.Footer id="create-project-actions">
-				<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
+				{#if cancellable}
+					<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
+				{/if}
 				<Button onclick={handleSubmit} disabled={isSubmitting || !title.trim()}>
 					{isSubmitting ? 'Creating...' : 'Create Project'}
 				</Button>

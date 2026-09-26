@@ -133,7 +133,7 @@ export function createTutorials(storage: TutorialStorage | undefined = browserSt
 			store.update((s) => ({ ...s, [id]: emptyRecord() }));
 		},
 
-		/** Mark every listed tutorial complete (e.g. "skip walkthrough"). Data is kept. */
+		/** Mark every listed tutorial complete (e.g. "Skip intro"). Data is kept. */
 		skipAll(ids: readonly string[]): void {
 			store.update((s) => {
 				const next = { ...s };

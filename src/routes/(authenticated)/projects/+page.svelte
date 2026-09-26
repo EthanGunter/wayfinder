@@ -236,6 +236,7 @@
 	bind:open={createModalOpen}
 	initialTitle={creatingDemoProject ? DEMO_PROJECT_TITLE : undefined}
 	closeOnOutsideClick={!creatingDemoProject}
+	cancellable={!creatingDemoProject}
 	onCreate={handleCreateProject}
 />
 

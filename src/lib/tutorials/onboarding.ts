@@ -19,7 +19,7 @@ export function onboardingData(api: TutorialsApi = tutorials) {
 	return api.data<OnboardingData>(ONBOARDING_DATA);
 }
 
-/** "Skip walkthrough": mark every onboarding part complete. */
+/** "Skip intro": mark every onboarding part complete. */
 export function skipOnboarding(api: TutorialsApi = tutorials): void {
 	api.skipAll(ALL_ONBOARDING);
 }

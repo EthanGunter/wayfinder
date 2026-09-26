@@ -16,6 +16,7 @@
 	// Empty-state button, or the grid's "+" when replaying with existing projects.
 	// Only one of them is ever rendered.
 	const CREATE_BUTTON = '#btn-create-first-project, #btn-create-project';
+	const CREATE_DIALOG = '#create-project-dialog';
 	const CREATE_DIALOG_ACTIONS = '#create-project-actions';
 
 	// Decided once per mount, so the tutorial doesn't vanish when the example project
@@ -36,7 +37,7 @@
 		started = true;
 	});
 
-	// Dialog closed without creating (Cancel / Esc): go back to the prompt
+	// Dialog closed without creating (it can't be cancelled here, but be safe): back to the prompt
 	$effect(() => {
 		if (active && step === WelcomeStep.CreateDialog && !createDialogOpen) {
 			tutorials.setStep(ONBOARDING_WELCOME, WelcomeStep.CreatePrompt);
@@ -65,10 +66,16 @@
 
 {#if active}
 	{#if step === WelcomeStep.Intro}
-		<TModal primaryLabel="Thanks for having me!" onPrimary={proceed}>
+		<TModal
+			primaryLabel="Show me around"
+			onPrimary={proceed}
+			secondaryLabel="Skip intro"
+			onSecondary={() => skipWelcome()}
+		>
 			{#snippet title()}
-				Welcome to Wayfinder alpha!
+				Welcome to Wayfinder!
 			{/snippet}
+			Would you like an introduction?
 		</TModal>
 	{:else if step === WelcomeStep.CreatePrompt}
 		<EventHandler selector={CREATE_BUTTON} type="click" onEvent={interceptCreateClick} />
@@ -76,15 +83,22 @@
 			primaryLabel={promptFallback ? 'Create it' : undefined}
 			onPrimary={openCreateDialog}
 			onFallback={() => (promptFallback = true)}
-			secondaryLabel="skip walkthrough"
-			onSecondary={() => skipWelcome()}
 			selector={CREATE_BUTTON}
 			placement="top"
 		>
-			Let's create a sample project so I can show you what makes Wayfinder unique!
+			{#snippet title()}
+				Let's start by creating a project
+			{/snippet}
+			Click the create button to start a new project.
 		</TModal>
 	{:else if step === WelcomeStep.CreateDialog && createDialogOpen}
-		<!-- Keep the prefilled dialog on track: only Cancel / Create Project are reachable -->
+		<!-- The prefilled dialog has no Cancel / X / Esc here; only "Create Project" is reachable -->
 		<TGate selector={CREATE_DIALOG_ACTIONS} />
+		<TModal selector={CREATE_DIALOG} placement="top" blockPage={false}>
+			{#snippet title()}
+				Let's say you want to
+			{/snippet}
+			"Go to the ball 💃🕺"
+		</TModal>
 	{/if}
 {/if}
