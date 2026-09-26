@@ -11,17 +11,14 @@
 	import type { AppNode } from '$domain/models/node';
 	import { svelteFlowInstance } from './logic/shared-state';
 	import { centerAndHighlightNode } from './logic/navigation';
-	import type { Snippet } from 'svelte';
 
 	type Props = {
 		open: boolean;
 		relation?: AppNode;
 		relationMode?: 'child' | 'parent';
-		/** Optional content shown above the form (used by the onboarding walkthrough). */
-		hint?: Snippet;
 	};
 
-	let { open = $bindable(), relation, relationMode, hint }: Props = $props();
+	let { open = $bindable(), relation, relationMode }: Props = $props();
 
 	// Form state
 	let formData = $state({
@@ -88,10 +85,6 @@
 				{relation?.data.type === 'project' ? 'New Task' : 'New Subtask'}
 			</ResponsiveDialog.Title>
 		</ResponsiveDialog.Header>
-
-		{#if hint}
-			{@render hint()}
-		{/if}
 
 		<div class="flex-1 overflow-y-auto">
 			<form onsubmit={handleSubmit} class="flex flex-col space-y-4">

@@ -1,12 +1,14 @@
 <!--
 	Onboarding Part B (wf-87q.6): builds the "Go to the ball" prerequisite graph with the user.
-	Steps B0-B9 (see the wf-87q epic for the script). Only runs on the demo project created in Part A.
+	Steps B1-B9 (see the wf-87q epic for the script). Only runs on the demo project created in Part A.
+	B0 ("Let's say you want to...") moved into Part A's create dialog (A2); step numbers are kept
+	so stored progress means the same thing, and step 0 is skipped on load.
 
 	Progress lives in the tutorial store (wf.tutorials.v1) so a reload resumes; `reconcile()` fixes up
 	the step against the actual project contents when the page loads.
 -->
 <script lang="ts">
-	import { untrack, type Snippet } from 'svelte';
+	import { untrack } from 'svelte';
 	import { get, type Readable } from 'svelte/store';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { v4 } from 'uuid';
@@ -43,16 +45,13 @@
 		projectId: string;
 		/** The page's project subtree store (includes the project node itself). */
 		subtree: Readable<Fetchable<AppNode[]>>;
-		/**
-		 * Set while step B6 is showing: a hint rendered INSIDE TaskCreationDialog. The dialog is a
-		 * focus-trapping modal layer, so an external popover would fight it (see wf-87q.6 notes).
-		 */
-		taskDialogHint?: Snippet;
 	};
 
-	let { projectId, subtree, taskDialogHint = $bindable() }: Props = $props();
+	let { projectId, subtree }: Props = $props();
 
 	const ID = ONBOARDING_EXAMPLE_PROJECT;
+	/** The old B0 now lives in Part A (A2). Index 0 is kept so stored steps stay meaningful. */
+	const FIRST_STEP = 1;
 
 	// Keep verbatim (matches src/convex/demo.ts DEMO_TITLES, which is server-only).
 	const DRESS_TITLE = 'Get dress clothes 🥿👗👔👞';
@@ -117,7 +116,7 @@
 		}
 
 		const data = getOnboardingData();
-		let s = tutorials.getStep(ID);
+		let s = Math.max(tutorials.getStep(ID), FIRST_STEP);
 
 		let dress = data.dressId ? byId.get(data.dressId) : undefined;
 		if (!dress) {
@@ -137,7 +136,7 @@
 				tutorials.complete(ID);
 				return;
 			}
-			s = Math.min(s, 1);
+			s = FIRST_STEP;
 		}
 
 		if (data.genieId && !byId.has(data.genieId)) setOnboardingData({ genieId: undefined });
@@ -154,7 +153,7 @@
 			}
 		}
 
-		// B0-B4 point into the project editor (B4 advances when the user selects dress).
+		// B1-B4 point into the project editor (B4 advances when the user selects dress).
 		if (s <= 4) selectedNode.set(null);
 
 		if (s !== tutorials.getStep(ID)) tutorials.setStep(ID, s);
@@ -176,14 +175,6 @@
 	// Steps from B4 on point at "Get dress clothes"; if it's gone, go back and recreate it (B1).
 	$effect(() => {
 		if (active && step >= 4 && step <= 8 && !dressId) untrack(() => tutorials.setStep(ID, 1));
-	});
-
-	// B6 hint lives inside the dialog.
-	$effect(() => {
-		taskDialogHint = active && step === 6 ? genieHint : undefined;
-	});
-	$effect(() => () => {
-		taskDialogHint = undefined;
 	});
 
 	//#endregion
@@ -346,55 +337,22 @@
 	//#endregion
 </script>
 
-{#snippet genieHint()}
-	<div
-		id="tutorial-task-dialog-hint"
-		role="note"
-		class="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm"
-	>
-		<p class="font-semibold text-gray-900">"Can I do this in 15 minutes?"</p>
-		<p class="text-gray-700">If not, you probably need to break it down into further subtasks.</p>
-	</div>
-{/snippet}
-
 {#if active}
-	{#if step === 0}
-		<TModal
-			selector="#input-project-title"
-			placement="left"
-			primaryLabel="I'll play along"
-			onPrimary={proceed}
-		>
-			{#snippet title()}Let's say you want to{/snippet}
-			"Go to the ball 💃🕺"
-		</TModal>
-	{:else if step === 1}
+	{#if step === 1}
 		{@const createSelector = `[data-list-id="child-${projectId}"] [data-action="create"]`}
 		<EventHandler selector={createSelector} onEvent={createDress} />
-		<TModal selector={createSelector} placement="left">
+		<TModal selector={createSelector} placement="top">
 			{#snippet title()}You can't go to the ball without some fancy clothes!{/snippet}
 			Add new tasks with "create". We'll create this one for you.
 		</TModal>
 	{:else if step === 2}
-		<TModal
-			selector="#editor-pane"
-			placement="left"
-			disableTargetInteraction
-			primaryLabel="because..."
-			onPrimary={proceed}
-		>
+		<TModal primaryLabel="because..." onPrimary={proceed}>
 			{#snippet title()}In order to get clothes, you need money, right?{/snippet}
 			Most task apps would force you to put your <em>money</em> subtask next to your
 			<em>clothes</em> subtask, but that doesn't make sense.
 		</TModal>
 	{:else if step === 3}
-		<TModal
-			selector="#editor-pane"
-			placement="left"
-			disableTargetInteraction
-			primaryLabel="Neat!"
-			onPrimary={proceed}
-		>
+		<TModal primaryLabel="Neat!" onPrimary={proceed}>
 			{#snippet title()}Money is the <em>prerequisite</em>{/snippet}
 			Wayfinder lets you model that relationship with subtasks nested as deep as you need. Infinitely!
 		</TModal>
@@ -414,12 +372,16 @@
 			when={(open) => open && get(drawerParams)?.relation.id === dressId}
 			onMatch={onGenieDialogOpened}
 		/>
-		<TModal selector={`[data-list-id="child-${dressId}"] [data-action="create"]`} placement="left">
+		<TModal selector={`[data-list-id="child-${dressId}"] [data-action="create"]`} placement="top">
 			Clicking "create" will open the new task dialog
 		</TModal>
 	{:else if step === 6}
-		<!-- Hint is rendered inside TaskCreationDialog (taskDialogHint). The create goes through. -->
+		<!-- A passive card above the dialog; Create (which goes through) or Cancel advances -->
 		<StoreWatcher store={drawerOpen} when={(open) => !open} onMatch={onGenieDialogClosed} />
+		<TModal selector="#task-creation-dialog" placement="top" blockPage={false}>
+			{#snippet title()}"Can I do this in 15 minutes?"{/snippet}
+			If not, you probably need to break it down into further subtasks.
+		</TModal>
 	{:else if step === 7}
 		{#if busy}
 			<TModal blockPage={false}>Adding tasks…</TModal>
