@@ -945,6 +945,93 @@ describe("deleteTasks", () => {
 	});
 });
 
+describe("deleting a project", () => {
+	/** project -> A -> (B, C); B -> D; D also has parent C (multi-parent); project -> E */
+	async function buildProjectTree(t: TestContext, userId: string, title = "Project") {
+		const asUser = t.withIdentity(mockAuth(userId));
+		const project = (await createProject(t, userId, { title }))!;
+		const mk = async (taskTitle: string, parents: string[]) =>
+			(await asUser.mutation(api.tasks.createTask, { createDetail: buildTaskCreate({ title: taskTitle, parents }) })).created.id;
+		const a = await mk(`${title}/A`, [project._id]);
+		const b = await mk(`${title}/B`, [a]);
+		const c = await mk(`${title}/C`, [a]);
+		const d = await mk(`${title}/D`, [b, c]);
+		const e = await mk(`${title}/E`, [project._id]);
+		return { projectId: project._id as string, ids: [a, b, c, d, e] };
+	}
+
+	test("deleteTask on a project removes nested and multi-parent descendants, leaving other projects untouched", async () => {
+		const t = createTestCtx();
+		const target = await buildProjectTree(t, "user1", "Target");
+		const other = await buildProjectTree(t, "user1", "Other");
+		await buildProjectTree(t, "user2", "Foreign");
+		const otherBefore = await Promise.all([other.projectId, ...other.ids].map(id => getTaskById(t, id)));
+
+		const result = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.deleteTask, { id: target.projectId });
+
+		for (const id of [target.projectId, ...target.ids]) {
+			expect(await getTaskById(t, id)).toBeNull();
+		}
+		// Nothing outside the subtree changed, so nothing is reported as affected
+		expect(result).toEqual({ affected: [] });
+
+		const otherAfter = await Promise.all([other.projectId, ...other.ids].map(id => getTaskById(t, id)));
+		expect(otherAfter).toEqual(otherBefore);
+		expect(await getAllTasksForUser(t, "user1")).toHaveLength(6);
+		expect(await getAllTasksForUser(t, "user2")).toHaveLength(6);
+	});
+
+	test("deleteTask on another user's project is rejected and deletes nothing", async () => {
+		const t = createTestCtx();
+		const target = await buildProjectTree(t, "user1");
+
+		await expect(
+			t.withIdentity(mockAuth("user2")).mutation(api.tasks.deleteTask, { id: target.projectId })
+		).rejects.toThrow("Not owner");
+		expect(await getAllTasksForUser(t, "user1")).toHaveLength(6);
+	});
+
+	test("deleteTasks tolerates ids inside a project deleted earlier in the same batch", async () => {
+		const t = createTestCtx();
+		const target = await buildProjectTree(t, "user1", "Target");
+		const other = await buildProjectTree(t, "user1", "Other");
+		const [otherA] = other.ids;
+
+		// A task of another project first (its project becomes affected), then the target
+		// project followed by some of its own descendants
+		const result = await t.withIdentity(mockAuth("user1")).mutation(api.tasks.deleteTasks, {
+			ids: [otherA, target.projectId, target.ids[3], target.ids[0]],
+		});
+
+		for (const id of [target.projectId, ...target.ids, otherA]) {
+			expect(await getTaskById(t, id)).toBeNull();
+		}
+		const affectedIds = result.affected.map(n => n.id);
+		expect(affectedIds).toContain(other.projectId);
+		for (const id of [target.projectId, ...target.ids]) {
+			expect(affectedIds).not.toContain(id);
+		}
+	});
+
+	test("deleting a plain task still re-attaches its children instead of deleting them", async () => {
+		const t = createTestCtx();
+		const { projectId, ids: [a, b, c, d] } = await buildProjectTree(t, "user1");
+
+		await t.withIdentity(mockAuth("user1")).mutation(api.tasks.deleteTask, { id: a });
+
+		expect(await getTaskById(t, a)).toBeNull();
+		for (const id of [b, c, d]) {
+			expect(await getTaskById(t, id)).not.toBeNull();
+		}
+		expect((await getTaskById(t, b))!.parents).toEqual([projectId]);
+		expect((await getTaskById(t, c))!.parents).toEqual([projectId]);
+		expect((await getTaskById(t, d))!.parents).toEqual([b, c]);
+		const project = await getTaskById(t, projectId);
+		expect(project!.children).toEqual(expect.arrayContaining([b, c]));
+		expect(project!.children).not.toContain(a);
+	});
+});
+
 
 //#region Node Invariants
 

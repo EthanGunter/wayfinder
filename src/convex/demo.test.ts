@@ -248,10 +248,8 @@ describe("seedDemoProject", () => {
 		]);
 	});
 
-	/* KNOWN GAP (see bd follow-up discovered from wf-87q.3): deleteTask is not recursive.
-	Deleting a project removes only the project node; its descendants are left behind,
-	still pointing at the deleted project. Flip `test.fails` -> `test` once fixed. */
-	test.fails("deleting the project via deleteTask removes the whole demo subtree", async () => {
+	// Regression for wf-87q.10: deleting a project must remove its entire subtree (tutorial step C6).
+	test("deleting the project via deleteTask removes the whole demo subtree", async () => {
 		const t = createTestCtx();
 		const { projectId, dressId, genieId, asUser } = await setupDemo(t, "user1", { withGenie: true });
 		await asUser.mutation(api.demo.seedDemoProject, { projectId, dressId, genieId });
