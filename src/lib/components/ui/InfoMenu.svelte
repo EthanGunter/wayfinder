@@ -45,28 +45,28 @@
 
 		<DropdownMenu.Separator />
 
-		<DropdownMenu.Item onselect={() => window.open(FORMS.bug, '_blank')}>
+		<DropdownMenu.Item onSelect={() => window.open(FORMS.bug, '_blank')}>
 			<Icon icon="lucide:bug" />
 			<span id="item-documentation">Report a bug</span>
 		</DropdownMenu.Item>
 
-		<DropdownMenu.Item onselect={() => window.open(FORMS.feature, '_blank')}>
+		<DropdownMenu.Item onSelect={() => window.open(FORMS.feature, '_blank')}>
 			<Icon icon="lucide:lightbulb" />
 			<span id="item-help">Suggest a feature</span>
 		</DropdownMenu.Item>
 
-		<!-- <DropdownMenu.Item onselect={() => click('contact')}>
+		<!-- <DropdownMenu.Item onSelect={() => click('contact')}>
 			<span id="item-contact">Documentation</span>
 		</DropdownMenu.Item> -->
 
-		<DropdownMenu.Item onselect={() => window.open(FORMS.feedback, '_blank')}>
+		<DropdownMenu.Item onSelect={() => window.open(FORMS.feedback, '_blank')}>
 			<Icon icon="lucide:message-circle" />
 			<span id="item-feedback">Send Feedback</span>
 		</DropdownMenu.Item>
 
 		<DropdownMenu.Separator />
 
-		<DropdownMenu.Item onselect={replayTutorial}>
+		<DropdownMenu.Item onSelect={replayTutorial}>
 			<Icon icon="lucide:graduation-cap" />
 			<span id="item-replay-tutorial">Replay tutorial</span>
 		</DropdownMenu.Item>
