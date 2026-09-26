@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, type Snippet } from 'svelte';
 	import { SvelteFlow, SvelteFlowProvider, Background, type NodeTypes } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
 	import TaskCreationDrawer from './TaskCreationDialog.svelte';
@@ -9,6 +9,7 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
 	import TaskEditor from './TaskEditor.svelte';
+	import TutorialExampleProject from './TutorialExampleProject.svelte';
 	import ProjectEditor from './ProjectEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import type { AppNode, IAppNode } from '$domain/models/node';
@@ -52,6 +53,8 @@
 	const nodeTypes = { task: TaskNode, fallback: FallbackNode } as NodeTypes;
 
 	let searchBar = $state<TaskSearchBar>();
+	/** Onboarding hint shown inside the task creation dialog (set by TutorialExampleProject). */
+	let taskDialogHint = $state<Snippet>();
 
 	const { data }: PageProps = $props();
 	const projectStore = data.subtreeStore;
@@ -330,7 +333,16 @@
 	bind:open={$drawerOpen}
 	relation={$drawerParams?.relation}
 	relationMode={$drawerParams?.mode}
+	hint={taskDialogHint}
 />
+
+{#if page.params.projectId}
+	<TutorialExampleProject
+		projectId={page.params.projectId}
+		subtree={projectStore}
+		bind:taskDialogHint
+	/>
+{/if}
 
 <style>
 	:global(.svelte-flow__attribution) {
