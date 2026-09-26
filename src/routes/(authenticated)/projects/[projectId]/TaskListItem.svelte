@@ -158,7 +158,11 @@
 {#if closestEdge === 'top'}
 	<div class="z-10 h-0 w-full outline-1 outline-blue-500"></div>
 {/if}
-<li class="relative flex w-full items-center gap-2 py-[.125rem] text-sm" bind:this={itemEl}>
+<li
+	data-task-id={task.id}
+	class="relative flex w-full items-center gap-2 py-[.125rem] text-sm"
+	bind:this={itemEl}
+>
 	<div
 		bind:this={containerEl}
 		class="w-full rounded border {isDraggable && !isCurrent

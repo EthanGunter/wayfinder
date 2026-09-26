@@ -1,7 +1,7 @@
-# TODO: Auth System using Convex + BetterAuth Component (SvelteKit, Vercel)
+# TODO: Auth System using Convex + BetterAuth Component (SvelteKit, Cloudflare Workers)
 
 Goal: Implement BetterAuth directly on Convex via the Convex BetterAuth component,
-fronted by SvelteKit on Vercel. Support multi-account (Google-style) switching. No refresh tokens in the browser.
+fronted by SvelteKit on Cloudflare Workers. Support multi-account (Google-style) switching. No refresh tokens in the browser.
 
 Env vars
 - Frontend: 

@@ -17,6 +17,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.cloudflare-prod
+!.env.cloudflare-preview
 !.env.test
 
 # Vite

@@ -29,7 +29,11 @@ export const createAuth = (
     // Note: Convex backend uses process.env directly (not our host config)
     // This maps to host.SITE_URL on the frontend
     baseURL: process.env.PUBLIC_SITE_URL,
-    trustedOrigins: [process.env.PUBLIC_SITE_URL!],
+    trustedOrigins: [
+      process.env.PUBLIC_SITE_URL!,
+      // Optional comma-separated extras, e.g. the upstream origin a dev preview proxy rewrites requests to
+      ...(process.env.AUTH_EXTRA_TRUSTED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ?? []),
+    ],
     database: authComponent.adapter(ctx),
     // Configure simple, non-verified email/password to get started
     emailAndPassword: {
@@ -40,10 +44,11 @@ export const createAuth = (
         // URL format: {baseURL}/api/auth/reset-password/{token}?callbackURL=...
         const urlPath = new URL(url).pathname;
         const token = urlPath.split('/').pop();
-        
+
         // Build direct frontend URL
-        const resetUrl = `${process.env.PUBLIC_SITE_URL}/reset-password?token=${token}`;
-        
+        const resetUrl = new URL("reset-password", process.env.PUBLIC_SITE_URL!);
+        resetUrl.searchParams.set("token", token!);
+
         await resend.sendEmail(requireActionCtx(ctx), {
           from: "Wayfinder Support <support@wayfinder.ethangunter.com>",
           to: user.email,

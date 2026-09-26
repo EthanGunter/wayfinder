@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
-	import { queryOrWait } from '../dom';
+	import { untrack } from 'svelte';
 
 	let {
 		selector,
@@ -11,35 +10,47 @@
 		onEvent,
 		active = $bindable(true)
 	}: {
+		/** Fires for events whose target is (or is inside) an element matching this selector. */
 		selector: string;
 		type?: string;
+		/**
+		 * Listen in the capture phase (default). The listener lives on `document`, so in capture
+		 * mode it runs before any handler on the element itself — `preventDefault()` +
+		 * `stopImmediatePropagation()` fully intercept the event. With `capture=false` only
+		 * bubbling events are seen, after the element's own handlers.
+		 */
 		capture?: boolean;
 		once?: boolean;
+		/** Passive listeners can't preventDefault. */
 		passive?: boolean;
 		onEvent: (e: Event) => void;
 		active?: boolean;
 	} = $props();
 
-	let el: Element | null = null;
-	let cleanup: (() => void) | null = null;
-
-	onMount(async () => {
+	// Delegated from `document` so it works for elements that mount late or re-render.
+	$effect(() => {
 		if (!active) return;
-		el = await queryOrWait(selector);
-		if (!el) return;
-		const handler = (e: Event) => {
-			onEvent?.(e);
-			if (once) {
-				cleanup?.();
-				active = false;
-			}
-		};
-		el.addEventListener(type as string, handler as EventListener, { capture, passive, once });
-		cleanup = () =>
-			el?.removeEventListener(type as string, handler as EventListener, { capture } as any);
-	});
+		const sel = selector;
+		const eventType = type;
+		const useCapture = capture;
+		const isPassive = passive;
 
-	onDestroy(() => cleanup?.());
+		return untrack(() => {
+			let done = false;
+			const handler = (e: Event) => {
+				if (done) return;
+				const target = e.target;
+				if (!(target instanceof Element) || !target.closest(sel)) return;
+				if (once) {
+					done = true;
+					active = false;
+				}
+				onEvent?.(e);
+			};
+			document.addEventListener(eventType, handler, { capture: useCapture, passive: isPassive });
+			return () => document.removeEventListener(eventType, handler, { capture: useCapture });
+		});
+	});
 </script>
 
 <!-- No DOM output; purely functional -->

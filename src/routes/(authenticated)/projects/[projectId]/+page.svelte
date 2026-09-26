@@ -9,6 +9,7 @@
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Resizable from '$lib/components/ui/resizable';
 	import TaskEditor from './TaskEditor.svelte';
+	import TutorialExampleProject from './TutorialExampleProject.svelte';
 	import ProjectEditor from './ProjectEditor.svelte';
 	import tasksAPI from '$lib/API/Tasks';
 	import type { AppNode, IAppNode } from '$domain/models/node';
@@ -313,6 +314,7 @@
 			</Resizable.Pane>
 			<Resizable.Handle />
 			<Resizable.Pane
+				id="editor-pane"
 				class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
 				defaultSize={30}
 				minSize={24}
@@ -343,6 +345,10 @@
 	relation={$drawerParams?.relation}
 	relationMode={$drawerParams?.mode}
 />
+
+{#if page.params.projectId}
+	<TutorialExampleProject projectId={page.params.projectId} subtree={projectStore} />
+{/if}
 
 <style>
 	:global(.svelte-flow__attribution) {
