@@ -26,7 +26,7 @@
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger class={className}>
-		<Button variant="ghost" size="icon">
+		<Button id="btn-feedback" variant="ghost" size="icon">
 			<Icon icon="material-symbols:feedback-outline" class="size-5" />
 			<span class="sr-only">Help and Information</span>
 		</Button>

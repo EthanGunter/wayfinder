@@ -49,9 +49,10 @@
 	}
 </script>
 
-<li class="task-list-item flex items-center gap-2" class:completed={checked}>
+<li data-task-id={task.id} class="task-list-item flex items-center gap-2" class:completed={checked}>
 	<!-- Completion checkbox -->
 	<Checkbox
+		data-action="complete"
 		class="mx-3 rounded-md border-gray-500 p-2 text-xl"
 		bind:checked
 		aria-label={checked ? 'Mark as incomplete' : 'Mark as complete'}
