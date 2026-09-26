@@ -13,13 +13,15 @@
 	import Separator from '$lib/components/ui/separator/separator.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { goto } from '$app/navigation';
+	import { onDestroy, untrack } from 'svelte';
 
 	let projects = tasksAPI.getProjects();
 	let todaysList = tasksAPI.getTodaysTasks();
 
 	// Store suggestions for each project
 	let projectSuggestions = $state<Map<string, Task[]>>(new Map());
-	let loadedProjectIds = new Set<string>(); // Track which projects we've loaded (non-reactive)
+	// Live suggestion subscriptions, one per active project (non-reactive)
+	const suggestionSubscriptions = new Map<string, () => void>();
 	let expandedProjects = $state<Set<string>>(new Set()); // Track which accordions are open
 
 	// Mobile responsive state
@@ -32,29 +34,40 @@
 		return $projects.value.filter((p) => isProjectActive(p.data));
 	});
 
-	// Load suggestions for active projects
+	// Subscribe to live suggestions for each active project; drop subscriptions for projects that leave the active set
 	$effect(() => {
-		if ($projects.status === 'resolved') {
-			const active = activeProjects;
+		if ($projects.status !== 'resolved') return;
+		const activeIds = new Set(activeProjects.map((p) => p.id));
 
-			// Load suggestions for each active project
-			active.forEach((project) => {
-				if (!loadedProjectIds.has(project.id)) {
-					loadedProjectIds.add(project.id);
-
-					tasksAPI
-						.getPrioritizedTasks(project.id, 15)
-						.then((suggestions) => {
-							projectSuggestions.set(project.id, suggestions);
-							projectSuggestions = new Map(projectSuggestions); // Trigger reactivity
-						})
-						.catch((error) => {
-							console.error(`Failed to load suggestions for project ${project.id}:`, error);
-							loadedProjectIds.delete(project.id); // Allow retry on error
-						});
+		untrack(() => {
+			let removed = false;
+			for (const [projectId, unsubscribe] of suggestionSubscriptions) {
+				if (!activeIds.has(projectId)) {
+					unsubscribe();
+					suggestionSubscriptions.delete(projectId);
+					removed = projectSuggestions.delete(projectId) || removed;
 				}
-			});
-		}
+			}
+			if (removed) projectSuggestions = new Map(projectSuggestions); // Trigger reactivity
+
+			for (const projectId of activeIds) {
+				if (suggestionSubscriptions.has(projectId)) continue;
+				const unsubscribe = tasksAPI.getPrioritizedTasks(projectId, 15).subscribe((suggestions) => {
+					if (suggestions.status === 'resolved') {
+						projectSuggestions.set(projectId, suggestions.value);
+						projectSuggestions = new Map(projectSuggestions); // Trigger reactivity
+					} else if (suggestions.status === 'error') {
+						console.error(`Failed to load suggestions for project ${projectId}:`, suggestions.error);
+					}
+				});
+				suggestionSubscriptions.set(projectId, unsubscribe);
+			}
+		});
+	});
+
+	onDestroy(() => {
+		for (const unsubscribe of suggestionSubscriptions.values()) unsubscribe();
+		suggestionSubscriptions.clear();
 	});
 
 	function isTaskData(data: unknown): data is { type: string; task: Task } {
@@ -276,11 +289,12 @@
 		<!-- Mobile Layout: Today's list on top, suggestions collapsible below -->
 		<div class="flex h-full w-full flex-col gap-4 overflow-y-auto p-4">
 			<div
+				id="todays-tasks-panel"
 				class="flex flex-col rounded-xl border border-gray-200 bg-gray-50 p-4 transition-all duration-200"
 			>
 				{@render todaysTasks()}
 			</div>
-			<div class="mt-auto rounded-xl border border-gray-200 bg-gray-50">
+			<div id="suggestions-panel" class="mt-auto rounded-xl border border-gray-200 bg-gray-50">
 				<Collapsible.Root bind:open={suggestionsOpen} class="flex flex-col">
 					<Collapsible.Trigger
 						class="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-100"
@@ -303,6 +317,7 @@
 		<!-- Desktop Layout: Side-by-side -->
 		<div class="mx-auto flex h-full w-full gap-4 overflow-hidden p-4">
 			<div
+				id="suggestions-panel"
 				class="flex w-1/2 flex-col gap-4 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-4 transition-all duration-200"
 			>
 				<h2 class="text-lg font-semibold text-gray-800">Suggestions</h2>
@@ -310,6 +325,7 @@
 			</div>
 			<div class="flex w-1/2 flex-col gap-4">
 				<div
+					id="todays-tasks-panel"
 					class="relative flex flex-1 flex-col overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-4 transition-all duration-200"
 				>
 					{@render todaysTasks()}
