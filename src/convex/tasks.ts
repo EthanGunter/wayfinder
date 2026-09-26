@@ -1641,7 +1641,7 @@ export async function propagateRelationshipChanges(
 	});
 }
 
-function cleanNodeForClient(node: DBNode) {
+export function cleanNodeForClient(node: DBNode) {
 	const { _id, _creationTime, ...rest } = node;
 	const t: ClientNode<AppData<number>> = {
 		...rest,

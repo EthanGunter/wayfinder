@@ -92,6 +92,12 @@ export interface ITasksRemote extends ITasksBase {
 	the client should frankly return void, since we're using a subscription-based data model */
 	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ created: Task & { data: TaskData<Date> & { givenId?: string } }, affected: AppNode[] }, NotAuthorizedError | InvalidStateError>>;
 	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ created: (Task & { data: TaskData<Date> & { givenId?: string } })[], affected: AppNode[] }, NotAuthorizedError>>;
+	/**
+	 * Seeds the onboarding walkthrough's example project under `projectId` / `dressId` ("Get dress clothes").
+	 * Reuses `genieId` ("Ask a genie for money") if the user already created it. Idempotent.
+	 * @returns final state of created nodes, pre-existing nodes it modified, and the genie's id
+	 */
+	seedDemoProject(params: { projectId: string, dressId: string, genieId?: string }): Promise<Result<{ created: Task[], affected: AppNode[], genieId: string | null }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 
 	// TODO:sync migrate un-synced user data
 	// changeOwnership(params: { oldUserID: string, newUserID: string }): Promise<Result<Task[], NotAuthorizedError>>;
@@ -100,6 +106,12 @@ export interface ITasksRemote extends ITasksBase {
 export interface ITasksLocal extends ITasksBase {
 	createTask(params: { createDetail: CreateTaskParams }): Promise<Result<{ oldId: string, newId: string }, InvalidStateError>>;
 	createTasks(params: { createDetails: CreateTaskParams[] }): Promise<Result<{ oldId: string, newId: string }[], InvalidStateError | ArgumentError>>;
+	/**
+	 * Seeds the onboarding walkthrough's example project under `projectId` / `dressId` ("Get dress clothes").
+	 * Reuses `genieId` ("Ask a genie for money") if the user already created it. Idempotent.
+	 * @returns final state of created nodes, pre-existing nodes it modified, and the genie's id
+	 */
+	seedDemoProject(params: { projectId: string, dressId: string, genieId?: string }): Promise<Result<{ created: Task[], affected: AppNode[], genieId: string | null }, NotAuthorizedError | NotFoundError | InvalidStateError>>;
 	handleCreateTasksResponse(response: Result<{ updatedIds: Map<string, string>, affectedTasks: AppNode[] }, { idsToDelete: string[], error: NotAuthorizedError }>): Promise<void>;
 
 	handleUpdateTasksResponse(response: Result<void, { oldState: { updatedId: string, task: Task }[], error: NotAuthorizedError }>): Promise<void>;
