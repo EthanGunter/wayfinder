@@ -142,7 +142,9 @@
 				>
 					<Icon icon="lucide:folder-search" class="h-10 w-10" />
 					<p class="text-sm">No projects yet.</p>
-					<Button onclick={() => (createModalOpen = true)}>Create your first project</Button>
+					<Button id="btn-create-first-project" onclick={() => (createModalOpen = true)}
+						>Create your first project</Button
+					>
 				</div>
 			{:else}
 				<!-- Active Projects Section -->

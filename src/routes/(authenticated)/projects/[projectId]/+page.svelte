@@ -300,6 +300,7 @@
 			</Resizable.Pane>
 			<Resizable.Handle />
 			<Resizable.Pane
+				id="editor-pane"
 				class="flex h-full min-h-0 flex-col border-l border-gray-200 bg-white shadow-[-2px_0_8px_rgba(0,0,0,0.06)]"
 				defaultSize={30}
 				minSize={24}
