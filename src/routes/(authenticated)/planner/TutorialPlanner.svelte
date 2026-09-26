@@ -160,7 +160,7 @@
 		<TModal
 			primaryLabel="Ok"
 			onPrimary={() => advanceFrom(1)}
-			selector={`#suggestions-panel [data-project-item="${demoProjectId}"]`}
+			selector={`#suggestions-panel ${genie}`}
 			placement="bottom"
 			disableTargetInteraction
 		>

@@ -141,8 +141,8 @@ sensible.
 genie is rendered as a suggestion. The page passes in `revealProject` so the project's
 collapsed suggestions open.
 
-- C1 points at the demo project's whole item in Suggestions (`[data-project-item]` on its
-  collapsible: header plus suggestions) from below, and shields it.
+- C1 points at the genie's row in Suggestions (`[data-task-id]` on the suggestion list item) from
+  below, and shields it.
 - C2 gates everything except the genie's "+" button and advances when the genie shows up in
   today's list.
 - C4 advances when the genie is completed. At that point the four tasks it was blocking appear

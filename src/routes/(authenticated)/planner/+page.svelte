@@ -271,7 +271,6 @@
 					}
 					expandedProjects = new Set(expandedProjects);
 				}}
-				data-project-item={project.id}
 				class="rounded-md border border-gray-200 bg-gray-50"
 			>
 				<Collapsible.Trigger
