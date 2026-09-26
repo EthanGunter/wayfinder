@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { get, writable } from 'svelte/store';
-import { createTutorials, parseTutorialState, STORAGE_KEY, type TutorialStorage } from './store';
+import { createTutorials, parseTutorialState, STORAGE_KEY, storageKeyFor, type TutorialStorage } from './store';
 import { ALL_ONBOARDING, ONBOARDING_DATA, ONBOARDING_WELCOME } from './ids';
 import { getOnboardingData, replayOnboarding, setOnboardingData, skipOnboarding } from './onboarding';
 import { onStore } from './watch';
@@ -190,6 +190,46 @@ describe('createTutorials', () => {
 		const t = createTutorials(memoryStorage().storage);
 		t.advance('x');
 		expect(get(t)).toEqual({ x: { completed: false, step: 1 } });
+	});
+});
+
+describe('per-user progress', () => {
+	it('keeps each user\'s progress separate in the same browser', () => {
+		const { storage, map } = memoryStorage();
+		const t = createTutorials(storage);
+
+		t.setUser('alice');
+		t.complete(ONBOARDING_WELCOME);
+		t.setData(ONBOARDING_DATA, { demoProjectId: 'p1' });
+
+		t.setUser('bob');
+		expect(t.isDone(ONBOARDING_WELCOME)).toBe(false);
+		expect(t.getData(ONBOARDING_DATA)).toEqual({});
+
+		t.setUser('alice');
+		expect(t.isDone(ONBOARDING_WELCOME)).toBe(true);
+		expect(t.getData(ONBOARDING_DATA)).toEqual({ demoProjectId: 'p1' });
+		expect(JSON.parse(map.get(storageKeyFor('alice'))!)[ONBOARDING_WELCOME].completed).toBe(true);
+		expect(map.has(storageKeyFor('bob'))).toBe(true);
+	});
+
+	it('does not hand the pre-auth (legacy) record to a signed-in user', () => {
+		const { storage } = memoryStorage({
+			[STORAGE_KEY]: JSON.stringify({ [ONBOARDING_WELCOME]: { completed: true, step: 1 } })
+		});
+		const t = createTutorials(storage);
+		expect(t.isDone(ONBOARDING_WELCOME)).toBe(true);
+		t.setUser('new-user');
+		expect(t.isDone(ONBOARDING_WELCOME)).toBe(false);
+	});
+
+	it('notifies subscribers when the user changes', () => {
+		const { storage } = memoryStorage();
+		const t = createTutorials(storage);
+		t.setUser('alice');
+		t.complete(ONBOARDING_WELCOME);
+		t.setUser('bob');
+		expect(get(t)[ONBOARDING_WELCOME]).toBeUndefined();
 	});
 });
 

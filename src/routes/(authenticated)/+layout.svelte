@@ -5,10 +5,17 @@
 	import { InputRequiredError, type Err } from '$domain/errors';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import { Toaster } from '$lib/components/ui/sonner';
+	import { tutorials } from '$lib/tutorials';
 
 	const { children } = $props();
 	let mode = $state</* 'select' | */ 'login' | 'register'>('login');
 	let overlayOpen = $state(false);
+
+	// Tutorial progress is per user; switch before child pages mount and read it
+	$effect.pre(() => {
+		const state = $authState;
+		tutorials.setUser(state.status === 'signed-in' ? state.user.id : null);
+	});
 
 	// Reactive effect that responds to auth state changes
 	$effect(() => {

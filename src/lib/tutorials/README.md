@@ -14,8 +14,10 @@ None of them know anything about Wayfinder routes.
 
 ### Store (`store.ts`)
 
-`tutorials` is a Svelte readable of every tutorial's progress, persisted to
-`localStorage['wf.tutorials.v1']`:
+`tutorials` is a Svelte readable of every tutorial's progress, persisted per user to
+`localStorage['wf.tutorials.v1:<userId>']` so accounts sharing a browser don't share completion.
+The authenticated layout calls `tutorials.setUser(id)` (in `$effect.pre`, before pages mount)
+whenever auth changes:
 
 ```ts
 { [tutorialId]: { completed: boolean, step: number, data?: Record<string, Json> } }
@@ -160,8 +162,9 @@ Parts can't start out of order because each one gates on the previous part being
   `{ replay: true }`, and navigates to `/projects`. Part A then starts even though the user has
   projects. Its A1 step points at the grid's "+" (`#btn-create-project`) and creates a fresh
   demo project.
-- **By hand:** run `localStorage.removeItem('wf.tutorials.v1')` in the console, then open
-  `/projects` with an account that has zero projects.
+- **By hand:** remove the signed-in user's `wf.tutorials.v1:<userId>` key from localStorage
+  in the console, then open `/projects` with an account that has zero projects. A brand-new
+  account always starts fresh.
 - **Skip:** "Skip intro" at A0 calls `skipOnboarding()`, which marks all three parts complete.
 
 Progress is per browser. An existing user who signs in on a new device has projects, so
