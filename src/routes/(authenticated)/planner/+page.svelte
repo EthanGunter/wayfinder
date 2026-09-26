@@ -1,9 +1,10 @@
 <script lang="ts">
 	import SuggestionListItem from './SuggestionListItem.svelte';
 	import TodayListItem from './TodayListItem.svelte';
+	import TutorialPlanner from './TutorialPlanner.svelte';
 	import { authState } from '$lib/API/Auth';
 	import tasksAPI from '$lib/API/Tasks';
-	import { Err } from '$domain/errors';
+	import { Err, NotFoundError } from '$domain/errors';
 	import { isTaskCompleted, type Task } from '$domain/models/task';
 	import { isProjectActive } from '$domain/models/project';
 	import AppHeader from '$lib/components/AppHeader.svelte';
@@ -23,6 +24,9 @@
 	// Live suggestion subscriptions, one per active project (non-reactive)
 	const suggestionSubscriptions = new Map<string, () => void>();
 	let expandedProjects = $state<Set<string>>(new Set()); // Track which accordions are open
+	// Projects being deleted from this page: hidden right away so their live suggestions query is
+	// dropped before the project disappears (otherwise it re-runs and errors with NotFound)
+	let deletingProjectIds = $state<Set<string>>(new Set());
 
 	// Mobile responsive state
 	const isMobile = new MediaQuery('(max-width: 768px)');
@@ -31,7 +35,7 @@
 	// Filter to active projects only
 	let activeProjects = $derived.by(() => {
 		if ($projects.status !== 'resolved') return [];
-		return $projects.value.filter((p) => isProjectActive(p.data));
+		return $projects.value.filter((p) => isProjectActive(p.data) && !deletingProjectIds.has(p.id));
 	});
 
 	// Subscribe to live suggestions for each active project; drop subscriptions for projects that leave the active set
@@ -64,6 +68,31 @@
 			}
 		});
 	});
+
+	/** Open a project's suggestions (and, on mobile, the Suggestions section). */
+	function revealProject(projectId: string) {
+		if (isMobile.current) suggestionsOpen = true;
+		if (!expandedProjects.has(projectId)) {
+			expandedProjects = new Set(expandedProjects).add(projectId);
+		}
+	}
+
+	/** Delete a project and its subtree without surfacing an error for its suggestions query. */
+	async function deleteProject(projectId: string) {
+		deletingProjectIds = new Set(deletingProjectIds).add(projectId);
+		suggestionSubscriptions.get(projectId)?.();
+		suggestionSubscriptions.delete(projectId);
+		if (projectSuggestions.delete(projectId)) projectSuggestions = new Map(projectSuggestions);
+
+		const [, error] = await tasksAPI.deleteTask({ id: projectId });
+		if (error && !(error instanceof NotFoundError)) {
+			// Still there: show it again (the subscription effect resubscribes)
+			const next = new Set(deletingProjectIds);
+			next.delete(projectId);
+			deletingProjectIds = next;
+			Err.UNHANDLED(error);
+		}
+	}
 
 	onDestroy(() => {
 		for (const unsubscribe of suggestionSubscriptions.values()) unsubscribe();
@@ -284,6 +313,13 @@
 
 {#if $authState.status === 'signed-in'}
 	<AppHeader />
+	<TutorialPlanner
+		{projects}
+		{todaysList}
+		isMobile={isMobile.current}
+		{revealProject}
+		{deleteProject}
+	/>
 
 	{#if isMobile.current}
 		<!-- Mobile Layout: Today's list on top, suggestions collapsible below -->
