@@ -92,7 +92,55 @@ export function observeRect(
   };
 }
 
+/** Tailwind's `sm` breakpoint; below it tutorials favor centered fallbacks. */
+export const NARROW_BREAKPOINT_PX = 640;
+
+export function isNarrowViewport(breakpointPx = NARROW_BREAKPOINT_PX): boolean {
+  return typeof window !== 'undefined' && window.innerWidth < breakpointPx;
+}
+
+/**
+ * True if the element can't be pointed at: detached, zero-size, `display:none` (itself or an
+ * ancestor, e.g. `hidden sm:block`), or `visibility:hidden`.
+ */
+export function isElementHidden(element: Element): boolean {
+  if (!element.isConnected) return true;
+  const rect = element.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return true;
+  const style = getComputedStyle(element);
+  if (style.display === 'none' || style.visibility === 'hidden') return true;
+  // offsetParent is null for display:none ancestors (and for position:fixed, which is fine)
+  if (element instanceof HTMLElement && element.offsetParent === null && style.position !== 'fixed') {
+    return element !== document.body;
+  }
+  return false;
+}
+
+/** True if no part of the element's box intersects the viewport. */
+export function isElementOffscreen(element: Element): boolean {
+  const rect = element.getBoundingClientRect();
+  return (
+    rect.bottom <= 0 ||
+    rect.right <= 0 ||
+    rect.top >= window.innerHeight ||
+    rect.left >= window.innerWidth
+  );
+}
+
+/** True if the element's box is entirely inside the viewport. */
+export function isElementFullyInView(element: Element): boolean {
+  const rect = element.getBoundingClientRect();
+  return (
+    rect.top >= 0 &&
+    rect.left >= 0 &&
+    rect.bottom <= window.innerHeight &&
+    rect.right <= window.innerWidth
+  );
+}
+
+/** Scroll the element to the center of the viewport unless it's already fully visible. */
 export function bringToViewIfNeeded(element: Element) {
+  if (isElementFullyInView(element)) return;
   if ('scrollIntoView' in element) {
     try {
       (element as HTMLElement).scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });

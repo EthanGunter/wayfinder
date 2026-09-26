@@ -101,6 +101,20 @@ export const api: ITasksRemote = {
 		}
 	},
 
+	seedDemoProject: async ({ projectId, dressId, genieId }) => {
+		try {
+			const res = await client.mutation(convexApi.demo.seedDemoProject, { projectId, dressId, genieId });
+			return ok({
+				created: res.created.map((r) => convertFromServerNode<Task>(r)),
+				affected: res.affected.map((r) => convertFromServerNode(r)),
+				genieId: res.genieId
+			});
+		} catch (error) {
+			console.error(error)
+			return err(reconstructError(error));
+		}
+	},
+
 	updateTask: debouncedUpdateTask,
 
 	updateTasks: debouncedUpdateTasks,
@@ -395,18 +409,24 @@ export const api: ITasksRemote = {
 			};
 		}),
 
-	getPrioritizedTasks: async (projectId, limit) => {
-		try {
-			const result = await client.query(convexApi.tasks.getPrioritizedTasks, { 
-				projectId, 
-				limit 
-			});
-			return result.map(convertFromServerNode<Task & { dueDateInherited: boolean }>);
-		} catch (error) {
-			console.error(error);
-			throw reconstructError(error);
-		}
-	},
+	getPrioritizedTasks: (projectId, limit) =>
+		createQueryable<{ projectId: string, limit: number }, (Task & { dueDateInherited: boolean })[]>(
+			{ projectId, limit },
+			(params, set) => {
+				const unsubscribe = client.onUpdate(
+					convexApi.tasks.getPrioritizedTasks,
+					{ projectId: params.projectId, limit: params.limit },
+					(result) => {
+						set({ status: "resolved", value: result.map(convertFromServerNode<Task & { dueDateInherited: boolean }>) });
+					},
+					(error: Error) => {
+						set({ status: "error", error: reconstructError(error) });
+					}
+				);
+				return () => {
+					unsubscribe();
+				};
+			}),
 
 	searchTasks: async () => {
 		// const res = await client.query(api.tasks.searchTasks, { searchTerm });
@@ -434,6 +454,7 @@ export const localApi: ITasksLocal = {
 		// Prefer authoritative ids from affectedTasks if mapping is empty
 		return ok(res.created.map(t => ({ newId: t.id, oldId: t.data.givenId! })));
 	},
+	seedDemoProject: async (params) => api.seedDemoProject(params),
 
 	getTask: (params) => api.getTask(params),
 	getTasks: (params) => api.getTasks(params),
@@ -458,7 +479,7 @@ export const localApi: ITasksLocal = {
 	createProject: async (params) => api.createProject(params),
 	updateProject: async (params) => api.updateProject(params),
 	getTodaysTasks: () => api.getTodaysTasks(),
-	getPrioritizedTasks: async (projectId: string, limit: number) => api.getPrioritizedTasks(projectId, limit),
+	getPrioritizedTasks: (projectId: string, limit: number) => api.getPrioritizedTasks(projectId, limit),
 
 	searchTasks: async (searchTerm: string) => api.searchTasks(searchTerm),
 

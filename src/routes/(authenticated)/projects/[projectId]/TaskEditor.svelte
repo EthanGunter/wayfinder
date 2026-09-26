@@ -151,11 +151,13 @@
 		const children = $childTasksStore;
 		if (children.status !== 'resolved') return;
 
-		const currentIds = (task.children ?? []).slice();
+		// Use the live, ordered children (the list being dragged), not `task.children`: the selected
+		// node is a snapshot and misses children added while it's selected (e.g. the tutorial's seed).
+		const list = children.value;
+		const currentIds = list.map((t) => t.id);
 		const from = currentIds.indexOf(movingId);
 		if (from < 0) return;
 
-		const list = children.value;
 		const target = list[Math.min(finishIndex, list.length - 1)];
 		let to = target ? currentIds.indexOf(target.id) : currentIds.length;
 		if (to < 0) to = currentIds.length;

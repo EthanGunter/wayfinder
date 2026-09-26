@@ -10,6 +10,15 @@
 
 	interface Props {
 		open?: boolean;
+		/** Title to prefill each time the dialog opens (e.g. the walkthrough's example project). */
+		initialTitle?: string;
+		/** Close when clicking outside the dialog (default). */
+		closeOnOutsideClick?: boolean;
+		/**
+		 * Offer Cancel, the X and Escape (default). The walkthrough turns this off so the only
+		 * way on is "Create Project".
+		 */
+		cancellable?: boolean;
 		onClose?: () => void;
 		onCreate?: (project: {
 			title: string;
@@ -25,7 +34,14 @@
 		}) => void | Promise<void>;
 	}
 
-	let { open = $bindable(false), onClose, onCreate }: Props = $props();
+	let {
+		open = $bindable(false),
+		initialTitle,
+		closeOnOutsideClick = true,
+		cancellable = true,
+		onClose,
+		onCreate
+	}: Props = $props();
 
 	let title = $state('');
 	let content = $state('');
@@ -37,6 +53,10 @@
 	let showMicroWins = $state(get(settings.projects.defaults.defaultProjectShowMicroWins));
 
 	let isSubmitting = $state(false);
+
+	$effect(() => {
+		if (open && initialTitle) title = initialTitle;
+	});
 
 	function resetForm() {
 		title = '';
@@ -56,7 +76,7 @@
 	}
 
 	function handleClose(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
+		if (event.key === 'Escape' && cancellable) {
 			event.preventDefault();
 			event.stopPropagation();
 			close();
@@ -99,7 +119,14 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content showCloseButton onkeydown={handleClose} class="max-w-md">
+	<Dialog.Content
+		id="create-project-dialog"
+		showCloseButton={cancellable}
+		onkeydown={handleClose}
+		interactOutsideBehavior={closeOnOutsideClick ? 'close' : 'ignore'}
+		escapeKeydownBehavior={cancellable ? 'close' : 'ignore'}
+		class="max-w-md"
+	>
 		<Dialog.Header sticky>
 			<Dialog.Title>Create New Project</Dialog.Title>
 			<Dialog.Description>Add a new project to organize your tasks.</Dialog.Description>
@@ -161,8 +188,10 @@
 			</div>
 			</div>
 
-			<Dialog.Footer>
-				<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
+			<Dialog.Footer id="create-project-actions">
+				{#if cancellable}
+					<Button variant="outline" onclick={close} disabled={isSubmitting}>Cancel</Button>
+				{/if}
 				<Button onclick={handleSubmit} disabled={isSubmitting || !title.trim()}>
 					{isSubmitting ? 'Creating...' : 'Create Project'}
 				</Button>

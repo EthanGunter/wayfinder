@@ -103,7 +103,7 @@
 	});
 </script>
 
-<div>
+<div data-list-id={id}>
 	{#if title}
 		<button
 			class="w-fit rounded-t-lg border border-b-0 border-gray-200 bg-gray-50 px-3 py-1.5 text-left text-sm text-gray-700 hover:cursor-pointer hover:bg-gray-100"
@@ -135,6 +135,7 @@
 			<span class="flex max-w-[16rem] items-center gap-2 text-gray-400">
 				{#if onLink}
 					<button
+						data-action="connect"
 						class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
 						onclick={() => onLink(parentId)}
 					>
@@ -148,6 +149,7 @@
 				{/if}
 				{#if onAddTask}
 					<button
+						data-action="create"
 						class="w-full px-2 py-1.5 text-sm hover:cursor-pointer hover:text-gray-600 hover:underline"
 						onclick={() => onAddTask(parentId)}
 					>

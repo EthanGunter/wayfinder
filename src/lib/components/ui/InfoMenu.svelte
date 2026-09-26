@@ -3,6 +3,8 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
 	import Icon from '@iconify/svelte';
+	import { goto } from '$app/navigation';
+	import { replayOnboarding } from '$lib/tutorials';
 
 	type Props = {
 		onItemClick?: (item: string) => void;
@@ -22,11 +24,17 @@
 	function click(item: string) {
 		onItemClick?.(item);
 	}
+
+	function replayTutorial() {
+		// Resets onboarding progress and flags it so it starts even if the user has projects
+		replayOnboarding();
+		goto('/projects');
+	}
 </script>
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger class={className}>
-		<Button variant="ghost" size="icon">
+		<Button id="btn-feedback" variant="ghost" size="icon">
 			<Icon icon="material-symbols:feedback-outline" class="size-5" />
 			<span class="sr-only">Help and Information</span>
 		</Button>
@@ -37,23 +45,30 @@
 
 		<DropdownMenu.Separator />
 
-		<DropdownMenu.Item onselect={() => window.open(FORMS.bug, '_blank')}>
+		<DropdownMenu.Item onSelect={() => window.open(FORMS.bug, '_blank')}>
 			<Icon icon="lucide:bug" />
 			<span id="item-documentation">Report a bug</span>
 		</DropdownMenu.Item>
 
-		<DropdownMenu.Item onselect={() => window.open(FORMS.feature, '_blank')}>
+		<DropdownMenu.Item onSelect={() => window.open(FORMS.feature, '_blank')}>
 			<Icon icon="lucide:lightbulb" />
 			<span id="item-help">Suggest a feature</span>
 		</DropdownMenu.Item>
 
-		<!-- <DropdownMenu.Item onselect={() => click('contact')}>
+		<!-- <DropdownMenu.Item onSelect={() => click('contact')}>
 			<span id="item-contact">Documentation</span>
 		</DropdownMenu.Item> -->
 
-		<DropdownMenu.Item onselect={() => window.open(FORMS.feedback, '_blank')}>
+		<DropdownMenu.Item onSelect={() => window.open(FORMS.feedback, '_blank')}>
 			<Icon icon="lucide:message-circle" />
 			<span id="item-feedback">Send Feedback</span>
+		</DropdownMenu.Item>
+
+		<DropdownMenu.Separator />
+
+		<DropdownMenu.Item onSelect={replayTutorial}>
+			<Icon icon="lucide:graduation-cap" />
+			<span id="item-replay-tutorial">Replay tutorial</span>
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>

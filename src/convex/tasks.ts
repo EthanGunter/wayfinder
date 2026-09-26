@@ -318,7 +318,8 @@ export const deleteTask = mutation({
 		if (!identity) {
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
-		return await _deleteTask(ctx, id as Id<"nodes">);
+		const { affected } = await _deleteTask(ctx, id as Id<"nodes">);
+		return { affected };
 	},
 });
 
@@ -330,19 +331,31 @@ export const deleteTasks = mutation({
 			throw new ConvexError({ type: "NotAuthorizedError", msg: "Failed to get identity from ctx" });
 		}
 
-		let affected: ClientNode[] = [];
+		// Keyed by id so the latest snapshot of each affected node wins
+		const affectedById = new Map<string, ClientNode>();
+		const deleted = new Set<string>();
 		for (const id of ids) {
-			const { affected: affectedTasks } = await _deleteTask(ctx, id as Id<"nodes">);
-			affected.push(...affectedTasks);
+			// Already removed as part of a project subtree deleted earlier in this batch
+			if (deleted.has(id)) continue;
+			const { affected: affectedTasks, deletedIds } = await _deleteTask(ctx, id as Id<"nodes">);
+			for (const deletedId of deletedIds) deleted.add(deletedId);
+			for (const t of affectedTasks) affectedById.set(t.id, t);
 		}
 
-		// Dedup affected
-		affected = affected.filter((t, index, self) => self.findIndex(t2 => t2.id === t.id) === index);
+		// Don't report nodes that were deleted later in the batch
+		const affected = Array.from(affectedById.values()).filter(t => !deleted.has(t.id));
 		return { affected };
 	},
 });
 
-export async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affected: ClientNode[] }> {
+/**
+ * Deletes a node.
+ * - Task: removes it; children left without parents are re-attached to the project ancestor.
+ * - Project: removes the project and its entire subtree (see `_deleteProjectSubtree`).
+ *
+ * `affected` lists surviving nodes whose relationships changed; `deletedIds` lists every removed node.
+ */
+export async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ affected: ClientNode[], deletedIds: string[] }> {
 
 	// Get node
 	const node = await ctx.db.get(id);
@@ -352,6 +365,10 @@ export async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ 
 	const identity = await ctx.auth.getUserIdentity();
 	if (!identity || identity.subject !== node.userAuthId) {
 		throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of node", ctx: id });
+	}
+
+	if (node.data.type === "project") {
+		return await _deleteProjectSubtree(ctx, node);
 	}
 
 
@@ -365,7 +382,64 @@ export async function _deleteTask(ctx: MutationCtx, id: Id<"nodes">): Promise<{ 
 	await ctx.db.delete(id);
 
 
-	return { affected: affected.map(cleanNodeForClient) };
+	return { affected: affected.map(cleanNodeForClient), deletedIds: [id] };
+}
+
+/**
+ * Deletes a project and every descendant.
+ *
+ * A descendant is removed once all of its parents are being removed. Since all parents of a task
+ * share one project ancestor (validateParentsAndProject), that covers every descendant; the check
+ * only guards against inconsistent data, where such a node survives with the deleted parents pruned
+ * (it still keeps at least one parent outside the subtree).
+ */
+async function _deleteProjectSubtree(ctx: MutationCtx, project: DBNode): Promise<{ affected: ClientNode[], deletedIds: string[] }> {
+	const cache: NodeCache = new Map([[project._id, project]]);
+	const toDelete = new Map<string, DBNode>([[project._id, project]]);
+
+	const queue: string[] = [...(project.children ?? [])];
+	while (queue.length > 0) {
+		const id = queue.shift()!;
+		if (toDelete.has(id)) continue;
+
+		const node = await getNodeCached(ctx, id, cache);
+		// Dangling reference, or another project (projects are never nested): leave it alone
+		if (!node || node.data.type === "project") continue;
+		if (node.userAuthId !== project.userAuthId) {
+			throw new ConvexError({ type: "NotAuthorizedError", msg: "Not owner of node", ctx: id });
+		}
+
+		// Not deletable yet; it gets re-queued when another of its parents is marked for deletion
+		if (!(node.parents ?? []).every(p => toDelete.has(p))) continue;
+
+		toDelete.set(id, node);
+		queue.push(...(node.children ?? []));
+	}
+
+	// Prune references to deleted nodes from any surviving neighbours
+	const survivorIds = new Set<string>();
+	for (const node of toDelete.values()) {
+		for (const relId of [...(node.parents ?? []), ...(node.children ?? [])]) {
+			if (!toDelete.has(relId)) survivorIds.add(relId);
+		}
+	}
+	const affected: DBNode[] = [];
+	for (const survivorId of survivorIds) {
+		const survivor = await getNodeCached(ctx, survivorId, cache);
+		if (!survivor || survivor.userAuthId !== project.userAuthId) continue;
+		await ctx.db.patch(survivor._id, {
+			parents: (survivor.parents ?? []).filter(p => !toDelete.has(p)),
+			children: (survivor.children ?? []).filter(c => !toDelete.has(c)),
+		});
+		const refreshed = await ctx.db.get(survivor._id);
+		if (refreshed) affected.push(refreshed);
+	}
+
+	for (const id of toDelete.keys()) {
+		await ctx.db.delete(id as Id<"nodes">);
+	}
+
+	return { affected: affected.map(cleanNodeForClient), deletedIds: Array.from(toDelete.keys()) };
 }
 
 const CURRENT_EXPORT_VERSION = "0.0.0";
@@ -1641,7 +1715,7 @@ export async function propagateRelationshipChanges(
 	});
 }
 
-function cleanNodeForClient(node: DBNode) {
+export function cleanNodeForClient(node: DBNode) {
 	const { _id, _creationTime, ...rest } = node;
 	const t: ClientNode<AppData<number>> = {
 		...rest,

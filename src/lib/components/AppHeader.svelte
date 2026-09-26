@@ -17,13 +17,21 @@
 	<NavigationMenu.Root class="flex w-full max-w-none sm:max-w-max">
 		<NavigationMenu.List>
 			<NavigationMenu.Item>
-				<NavigationMenu.Link active={page.url.pathname === '/projects'} href="/projects">
+				<NavigationMenu.Link
+					id="nav-projects"
+					active={page.url.pathname === '/projects'}
+					href="/projects"
+				>
 					Projects
 				</NavigationMenu.Link>
 			</NavigationMenu.Item>
 			<Separator orientation="vertical" />
 			<NavigationMenu.Item>
-				<NavigationMenu.Link active={page.url.pathname === '/planner'} href="/planner">
+				<NavigationMenu.Link
+					id="nav-planner"
+					active={page.url.pathname === '/planner'}
+					href="/planner"
+				>
 					Planner
 				</NavigationMenu.Link>
 			</NavigationMenu.Item>
